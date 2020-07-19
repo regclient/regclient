@@ -2,21 +2,26 @@ package regclient
 
 import (
 	"context"
-	"crypto/tls"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 
+	dockercfg "github.com/docker/cli/cli/config"
 	"github.com/docker/distribution/reference"
-)
-
-var (
-	ErrNotImplemented = errors.New("Not implemented")
+	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 type tlsConf int
+
+var (
+	// MediaTypeDocker2Manifest is the media type when pulling manifests from a v2 registry
+	MediaTypeDocker2Manifest = "application/vnd.docker.distribution.manifest.v2+json"
+	// MediaTypeDocker2ImageConfig is for the configuration json object
+	MediaTypeDocker2ImageConfig = "application/vnd.docker.container.image.v1+json"
+)
 
 const (
 	tlsEnabled tlsConf = iota
@@ -27,7 +32,15 @@ const (
 // RegClient provides an interfaces to working with registries
 type RegClient interface {
 	Auth() AuthClient
-	RepoList(ctx context.Context, ref Ref) error
+	RepoList(ctx context.Context, ref Ref) (TagList, error)
+	ImageInspect(ctx context.Context, ref Ref) (ociv1.Image, error)
+}
+
+// TagList comes from github.com/opencontainers/distribution-spec,
+// switch to their implementation when it becomes stable
+type TagList struct {
+	Name string   `json:"name"`
+	Tags []string `json:"tags"`
 }
 
 // Ref reference to a registry/repository
@@ -45,8 +58,9 @@ type regClient struct {
 }
 
 type regHost struct {
-	scheme string
-	tls    tlsConf
+	scheme   string
+	tls      tlsConf
+	dnsNames []string
 }
 
 // Opt functions are used to configure NewRegClient
@@ -55,6 +69,8 @@ type Opt func(*regClient)
 // NewRegClient returns a registry client
 func NewRegClient(opts ...Opt) RegClient {
 	var rc regClient
+
+	rc.hosts = map[string]*regHost{"docker.io": {scheme: "https", tls: tlsEnabled, dnsNames: []string{"registry-1.docker.io"}}}
 
 	rc.auth = NewAuthClient()
 
@@ -75,6 +91,21 @@ func WithDockerCerts() Opt {
 // WithDockerCreds adds configuration from users docker config with registry logins
 func WithDockerCreds() Opt {
 	return func(rc *regClient) {
+		conffile := dockercfg.LoadDefaultConfigFile(os.Stderr)
+		creds, err := conffile.GetAllCredentials()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to load docker creds %s\n", err)
+			return
+		}
+		for _, cred := range creds {
+			// fmt.Printf("Processing cred %v\n", cred)
+			// TODO: clean this up, get index and registry-1 from variables
+			if cred.ServerAddress == "https://index.docker.io/v1/" && cred.Username != "" && cred.Password != "" {
+				rc.auth.Set("registry-1.docker.io", cred.Username, cred.Password)
+			} else if cred.ServerAddress != "" && cred.Username != "" && cred.Password != "" {
+				rc.auth.Set(cred.ServerAddress, cred.Username, cred.Password)
+			}
+		}
 		return
 	}
 }
@@ -115,89 +146,110 @@ func (rc *regClient) Auth() AuthClient {
 	return rc.auth
 }
 
-func (rc *regClient) RepoList(ctx context.Context, ref Ref) error {
+func (rc *regClient) RepoList(ctx context.Context, ref Ref) (TagList, error) {
+	tl := TagList{}
+	host, ok := rc.hosts[ref.Registry]
+	if !ok {
+		host = &regHost{scheme: "https", tls: tlsEnabled, dnsNames: []string{ref.Registry}}
+		rc.hosts[ref.Registry] = host
+	}
 	repoURL := url.URL{
-		Scheme: "https",
-		Host:   ref.Registry,
-		Path:   "/v2/" + ref.Repository,
+		Scheme: host.scheme,
+		Host:   host.dnsNames[0],
+		Path:   "/v2/" + ref.Repository + "/tags/list",
 	}
 
 	req, err := http.NewRequest("GET", repoURL.String(), nil)
 	if err != nil {
-		return err
+		return tl, err
 	}
 	rty := NewRetryable(RetryWithLimit(3))
 	resp, err := rty.Req(ctx, rc, req)
 	if err != nil {
-		return err
+		return tl, err
 	}
-	fmt.Printf("Response Code: %d\n", resp.StatusCode)
 	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return tl, err
 	}
-	fmt.Printf("Response Body: \n%s", respBody)
-	return nil
-}
-
-// Retryable retries a request until it succeeds or reaches a max number of failures
-// This is also used to inject authorization into a request
-type Retryable interface {
-	Req(context.Context, RegClient, *http.Request) (*http.Response, error)
-}
-
-type retryable struct {
-	transport *http.Transport
-	req       *http.Request
-	resps     []*http.Response
-	limit     int
-}
-
-// ROpt is used to pass options to NewRetryable
-type ROpt func(*retryable)
-
-// NewRetryable returns a Retryable used to retry http requests
-func NewRetryable(opts ...ROpt) Retryable {
-	r := retryable{
-		transport: http.DefaultTransport.(*http.Transport),
-		limit:     5,
+	err = json.Unmarshal(respBody, &tl)
+	if err != nil {
+		return tl, err
 	}
 
-	for _, opt := range opts {
-		opt(&r)
-	}
-
-	return &r
+	return tl, nil
 }
 
-// RetryWithTransport adds a user provided transport to NewRetryable
-func RetryWithTransport(t *http.Transport) ROpt {
-	return func(r *retryable) {
-		r.transport = t
-		return
-	}
-}
+func (rc *regClient) ImageInspect(ctx context.Context, ref Ref) (ociv1.Image, error) {
+	m := ociv1.Manifest{}
+	img := ociv1.Image{}
 
-// RetryWithTLSInsecure allows https with invalid certificate
-func RetryWithTLSInsecure() ROpt {
-	return func(r *retryable) {
-		if r.transport.TLSClientConfig == nil {
-			r.transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-		} else {
-			r.transport.TLSClientConfig.InsecureSkipVerify = true
-		}
-		return
+	host, ok := rc.hosts[ref.Registry]
+	if !ok {
+		host = &regHost{scheme: "https", tls: tlsEnabled, dnsNames: []string{ref.Registry}}
+		rc.hosts[ref.Registry] = host
 	}
-}
-
-// RetryWithLimit allows adjusting the retry limit
-func RetryWithLimit(limit int) ROpt {
-	return func(r *retryable) {
-		r.limit = limit
-		return
+	var tagOrDigest string
+	if ref.Digest != "" {
+		tagOrDigest = ref.Digest
+	} else if ref.Tag != "" {
+		tagOrDigest = ref.Tag
+	} else {
+		return img, ErrMissingTag
 	}
-}
 
-func (r *retryable) Req(ctx context.Context, rc RegClient, req *http.Request) (*http.Response, error) {
-	return nil, ErrNotImplemented
+	manfURL := url.URL{
+		Scheme: host.scheme,
+		Host:   host.dnsNames[0],
+		Path:   "/v2/" + ref.Repository + "/manifests/" + tagOrDigest,
+	}
+
+	req, err := http.NewRequest("GET", manfURL.String(), nil)
+	if err != nil {
+		return img, err
+	}
+	req.Header.Add("Accept", MediaTypeDocker2Manifest)
+	req.Header.Add("Accept", ociv1.MediaTypeImageManifest)
+
+	rty := NewRetryable(RetryWithLimit(3))
+	resp, err := rty.Req(ctx, rc, req)
+	if err != nil {
+		return img, err
+	}
+	respBody, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return img, err
+	}
+	err = json.Unmarshal(respBody, &m)
+	if err != nil {
+		return img, err
+	}
+
+	confURL := url.URL{
+		Scheme: host.scheme,
+		Host:   host.dnsNames[0],
+		Path:   "/v2/" + ref.Repository + "/blobs/" + m.Config.Digest.String(),
+	}
+
+	req, err = http.NewRequest("GET", confURL.String(), nil)
+	if err != nil {
+		return img, err
+	}
+	req.Header.Add("Accept", MediaTypeDocker2ImageConfig)
+	req.Header.Add("Accept", ociv1.MediaTypeImageConfig)
+	resp, err = rty.Req(ctx, rc, req)
+	if err != nil {
+		return img, err
+	}
+	// fmt.Printf("Headers: %v\n", resp.Header)
+	respBody, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return img, err
+	}
+	// fmt.Printf("Body:\n%s\n", respBody)
+	err = json.Unmarshal(respBody, &img)
+	if err != nil {
+		return img, err
+	}
+	return img, nil
 }
