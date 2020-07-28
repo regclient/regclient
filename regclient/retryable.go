@@ -2,7 +2,6 @@ package regclient
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"net/http"
 )
@@ -46,7 +45,7 @@ func RetryWithTransport(t *http.Transport) ROpt {
 }
 
 // RetryWithTLSInsecure allows https with invalid certificate
-func RetryWithTLSInsecure() ROpt {
+/* func RetryWithTLSInsecure() ROpt {
 	return func(r *retryable) {
 		if r.transport.TLSClientConfig == nil {
 			r.transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
@@ -55,7 +54,7 @@ func RetryWithTLSInsecure() ROpt {
 		}
 		return
 	}
-}
+} */
 
 // RetryWithLimit allows adjusting the retry limit
 func RetryWithLimit(limit int) ROpt {

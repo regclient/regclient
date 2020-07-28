@@ -31,7 +31,7 @@ func runRepoLs(cmd *cobra.Command, args []string) error {
 	}
 	rc := regclient.NewRegClient(regclient.WithDockerCreds())
 	// fmt.Printf("Listing host: %s, repo: %s\n", ref.Registry, ref.Repository)
-	tl, err := rc.RepoList(context.Background(), ref)
+	tl, err := rc.TagsList(context.Background(), ref)
 	if err != nil {
 		return err
 	}

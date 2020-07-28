@@ -16,6 +16,7 @@ type AuthClient interface {
 	Set(host, user, pass string)
 }
 
+// ACOpt defines options that can be added to NewAuthClient
 type ACOpt func(*authClient)
 
 type authClient struct {
@@ -29,11 +30,11 @@ type authHost struct {
 }
 
 // ACWithDockerCreds adds configuration from users docker config with registry logins
-func ACWithDockerCreds() ACOpt {
+/* func ACWithDockerCreds() ACOpt {
 	return func(ac *authClient) {
 		return
 	}
-}
+} */
 
 /* type credStore struct {
 	cred map[string]*cred
