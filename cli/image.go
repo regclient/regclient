@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/sudo-bmitch/regcli/regclient"
@@ -81,12 +82,7 @@ func runImageExport(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	rc := regclient.NewRegClient(regclient.WithDockerCreds())
-	ioHandle, err := rc.ImageExport(context.Background(), ref)
-	if err != nil {
-		return err
-	}
-	_ = ioHandle
-	return ErrNotImplemented
+	return rc.ImageExport(context.Background(), ref, os.Stdout)
 }
 
 func runImageImport(cmd *cobra.Command, args []string) error {

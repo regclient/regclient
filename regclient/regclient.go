@@ -2,6 +2,9 @@ package regclient
 
 import (
 	"context"
+	// crypto libraries included for go-digest
+	_ "crypto/sha256"
+	_ "crypto/sha512"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -11,10 +14,13 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"time"
 
 	dockercfg "github.com/docker/cli/cli/config"
 	"github.com/docker/distribution/reference"
+	"github.com/docker/docker/pkg/archive"
+	digest "github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -38,7 +44,7 @@ const (
 type RegClient interface {
 	Auth() AuthClient
 	BlobGet(ctx context.Context, ref Ref, digest string, accepts []string) (io.ReadCloser, *http.Response, error)
-	ImageExport(ctx context.Context, ref Ref) (io.ReadCloser, error)
+	ImageExport(ctx context.Context, ref Ref, outStream io.Writer) error
 	ImageInspect(ctx context.Context, ref Ref) (ociv1.Image, error)
 	ManifestGet(ctx context.Context, ref Ref) (ociv1.Manifest, error)
 	ManifestListGet(ctx context.Context, ref Ref) (ociv1.Index, error)
@@ -72,6 +78,13 @@ type regHost struct {
 	tls       tlsConf
 	dnsNames  []string
 	transport *http.Transport
+}
+
+// used by image import/export to match docker expected format
+type imageManifest struct {
+	Config   string
+	RepoTags []string
+	Layers   []string
 }
 
 // Opt functions are used to configure NewRegClient
@@ -154,6 +167,25 @@ func NewRef(ref string) (Ref, error) {
 	return ret, nil
 }
 
+// CommonName outputs a parsable name from a reference
+func (r Ref) CommonName() string {
+	cn := ""
+	if r.Registry != "" {
+		cn = r.Registry + "/"
+	}
+	if r.Repository == "" {
+		return ""
+	}
+	cn = cn + r.Repository
+	if r.Tag != "" {
+		cn = cn + ":" + r.Tag
+	}
+	if r.Digest != "" {
+		cn = cn + "@" + r.Digest
+	}
+	return cn
+}
+
 func (rc *regClient) Auth() AuthClient {
 	return rc.auth
 }
@@ -183,8 +215,152 @@ func (rc *regClient) BlobGet(ctx context.Context, ref Ref, digest string, accept
 	return resp.Body, resp, nil
 }
 
-func (rc *regClient) ImageExport(ctx context.Context, ref Ref) (io.ReadCloser, error) {
-	return nil, ErrNotImplemented
+func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writer) error {
+	if ref.CommonName() == "" {
+		return ErrNotFound
+	}
+
+	expManifest := imageManifest{}
+	expManifest.RepoTags = append(expManifest.RepoTags, ref.CommonName())
+
+	m, err := rc.ManifestGet(ctx, ref)
+	if err != nil {
+		return err
+	}
+
+	// write to a temp directory
+	tempDir, err := ioutil.TempDir("", "regcli-export-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tempDir)
+
+	fmt.Fprintf(os.Stderr, "Debug: Using temp directory for export \"%s\"\n", tempDir)
+
+	// retrieve the config blob
+	confio, _, err := rc.BlobGet(ctx, ref, m.Config.Digest.String(), []string{MediaTypeDocker2ImageConfig, ociv1.MediaTypeImageConfig})
+	if err != nil {
+		return err
+	}
+	confstr, err := ioutil.ReadAll(confio)
+	if err != nil {
+		return err
+	}
+	confDigest := digest.FromBytes(confstr)
+	if m.Config.Digest != confDigest {
+		fmt.Fprintf(os.Stderr, "Warning: digest for image config does not match, pulled %s, calculated %s\n", m.Config.Digest.String(), confDigest.String())
+	}
+	conf := ociv1.Image{}
+	err = json.Unmarshal(confstr, &conf)
+	if err != nil {
+		return err
+	}
+	// reset the rootfs DiffIDs and recalculate them as layers are downloaded from the manifest
+	// layer digest will change when decompressed and docker load expects layers as tar files
+	conf.RootFS.DiffIDs = []digest.Digest{}
+
+	for _, layerDesc := range m.Layers {
+		// TODO: wrap layer download in a concurrency throttled goroutine
+		// create tempdir for layer
+		layerDir, err := ioutil.TempDir(tempDir, "layer-*")
+		if err != nil {
+			return err
+		}
+		// no need to defer remove of layerDir, it is inside of tempDir
+
+		// request layer
+		layerRComp, _, err := rc.BlobGet(ctx, ref, layerDesc.Digest.String(), []string{})
+		if err != nil {
+			return err
+		}
+		// handle any failures before reading to a file
+		defer layerRComp.Close()
+		// gather digest of compressed stream to verify downloaded blob
+		digestComp := digest.Canonical.Digester()
+		trComp := io.TeeReader(layerRComp, digestComp.Hash())
+		// decompress layer
+		layerTarStream, err := archive.DecompressStream(trComp)
+		if err != nil {
+			return err
+		}
+		// generate digest of decompressed layer
+		digestTar := digest.Canonical.Digester()
+		tr := io.TeeReader(layerTarStream, digestTar.Hash())
+
+		// download to a temp location
+		layerTarFile := filepath.Join(layerDir, "layer.tar")
+		lf, err := os.OpenFile(layerTarFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+		if err != nil {
+			return err
+		}
+		_, err = io.Copy(lf, tr)
+		if err != nil {
+			return err
+		}
+		lf.Close()
+
+		// verify digests
+		if layerDesc.Digest != digestComp.Digest() {
+			fmt.Fprintf(os.Stderr, "Warning: digest for layer does not match, pulled %s, calculated %s\n", layerDesc.Digest.String(), digestComp.Digest().String())
+		}
+
+		// update references to uncompressed tar digest in the filesystem, manifest, and image config
+		digestFull := digestTar.Digest()
+		digestHex := digestFull.Encoded()
+		digestDir := filepath.Join(tempDir, digestHex)
+		digestFile := filepath.Join(digestHex, "layer.tar")
+		digestFileFull := filepath.Join(tempDir, digestFile)
+		if err := os.Rename(layerDir, digestDir); err != nil {
+			return err
+		}
+		if err := os.Chtimes(digestFileFull, *conf.Created, *conf.Created); err != nil {
+			return err
+		}
+		expManifest.Layers = append(expManifest.Layers, digestFile)
+		conf.RootFS.DiffIDs = append(conf.RootFS.DiffIDs, digestFull)
+	}
+	// TODO: if using goroutines, wait for all layers to finish
+
+	// calc config digest and write to file
+	confstr, err = json.Marshal(conf)
+	if err != nil {
+		return err
+	}
+	confDigest = digest.Canonical.FromBytes(confstr)
+	confFile := confDigest.Encoded() + ".json"
+	confFileFull := filepath.Join(tempDir, confFile)
+	if err := ioutil.WriteFile(confFileFull, confstr, 0644); err != nil {
+		return err
+	}
+	if err := os.Chtimes(confFileFull, *conf.Created, *conf.Created); err != nil {
+		return err
+	}
+	expManifest.Config = confFile
+
+	// write manifest
+	ml := []imageManifest{expManifest}
+	mlj, err := json.Marshal(ml)
+	if err != nil {
+		return err
+	}
+	manifestFile := filepath.Join(tempDir, "manifest.json")
+	if err := ioutil.WriteFile(manifestFile, mlj, 0644); err != nil {
+		return err
+	}
+	if err := os.Chtimes(manifestFile, time.Unix(0, 0), time.Unix(0, 0)); err != nil {
+		return err
+	}
+
+	// package in tar file
+	fs, err := archive.Tar(tempDir, archive.Uncompressed)
+	if err != nil {
+		return err
+	}
+	defer fs.Close()
+
+	_, err = io.Copy(outStream, fs)
+
+	return nil
 }
 
 func (rc *regClient) ImageInspect(ctx context.Context, ref Ref) (ociv1.Image, error) {
