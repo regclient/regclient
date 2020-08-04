@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/spf13/cobra"
 	"github.com/sudo-bmitch/regcli/regclient"
 )
@@ -69,7 +70,16 @@ func init() {
 }
 
 func runImageCopy(cmd *cobra.Command, args []string) error {
-	return ErrNotImplemented
+	refSrc, err := regclient.NewRef(args[0])
+	if err != nil {
+		return err
+	}
+	refTgt, err := regclient.NewRef(args[1])
+	if err != nil {
+		return err
+	}
+	rc := regclient.NewRegClient(regclient.WithDockerCreds())
+	return rc.ImageCopy(context.Background(), refSrc, refTgt)
 }
 
 func runImageDelete(cmd *cobra.Command, args []string) error {
@@ -111,26 +121,29 @@ func runImageManifest(cmd *cobra.Command, args []string) error {
 	}
 	rc := regclient.NewRegClient(regclient.WithDockerCreds())
 
-	// try retrieving a manifest list
-	manifestList, err := rc.ManifestListGet(context.Background(), ref)
-	if err == nil {
-		manifestListJSON, err := json.MarshalIndent(manifestList, "", "  ")
-		if err != nil {
-			return err
-		}
-		fmt.Println(string(manifestListJSON))
-		return nil
-	}
-
-	manifest, err := rc.ManifestGet(context.Background(), ref)
+	m, err := rc.ManifestGet(context.Background(), ref)
 	if err != nil {
 		return err
 	}
-	manifestJSON, err := json.MarshalIndent(manifest, "", "  ")
+	mt := m.GetMediaType()
+	var mj []byte
+	switch mt {
+	case regclient.MediaTypeDocker2Manifest:
+		mj, err = json.MarshalIndent(m.GetDocker(), "", "  ")
+	case ociv1.MediaTypeImageManifest:
+		mj, err = json.MarshalIndent(m.GetOCI(), "", "  ")
+	case regclient.MediaTypeDocker2ManifestList:
+		// TODO
+		return fmt.Errorf("Unsupported manifest media type %s", mt)
+	case ociv1.MediaTypeImageIndex:
+		mj, err = json.MarshalIndent(m.GetOCIIndex(), "", "  ")
+	default:
+		return fmt.Errorf("Unknown manifest media type %s", mt)
+	}
 	if err != nil {
 		return err
 	}
-	fmt.Println(string(manifestJSON))
+	fmt.Println(string(mj))
 	return nil
 }
 

@@ -1,7 +1,10 @@
 package regclient
 
 import (
+	"bytes"
 	"context"
+	"strings"
+
 	// crypto libraries included for go-digest
 	_ "crypto/sha256"
 	_ "crypto/sha512"
@@ -43,11 +46,11 @@ const (
 // RegClient provides an interfaces to working with registries
 type RegClient interface {
 	Auth() AuthClient
-	BlobGet(ctx context.Context, ref Ref, digest string, accepts []string) (io.ReadCloser, *http.Response, error)
+	BlobGet(ctx context.Context, ref Ref, d string, accepts []string) (io.ReadCloser, *http.Response, error)
+	ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) error
 	ImageExport(ctx context.Context, ref Ref, outStream io.Writer) error
 	ImageInspect(ctx context.Context, ref Ref) (ociv1.Image, error)
-	ManifestGet(ctx context.Context, ref Ref) (ociv1.Manifest, error)
-	ManifestListGet(ctx context.Context, ref Ref) (ociv1.Index, error)
+	ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 	TagsList(ctx context.Context, ref Ref) (TagList, error)
 }
 
@@ -80,8 +83,8 @@ type regHost struct {
 	transport *http.Transport
 }
 
-// used by image import/export to match docker expected format
-type imageManifest struct {
+// used by image import/export to match docker tar expected format
+type dockerTarManifest struct {
 	Config   string
 	RepoTags []string
 	Layers   []string
@@ -97,7 +100,7 @@ func NewRegClient(opts ...Opt) RegClient {
 	// TODO: move hardcoded host references into vars defined in another file
 	rc.hosts = map[string]*regHost{"docker.io": {scheme: "https", tls: tlsEnabled, dnsNames: []string{"registry-1.docker.io"}}}
 	rc.auth = NewAuthClient()
-	rc.retryLimit = 3
+	rc.retryLimit = 5
 
 	for _, opt := range opts {
 		opt(&rc)
@@ -190,13 +193,42 @@ func (rc *regClient) Auth() AuthClient {
 	return rc.auth
 }
 
-func (rc *regClient) BlobGet(ctx context.Context, ref Ref, digest string, accepts []string) (io.ReadCloser, *http.Response, error) {
+func (rc *regClient) BlobCopy(ctx context.Context, refSrc Ref, refTgt Ref, d string) error {
+	// for the same repository, there's nothing to copy
+	if refSrc.Repository == refTgt.Repository {
+		return nil
+	}
+	// check if layer already exists
+	if err := rc.BlobHead(ctx, refTgt, d); err == nil {
+		return nil
+	}
+	// try mounting blob from the source repo is the registry is the same
+	if refSrc.Registry == refTgt.Registry {
+		err := rc.BlobMount(ctx, refSrc, refTgt, d)
+		if err == nil {
+			return nil
+		}
+		fmt.Fprintf(os.Stderr, "Failed to mount blob: %s\n", err)
+	}
+	// fast options failed, download layer from source and push to target
+	blobIO, layerResp, err := rc.BlobGet(ctx, refSrc, d, []string{})
+	if err != nil {
+		return err
+	}
+	if err := rc.BlobPut(ctx, refTgt, d, blobIO, layerResp.Header.Get("Content-Type"), layerResp.ContentLength); err != nil {
+		blobIO.Close()
+		return err
+	}
+	return nil
+}
+
+func (rc *regClient) BlobGet(ctx context.Context, ref Ref, d string, accepts []string) (io.ReadCloser, *http.Response, error) {
 	host := rc.getHost(ref.Registry)
 
 	blobURL := url.URL{
 		Scheme: host.scheme,
 		Host:   host.dnsNames[0],
-		Path:   "/v2/" + ref.Repository + "/blobs/" + digest,
+		Path:   "/v2/" + ref.Repository + "/blobs/" + d,
 	}
 
 	req, err := http.NewRequest("GET", blobURL.String(), nil)
@@ -215,12 +247,173 @@ func (rc *regClient) BlobGet(ctx context.Context, ref Ref, digest string, accept
 	return resp.Body, resp, nil
 }
 
+func (rc *regClient) BlobHead(ctx context.Context, ref Ref, d string) error {
+	host := rc.getHost(ref.Registry)
+
+	blobURL := url.URL{
+		Scheme: host.scheme,
+		Host:   host.dnsNames[0],
+		Path:   "/v2/" + ref.Repository + "/blobs/" + d,
+	}
+
+	req, err := http.NewRequest("HEAD", blobURL.String(), nil)
+	if err != nil {
+		return err
+	}
+	rty := rc.newRetryableForHost(host)
+	resp, err := rty.Req(ctx, rc, req)
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+func (rc *regClient) BlobMount(ctx context.Context, refSrc Ref, refTgt Ref, d string) error {
+	if refSrc.Registry != refTgt.Registry {
+		return fmt.Errorf("Registry must match for blob mount")
+	}
+
+	host := rc.getHost(refTgt.Registry)
+	mountURL := url.URL{
+		Scheme:   host.scheme,
+		Host:     host.dnsNames[0],
+		Path:     "/v2/" + refTgt.Repository + "/blobs/uploads/",
+		RawQuery: "mount=" + d + "&from=" + refSrc.Repository,
+	}
+
+	req, err := http.NewRequest("POST", mountURL.String(), nil)
+	if err != nil {
+		return fmt.Errorf("Error creating manifest put request: %w", err)
+	}
+
+	rty := rc.newRetryableForHost(host)
+	resp, err := rty.Req(ctx, rc, req)
+	if err != nil {
+		return fmt.Errorf("Error calling blob mount request: %w\nRequest object: %v\nResponse object: %v", err, req, resp)
+	}
+	if resp.StatusCode != 201 {
+		return fmt.Errorf("Blob mount did not return a 201 status, status code: %d\nRequest object: %v\nResponse object: %v", resp.StatusCode, req, resp)
+	}
+
+	return nil
+}
+
+func (rc *regClient) BlobPut(ctx context.Context, ref Ref, d string, rdr io.ReadCloser, ct string, cl int64) error {
+	if ct == "" {
+		ct = "application/octet-stream"
+	}
+	if cl == 0 {
+		cl = -1
+	}
+
+	host := rc.getHost(ref.Registry)
+
+	// request an upload location
+	uploadURL := url.URL{
+		Scheme: host.scheme,
+		Host:   host.dnsNames[0],
+		Path:   "/v2/" + ref.Repository + "/blobs/uploads/",
+	}
+	req, err := http.NewRequest("POST", uploadURL.String(), nil)
+	if err != nil {
+		return fmt.Errorf("Error creating manifest put request: %w", err)
+	}
+	rty := rc.newRetryableForHost(host)
+	resp, err := rty.Req(ctx, rc, req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != 202 {
+		return fmt.Errorf("Blob upload request did not return a 202 status, status code: %d\nRequest object: %v\nResponse object: %v", resp.StatusCode, req, resp)
+	}
+
+	// extract the location into a new putURL based on whether it's relative, fqdn with a scheme, or without a scheme
+	location := resp.Header.Get("Location")
+	fmt.Fprintf(os.Stderr, "Upload location received: %s", location)
+	var putURL *url.URL
+	if strings.HasPrefix(location, "/") {
+		location = host.scheme + "://" + host.dnsNames[0] + location
+	} else if !strings.Contains(location, "://") {
+		location = host.scheme + "://" + location
+	}
+	putURL, err = url.Parse(location)
+	if err != nil {
+		return err
+	}
+
+	// append digest to request to use the monolithic upload option
+	if putURL.RawQuery != "" {
+		putURL.RawQuery = putURL.RawQuery + "&digest=" + d
+	} else {
+		putURL.RawQuery = "digest=" + d
+	}
+
+	// send the blob
+	req, err = http.NewRequest("PUT", putURL.String(), nil)
+	if err != nil {
+		return fmt.Errorf("Error creating manifest put request: %w", err)
+	}
+	req.Body = rdr
+	req.ContentLength = cl
+	req.Header.Set("Content-Type", ct)
+	resp, err = rty.Req(ctx, rc, req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return fmt.Errorf("Blob put request status code: %d\nRequest object: %v\nResponse object: %v", resp.StatusCode, req, resp)
+	}
+
+	return nil
+}
+
+func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) error {
+	// get the manifest for the source
+	m, err := rc.ManifestGet(ctx, refSrc)
+	if err != nil {
+		return err
+	}
+
+	// transfer the config
+	cd, err := m.GetConfigDigest()
+	if err != nil {
+		return err
+	}
+	if err := rc.BlobCopy(ctx, refSrc, refTgt, cd.String()); err != nil {
+		return err
+	}
+
+	// for each layer from the source
+	l, err := m.GetLayers()
+	if err != nil {
+		return err
+	}
+	for _, layerSrc := range l {
+		if err := rc.BlobCopy(ctx, refSrc, refTgt, layerSrc.Digest.String()); err != nil {
+			return err
+		}
+	}
+
+	// push manifest to target
+	if err := rc.ManifestPut(ctx, refTgt, m); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writer) error {
 	if ref.CommonName() == "" {
 		return ErrNotFound
 	}
 
-	expManifest := imageManifest{}
+	expManifest := dockerTarManifest{}
 	expManifest.RepoTags = append(expManifest.RepoTags, ref.CommonName())
 
 	m, err := rc.ManifestGet(ctx, ref)
@@ -238,7 +431,11 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 	fmt.Fprintf(os.Stderr, "Debug: Using temp directory for export \"%s\"\n", tempDir)
 
 	// retrieve the config blob
-	confio, _, err := rc.BlobGet(ctx, ref, m.Config.Digest.String(), []string{MediaTypeDocker2ImageConfig, ociv1.MediaTypeImageConfig})
+	cd, err := m.GetConfigDigest()
+	if err != nil {
+		return err
+	}
+	confio, _, err := rc.BlobGet(ctx, ref, cd.String(), []string{MediaTypeDocker2ImageConfig, ociv1.MediaTypeImageConfig})
 	if err != nil {
 		return err
 	}
@@ -247,8 +444,8 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 		return err
 	}
 	confDigest := digest.FromBytes(confstr)
-	if m.Config.Digest != confDigest {
-		fmt.Fprintf(os.Stderr, "Warning: digest for image config does not match, pulled %s, calculated %s\n", m.Config.Digest.String(), confDigest.String())
+	if cd != confDigest {
+		fmt.Fprintf(os.Stderr, "Warning: digest for image config does not match, pulled %s, calculated %s\n", cd.String(), confDigest.String())
 	}
 	conf := ociv1.Image{}
 	err = json.Unmarshal(confstr, &conf)
@@ -259,7 +456,11 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 	// layer digest will change when decompressed and docker load expects layers as tar files
 	conf.RootFS.DiffIDs = []digest.Digest{}
 
-	for _, layerDesc := range m.Layers {
+	l, err := m.GetLayers()
+	if err != nil {
+		return err
+	}
+	for _, layerDesc := range l {
 		// TODO: wrap layer download in a concurrency throttled goroutine
 		// create tempdir for layer
 		layerDir, err := ioutil.TempDir(tempDir, "layer-*")
@@ -337,8 +538,8 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 	}
 	expManifest.Config = confFile
 
-	// write manifest
-	ml := []imageManifest{expManifest}
+	// convert to list and write manifest
+	ml := []dockerTarManifest{expManifest}
 	mlj, err := json.Marshal(ml)
 	if err != nil {
 		return err
@@ -370,8 +571,11 @@ func (rc *regClient) ImageInspect(ctx context.Context, ref Ref) (ociv1.Image, er
 	if err != nil {
 		return img, err
 	}
-
-	imgIO, _, err := rc.BlobGet(ctx, ref, m.Config.Digest.String(), []string{MediaTypeDocker2ImageConfig, ociv1.MediaTypeImageConfig})
+	cd, err := m.GetConfigDigest()
+	if err != nil {
+		return img, err
+	}
+	imgIO, _, err := rc.BlobGet(ctx, ref, cd.String(), []string{MediaTypeDocker2ImageConfig, ociv1.MediaTypeImageConfig})
 	if err != nil {
 		return img, err
 	}
@@ -388,8 +592,8 @@ func (rc *regClient) ImageInspect(ctx context.Context, ref Ref) (ociv1.Image, er
 	return img, nil
 }
 
-func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (ociv1.Manifest, error) {
-	m := ociv1.Manifest{}
+func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error) {
+	m := manifest{}
 
 	host := rc.getHost(ref.Registry)
 	var tagOrDigest string
@@ -398,7 +602,7 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (ociv1.Manifest, 
 	} else if ref.Tag != "" {
 		tagOrDigest = ref.Tag
 	} else {
-		return m, ErrMissingTag
+		return nil, ErrMissingTag
 	}
 
 	manfURL := url.URL{
@@ -409,30 +613,47 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (ociv1.Manifest, 
 
 	req, err := http.NewRequest("GET", manfURL.String(), nil)
 	if err != nil {
-		return m, err
+		return nil, err
 	}
+	// accept either the manifest or manifest list (index in OCI terms)
 	req.Header.Add("Accept", MediaTypeDocker2Manifest)
 	req.Header.Add("Accept", ociv1.MediaTypeImageManifest)
+	req.Header.Add("Accept", MediaTypeDocker2ManifestList)
+	req.Header.Add("Accept", ociv1.MediaTypeImageIndex)
 
 	rty := rc.newRetryableForHost(host)
 	resp, err := rty.Req(ctx, rc, req)
 	if err != nil {
-		return m, err
+		return nil, err
 	}
 	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return m, err
+		return nil, err
+	}
+	m.mediatype = resp.Header.Get("Content-Type")
+	switch m.mediatype {
+	case MediaTypeDocker2Manifest:
+		err = json.Unmarshal(respBody, &m.docker)
+	case ociv1.MediaTypeImageManifest:
+		err = json.Unmarshal(respBody, &m.oci)
+	case MediaTypeDocker2ManifestList:
+		// TODO
+		return nil, fmt.Errorf("Unsupported manifest media type %s", m.mediatype)
+	case ociv1.MediaTypeImageIndex:
+		err = json.Unmarshal(respBody, &m.ociIndex)
+	default:
+		return nil, fmt.Errorf("Unknown manifest media type %s", m.mediatype)
 	}
 	err = json.Unmarshal(respBody, &m)
 	if err != nil {
-		return m, err
+		return nil, err
 	}
 
-	return m, nil
+	return &m, nil
 }
 
-func (rc *regClient) ManifestListGet(ctx context.Context, ref Ref) (ociv1.Index, error) {
-	ml := ociv1.Index{}
+/* func (rc *regClient) ManifestListGet(ctx context.Context, ref Ref) (Manifest, error) {
+	m := manifest{}
 
 	host := rc.getHost(ref.Registry)
 	var tagOrDigest string
@@ -441,7 +662,7 @@ func (rc *regClient) ManifestListGet(ctx context.Context, ref Ref) (ociv1.Index,
 	} else if ref.Tag != "" {
 		tagOrDigest = ref.Tag
 	} else {
-		return ml, ErrMissingTag
+		return nil, ErrMissingTag
 	}
 
 	manfURL := url.URL{
@@ -452,7 +673,7 @@ func (rc *regClient) ManifestListGet(ctx context.Context, ref Ref) (ociv1.Index,
 
 	req, err := http.NewRequest("GET", manfURL.String(), nil)
 	if err != nil {
-		return ml, err
+		return nil, err
 	}
 	req.Header.Add("Accept", MediaTypeDocker2ManifestList)
 	req.Header.Add("Accept", ociv1.MediaTypeImageIndex)
@@ -460,26 +681,83 @@ func (rc *regClient) ManifestListGet(ctx context.Context, ref Ref) (ociv1.Index,
 	rty := rc.newRetryableForHost(host)
 	resp, err := rty.Req(ctx, rc, req)
 	if err != nil {
-		return ml, err
+		return nil, err
 	}
 
 	// docker will respond for a manifestlist request with a manifest, so check the content type
 	ct := resp.Header.Get("Content-Type")
 	if ct != MediaTypeDocker2ManifestList && ct != ociv1.MediaTypeImageIndex {
-		return ml, ErrNotFound
+		return nil, ErrNotFound
 	}
 
 	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return ml, err
+		return nil, err
 	}
 
 	err = json.Unmarshal(respBody, &ml)
 	if err != nil {
-		return ml, err
+		return nil, err
 	}
 
 	return ml, nil
+}
+*/
+func (rc *regClient) ManifestPut(ctx context.Context, ref Ref, m Manifest) error {
+	host := rc.getHost(ref.Registry)
+	if ref.Tag == "" {
+		return ErrMissingTag
+	}
+
+	manfURL := url.URL{
+		Scheme: host.scheme,
+		Host:   host.dnsNames[0],
+		Path:   "/v2/" + ref.Repository + "/manifests/" + ref.Tag,
+	}
+
+	req, err := http.NewRequest("PUT", manfURL.String(), nil)
+	if err != nil {
+		return fmt.Errorf("Error creating manifest put request: %w", err)
+	}
+
+	// add body to request
+	var mj []byte
+	mt := m.GetMediaType()
+	switch mt {
+	case MediaTypeDocker2Manifest:
+		mj, err = json.Marshal(m.GetDocker())
+	case ociv1.MediaTypeImageManifest:
+		mj, err = json.Marshal(m.GetOCI())
+	case MediaTypeDocker2ManifestList:
+		// TODO
+		return fmt.Errorf("Unsupported manifest media type %s", mt)
+	case ociv1.MediaTypeImageIndex:
+		mj, err = json.Marshal(m.GetOCIIndex())
+	default:
+		return fmt.Errorf("Unknown manifest media type %s", mt)
+	}
+	if err != nil {
+		return err
+	}
+	req.Body = ioutil.NopCloser(bytes.NewReader(mj))
+	req.GetBody = func() (io.ReadCloser, error) {
+		return ioutil.NopCloser(bytes.NewReader(mj)), nil
+	}
+	req.ContentLength = int64(len(mj))
+	// req.Header.Set("Content-Type", MediaTypeDocker2Manifest)
+	req.Header.Set("Content-Type", mt)
+
+	rty := rc.newRetryableForHost(host)
+	resp, err := rty.Req(ctx, rc, req)
+	if err != nil {
+		return fmt.Errorf("Error calling manifest put request: %w\nRequest object: %v\nResponse object: %v", err, req, resp)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		body, _ := ioutil.ReadAll(resp.Body)
+		return fmt.Errorf("Unexpected status code on manifest put %d\nRequest object: %v\nResponse object: %v\nBody: %s", resp.StatusCode, req, resp, body)
+	}
+
+	return nil
 }
 
 func (rc *regClient) TagsList(ctx context.Context, ref Ref) (TagList, error) {
@@ -545,4 +823,64 @@ func (rc *regClient) newRetryableForHost(host *regHost) Retryable {
 	}
 	r := NewRetryable(RetryWithTransport(host.transport), RetryWithLimit(rc.retryLimit))
 	return r
+}
+
+// TODO: temp hack, grab the proper manifest from github.com/docker/distribution/manifest/schema2
+type dockerManifest struct {
+	MediaType string `json:"mediaType,omitempty"`
+	ociv1.Manifest
+}
+
+type manifest struct {
+	mediatype string
+	oci       ociv1.Manifest
+	ociIndex  ociv1.Index
+	docker    dockerManifest
+	// TODO: include docker manifest list
+}
+
+// Manifest abstracts the various types of manifests that are supported
+type Manifest interface {
+	GetConfigDigest() (digest.Digest, error)
+	GetDocker() dockerManifest
+	GetLayers() ([]ociv1.Descriptor, error)
+	GetMediaType() string
+	GetOCI() ociv1.Manifest
+	GetOCIIndex() ociv1.Index
+}
+
+func (m *manifest) GetConfigDigest() (digest.Digest, error) {
+	switch m.mediatype {
+	case MediaTypeDocker2Manifest:
+		return m.docker.Config.Digest, nil
+	case ociv1.MediaTypeImageManifest:
+		return m.oci.Config.Digest, nil
+	}
+	return "", fmt.Errorf("Unsupported manifest mediatype %s", m.mediatype)
+}
+
+func (m *manifest) GetDocker() dockerManifest {
+	return m.docker
+}
+
+func (m *manifest) GetLayers() ([]ociv1.Descriptor, error) {
+	switch m.mediatype {
+	case MediaTypeDocker2Manifest:
+		return m.docker.Layers, nil
+	case ociv1.MediaTypeImageManifest:
+		return m.oci.Layers, nil
+	}
+	return []ociv1.Descriptor{}, fmt.Errorf("Unsupported manifest mediatype %s", m.mediatype)
+}
+
+func (m *manifest) GetMediaType() string {
+	return m.mediatype
+}
+
+func (m *manifest) GetOCI() ociv1.Manifest {
+	return m.oci
+}
+
+func (m *manifest) GetOCIIndex() ociv1.Index {
+	return m.ociIndex
 }

@@ -68,6 +68,7 @@ func (r *retryable) Req(ctx context.Context, rc RegClient, req *http.Request) (*
 	// define return values outside of the loop scope
 	var resp *http.Response
 	var err error
+	resps := []*http.Response{}
 
 	client := &http.Client{
 		Transport: r.transport,
@@ -89,12 +90,13 @@ func (r *retryable) Req(ctx context.Context, rc RegClient, req *http.Request) (*
 		if err != nil {
 			return resp, err
 		}
+		resps = append(resps, resp)
 
 		switch resp.StatusCode {
 		case http.StatusUnauthorized:
 			// fmt.Printf("Unauthorized, adding auth\n")
 			// update auth based on response
-			err = rc.Auth().AddResp(ctx, resp)
+			err = rc.Auth().AddResp(ctx, resps)
 			if err != nil {
 				return resp, err
 			}
@@ -105,6 +107,10 @@ func (r *retryable) Req(ctx context.Context, rc RegClient, req *http.Request) (*
 		default:
 			// on all other success and failure cases do not retry
 			return resp, err
+		}
+		// reset body if GetBody has been set
+		if req.GetBody != nil {
+			req.Body, _ = req.GetBody()
 		}
 	}
 	return resp, err

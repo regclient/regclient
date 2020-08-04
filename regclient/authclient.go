@@ -12,7 +12,7 @@ import (
 // AuthClient authorizes registry reqests
 type AuthClient interface {
 	AuthReq(context.Context, *http.Request) error
-	AddResp(context.Context, *http.Response) error
+	AddResp(context.Context, []*http.Response) error
 	Set(host, user, pass string)
 }
 
@@ -28,6 +28,8 @@ type authClient struct {
 type authHost struct {
 	user, pass string
 }
+
+// TODO: replace containerd authorizer with local implementation to reduce dependencies and better handle a scope change (pull to pull and push)
 
 // ACWithDockerCreds adds configuration from users docker config with registry logins
 /* func ACWithDockerCreds() ACOpt {
@@ -46,14 +48,18 @@ type cred struct {
 
 // NewAuthClient creates an AuthClient to authorize registry requests
 func NewAuthClient(opts ...ACOpt) AuthClient {
-	var a authClient
-	a.client = &http.Client{}
-	a.hosts = map[string]authHost{}
-	a.authorizer = cdauth.NewDockerAuthorizer(cdauth.WithAuthClient(a.client), cdauth.WithAuthCreds(a.getAuth))
+	var ac authClient
+	ac.client = &http.Client{}
+	ac.hosts = map[string]authHost{}
+	ac.authorizer = cdauth.NewDockerAuthorizer(cdauth.WithAuthClient(ac.client), cdauth.WithAuthCreds(ac.getAuth))
 	for _, opt := range opts {
-		opt(&a)
+		opt(&ac)
 	}
-	return &a
+	return &ac
+}
+
+func (ac *authClient) resetAuth() {
+	ac.authorizer = cdauth.NewDockerAuthorizer(cdauth.WithAuthClient(ac.client), cdauth.WithAuthCreds(ac.getAuth))
 }
 
 // AuthReq Add auth headers to a request
@@ -79,9 +85,15 @@ func (ac *authClient) AuthReq(ctx context.Context, req *http.Request) error {
 	   	return nil */
 }
 
-func (ac *authClient) AddResp(ctx context.Context, resp *http.Response) error {
-	resps := []*http.Response{resp}
-	return ac.authorizer.AddResponses(ctx, resps)
+func (ac *authClient) AddResp(ctx context.Context, resps []*http.Response) error {
+	// AddResponses does not handle a scope change, reset auth when that happens
+	err := ac.authorizer.AddResponses(ctx, resps)
+	if err != nil {
+		ac.resetAuth()
+		resps = resps[len(resps)-1:]
+		err = ac.authorizer.AddResponses(ctx, resps)
+	}
+	return err
 }
 
 // AuthSet create/update a saved user/pass auth entry
