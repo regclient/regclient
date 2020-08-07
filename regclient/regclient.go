@@ -21,6 +21,8 @@ import (
 	"time"
 
 	dockercfg "github.com/docker/cli/cli/config"
+	dockerManifestList "github.com/docker/distribution/manifest/manifestlist"
+	dockerSchema2 "github.com/docker/distribution/manifest/schema2"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/pkg/archive"
 	digest "github.com/opencontainers/go-digest"
@@ -31,10 +33,17 @@ type tlsConf int
 
 var (
 	// MediaTypeDocker2Manifest is the media type when pulling manifests from a v2 registry
-	MediaTypeDocker2Manifest     = "application/vnd.docker.distribution.manifest.v2+json"
-	MediaTypeDocker2ManifestList = "application/vnd.docker.distribution.manifest.list.v2+json"
-	// MediaTypeDocker2ImageConfig is for the configuration json object
-	MediaTypeDocker2ImageConfig = "application/vnd.docker.container.image.v1+json"
+	MediaTypeDocker2Manifest = dockerSchema2.MediaTypeManifest
+	// MediaTypeDocker2ManifestList is the media type when pulling a manifest list from a v2 registry
+	MediaTypeDocker2ManifestList = dockerManifestList.MediaTypeManifestList
+	// MediaTypeDocker2ImageConfig is for the configuration json object media type
+	MediaTypeDocker2ImageConfig = dockerSchema2.MediaTypeImageConfig
+	// MediaTypeOCI1Manifest OCI v1 manifest media type
+	MediaTypeOCI1Manifest = ociv1.MediaTypeImageManifest
+	// MediaTypeOCI1ManifestList OCI v1 manifest list media type
+	MediaTypeOCI1ManifestList = ociv1.MediaTypeImageIndex
+	// MediaTypeOCI1ImageConfig OCI v1 configuration json object media type
+	MediaTypeOCI1ImageConfig = ociv1.MediaTypeImageConfig
 )
 
 const (
@@ -617,9 +626,9 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 	}
 	// accept either the manifest or manifest list (index in OCI terms)
 	req.Header.Add("Accept", MediaTypeDocker2Manifest)
-	req.Header.Add("Accept", ociv1.MediaTypeImageManifest)
 	req.Header.Add("Accept", MediaTypeDocker2ManifestList)
-	req.Header.Add("Accept", ociv1.MediaTypeImageIndex)
+	req.Header.Add("Accept", MediaTypeOCI1Manifest)
+	req.Header.Add("Accept", MediaTypeOCI1ManifestList)
 
 	rty := rc.newRetryableForHost(host)
 	resp, err := rty.Req(ctx, rc, req)
@@ -630,19 +639,18 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 	if err != nil {
 		return nil, err
 	}
-	m.mediatype = resp.Header.Get("Content-Type")
-	switch m.mediatype {
+	m.mt = resp.Header.Get("Content-Type")
+	switch m.mt {
 	case MediaTypeDocker2Manifest:
-		err = json.Unmarshal(respBody, &m.docker)
-	case ociv1.MediaTypeImageManifest:
-		err = json.Unmarshal(respBody, &m.oci)
+		err = json.Unmarshal(respBody, &m.dockerM)
 	case MediaTypeDocker2ManifestList:
-		// TODO
-		return nil, fmt.Errorf("Unsupported manifest media type %s", m.mediatype)
-	case ociv1.MediaTypeImageIndex:
-		err = json.Unmarshal(respBody, &m.ociIndex)
+		err = json.Unmarshal(respBody, &m.dockerML)
+	case MediaTypeOCI1Manifest:
+		err = json.Unmarshal(respBody, &m.ociM)
+	case MediaTypeOCI1ManifestList:
+		err = json.Unmarshal(respBody, &m.ociML)
 	default:
-		return nil, fmt.Errorf("Unknown manifest media type %s", m.mediatype)
+		return nil, fmt.Errorf("Unknown manifest media type %s", m.mt)
 	}
 	err = json.Unmarshal(respBody, &m)
 	if err != nil {
@@ -723,19 +731,7 @@ func (rc *regClient) ManifestPut(ctx context.Context, ref Ref, m Manifest) error
 	// add body to request
 	var mj []byte
 	mt := m.GetMediaType()
-	switch mt {
-	case MediaTypeDocker2Manifest:
-		mj, err = json.Marshal(m.GetDocker())
-	case ociv1.MediaTypeImageManifest:
-		mj, err = json.Marshal(m.GetOCI())
-	case MediaTypeDocker2ManifestList:
-		// TODO
-		return fmt.Errorf("Unsupported manifest media type %s", mt)
-	case ociv1.MediaTypeImageIndex:
-		mj, err = json.Marshal(m.GetOCIIndex())
-	default:
-		return fmt.Errorf("Unknown manifest media type %s", mt)
-	}
+	mj, err = json.Marshal(m)
 	if err != nil {
 		return err
 	}
@@ -832,55 +828,84 @@ type dockerManifest struct {
 }
 
 type manifest struct {
-	mediatype string
-	oci       ociv1.Manifest
-	ociIndex  ociv1.Index
-	docker    dockerManifest
-	// TODO: include docker manifest list
+	dockerM  dockerSchema2.Manifest
+	dockerML dockerManifestList.ManifestList
+	mt       string
+	ociM     ociv1.Manifest
+	ociML    ociv1.Index
 }
 
 // Manifest abstracts the various types of manifests that are supported
 type Manifest interface {
 	GetConfigDigest() (digest.Digest, error)
-	GetDocker() dockerManifest
+	GetDockerManifest() dockerSchema2.Manifest
+	GetDockerManifestList() dockerManifestList.ManifestList
 	GetLayers() ([]ociv1.Descriptor, error)
 	GetMediaType() string
-	GetOCI() ociv1.Manifest
-	GetOCIIndex() ociv1.Index
+	GetOCIManifest() ociv1.Manifest
+	GetOCIManifestList() ociv1.Index
+	MarshalJSON() ([]byte, error)
 }
 
 func (m *manifest) GetConfigDigest() (digest.Digest, error) {
-	switch m.mediatype {
+	switch m.mt {
 	case MediaTypeDocker2Manifest:
-		return m.docker.Config.Digest, nil
+		return m.dockerM.Config.Digest, nil
 	case ociv1.MediaTypeImageManifest:
-		return m.oci.Config.Digest, nil
+		return m.ociM.Config.Digest, nil
 	}
-	return "", fmt.Errorf("Unsupported manifest mediatype %s", m.mediatype)
+	// TODO: find config for current OS type?
+	return "", fmt.Errorf("Unsupported manifest mediatype %s", m.mt)
 }
 
-func (m *manifest) GetDocker() dockerManifest {
-	return m.docker
+func (m *manifest) GetDockerManifest() dockerSchema2.Manifest {
+	return m.dockerM
+}
+
+func (m *manifest) GetDockerManifestList() dockerManifestList.ManifestList {
+	return m.dockerML
 }
 
 func (m *manifest) GetLayers() ([]ociv1.Descriptor, error) {
-	switch m.mediatype {
+	switch m.mt {
 	case MediaTypeDocker2Manifest:
-		return m.docker.Layers, nil
+		// TODO: this is painfully hacky, and the underlying objects are essentially the same.
+		// Research better options to do a cast between layers struct imported from two different projects.
+		var l []ociv1.Descriptor
+		lj, err := json.Marshal(m.dockerM.Layers)
+		if err != nil {
+			return l, err
+		}
+		err = json.Unmarshal(lj, &l)
+		return l, err
 	case ociv1.MediaTypeImageManifest:
-		return m.oci.Layers, nil
+		return m.ociM.Layers, nil
 	}
-	return []ociv1.Descriptor{}, fmt.Errorf("Unsupported manifest mediatype %s", m.mediatype)
+	return []ociv1.Descriptor{}, fmt.Errorf("Unsupported manifest mediatype %s", m.mt)
 }
 
 func (m *manifest) GetMediaType() string {
-	return m.mediatype
+	return m.mt
 }
 
-func (m *manifest) GetOCI() ociv1.Manifest {
-	return m.oci
+func (m *manifest) GetOCIManifest() ociv1.Manifest {
+	return m.ociM
 }
 
-func (m *manifest) GetOCIIndex() ociv1.Index {
-	return m.ociIndex
+func (m *manifest) GetOCIManifestList() ociv1.Index {
+	return m.ociML
+}
+
+func (m *manifest) MarshalJSON() ([]byte, error) {
+	switch m.mt {
+	case MediaTypeDocker2Manifest:
+		return json.Marshal(m.dockerM)
+	case MediaTypeDocker2ManifestList:
+		return json.Marshal(m.dockerML)
+	case MediaTypeOCI1Manifest:
+		return json.Marshal(m.ociM)
+	case MediaTypeOCI1ManifestList:
+		return json.Marshal(m.ociML)
+	}
+	return []byte{}, ErrUnsupportedMediaType
 }

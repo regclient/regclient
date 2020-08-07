@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/spf13/cobra"
 	"github.com/sudo-bmitch/regcli/regclient"
 )
@@ -125,21 +124,7 @@ func runImageManifest(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	mt := m.GetMediaType()
-	var mj []byte
-	switch mt {
-	case regclient.MediaTypeDocker2Manifest:
-		mj, err = json.MarshalIndent(m.GetDocker(), "", "  ")
-	case ociv1.MediaTypeImageManifest:
-		mj, err = json.MarshalIndent(m.GetOCI(), "", "  ")
-	case regclient.MediaTypeDocker2ManifestList:
-		// TODO
-		return fmt.Errorf("Unsupported manifest media type %s", mt)
-	case ociv1.MediaTypeImageIndex:
-		mj, err = json.MarshalIndent(m.GetOCIIndex(), "", "  ")
-	default:
-		return fmt.Errorf("Unknown manifest media type %s", mt)
-	}
+	mj, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return err
 	}
