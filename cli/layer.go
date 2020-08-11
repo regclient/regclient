@@ -30,7 +30,7 @@ func runLayerPull(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	rc := regclient.NewRegClient(regclient.WithDockerCreds())
+	rc := newRegClient()
 
 	// try retrieving a manifest list
 	blobIO, resp, err := rc.BlobGet(context.Background(), ref, args[1], []string{})

@@ -143,8 +143,9 @@ func runRegistrySet(cmd *cobra.Command, args []string) error {
 	}
 	h, ok := c.Hosts[args[0]]
 	if !ok {
-		fmt.Fprintf(os.Stderr, "No configuration found for registry.\n")
-		return ErrNotFound
+		h = regclient.ConfigHostNew()
+		h.DNS = []string{args[0]}
+		c.Hosts[args[0]] = h
 	}
 
 	if registryOpts.scheme != "" {

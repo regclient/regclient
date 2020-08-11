@@ -149,3 +149,35 @@ func (c credStore) SetRefreshToken(u *url.URL, service string, token string) {
 	}
 	return
 } */
+
+func (rc *regClient) newAuth() {
+	rc.authorizer = cdauth.NewDockerAuthorizer(cdauth.WithAuthCreds(rc.getAuth))
+}
+
+func (rc *regClient) AddResp(ctx context.Context, resps []*http.Response) error {
+	// AddResponses does not handle a scope change, reset auth when that happens
+	err := rc.authorizer.AddResponses(ctx, resps)
+	if err != nil {
+		rc.newAuth()
+		resps = resps[len(resps)-1:]
+		err = rc.authorizer.AddResponses(ctx, resps)
+	}
+	return err
+}
+
+func (rc *regClient) AuthReq(ctx context.Context, req *http.Request) error {
+	return rc.authorizer.Authorize(ctx, req)
+}
+
+func (rc *regClient) getAuth(host string) (string, string, error) {
+	if h, ok := rc.config.Hosts[host]; ok {
+		return h.User, h.Pass, nil
+	}
+	// default credentials are stored under a blank hostname
+	if h, ok := rc.config.Hosts[""]; ok {
+		return h.User, h.Pass, nil
+	}
+	fmt.Fprintf(os.Stderr, "No credentials found for %s\n", host)
+	// anonymous request
+	return "", "", nil
+}

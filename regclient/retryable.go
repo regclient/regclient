@@ -80,7 +80,7 @@ func (r *retryable) Req(ctx context.Context, rc RegClient, req *http.Request) (*
 		}
 
 		// add auth
-		err = rc.Auth().AuthReq(ctx, req)
+		err = rc.AuthReq(ctx, req)
 		if err != nil {
 			return resp, err
 		}
@@ -96,7 +96,7 @@ func (r *retryable) Req(ctx context.Context, rc RegClient, req *http.Request) (*
 		case http.StatusUnauthorized:
 			// fmt.Printf("Unauthorized, adding auth\n")
 			// update auth based on response
-			err = rc.Auth().AddResp(ctx, resps)
+			err = rc.AddResp(ctx, resps)
 			if err != nil {
 				return resp, err
 			}

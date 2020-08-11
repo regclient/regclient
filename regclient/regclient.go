@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"time"
 
+	cdauth "github.com/containerd/containerd/remotes/docker"
 	dockercfg "github.com/docker/cli/cli/config"
 	dockerDistribution "github.com/docker/distribution"
 	dockerManifestList "github.com/docker/distribution/manifest/manifestlist"
@@ -103,11 +104,14 @@ func (t *tlsConf) UnmarshalText(b []byte) error {
 
 // RegClient provides an interfaces to working with registries
 type RegClient interface {
-	Auth() AuthClient
+	Config() Config
+	AddResp(ctx context.Context, resps []*http.Response) error
+	AuthReq(ctx context.Context, req *http.Request) error
 	BlobGet(ctx context.Context, ref Ref, d string, accepts []string) (io.ReadCloser, *http.Response, error)
 	ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) error
 	ImageExport(ctx context.Context, ref Ref, outStream io.Writer) error
 	ImageInspect(ctx context.Context, ref Ref) (ociv1.Image, error)
+	ManifestDigest(ctx context.Context, ref Ref) (digest.Digest, error)
 	ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 	TagsList(ctx context.Context, ref Ref) (TagList, error)
 }
@@ -129,10 +133,12 @@ type Ref struct {
 }
 
 type regClient struct {
-	hosts      map[string]*regHost
-	auth       AuthClient
+	// hosts      map[string]*regHost
+	// auth       AuthClient
 	config     *Config
 	retryLimit int
+	transports map[string]*http.Transport
+	authorizer cdauth.Authorizer
 }
 
 type regHost struct {
@@ -157,18 +163,33 @@ func NewRegClient(opts ...Opt) RegClient {
 	var rc regClient
 
 	// TODO: move hardcoded host references into vars defined in another file
-	rc.hosts = map[string]*regHost{"docker.io": {scheme: "https", tls: tlsEnabled, dnsNames: []string{"registry-1.docker.io"}}}
-	rc.auth = NewAuthClient()
+	/* 	rc.hosts = map[string]*regHost{"docker.io": {scheme: "https", tls: tlsEnabled, dnsNames: []string{"registry-1.docker.io"}}}
+	   	rc.auth = NewAuthClient() */
 	rc.retryLimit = 5
+	rc.transports = map[string]*http.Transport{}
+	rc.newAuth()
 
 	for _, opt := range opts {
 		opt(&rc)
 	}
 
+	if rc.config == nil {
+		rc.config = ConfigNew()
+	}
+
+	// hard code docker hub host config
+	// TODO: change to a global var? merge ConfigHost structs?
+	if _, ok := rc.config.Hosts["docker.io"]; !ok {
+		rc.config.Hosts["docker.io"] = &ConfigHost{}
+	}
+	rc.config.Hosts["docker.io"].Scheme = "https"
+	rc.config.Hosts["docker.io"].TLS = tlsEnabled
+	rc.config.Hosts["docker.io"].DNS = []string{"registry-1.docker.io"}
+
 	return &rc
 }
 
-// WithConfigDefault parses a differently named config file
+// WithConfigDefault default config file
 func WithConfigDefault() Opt {
 	return func(rc *regClient) {
 		config, err := ConfigLoadDefault()
@@ -202,6 +223,9 @@ func WithDockerCerts() Opt {
 // WithDockerCreds adds configuration from users docker config with registry logins
 func WithDockerCreds() Opt {
 	return func(rc *regClient) {
+		if rc.config == nil {
+			rc.config = ConfigNew()
+		}
 		conffile := dockercfg.LoadDefaultConfigFile(os.Stderr)
 		creds, err := conffile.GetAllCredentials()
 		if err != nil {
@@ -209,12 +233,36 @@ func WithDockerCreds() Opt {
 			return
 		}
 		for _, cred := range creds {
-			// fmt.Printf("Processing cred %v\n", cred)
-			// TODO: clean this up, get index and registry-1 from variables
-			if cred.ServerAddress == "https://index.docker.io/v1/" && cred.Username != "" && cred.Password != "" {
-				rc.auth.Set("registry-1.docker.io", cred.Username, cred.Password)
-			} else if cred.ServerAddress != "" && cred.Username != "" && cred.Password != "" {
-				rc.auth.Set(cred.ServerAddress, cred.Username, cred.Password)
+			// TODO: remove rc.auth
+			/* 			if cred.ServerAddress == "https://index.docker.io/v1/" && cred.Username != "" && cred.Password != "" {
+			   				rc.auth.Set("registry-1.docker.io", cred.Username, cred.Password)
+			   			} else if cred.ServerAddress != "" && cred.Username != "" && cred.Password != "" {
+			   				rc.auth.Set(cred.ServerAddress, cred.Username, cred.Password)
+			   			} */
+
+			if cred.ServerAddress == "" || cred.Username == "" || cred.Password == "" {
+				continue
+			}
+			// TODO: move these hostnames into a const (possibly pull from distribution repo)
+			if cred.ServerAddress == "https://index.docker.io/v1/" {
+				cred.ServerAddress = "registry-1.docker.io"
+			}
+			if _, ok := rc.config.Hosts[cred.ServerAddress]; !ok {
+				h := ConfigHost{
+					DNS:    []string{cred.ServerAddress},
+					Scheme: "https",
+					TLS:    tlsEnabled,
+					User:   cred.Username,
+					Pass:   cred.Password,
+				}
+				rc.config.Hosts[cred.ServerAddress] = &h
+			} else if rc.config.Hosts[cred.ServerAddress].User != "" || rc.config.Hosts[cred.ServerAddress].Pass != "" {
+				if rc.config.Hosts[cred.ServerAddress].User != cred.Username || rc.config.Hosts[cred.ServerAddress].Pass != cred.Password {
+					fmt.Fprintf(os.Stderr, "Warning: credentials in docker do not match regcli credentials for registry %s\n", cred.ServerAddress)
+				}
+			} else {
+				rc.config.Hosts[cred.ServerAddress].User = cred.Username
+				rc.config.Hosts[cred.ServerAddress].Pass = cred.Password
 			}
 		}
 		return
@@ -272,10 +320,10 @@ func (r Ref) CommonName() string {
 	return cn
 }
 
-func (rc *regClient) Auth() AuthClient {
+/* func (rc *regClient) Auth() AuthClient {
 	return rc.auth
 }
-
+*/
 func (rc *regClient) BlobCopy(ctx context.Context, refSrc Ref, refTgt Ref, d string) error {
 	// for the same repository, there's nothing to copy
 	if refSrc.Repository == refTgt.Repository {
@@ -309,8 +357,8 @@ func (rc *regClient) BlobGet(ctx context.Context, ref Ref, d string, accepts []s
 	host := rc.getHost(ref.Registry)
 
 	blobURL := url.URL{
-		Scheme: host.scheme,
-		Host:   host.dnsNames[0],
+		Scheme: host.Scheme,
+		Host:   host.DNS[0],
 		Path:   "/v2/" + ref.Repository + "/blobs/" + d,
 	}
 
@@ -334,8 +382,8 @@ func (rc *regClient) BlobHead(ctx context.Context, ref Ref, d string) error {
 	host := rc.getHost(ref.Registry)
 
 	blobURL := url.URL{
-		Scheme: host.scheme,
-		Host:   host.dnsNames[0],
+		Scheme: host.Scheme,
+		Host:   host.DNS[0],
 		Path:   "/v2/" + ref.Repository + "/blobs/" + d,
 	}
 
@@ -364,8 +412,8 @@ func (rc *regClient) BlobMount(ctx context.Context, refSrc Ref, refTgt Ref, d st
 
 	host := rc.getHost(refTgt.Registry)
 	mountURL := url.URL{
-		Scheme:   host.scheme,
-		Host:     host.dnsNames[0],
+		Scheme:   host.Scheme,
+		Host:     host.DNS[0],
 		Path:     "/v2/" + refTgt.Repository + "/blobs/uploads/",
 		RawQuery: "mount=" + d + "&from=" + refSrc.Repository,
 	}
@@ -399,8 +447,8 @@ func (rc *regClient) BlobPut(ctx context.Context, ref Ref, d string, rdr io.Read
 
 	// request an upload location
 	uploadURL := url.URL{
-		Scheme: host.scheme,
-		Host:   host.dnsNames[0],
+		Scheme: host.Scheme,
+		Host:   host.DNS[0],
 		Path:   "/v2/" + ref.Repository + "/blobs/uploads/",
 	}
 	req, err := http.NewRequest("POST", uploadURL.String(), nil)
@@ -421,9 +469,9 @@ func (rc *regClient) BlobPut(ctx context.Context, ref Ref, d string, rdr io.Read
 	fmt.Fprintf(os.Stderr, "Upload location received: %s", location)
 	var putURL *url.URL
 	if strings.HasPrefix(location, "/") {
-		location = host.scheme + "://" + host.dnsNames[0] + location
+		location = host.Scheme + "://" + host.DNS[0] + location
 	} else if !strings.Contains(location, "://") {
-		location = host.scheme + "://" + location
+		location = host.Scheme + "://" + location
 	}
 	putURL, err = url.Parse(location)
 	if err != nil {
@@ -454,6 +502,10 @@ func (rc *regClient) BlobPut(ctx context.Context, ref Ref, d string, rdr io.Read
 	}
 
 	return nil
+}
+
+func (rc *regClient) Config() Config {
+	return *rc.config
 }
 
 func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) error {
@@ -675,6 +727,45 @@ func (rc *regClient) ImageInspect(ctx context.Context, ref Ref) (ociv1.Image, er
 	return img, nil
 }
 
+func (rc *regClient) ManifestDigest(ctx context.Context, ref Ref) (digest.Digest, error) {
+	host := rc.getHost(ref.Registry)
+	var tagOrDigest string
+	if ref.Digest != "" {
+		tagOrDigest = ref.Digest
+	} else if ref.Tag != "" {
+		tagOrDigest = ref.Tag
+	} else {
+		return "", ErrMissingTag
+	}
+
+	manfURL := url.URL{
+		Scheme: host.Scheme,
+		Host:   host.DNS[0],
+		Path:   "/v2/" + ref.Repository + "/manifests/" + tagOrDigest,
+	}
+
+	req, err := http.NewRequest("GET", manfURL.String(), nil)
+	if err != nil {
+		return "", err
+	}
+	// accept either the manifest or manifest list (index in OCI terms)
+	req.Header.Add("Accept", MediaTypeDocker2Manifest)
+	req.Header.Add("Accept", MediaTypeDocker2ManifestList)
+	req.Header.Add("Accept", MediaTypeOCI1Manifest)
+	req.Header.Add("Accept", MediaTypeOCI1ManifestList)
+
+	rty := rc.newRetryableForHost(host)
+	resp, err := rty.Req(ctx, rc, req)
+	if err != nil {
+		return "", err
+	}
+	respBody, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return digest.FromBytes(respBody), nil
+}
+
 func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error) {
 	m := manifest{}
 
@@ -689,11 +780,12 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 	}
 
 	manfURL := url.URL{
-		Scheme: host.scheme,
-		Host:   host.dnsNames[0],
+		Scheme: host.Scheme,
+		Host:   host.DNS[0],
 		Path:   "/v2/" + ref.Repository + "/manifests/" + tagOrDigest,
 	}
 
+	fmt.Fprintf(os.Stderr, "Debug: url is %s\n", manfURL.String())
 	req, err := http.NewRequest("GET", manfURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -734,57 +826,6 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 	return &m, nil
 }
 
-/* func (rc *regClient) ManifestListGet(ctx context.Context, ref Ref) (Manifest, error) {
-	m := manifest{}
-
-	host := rc.getHost(ref.Registry)
-	var tagOrDigest string
-	if ref.Digest != "" {
-		tagOrDigest = ref.Digest
-	} else if ref.Tag != "" {
-		tagOrDigest = ref.Tag
-	} else {
-		return nil, ErrMissingTag
-	}
-
-	manfURL := url.URL{
-		Scheme: host.scheme,
-		Host:   host.dnsNames[0],
-		Path:   "/v2/" + ref.Repository + "/manifests/" + tagOrDigest,
-	}
-
-	req, err := http.NewRequest("GET", manfURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Add("Accept", MediaTypeDocker2ManifestList)
-	req.Header.Add("Accept", ociv1.MediaTypeImageIndex)
-
-	rty := rc.newRetryableForHost(host)
-	resp, err := rty.Req(ctx, rc, req)
-	if err != nil {
-		return nil, err
-	}
-
-	// docker will respond for a manifestlist request with a manifest, so check the content type
-	ct := resp.Header.Get("Content-Type")
-	if ct != MediaTypeDocker2ManifestList && ct != ociv1.MediaTypeImageIndex {
-		return nil, ErrNotFound
-	}
-
-	respBody, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(respBody, &ml)
-	if err != nil {
-		return nil, err
-	}
-
-	return ml, nil
-}
-*/
 func (rc *regClient) ManifestPut(ctx context.Context, ref Ref, m Manifest) error {
 	host := rc.getHost(ref.Registry)
 	if ref.Tag == "" {
@@ -792,8 +833,8 @@ func (rc *regClient) ManifestPut(ctx context.Context, ref Ref, m Manifest) error
 	}
 
 	manfURL := url.URL{
-		Scheme: host.scheme,
-		Host:   host.dnsNames[0],
+		Scheme: host.Scheme,
+		Host:   host.DNS[0],
 		Path:   "/v2/" + ref.Repository + "/manifests/" + ref.Tag,
 	}
 
@@ -834,8 +875,8 @@ func (rc *regClient) TagsList(ctx context.Context, ref Ref) (TagList, error) {
 	tl := TagList{}
 	host := rc.getHost(ref.Registry)
 	repoURL := url.URL{
-		Scheme: host.scheme,
-		Host:   host.dnsNames[0],
+		Scheme: host.Scheme,
+		Host:   host.DNS[0],
 		Path:   "/v2/" + ref.Repository + "/tags/list",
 	}
 
@@ -860,19 +901,20 @@ func (rc *regClient) TagsList(ctx context.Context, ref Ref) (TagList, error) {
 	return tl, nil
 }
 
-func (rc *regClient) getHost(hostname string) *regHost {
-	host, ok := rc.hosts[hostname]
+func (rc *regClient) getHost(hostname string) *ConfigHost {
+	host, ok := rc.config.Hosts[hostname]
 	if !ok {
-		host = &regHost{scheme: "https", tls: tlsEnabled, dnsNames: []string{hostname}}
-		rc.hosts[hostname] = host
+		host = &ConfigHost{Scheme: "https", TLS: tlsEnabled, DNS: []string{hostname}}
+		rc.config.Hosts[hostname] = host
 	}
 	return host
 }
 
-func (rc *regClient) newRetryableForHost(host *regHost) Retryable {
-	if host.transport == nil {
+// TODO: rework, retryable should fall back to other DNS names, perhaps pass the transport map and host object
+func (rc *regClient) newRetryableForHost(host *ConfigHost) Retryable {
+	if _, ok := rc.transports[host.DNS[0]]; !ok {
 		tlsc := &tls.Config{}
-		if host.tls == tlsInsecure {
+		if host.TLS == tlsInsecure {
 			tlsc.InsecureSkipVerify = true
 		}
 		// TODO: update tlsc based on host config for host specific certs and client key/cert pair
@@ -889,9 +931,9 @@ func (rc *regClient) newRetryableForHost(host *regHost) Retryable {
 			TLSClientConfig:       tlsc,
 			ExpectContinueTimeout: 5 * time.Second,
 		}
-		host.transport = t
+		rc.transports[host.DNS[0]] = t
 	}
-	r := NewRetryable(RetryWithTransport(host.transport), RetryWithLimit(rc.retryLimit))
+	r := NewRetryable(RetryWithTransport(rc.transports[host.DNS[0]]), RetryWithLimit(rc.retryLimit))
 	return r
 }
 

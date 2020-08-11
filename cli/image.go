@@ -26,6 +26,12 @@ var imageDeleteCmd = &cobra.Command{
 	Args:  cobra.RangeArgs(1, 1),
 	RunE:  runImageDelete,
 }
+var imageDigestCmd = &cobra.Command{
+	Use:   "digest",
+	Short: "show digest for pinning",
+	Args:  cobra.RangeArgs(1, 1),
+	RunE:  runImageDigest,
+}
 var imageExportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "export images",
@@ -60,6 +66,7 @@ var imageRetagCmd = &cobra.Command{
 func init() {
 	imageCmd.AddCommand(imageCopyCmd)
 	imageCmd.AddCommand(imageDeleteCmd)
+	imageCmd.AddCommand(imageDigestCmd)
 	imageCmd.AddCommand(imageExportCmd)
 	imageCmd.AddCommand(imageImportCmd)
 	imageCmd.AddCommand(imageInspectCmd)
@@ -77,7 +84,7 @@ func runImageCopy(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	rc := regclient.NewRegClient(regclient.WithDockerCreds())
+	rc := newRegClient()
 	return rc.ImageCopy(context.Background(), refSrc, refTgt)
 }
 
@@ -85,12 +92,27 @@ func runImageDelete(cmd *cobra.Command, args []string) error {
 	return ErrNotImplemented
 }
 
+func runImageDigest(cmd *cobra.Command, args []string) error {
+	ref, err := regclient.NewRef(args[0])
+	if err != nil {
+		return err
+	}
+	rc := newRegClient()
+
+	d, err := rc.ManifestDigest(context.Background(), ref)
+	if err != nil {
+		return err
+	}
+	fmt.Println(d.String())
+	return nil
+}
+
 func runImageExport(cmd *cobra.Command, args []string) error {
 	ref, err := regclient.NewRef(args[0])
 	if err != nil {
 		return err
 	}
-	rc := regclient.NewRegClient(regclient.WithDockerCreds())
+	rc := newRegClient()
 	return rc.ImageExport(context.Background(), ref, os.Stdout)
 }
 
@@ -103,7 +125,7 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	rc := regclient.NewRegClient(regclient.WithDockerCreds())
+	rc := newRegClient()
 	img, err := rc.ImageInspect(context.Background(), ref)
 	if err != nil {
 		return err
@@ -118,7 +140,7 @@ func runImageManifest(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	rc := regclient.NewRegClient(regclient.WithDockerCreds())
+	rc := newRegClient()
 
 	m, err := rc.ManifestGet(context.Background(), ref)
 	if err != nil {
