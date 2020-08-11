@@ -21,6 +21,7 @@ import (
 	"time"
 
 	dockercfg "github.com/docker/cli/cli/config"
+	dockerDistribution "github.com/docker/distribution"
 	dockerManifestList "github.com/docker/distribution/manifest/manifestlist"
 	dockerSchema2 "github.com/docker/distribution/manifest/schema2"
 	"github.com/docker/distribution/reference"
@@ -28,8 +29,6 @@ import (
 	digest "github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
-
-type tlsConf int
 
 var (
 	// MediaTypeDocker2Manifest is the media type when pulling manifests from a v2 registry
@@ -46,11 +45,61 @@ var (
 	MediaTypeOCI1ImageConfig = ociv1.MediaTypeImageConfig
 )
 
+type tlsConf int
+
 const (
-	tlsEnabled tlsConf = iota
+	tlsUndefined tlsConf = iota
+	tlsEnabled
 	tlsInsecure
 	tlsDisabled
 )
+
+func (t tlsConf) MarshalJSON() ([]byte, error) {
+	s, err := t.MarshalText()
+	if err != nil {
+		return []byte(""), err
+	}
+	return json.Marshal(string(s))
+}
+
+func (t tlsConf) MarshalText() ([]byte, error) {
+	var s string
+	switch t {
+	default:
+		s = ""
+	case tlsEnabled:
+		s = "enabled"
+	case tlsInsecure:
+		s = "insecure"
+	case tlsDisabled:
+		s = "disabled"
+	}
+	return []byte(s), nil
+}
+
+func (t *tlsConf) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	return t.UnmarshalText([]byte(s))
+}
+
+func (t *tlsConf) UnmarshalText(b []byte) error {
+	switch strings.ToLower(string(b)) {
+	default:
+		return fmt.Errorf("Unknown TLS value \"%s\"", b)
+	case "":
+		*t = tlsUndefined
+	case "enabled":
+		*t = tlsEnabled
+	case "insecure":
+		*t = tlsInsecure
+	case "disabled":
+		*t = tlsDisabled
+	}
+	return nil
+}
 
 // RegClient provides an interfaces to working with registries
 type RegClient interface {
@@ -82,6 +131,7 @@ type Ref struct {
 type regClient struct {
 	hosts      map[string]*regHost
 	auth       AuthClient
+	config     *Config
 	retryLimit int
 }
 
@@ -116,6 +166,30 @@ func NewRegClient(opts ...Opt) RegClient {
 	}
 
 	return &rc
+}
+
+// WithConfigDefault parses a differently named config file
+func WithConfigDefault() Opt {
+	return func(rc *regClient) {
+		config, err := ConfigLoadDefault()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to load default config: %s\n", err)
+		} else {
+			rc.config = config
+		}
+	}
+}
+
+// WithConfigFile parses a differently named config file
+func WithConfigFile(filename string) Opt {
+	return func(rc *regClient) {
+		config, err := ConfigLoadFile(filename)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to load config file %s: %s\n", filename, err)
+		} else {
+			rc.config = config
+		}
+	}
 }
 
 // WithDockerCerts adds certificates trusted by docker in /etc/docker/certs.d
@@ -869,19 +943,27 @@ func (m *manifest) GetDockerManifestList() dockerManifestList.ManifestList {
 func (m *manifest) GetLayers() ([]ociv1.Descriptor, error) {
 	switch m.mt {
 	case MediaTypeDocker2Manifest:
-		// TODO: this is painfully hacky, and the underlying objects are essentially the same.
-		// Research better options to do a cast between layers struct imported from two different projects.
-		var l []ociv1.Descriptor
-		lj, err := json.Marshal(m.dockerM.Layers)
-		if err != nil {
-			return l, err
-		}
-		err = json.Unmarshal(lj, &l)
-		return l, err
+		return d2oDescriptorList(m.dockerM.Layers), nil
 	case ociv1.MediaTypeImageManifest:
 		return m.ociM.Layers, nil
 	}
 	return []ociv1.Descriptor{}, fmt.Errorf("Unsupported manifest mediatype %s", m.mt)
+}
+
+func d2oDescriptorList(src []dockerDistribution.Descriptor) []ociv1.Descriptor {
+	var tgt []ociv1.Descriptor
+	for _, sd := range src {
+		td := ociv1.Descriptor{
+			MediaType:   sd.MediaType,
+			Digest:      sd.Digest,
+			Size:        sd.Size,
+			URLs:        sd.URLs,
+			Annotations: sd.Annotations,
+			Platform:    sd.Platform,
+		}
+		tgt = append(tgt, td)
+	}
+	return tgt
 }
 
 func (m *manifest) GetMediaType() string {

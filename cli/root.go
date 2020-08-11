@@ -6,6 +6,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/sudo-bmitch/regcli/regclient"
 )
 
 const usageDesc = `Utility for accessing docker registries
@@ -41,4 +42,8 @@ func rootPreRun(cmd *cobra.Command, args []string) error {
 	}
 	log.SetLevel(lvl)
 	return nil
+}
+
+func newRegClient() regclient.RegClient {
+	return regclient.NewRegClient(regclient.WithConfigDefault(), regclient.WithDockerCreds())
 }

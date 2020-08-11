@@ -8,4 +8,6 @@ var (
 	// ErrNotImplemented returned when method has not been implemented yet
 	// TODO: Delete when all methods are implemented
 	ErrNotImplemented = errors.New("Not implemented")
+	// ErrNotFound when anything else isn't found
+	ErrNotFound = errors.New("Not found")
 )
