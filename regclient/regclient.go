@@ -29,6 +29,8 @@ import (
 	"github.com/docker/docker/pkg/archive"
 	digest "github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/sudo-bmitch/regcli/pkg/auth"
+	"github.com/sudo-bmitch/regcli/pkg/retryable"
 )
 
 var (
@@ -786,26 +788,34 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 	}
 
 	fmt.Fprintf(os.Stderr, "Debug: url is %s\n", manfURL.String())
-	req, err := http.NewRequest("GET", manfURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-	// accept either the manifest or manifest list (index in OCI terms)
-	req.Header.Add("Accept", MediaTypeDocker2Manifest)
-	req.Header.Add("Accept", MediaTypeDocker2ManifestList)
-	req.Header.Add("Accept", MediaTypeOCI1Manifest)
-	req.Header.Add("Accept", MediaTypeOCI1ManifestList)
+	/* 	req, err := http.NewRequest("GET", manfURL.String(), nil)
+	   	if err != nil {
+	   		return nil, err
+	   	}
+	   	// accept either the manifest or manifest list (index in OCI terms)
+	   	req.Header.Add("Accept", MediaTypeDocker2Manifest)
+	   	req.Header.Add("Accept", MediaTypeDocker2ManifestList)
+	   	req.Header.Add("Accept", MediaTypeOCI1Manifest)
+	   	req.Header.Add("Accept", MediaTypeOCI1ManifestList)
+	*/
+	opts := []retryable.OptsReq{}
+	opts = append(opts, retryable.WithHeader("Accept", []string{
+		MediaTypeDocker2Manifest,
+		MediaTypeDocker2ManifestList,
+		MediaTypeOCI1Manifest,
+		MediaTypeOCI1ManifestList,
+	}))
 
-	rty := rc.newRetryableForHost(host)
-	resp, err := rty.Req(ctx, rc, req)
+	rty := rc.newRetryableHost(host)
+	resp, err := rty.DoRequest(ctx, "GET", manfURL, opts...)
 	if err != nil {
 		return nil, err
 	}
-	respBody, err := ioutil.ReadAll(resp.Body)
+	respBody, err := ioutil.ReadAll(resp)
 	if err != nil {
 		return nil, err
 	}
-	m.mt = resp.Header.Get("Content-Type")
+	m.mt = resp.HTTPResponse().Header.Get("Content-Type")
 	switch m.mt {
 	case MediaTypeDocker2Manifest:
 		err = json.Unmarshal(respBody, &m.dockerM)
@@ -935,6 +945,26 @@ func (rc *regClient) newRetryableForHost(host *ConfigHost) Retryable {
 	}
 	r := NewRetryable(RetryWithTransport(rc.transports[host.DNS[0]]), RetryWithLimit(rc.retryLimit))
 	return r
+}
+
+func (rc *regClient) newRetryableHost(host *ConfigHost) retryable.Retryable {
+	// TODO: include creds func
+	a := auth.NewAuth(auth.WithCreds(rc.authCreds))
+	r := retryable.NewRetryable(retryable.WithAuth(a))
+	return r
+}
+
+func (rc *regClient) authCreds(host string) (string, string) {
+	if h, ok := rc.config.Hosts[host]; ok {
+		return h.User, h.Pass
+	}
+	// default credentials are stored under a blank hostname
+	if h, ok := rc.config.Hosts[""]; ok {
+		return h.User, h.Pass
+	}
+	fmt.Fprintf(os.Stderr, "No credentials found for %s\n", host)
+	// anonymous request
+	return "", ""
 }
 
 // TODO: temp hack, grab the proper manifest from github.com/docker/distribution/manifest/schema2

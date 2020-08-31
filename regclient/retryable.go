@@ -12,7 +12,7 @@ type Retryable interface {
 	Req(context.Context, RegClient, *http.Request) (*http.Response, error)
 }
 
-type retryable struct {
+type rcretryable struct {
 	transport *http.Transport
 	req       *http.Request
 	resps     []*http.Response
@@ -20,11 +20,11 @@ type retryable struct {
 }
 
 // ROpt is used to pass options to NewRetryable
-type ROpt func(*retryable)
+type ROpt func(*rcretryable)
 
 // NewRetryable returns a Retryable used to retry http requests
 func NewRetryable(opts ...ROpt) Retryable {
-	r := retryable{
+	r := rcretryable{
 		transport: http.DefaultTransport.(*http.Transport),
 		limit:     5,
 	}
@@ -38,7 +38,7 @@ func NewRetryable(opts ...ROpt) Retryable {
 
 // RetryWithTransport adds a user provided transport to NewRetryable
 func RetryWithTransport(t *http.Transport) ROpt {
-	return func(r *retryable) {
+	return func(r *rcretryable) {
 		r.transport = t
 		return
 	}
@@ -58,13 +58,13 @@ func RetryWithTransport(t *http.Transport) ROpt {
 
 // RetryWithLimit allows adjusting the retry limit
 func RetryWithLimit(limit int) ROpt {
-	return func(r *retryable) {
+	return func(r *rcretryable) {
 		r.limit = limit
 		return
 	}
 }
 
-func (r *retryable) Req(ctx context.Context, rc RegClient, req *http.Request) (*http.Response, error) {
+func (r *rcretryable) Req(ctx context.Context, rc RegClient, req *http.Request) (*http.Response, error) {
 	// define return values outside of the loop scope
 	var resp *http.Response
 	var err error

@@ -262,6 +262,14 @@ func (req *request) httpDo() error {
 		return ErrNotImplemented
 	}
 
+	// include auth header
+	if req.r.auth != nil {
+		err = req.r.auth.UpdateRequest(httpReq)
+		if err != nil {
+			return err
+		}
+	}
+
 	resp, err := req.r.httpClient.Do(httpReq)
 	if err != nil {
 		return err
