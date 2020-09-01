@@ -7,19 +7,16 @@ import (
 	// crypto libraries included for go-digest
 	_ "crypto/sha256"
 	_ "crypto/sha512"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"time"
 
-	cdauth "github.com/containerd/containerd/remotes/docker"
 	dockercfg "github.com/docker/cli/cli/config"
 	dockerDistribution "github.com/docker/distribution"
 	dockerManifestList "github.com/docker/distribution/manifest/manifestlist"
@@ -106,8 +103,6 @@ func (t *tlsConf) UnmarshalText(b []byte) error {
 // RegClient provides an interfaces to working with registries
 type RegClient interface {
 	Config() Config
-	AddResp(ctx context.Context, resps []*http.Response) error
-	AuthReq(ctx context.Context, req *http.Request) error
 	BlobGet(ctx context.Context, ref Ref, d string, accepts []string) (io.ReadCloser, *http.Response, error)
 	ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) error
 	ImageExport(ctx context.Context, ref Ref, outStream io.Writer) error
@@ -139,7 +134,6 @@ type regClient struct {
 	config     *Config
 	retryLimit int
 	transports map[string]*http.Transport
-	authorizer cdauth.Authorizer
 	retryables map[string]retryable.Retryable
 }
 
@@ -164,13 +158,9 @@ type Opt func(*regClient)
 func NewRegClient(opts ...Opt) RegClient {
 	var rc regClient
 
-	// TODO: move hardcoded host references into vars defined in another file
-	/* 	rc.hosts = map[string]*regHost{"docker.io": {scheme: "https", tls: tlsEnabled, dnsNames: []string{"registry-1.docker.io"}}}
-	   	rc.auth = NewAuthClient() */
 	rc.retryLimit = 5
 	rc.retryables = map[string]retryable.Retryable{}
 	rc.transports = map[string]*http.Transport{}
-	rc.newAuth()
 
 	for _, opt := range opts {
 		opt(&rc)
@@ -372,7 +362,7 @@ func (rc *regClient) BlobGet(ctx context.Context, ref Ref, d string, accepts []s
 		headers.Add("Accept", accept)
 	}
 
-	rty := rc.newRetryableHost(host)
+	rty := rc.getRetryable(host)
 	resp, err := rty.DoRequest(ctx, "GET", blobURL, retryable.WithHeaders(headers))
 	if err != nil {
 		return nil, nil, err
@@ -389,7 +379,7 @@ func (rc *regClient) BlobHead(ctx context.Context, ref Ref, d string) error {
 		Path:   "/v2/" + ref.Repository + "/blobs/" + d,
 	}
 
-	rty := rc.newRetryableHost(host)
+	rty := rc.getRetryable(host)
 	resp, err := rty.DoRequest(ctx, "HEAD", blobURL)
 	if err != nil {
 		return err
@@ -416,7 +406,7 @@ func (rc *regClient) BlobMount(ctx context.Context, refSrc Ref, refTgt Ref, d st
 		RawQuery: "mount=" + d + "&from=" + refSrc.Repository,
 	}
 
-	rty := rc.newRetryableHost(host)
+	rty := rc.getRetryable(host)
 	resp, err := rty.DoRequest(ctx, "POST", mountURL)
 	if err != nil {
 		return fmt.Errorf("Error calling blob mount request: %w\nResponse object: %v", err, resp)
@@ -444,7 +434,7 @@ func (rc *regClient) BlobPut(ctx context.Context, ref Ref, d string, rdr io.Read
 		Host:   host.DNS[0],
 		Path:   "/v2/" + ref.Repository + "/blobs/uploads/",
 	}
-	rty := rc.newRetryableHost(host)
+	rty := rc.getRetryable(host)
 	resp, err := rty.DoRequest(ctx, "POST", uploadURL)
 	if err != nil {
 		return err
@@ -741,7 +731,7 @@ func (rc *regClient) ManifestDigest(ctx context.Context, ref Ref) (digest.Digest
 		MediaTypeOCI1ManifestList,
 	}))
 
-	rty := rc.newRetryableHost(host)
+	rty := rc.getRetryable(host)
 	resp, err := rty.DoRequest(ctx, "GET", manfURL, opts...)
 	if err != nil {
 		return "", err
@@ -780,7 +770,7 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 		MediaTypeOCI1ManifestList,
 	}))
 
-	rty := rc.newRetryableHost(host)
+	rty := rc.getRetryable(host)
 	resp, err := rty.DoRequest(ctx, "GET", manfURL, opts...)
 	if err != nil {
 		return nil, err
@@ -834,7 +824,7 @@ func (rc *regClient) ManifestPut(ctx context.Context, ref Ref, m Manifest) error
 	opts = append(opts, retryable.WithBodyBytes(mj))
 	opts = append(opts, retryable.WithContentLen(int64(len(mj))))
 
-	rty := rc.newRetryableHost(host)
+	rty := rc.getRetryable(host)
 	resp, err := rty.DoRequest(ctx, "PUT", manfURL, opts...)
 	if err != nil {
 		return fmt.Errorf("Error calling manifest put request: %w\nResponse object: %v", err, resp)
@@ -857,7 +847,7 @@ func (rc *regClient) TagsList(ctx context.Context, ref Ref) (TagList, error) {
 		Path:   "/v2/" + ref.Repository + "/tags/list",
 	}
 
-	rty := rc.newRetryableHost(host)
+	rty := rc.getRetryable(host)
 	resp, err := rty.DoRequest(ctx, "GET", repoURL)
 	if err != nil {
 		return tl, err
@@ -883,34 +873,7 @@ func (rc *regClient) getHost(hostname string) *ConfigHost {
 	return host
 }
 
-// TODO: rework, retryable should fall back to other DNS names, perhaps pass the transport map and host object
-func (rc *regClient) newRetryableForHost(host *ConfigHost) Retryable {
-	if _, ok := rc.transports[host.DNS[0]]; !ok {
-		tlsc := &tls.Config{}
-		if host.TLS == tlsInsecure {
-			tlsc.InsecureSkipVerify = true
-		}
-		// TODO: update tlsc based on host config for host specific certs and client key/cert pair
-		t := &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			DialContext: (&net.Dialer{
-				Timeout:       30 * time.Second,
-				KeepAlive:     30 * time.Second,
-				FallbackDelay: 300 * time.Millisecond,
-			}).DialContext,
-			MaxIdleConns:          10,
-			IdleConnTimeout:       30 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			TLSClientConfig:       tlsc,
-			ExpectContinueTimeout: 5 * time.Second,
-		}
-		rc.transports[host.DNS[0]] = t
-	}
-	r := NewRetryable(RetryWithTransport(rc.transports[host.DNS[0]]), RetryWithLimit(rc.retryLimit))
-	return r
-}
-
-func (rc *regClient) newRetryableHost(host *ConfigHost) retryable.Retryable {
+func (rc *regClient) getRetryable(host *ConfigHost) retryable.Retryable {
 	if _, ok := rc.retryables[host.Name]; !ok {
 		a := auth.NewAuth(auth.WithCreds(rc.authCreds))
 		r := retryable.NewRetryable(retryable.WithAuth(a))
