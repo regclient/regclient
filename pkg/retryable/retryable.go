@@ -233,6 +233,17 @@ func WithHeader(key string, values []string) OptsReq {
 	}
 }
 
+// WithHeaders includes a header object
+func WithHeaders(headers http.Header) OptsReq {
+	return func(req *request) {
+		for key := range headers {
+			for _, val := range headers.Values(key) {
+				req.header.Add(key, val)
+			}
+		}
+	}
+}
+
 // WithProgressCB calls the CB function as data is received
 func WithProgressCB(cb func(int64, error)) OptsReq {
 	return func(req *request) {

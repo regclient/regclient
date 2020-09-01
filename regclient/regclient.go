@@ -1,7 +1,6 @@
 package regclient
 
 import (
-	"bytes"
 	"context"
 	"strings"
 
@@ -141,6 +140,7 @@ type regClient struct {
 	retryLimit int
 	transports map[string]*http.Transport
 	authorizer cdauth.Authorizer
+	retryables map[string]retryable.Retryable
 }
 
 type regHost struct {
@@ -168,6 +168,7 @@ func NewRegClient(opts ...Opt) RegClient {
 	/* 	rc.hosts = map[string]*regHost{"docker.io": {scheme: "https", tls: tlsEnabled, dnsNames: []string{"registry-1.docker.io"}}}
 	   	rc.auth = NewAuthClient() */
 	rc.retryLimit = 5
+	rc.retryables = map[string]retryable.Retryable{}
 	rc.transports = map[string]*http.Transport{}
 	rc.newAuth()
 
@@ -184,6 +185,7 @@ func NewRegClient(opts ...Opt) RegClient {
 	if _, ok := rc.config.Hosts["docker.io"]; !ok {
 		rc.config.Hosts["docker.io"] = &ConfigHost{}
 	}
+	rc.config.Hosts["docker.io"].Name = "docker.io"
 	rc.config.Hosts["docker.io"].Scheme = "https"
 	rc.config.Hosts["docker.io"].TLS = tlsEnabled
 	rc.config.Hosts["docker.io"].DNS = []string{"registry-1.docker.io"}
@@ -251,6 +253,7 @@ func WithDockerCreds() Opt {
 			}
 			if _, ok := rc.config.Hosts[cred.ServerAddress]; !ok {
 				h := ConfigHost{
+					Name:   cred.ServerAddress,
 					DNS:    []string{cred.ServerAddress},
 					Scheme: "https",
 					TLS:    tlsEnabled,
@@ -364,20 +367,17 @@ func (rc *regClient) BlobGet(ctx context.Context, ref Ref, d string, accepts []s
 		Path:   "/v2/" + ref.Repository + "/blobs/" + d,
 	}
 
-	req, err := http.NewRequest("GET", blobURL.String(), nil)
-	if err != nil {
-		return nil, nil, err
-	}
+	headers := http.Header{}
 	for _, accept := range accepts {
-		req.Header.Add("Accept", accept)
+		headers.Add("Accept", accept)
 	}
 
-	rty := rc.newRetryableForHost(host)
-	resp, err := rty.Req(ctx, rc, req)
+	rty := rc.newRetryableHost(host)
+	resp, err := rty.DoRequest(ctx, "GET", blobURL, retryable.WithHeaders(headers))
 	if err != nil {
 		return nil, nil, err
 	}
-	return resp.Body, resp, nil
+	return resp, resp.HTTPResponse(), nil
 }
 
 func (rc *regClient) BlobHead(ctx context.Context, ref Ref, d string) error {
@@ -389,18 +389,14 @@ func (rc *regClient) BlobHead(ctx context.Context, ref Ref, d string) error {
 		Path:   "/v2/" + ref.Repository + "/blobs/" + d,
 	}
 
-	req, err := http.NewRequest("HEAD", blobURL.String(), nil)
+	rty := rc.newRetryableHost(host)
+	resp, err := rty.DoRequest(ctx, "HEAD", blobURL)
 	if err != nil {
 		return err
 	}
-	rty := rc.newRetryableForHost(host)
-	resp, err := rty.Req(ctx, rc, req)
-	if err != nil {
-		return err
-	}
-	resp.Body.Close()
+	defer resp.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+	if resp.HTTPResponse().StatusCode < 200 || resp.HTTPResponse().StatusCode > 299 {
 		return ErrNotFound
 	}
 
@@ -420,18 +416,13 @@ func (rc *regClient) BlobMount(ctx context.Context, refSrc Ref, refTgt Ref, d st
 		RawQuery: "mount=" + d + "&from=" + refSrc.Repository,
 	}
 
-	req, err := http.NewRequest("POST", mountURL.String(), nil)
+	rty := rc.newRetryableHost(host)
+	resp, err := rty.DoRequest(ctx, "POST", mountURL)
 	if err != nil {
-		return fmt.Errorf("Error creating manifest put request: %w", err)
+		return fmt.Errorf("Error calling blob mount request: %w\nResponse object: %v", err, resp)
 	}
-
-	rty := rc.newRetryableForHost(host)
-	resp, err := rty.Req(ctx, rc, req)
-	if err != nil {
-		return fmt.Errorf("Error calling blob mount request: %w\nRequest object: %v\nResponse object: %v", err, req, resp)
-	}
-	if resp.StatusCode != 201 {
-		return fmt.Errorf("Blob mount did not return a 201 status, status code: %d\nRequest object: %v\nResponse object: %v", resp.StatusCode, req, resp)
+	if resp.HTTPResponse().StatusCode != 201 {
+		return fmt.Errorf("Blob mount did not return a 201 status, status code: %d\nResponse object: %v", resp.HTTPResponse().StatusCode, resp)
 	}
 
 	return nil
@@ -453,21 +444,17 @@ func (rc *regClient) BlobPut(ctx context.Context, ref Ref, d string, rdr io.Read
 		Host:   host.DNS[0],
 		Path:   "/v2/" + ref.Repository + "/blobs/uploads/",
 	}
-	req, err := http.NewRequest("POST", uploadURL.String(), nil)
-	if err != nil {
-		return fmt.Errorf("Error creating manifest put request: %w", err)
-	}
-	rty := rc.newRetryableForHost(host)
-	resp, err := rty.Req(ctx, rc, req)
+	rty := rc.newRetryableHost(host)
+	resp, err := rty.DoRequest(ctx, "POST", uploadURL)
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode != 202 {
-		return fmt.Errorf("Blob upload request did not return a 202 status, status code: %d\nRequest object: %v\nResponse object: %v", resp.StatusCode, req, resp)
+	if resp.HTTPResponse().StatusCode != 202 {
+		return fmt.Errorf("Blob upload request did not return a 202 status, status code: %d\nResponse object: %v", resp.HTTPResponse().StatusCode, resp)
 	}
 
 	// extract the location into a new putURL based on whether it's relative, fqdn with a scheme, or without a scheme
-	location := resp.Header.Get("Location")
+	location := resp.HTTPResponse().Header.Get("Location")
 	fmt.Fprintf(os.Stderr, "Upload location received: %s", location)
 	var putURL *url.URL
 	if strings.HasPrefix(location, "/") {
@@ -488,19 +475,19 @@ func (rc *regClient) BlobPut(ctx context.Context, ref Ref, d string, rdr io.Read
 	}
 
 	// send the blob
-	req, err = http.NewRequest("PUT", putURL.String(), nil)
-	if err != nil {
-		return fmt.Errorf("Error creating manifest put request: %w", err)
+	opts := []retryable.OptsReq{}
+	bodyFunc := func() (io.ReadCloser, error) {
+		return ioutil.NopCloser(rdr), nil
 	}
-	req.Body = rdr
-	req.ContentLength = cl
-	req.Header.Set("Content-Type", ct)
-	resp, err = rty.Req(ctx, rc, req)
+	opts = append(opts, retryable.WithBodyFunc(bodyFunc))
+	opts = append(opts, retryable.WithContentLen(cl))
+	opts = append(opts, retryable.WithHeader("Content-Type", []string{ct}))
+	resp, err = rty.DoRequest(ctx, "PUT", *putURL, opts...)
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("Blob put request status code: %d\nRequest object: %v\nResponse object: %v", resp.StatusCode, req, resp)
+	if resp.HTTPResponse().StatusCode < 200 || resp.HTTPResponse().StatusCode > 299 {
+		return fmt.Errorf("Blob put request status code: %d\nRequest object: %v\nResponse object: %v", resp.HTTPResponse().StatusCode, resp)
 	}
 
 	return nil
@@ -746,22 +733,20 @@ func (rc *regClient) ManifestDigest(ctx context.Context, ref Ref) (digest.Digest
 		Path:   "/v2/" + ref.Repository + "/manifests/" + tagOrDigest,
 	}
 
-	req, err := http.NewRequest("GET", manfURL.String(), nil)
-	if err != nil {
-		return "", err
-	}
-	// accept either the manifest or manifest list (index in OCI terms)
-	req.Header.Add("Accept", MediaTypeDocker2Manifest)
-	req.Header.Add("Accept", MediaTypeDocker2ManifestList)
-	req.Header.Add("Accept", MediaTypeOCI1Manifest)
-	req.Header.Add("Accept", MediaTypeOCI1ManifestList)
+	opts := []retryable.OptsReq{}
+	opts = append(opts, retryable.WithHeader("Accept", []string{
+		MediaTypeDocker2Manifest,
+		MediaTypeDocker2ManifestList,
+		MediaTypeOCI1Manifest,
+		MediaTypeOCI1ManifestList,
+	}))
 
-	rty := rc.newRetryableForHost(host)
-	resp, err := rty.Req(ctx, rc, req)
+	rty := rc.newRetryableHost(host)
+	resp, err := rty.DoRequest(ctx, "GET", manfURL, opts...)
 	if err != nil {
 		return "", err
 	}
-	respBody, err := ioutil.ReadAll(resp.Body)
+	respBody, err := ioutil.ReadAll(resp)
 	if err != nil {
 		return "", err
 	}
@@ -787,17 +772,6 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 		Path:   "/v2/" + ref.Repository + "/manifests/" + tagOrDigest,
 	}
 
-	fmt.Fprintf(os.Stderr, "Debug: url is %s\n", manfURL.String())
-	/* 	req, err := http.NewRequest("GET", manfURL.String(), nil)
-	   	if err != nil {
-	   		return nil, err
-	   	}
-	   	// accept either the manifest or manifest list (index in OCI terms)
-	   	req.Header.Add("Accept", MediaTypeDocker2Manifest)
-	   	req.Header.Add("Accept", MediaTypeDocker2ManifestList)
-	   	req.Header.Add("Accept", MediaTypeOCI1Manifest)
-	   	req.Header.Add("Accept", MediaTypeOCI1ManifestList)
-	*/
 	opts := []retryable.OptsReq{}
 	opts = append(opts, retryable.WithHeader("Accept", []string{
 		MediaTypeDocker2Manifest,
@@ -848,34 +822,27 @@ func (rc *regClient) ManifestPut(ctx context.Context, ref Ref, m Manifest) error
 		Path:   "/v2/" + ref.Repository + "/manifests/" + ref.Tag,
 	}
 
-	req, err := http.NewRequest("PUT", manfURL.String(), nil)
-	if err != nil {
-		return fmt.Errorf("Error creating manifest put request: %w", err)
-	}
-
 	// add body to request
+	opts := []retryable.OptsReq{}
+	opts = append(opts, retryable.WithHeader("Content-Type", []string{m.GetMediaType()}))
+
 	var mj []byte
-	mt := m.GetMediaType()
-	mj, err = json.Marshal(m)
+	mj, err := json.Marshal(m)
 	if err != nil {
 		return err
 	}
-	req.Body = ioutil.NopCloser(bytes.NewReader(mj))
-	req.GetBody = func() (io.ReadCloser, error) {
-		return ioutil.NopCloser(bytes.NewReader(mj)), nil
-	}
-	req.ContentLength = int64(len(mj))
-	// req.Header.Set("Content-Type", MediaTypeDocker2Manifest)
-	req.Header.Set("Content-Type", mt)
+	opts = append(opts, retryable.WithBodyBytes(mj))
+	opts = append(opts, retryable.WithContentLen(int64(len(mj))))
 
-	rty := rc.newRetryableForHost(host)
-	resp, err := rty.Req(ctx, rc, req)
+	rty := rc.newRetryableHost(host)
+	resp, err := rty.DoRequest(ctx, "PUT", manfURL, opts...)
 	if err != nil {
-		return fmt.Errorf("Error calling manifest put request: %w\nRequest object: %v\nResponse object: %v", err, req, resp)
+		return fmt.Errorf("Error calling manifest put request: %w\nResponse object: %v", err, resp)
 	}
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		body, _ := ioutil.ReadAll(resp.Body)
-		return fmt.Errorf("Unexpected status code on manifest put %d\nRequest object: %v\nResponse object: %v\nBody: %s", resp.StatusCode, req, resp, body)
+
+	if resp.HTTPResponse().StatusCode < 200 || resp.HTTPResponse().StatusCode > 299 {
+		body, _ := ioutil.ReadAll(resp)
+		return fmt.Errorf("Unexpected status code on manifest put %d\nResponse object: %v\nBody: %s", resp.HTTPResponse().StatusCode, resp, body)
 	}
 
 	return nil
@@ -890,16 +857,12 @@ func (rc *regClient) TagsList(ctx context.Context, ref Ref) (TagList, error) {
 		Path:   "/v2/" + ref.Repository + "/tags/list",
 	}
 
-	req, err := http.NewRequest("GET", repoURL.String(), nil)
+	rty := rc.newRetryableHost(host)
+	resp, err := rty.DoRequest(ctx, "GET", repoURL)
 	if err != nil {
 		return tl, err
 	}
-	rty := rc.newRetryableForHost(host)
-	resp, err := rty.Req(ctx, rc, req)
-	if err != nil {
-		return tl, err
-	}
-	respBody, err := ioutil.ReadAll(resp.Body)
+	respBody, err := ioutil.ReadAll(resp)
 	if err != nil {
 		return tl, err
 	}
@@ -948,10 +911,12 @@ func (rc *regClient) newRetryableForHost(host *ConfigHost) Retryable {
 }
 
 func (rc *regClient) newRetryableHost(host *ConfigHost) retryable.Retryable {
-	// TODO: include creds func
-	a := auth.NewAuth(auth.WithCreds(rc.authCreds))
-	r := retryable.NewRetryable(retryable.WithAuth(a))
-	return r
+	if _, ok := rc.retryables[host.Name]; !ok {
+		a := auth.NewAuth(auth.WithCreds(rc.authCreds))
+		r := retryable.NewRetryable(retryable.WithAuth(a))
+		rc.retryables[host.Name] = r
+	}
+	return rc.retryables[host.Name]
 }
 
 func (rc *regClient) authCreds(host string) (string, string) {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -390,6 +391,7 @@ type BearerToken struct {
 	ExpiresIn    int       `json:"expires_in"`
 	IssuedAt     time.Time `json:"issued_at"`
 	RefreshToken string    `json:"refresh_token"`
+	Scope        string    `json:"scope"`
 }
 
 // NewBearerHandler creates a new BearerHandler
@@ -452,16 +454,17 @@ func (b *BearerHandler) GenerateAuth() (string, error) {
 		return fmt.Sprintf("Bearer %s", b.token.Token), nil
 	}
 
-	// if renewal token exists, attempt to use it
-
-	// if user/pass exists, attempt to post with oauth form
-
-	// attempt a get (with basic auth if user/pass available)
-	if err := b.tryGet(); err != nil {
-		return "", err
+	// attempt to post with oauth form, this also uses refresh tokens
+	if err := b.tryPost(); err == nil {
+		return fmt.Sprintf("Bearer %s", b.token.Token), nil
 	}
 
-	return fmt.Sprintf("Bearer %s", b.token.Token), nil
+	// attempt a get (with basic auth if user/pass available)
+	if err := b.tryGet(); err == nil {
+		return fmt.Sprintf("Bearer %s", b.token.Token), nil
+	}
+
+	return "", ErrUnauthorized
 }
 
 func (b *BearerHandler) tryGet() error {
@@ -492,9 +495,34 @@ func (b *BearerHandler) tryGet() error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
-		return ErrUnauthorized
+	return b.validateResponse(resp)
+}
+
+func (b *BearerHandler) tryPost() error {
+	form := url.Values{}
+	form.Set("scope", strings.Join(b.scopes, " "))
+	form.Set("service", b.service)
+	form.Set("client_id", defaultClientID)
+	if b.token.RefreshToken != "" {
+		form.Set("grant_type", "refresh_token")
+		form.Set("refresh_token", b.token.RefreshToken)
+	} else if b.user != "" && b.pass != "" {
+		form.Set("grant_type", "password")
+		form.Set("username", b.user)
+		form.Set("password", b.pass)
 	}
+
+	req, err := http.NewRequest("POST", b.realm, strings.NewReader(form.Encode()))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
+
+	resp, err := b.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
 
 	return b.validateResponse(resp)
 }
@@ -510,6 +538,10 @@ func (b *BearerHandler) scopeExists(search string) bool {
 }
 
 func (b *BearerHandler) validateResponse(resp *http.Response) error {
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
+		return ErrUnauthorized
+	}
+
 	decoder := json.NewDecoder(resp.Body)
 
 	if err := decoder.Decode(&b.token); err != nil {
@@ -523,6 +555,12 @@ func (b *BearerHandler) validateResponse(resp *http.Response) error {
 	if b.token.IssuedAt.IsZero() {
 		b.token.IssuedAt = time.Now().UTC()
 	}
+
+	// AccessToken and Token should be the same and we use Token elsewhere
+	if b.token.AccessToken != "" {
+		b.token.Token = b.token.AccessToken
+	}
+
 	return nil
 }
 

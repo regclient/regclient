@@ -25,6 +25,7 @@ type Config struct {
 
 // ConfigHost struct contains host specific settings
 type ConfigHost struct {
+	Name    string   `json:"-"`
 	Scheme  string   `json:"scheme,omitempty"`
 	TLS     tlsConf  `json:"tls,omitempty"`
 	TLSCert string   `json:"tlscert,omitempty"`
@@ -81,6 +82,7 @@ func ConfigLoadReader(r io.Reader) (*Config, error) {
 		return c, ErrUnsupportedConfigVersion
 	}
 	for h := range c.Hosts {
+		c.Hosts[h].Name = h
 		if c.Hosts[h].DNS == nil {
 			c.Hosts[h].DNS = []string{h}
 		}
