@@ -2,15 +2,22 @@ package auth
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 type charLU byte
 
 var charLUs [256]charLU
+
+var defaultClientID = "regcli"
+
+// minTokenLife tokens are required to last at least 60 seconds to support older docker clients
+var minTokenLife = 60
 
 const (
 	isSpace charLU = 1 << iota
@@ -194,6 +201,10 @@ func (a *auth) addDefaultHandlers() {
 		a.hbs["basic"] = NewBasicHandler
 		a.authTypes = append(a.authTypes, "basic")
 	}
+	if _, ok := a.hbs["bearer"]; !ok {
+		a.hbs["bearer"] = NewBearerHandler
+		a.authTypes = append(a.authTypes, "bearer")
+	}
 }
 
 // DefaultCredsFn is used to return no credentials when auth is not configured with a CredsFn
@@ -369,6 +380,16 @@ type BearerHandler struct {
 	client                     *http.Client
 	realm, service, user, pass string
 	scopes                     []string
+	token                      BearerToken
+}
+
+// BearerToken is the json response to the Bearer request
+type BearerToken struct {
+	Token        string    `json:"token"`
+	AccessToken  string    `json:"access_token"`
+	ExpiresIn    int       `json:"expires_in"`
+	IssuedAt     time.Time `json:"issued_at"`
+	RefreshToken string    `json:"refresh_token"`
 }
 
 // NewBearerHandler creates a new BearerHandler
@@ -398,6 +419,8 @@ func (b *BearerHandler) ProcessChallenge(c Challenge) error {
 
 	existingScope := b.scopeExists(c.params["scope"])
 
+	// TODO: Check if existing token has expired, do not throw error with expired token
+
 	if b.realm == c.params["realm"] && b.service == c.params["service"] && existingScope {
 		return ErrNoNewChallenge
 	}
@@ -416,18 +439,64 @@ func (b *BearerHandler) ProcessChallenge(c Challenge) error {
 		b.scopes = append(b.scopes, c.params["scope"])
 	}
 
-	// TODO: delete any scope specific token
+	// delete any scope specific token
+	b.token.Token = ""
 
 	return nil
 }
 
 // GenerateAuth for BasicHandler generates base64 encoded user/pass for a host
 func (b *BearerHandler) GenerateAuth() (string, error) {
-	if b.user == "" || b.pass == "" {
-		// do anonymous request
+	// if unexpired token already exists, return it
+	if b.token.Token != "" && time.Now().Before(b.token.IssuedAt.Add(time.Duration(b.token.ExpiresIn)*time.Second)) {
+		return fmt.Sprintf("Bearer %s", b.token.Token), nil
 	}
 
-	return fmt.Sprintf("Bearer %s", ""), nil
+	// if renewal token exists, attempt to use it
+
+	// if user/pass exists, attempt to post with oauth form
+
+	// attempt a get (with basic auth if user/pass available)
+	if err := b.tryGet(); err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("Bearer %s", b.token.Token), nil
+}
+
+func (b *BearerHandler) tryGet() error {
+	req, err := http.NewRequest("GET", b.realm, nil)
+	if err != nil {
+		return err
+	}
+
+	reqParams := req.URL.Query()
+	reqParams.Add("client_id", defaultClientID)
+	reqParams.Add("offline_token", "true")
+	reqParams.Add("service", b.service)
+
+	for _, s := range b.scopes {
+		reqParams.Add("scope", s)
+	}
+
+	if b.user != "" && b.pass != "" {
+		reqParams.Add("account", b.user)
+		req.SetBasicAuth(b.user, b.pass)
+	}
+
+	req.URL.RawQuery = reqParams.Encode()
+
+	resp, err := b.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
+		return ErrUnauthorized
+	}
+
+	return b.validateResponse(resp)
 }
 
 // check if the scope already exists within the list of scopes
@@ -438,6 +507,23 @@ func (b *BearerHandler) scopeExists(search string) bool {
 		}
 	}
 	return false
+}
+
+func (b *BearerHandler) validateResponse(resp *http.Response) error {
+	decoder := json.NewDecoder(resp.Body)
+
+	if err := decoder.Decode(&b.token); err != nil {
+		return err
+	}
+
+	if b.token.ExpiresIn < minTokenLife {
+		b.token.ExpiresIn = minTokenLife
+	}
+
+	if b.token.IssuedAt.IsZero() {
+		b.token.IssuedAt = time.Now().UTC()
+	}
+	return nil
 }
 
 /*
