@@ -214,7 +214,7 @@ func (a *auth) UpdateRequest(req *http.Request) error {
 			a.log.WithFields(logrus.Fields{
 				"host":     host,
 				"authtype": at,
-				"header":   ah,
+				"header":   ah[0:17] + "...",
 			}).Debug("Auth header added")
 			req.Header.Set("Authorization", ah)
 			break

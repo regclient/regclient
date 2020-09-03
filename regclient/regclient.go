@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 
 	dockercfg "github.com/docker/cli/cli/config"
@@ -330,7 +331,7 @@ func (rc *regClient) getHost(hostname string) *ConfigHost {
 func (rc *regClient) getRetryable(host *ConfigHost) retryable.Retryable {
 	if _, ok := rc.retryables[host.Name]; !ok {
 		a := auth.NewAuth(auth.WithLog(rc.log), auth.WithCreds(rc.authCreds))
-		r := retryable.NewRetryable(retryable.WithLog(rc.log), retryable.WithAuth(a))
+		r := retryable.NewRetryable(retryable.WithLog(rc.log), retryable.WithAuth(a), retryable.WithMirrors(rc.mirrorFunc(host)))
 		rc.retryables[host.Name] = r
 	}
 	return rc.retryables[host.Name]
@@ -347,4 +348,16 @@ func (rc *regClient) authCreds(host string) (string, string) {
 	fmt.Fprintf(os.Stderr, "No credentials found for %s\n", host)
 	// anonymous request
 	return "", ""
+}
+
+func (rc *regClient) mirrorFunc(host *ConfigHost) func(url.URL) ([]url.URL, error) {
+	return func(u url.URL) ([]url.URL, error) {
+		var ul []url.URL
+		for _, m := range host.DNS {
+			mu := u
+			mu.Host = m
+			ul = append(ul, mu)
+		}
+		return ul, nil
+	}
 }

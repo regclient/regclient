@@ -3,6 +3,8 @@ package retryable
 import "errors"
 
 var (
+	// ErrAllMirrorsFailed when there are no mirrors left to try
+	ErrAllMirrorsFailed = errors.New("All mirrors failed")
 	// ErrBackoffLimit maximum backoff attempts reached
 	ErrBackoffLimit = errors.New("Backoff limit reached")
 	// ErrDigestMismatch if the expected digest wasn't received
