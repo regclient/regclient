@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 type charLU byte
@@ -70,6 +72,7 @@ type auth struct {
 	hbs        map[string]HandlerBuild       // handler builders based on authType
 	hs         map[string]map[string]Handler // handlers based on url and authType
 	authTypes  []string
+	log        *logrus.Logger
 }
 
 // NewAuth creates a new Auth
@@ -80,6 +83,12 @@ func NewAuth(opts ...Opts) Auth {
 		hbs:        map[string]HandlerBuild{},
 		hs:         map[string]map[string]Handler{},
 		authTypes:  []string{},
+	}
+	a.log = &logrus.Logger{
+		Out:       os.Stderr,
+		Formatter: new(logrus.TextFormatter),
+		Hooks:     make(logrus.LevelHooks),
+		Level:     logrus.WarnLevel,
 	}
 
 	for _, opt := range opts {
@@ -127,6 +136,13 @@ func WithDefaultHandlers() Opts {
 	}
 }
 
+// WithLog injects a logrus Logger
+func WithLog(log *logrus.Logger) Opts {
+	return func(a *auth) {
+		a.log = log
+	}
+}
+
 func (a *auth) HandleResponse(resp *http.Response) error {
 	/* 	- HandleResponse: parse 401 response, register/update auth method
 	   	- Manage handlers in map based on URL's host field
@@ -147,10 +163,15 @@ func (a *auth) HandleResponse(resp *http.Response) error {
 	if err != nil {
 		return err
 	}
+	a.log.WithFields(logrus.Fields{
+		"challenge": cl,
+	}).Debug("Auth request parsed")
 	goodChallenge := false
 	for _, c := range cl {
 		if _, ok := a.hbs[c.authType]; !ok {
-			fmt.Fprintf(os.Stderr, "Warning: unsupported auth type seen in challenge: %s\n", c.authType)
+			a.log.WithFields(logrus.Fields{
+				"authtype": c.authType,
+			}).Warn("Unsupported auth type")
 			continue
 		}
 		if _, ok := a.hs[host]; !ok {
@@ -190,6 +211,11 @@ func (a *auth) UpdateRequest(req *http.Request) error {
 			if err != nil {
 				continue
 			}
+			a.log.WithFields(logrus.Fields{
+				"host":     host,
+				"authtype": at,
+				"header":   ah,
+			}).Debug("Auth header added")
 			req.Header.Set("Authorization", ah)
 			break
 		}
@@ -330,12 +356,22 @@ func ParseAuthHeader(ah string) ([]Challenge, error) {
 		}
 	}
 
-	// process any content left at end of string
+	// process any content left at end of string, and handle any unfinished sections
 	switch state {
+	case "string":
+		if len(eb) != 0 {
+			atb = eb
+			c = &Challenge{authType: strings.ToLower(string(atb)), params: map[string]string{}}
+			cl = append(cl, *c)
+		}
 	case "value":
 		if len(vb) != 0 {
 			c.params[strings.ToLower(string(kb))] = string(vb)
 		}
+	case "quoted":
+		fallthrough
+	case "escape":
+		return nil, ErrParseFailure
 	}
 
 	return cl, nil
@@ -421,9 +457,7 @@ func (b *BearerHandler) ProcessChallenge(c Challenge) error {
 
 	existingScope := b.scopeExists(c.params["scope"])
 
-	// TODO: Check if existing token has expired, do not throw error with expired token
-
-	if b.realm == c.params["realm"] && b.service == c.params["service"] && existingScope {
+	if b.realm == c.params["realm"] && b.service == c.params["service"] && existingScope && !b.isExpired() {
 		return ErrNoNewChallenge
 	}
 
@@ -450,7 +484,7 @@ func (b *BearerHandler) ProcessChallenge(c Challenge) error {
 // GenerateAuth for BasicHandler generates base64 encoded user/pass for a host
 func (b *BearerHandler) GenerateAuth() (string, error) {
 	// if unexpired token already exists, return it
-	if b.token.Token != "" && time.Now().Before(b.token.IssuedAt.Add(time.Duration(b.token.ExpiresIn)*time.Second)) {
+	if b.token.Token != "" && !b.isExpired() {
 		return fmt.Sprintf("Bearer %s", b.token.Token), nil
 	}
 
@@ -465,6 +499,14 @@ func (b *BearerHandler) GenerateAuth() (string, error) {
 	}
 
 	return "", ErrUnauthorized
+}
+
+// returns true when token issue date is either 0 or token is expired
+func (b *BearerHandler) isExpired() bool {
+	if b.token.IssuedAt.IsZero() {
+		return true
+	}
+	return !time.Now().Before(b.token.IssuedAt.Add(time.Duration(b.token.ExpiresIn) * time.Second))
 }
 
 func (b *BearerHandler) tryGet() error {

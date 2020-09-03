@@ -19,6 +19,7 @@ import (
 	"github.com/docker/distribution/reference"
 	digest "github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/sirupsen/logrus"
 	"github.com/sudo-bmitch/regcli/pkg/auth"
 	"github.com/sudo-bmitch/regcli/pkg/retryable"
 )
@@ -126,6 +127,7 @@ type regClient struct {
 	// hosts      map[string]*regHost
 	// auth       AuthClient
 	config     *Config
+	log        *logrus.Logger
 	retryLimit int
 	transports map[string]*http.Transport
 	retryables map[string]retryable.Retryable
@@ -156,6 +158,14 @@ func NewRegClient(opts ...Opt) RegClient {
 	rc.retryables = map[string]retryable.Retryable{}
 	rc.transports = map[string]*http.Transport{}
 
+	// configure default logging
+	rc.log = &logrus.Logger{
+		Out:       os.Stderr,
+		Formatter: new(logrus.TextFormatter),
+		Hooks:     make(logrus.LevelHooks),
+		Level:     logrus.WarnLevel,
+	}
+
 	for _, opt := range opts {
 		opt(&rc)
 	}
@@ -173,6 +183,8 @@ func NewRegClient(opts ...Opt) RegClient {
 	rc.config.Hosts["docker.io"].Scheme = "https"
 	rc.config.Hosts["docker.io"].TLS = tlsEnabled
 	rc.config.Hosts["docker.io"].DNS = []string{"registry-1.docker.io"}
+
+	rc.log.Debug("regclient initialized")
 
 	return &rc
 }
@@ -251,10 +263,10 @@ func WithDockerCreds() Opt {
 	}
 }
 
-// WithRegClientConf adds configuration from regcli configuration file (yml?)
-func WithRegClientConf() Opt {
+// WithLog overrides default logrus Logger
+func WithLog(log *logrus.Logger) Opt {
 	return func(rc *regClient) {
-		return
+		rc.log = log
 	}
 }
 
@@ -317,8 +329,8 @@ func (rc *regClient) getHost(hostname string) *ConfigHost {
 
 func (rc *regClient) getRetryable(host *ConfigHost) retryable.Retryable {
 	if _, ok := rc.retryables[host.Name]; !ok {
-		a := auth.NewAuth(auth.WithCreds(rc.authCreds))
-		r := retryable.NewRetryable(retryable.WithAuth(a))
+		a := auth.NewAuth(auth.WithLog(rc.log), auth.WithCreds(rc.authCreds))
+		r := retryable.NewRetryable(retryable.WithLog(rc.log), retryable.WithAuth(a))
 		rc.retryables[host.Name] = r
 	}
 	return rc.retryables[host.Name]

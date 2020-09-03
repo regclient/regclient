@@ -4,13 +4,15 @@ import (
 	"fmt"
 	"os"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/sudo-bmitch/regcli/regclient"
 )
 
 const usageDesc = `Utility for accessing docker registries
 More details at https://github.com/sudo-bmitch/regcli`
+
+var log *logrus.Logger
 
 var rootCmd = &cobra.Command{
 	Use:   "regcli",
@@ -23,10 +25,17 @@ var rootCmd = &cobra.Command{
 var verbosity string
 
 func init() {
-	rootCmd.PersistentFlags().StringVarP(&verbosity, "verbosity", "v", log.WarnLevel.String(), "Log level (debug, info, warn, error, fatal, panic")
+	log = &logrus.Logger{
+		Out:       os.Stderr,
+		Formatter: new(logrus.TextFormatter),
+		Hooks:     make(logrus.LevelHooks),
+		Level:     logrus.WarnLevel,
+	}
+	rootCmd.PersistentFlags().StringVarP(&verbosity, "verbosity", "v", logrus.WarnLevel.String(), "Log level (debug, info, warn, error, fatal, panic")
 	rootCmd.PersistentPreRunE = rootPreRun
 }
 
+// Execute runs the CLI using cobra
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
@@ -36,7 +45,7 @@ func Execute() {
 }
 
 func rootPreRun(cmd *cobra.Command, args []string) error {
-	lvl, err := log.ParseLevel(verbosity)
+	lvl, err := logrus.ParseLevel(verbosity)
 	if err != nil {
 		return err
 	}
@@ -45,5 +54,5 @@ func rootPreRun(cmd *cobra.Command, args []string) error {
 }
 
 func newRegClient() regclient.RegClient {
-	return regclient.NewRegClient(regclient.WithConfigDefault(), regclient.WithDockerCreds())
+	return regclient.NewRegClient(regclient.WithLog(log), regclient.WithConfigDefault(), regclient.WithDockerCreds())
 }

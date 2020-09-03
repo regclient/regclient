@@ -3,8 +3,8 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/sudo-bmitch/regcli/regclient"
 )
@@ -72,7 +72,9 @@ func runRegistryConfig(cmd *cobra.Command, args []string) error {
 	if len(args) > 0 {
 		h, ok := c.Hosts[args[0]]
 		if !ok {
-			fmt.Fprintf(os.Stderr, "No configuration found for registry \"%s\"\n", args[0])
+			log.WithFields(logrus.Fields{
+				"registry": args[0],
+			}).Warn("No configuration found for registry")
 			return nil
 		}
 		hj, err = json.MarshalIndent(h, "", "  ")
@@ -111,7 +113,9 @@ func runRegistryLogin(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "Credentials set.\n")
+	log.WithFields(logrus.Fields{
+		"registry": args[0],
+	}).Info("Credentials set")
 	return nil
 }
 
@@ -122,7 +126,9 @@ func runRegistryLogout(cmd *cobra.Command, args []string) error {
 	}
 	h, ok := c.Hosts[args[0]]
 	if !ok {
-		fmt.Fprintf(os.Stderr, "No configuration found for registry.\n")
+		log.WithFields(logrus.Fields{
+			"registry": args[0],
+		}).Warn("No configuration/credentials found")
 		return nil
 	}
 	h.User = ""
@@ -132,7 +138,9 @@ func runRegistryLogout(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "Credentials unset.\n")
+	log.WithFields(logrus.Fields{
+		"registry": args[0],
+	}).Debug("Credentials unset")
 	return nil
 }
 
@@ -165,6 +173,8 @@ func runRegistrySet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "Registry configuration updated.\n")
+	log.WithFields(logrus.Fields{
+		"registry": args[0],
+	}).Info("Registry configuration updated/set")
 	return nil
 }

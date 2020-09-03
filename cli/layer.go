@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/sudo-bmitch/regcli/regclient"
 )
@@ -32,7 +33,11 @@ func runLayerPull(cmd *cobra.Command, args []string) error {
 	}
 	rc := newRegClient()
 
-	// try retrieving a manifest list
+	log.WithFields(logrus.Fields{
+		"host":       ref.Registry,
+		"repository": ref.Repository,
+		"digest":     ref.Digest,
+	}).Debug("Pulling layer")
 	blobIO, resp, err := rc.BlobGet(context.Background(), ref, args[1], []string{})
 
 	_ = resp

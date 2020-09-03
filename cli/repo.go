@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/sudo-bmitch/regcli/regclient"
 )
@@ -30,7 +31,10 @@ func runRepoLs(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	rc := newRegClient()
-	// fmt.Printf("Listing host: %s, repo: %s\n", ref.Registry, ref.Repository)
+	log.WithFields(logrus.Fields{
+		"host":       ref.Registry,
+		"repository": ref.Repository,
+	}).Debug("Listing tags")
 	tl, err := rc.TagsList(context.Background(), ref)
 	if err != nil {
 		return err

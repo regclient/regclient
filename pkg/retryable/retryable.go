@@ -12,6 +12,7 @@ import (
 	"time"
 
 	digest "github.com/opencontainers/go-digest"
+	"github.com/sirupsen/logrus"
 )
 
 // Retryable is used to create requests with built in retry capabilities
@@ -45,6 +46,7 @@ type retryable struct {
 	limit      int
 	delayInit  time.Duration
 	delayMax   time.Duration
+	log        *logrus.Logger
 }
 
 // NewRetryable returns a retryable interface
@@ -55,6 +57,12 @@ func NewRetryable(opts ...Opts) Retryable {
 	}
 	r.delayInit, _ = time.ParseDuration("1s")
 	r.delayMax, _ = time.ParseDuration("30s")
+	r.log = &logrus.Logger{
+		Out:       os.Stderr,
+		Formatter: new(logrus.TextFormatter),
+		Hooks:     make(logrus.LevelHooks),
+		Level:     logrus.WarnLevel,
+	}
 
 	for _, opt := range opts {
 		opt(r)
@@ -103,6 +111,13 @@ func WithLimit(l int) Opts {
 	}
 }
 
+// WithLog injects a logrus Logger configuration
+func WithLog(log *logrus.Logger) Opts {
+	return func(r *retryable) {
+		r.log = log
+	}
+}
+
 // WithMirrors adds ability to contact mirrors in retryable methods
 func WithMirrors(mirrorFunc func(url.URL) ([]url.URL, error)) Opts {
 	return func(r *retryable) {
@@ -134,6 +149,7 @@ type request struct {
 	digester   digest.Digester
 	progressCB func(int64, error)
 	responses  []*http.Response
+	log        *logrus.Logger
 }
 
 func (r *retryable) DoRequest(ctx context.Context, method string, u url.URL, opts ...OptsReq) (Response, error) {
@@ -154,6 +170,7 @@ func (r *retryable) DoRequest(ctx context.Context, method string, u url.URL, opt
 		digester:   nil,
 		progressCB: nil,
 		responses:  []*http.Response{},
+		log:        r.log,
 	}
 	// replace url list with mirrors
 	if r.mirrorFunc != nil {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/sudo-bmitch/regcli/regclient"
 )
@@ -56,12 +57,6 @@ var imageManifestCmd = &cobra.Command{
 	Args:  cobra.RangeArgs(1, 1),
 	RunE:  runImageManifest,
 }
-var imageRetagCmd = &cobra.Command{
-	Use:   "retag",
-	Short: "retag images",
-	Args:  cobra.RangeArgs(2, 2),
-	RunE:  runImageRetag,
-}
 
 func init() {
 	imageCmd.AddCommand(imageCopyCmd)
@@ -71,7 +66,6 @@ func init() {
 	imageCmd.AddCommand(imageImportCmd)
 	imageCmd.AddCommand(imageInspectCmd)
 	imageCmd.AddCommand(imageManifestCmd)
-	imageCmd.AddCommand(imageRetagCmd)
 	rootCmd.AddCommand(imageCmd)
 }
 
@@ -85,6 +79,14 @@ func runImageCopy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	rc := newRegClient()
+	log.WithFields(logrus.Fields{
+		"source host": refSrc.Registry,
+		"source repo": refSrc.Repository,
+		"source tag":  refSrc.Tag,
+		"target host": refTgt.Registry,
+		"target repo": refTgt.Repository,
+		"target tag":  refTgt.Tag,
+	}).Debug("Image copy")
 	return rc.ImageCopy(context.Background(), refSrc, refTgt)
 }
 
@@ -99,6 +101,11 @@ func runImageDigest(cmd *cobra.Command, args []string) error {
 	}
 	rc := newRegClient()
 
+	log.WithFields(logrus.Fields{
+		"host": ref.Registry,
+		"repo": ref.Repository,
+		"tag":  ref.Tag,
+	}).Debug("Image digest")
 	d, err := rc.ManifestDigest(context.Background(), ref)
 	if err != nil {
 		return err
@@ -113,6 +120,11 @@ func runImageExport(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	rc := newRegClient()
+	log.WithFields(logrus.Fields{
+		"host": ref.Registry,
+		"repo": ref.Repository,
+		"tag":  ref.Tag,
+	}).Debug("Image export")
 	return rc.ImageExport(context.Background(), ref, os.Stdout)
 }
 
@@ -126,6 +138,11 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	rc := newRegClient()
+	log.WithFields(logrus.Fields{
+		"host": ref.Registry,
+		"repo": ref.Repository,
+		"tag":  ref.Tag,
+	}).Debug("Image inspect")
 	img, err := rc.ImageInspect(context.Background(), ref)
 	if err != nil {
 		return err
@@ -142,6 +159,11 @@ func runImageManifest(cmd *cobra.Command, args []string) error {
 	}
 	rc := newRegClient()
 
+	log.WithFields(logrus.Fields{
+		"host": ref.Registry,
+		"repo": ref.Repository,
+		"tag":  ref.Tag,
+	}).Debug("Image manifest")
 	m, err := rc.ManifestGet(context.Background(), ref)
 	if err != nil {
 		return err
@@ -152,8 +174,4 @@ func runImageManifest(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println(string(mj))
 	return nil
-}
-
-func runImageRetag(cmd *cobra.Command, args []string) error {
-	return ErrNotImplemented
 }
