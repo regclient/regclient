@@ -3,6 +3,7 @@ package retryable
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -148,6 +149,7 @@ type request struct {
 	digester   digest.Digester
 	progressCB func(int64, error)
 	responses  []*http.Response
+	reader     io.Reader
 	log        *logrus.Logger
 }
 
@@ -169,6 +171,7 @@ func (r *retryable) DoRequest(ctx context.Context, method string, u url.URL, opt
 		digester:   nil,
 		progressCB: nil,
 		responses:  []*http.Response{},
+		reader:     nil,
 		log:        r.log,
 	}
 	// replace url list with mirrors
@@ -297,6 +300,13 @@ func (req *request) httpDo() error {
 	}
 	req.responses = append(req.responses, resp)
 
+	// update reader
+	if req.digester == nil {
+		req.reader = resp.Body
+	} else {
+		req.reader = io.TeeReader(resp.Body, req.digester.Hash())
+	}
+
 	return nil
 }
 
@@ -304,8 +314,7 @@ func (req *request) retryLoop() error {
 	for {
 		err := req.httpDo()
 		if err != nil {
-			err = req.backoff(true)
-			if err == nil {
+			if boerr := req.backoff(true); boerr == nil {
 				continue
 			}
 		}
@@ -335,7 +344,10 @@ func (req *request) checkResp() error {
 					"URL": curURL.String(),
 					"Err": err,
 				}).Warn("Failed to handle auth request")
-				return req.backoff(true)
+				if boerr := req.backoff(true); boerr == nil {
+					return nil
+				}
+				return err
 			}
 			req.log.WithFields(logrus.Fields{
 				"URL": curURL.String(),
@@ -349,11 +361,10 @@ func (req *request) checkResp() error {
 			"Status": lastResp.Status,
 		}).Debug("Backoff and retry needed")
 		// backoff, next mirror
-		if err := req.backoff(false); err != nil {
-			return err
-		} else {
+		if boerr := req.backoff(false); boerr == nil {
 			return ErrRetryNeeded
 		}
+		return fmt.Errorf("Unexpected http status code %d", lastResp.StatusCode)
 	} else if lastResp.StatusCode >= 200 && lastResp.StatusCode < 300 {
 		return nil
 	}
@@ -363,20 +374,14 @@ func (req *request) checkResp() error {
 		"URL":    curURL.String(),
 		"Status": lastResp.Status,
 	}).Debug("Backoff and retry needed, removing failing mirror")
-	if err := req.backoff(true); err != nil {
-		return err
+	if boerr := req.backoff(true); boerr == nil {
+		return ErrRetryNeeded
 	}
-	return ErrRetryNeeded
+	return fmt.Errorf("Unexpected http status code %d", lastResp.StatusCode)
 }
 
 func (req *request) backoff(removeMirror bool) error {
 	req.backoffs++
-	req.log.WithFields(logrus.Fields{
-		"curURL":       req.curURL,
-		"urls":         req.urls,
-		"removeMirror": removeMirror,
-		"backoffs":     req.backoffs,
-	}).Debug("Backoff request")
 	if req.backoffs >= req.r.limit {
 		return ErrBackoffLimit
 	}
@@ -415,12 +420,8 @@ func (req *request) Read(b []byte) (int, error) {
 	}
 	// fetch block
 	lastResp := req.responses[len(req.responses)-1]
-	i, err := lastResp.Body.Read(b)
+	i, err := req.reader.Read(b)
 	req.curRead += int64(i)
-	// add to digest
-	if req.digester != nil && i > 0 {
-		req.digester.Hash().Write(b)
-	}
 	if err == io.EOF && lastResp.ContentLength > 0 {
 		// handle early EOF or other failed connection with a retry from an offset
 		if req.curRead < lastResp.ContentLength {
@@ -439,6 +440,10 @@ func (req *request) Read(b []byte) (int, error) {
 	}
 	// if eof, verify digest, set error on mismatch
 	if req.digester != nil && err == io.EOF && req.digest != req.digester.Digest() {
+		req.log.WithFields(logrus.Fields{
+			"expected": req.digest,
+			"computed": req.digester.Digest(),
+		}).Warn("Digest mismatch")
 		req.done = true
 		return i, ErrDigestMismatch
 	}
@@ -449,12 +454,13 @@ func (req *request) Read(b []byte) (int, error) {
 
 func (req *request) Close() error {
 	// if no responses, error
-	if len(req.responses) == 0 {
+	if req.reader == nil {
 		return ErrNotFound
 	}
 	// pass through close to last request, mark as done
+	lastResp := req.responses[len(req.responses)-1]
 	req.done = true
-	return req.responses[len(req.responses)-1].Body.Close()
+	return lastResp.Body.Close()
 }
 
 func (req *request) HTTPResponse() *http.Response {

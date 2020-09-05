@@ -13,21 +13,39 @@ import (
 	"github.com/docker/docker/pkg/archive"
 	digest "github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/sirupsen/logrus"
 )
 
 func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) error {
 	// get the manifest for the source
 	m, err := rc.ManifestGet(ctx, refSrc)
 	if err != nil {
+		rc.log.WithFields(logrus.Fields{
+			"ref": refSrc.Reference,
+			"err": err,
+		}).Warn("Failed to get source manifest")
 		return err
 	}
 
 	// transfer the config
 	cd, err := m.GetConfigDigest()
 	if err != nil {
+		rc.log.WithFields(logrus.Fields{
+			"ref": refSrc.Reference,
+			"err": err,
+		}).Warn("Failed to get config digest from manifest")
 		return err
 	}
+	rc.log.WithFields(logrus.Fields{
+		"digest": cd.String(),
+	}).Info("Copy config")
 	if err := rc.BlobCopy(ctx, refSrc, refTgt, cd.String()); err != nil {
+		rc.log.WithFields(logrus.Fields{
+			"source": refSrc.Reference,
+			"target": refTgt.Reference,
+			"digest": cd.String(),
+			"err":    err,
+		}).Warn("Failed to copy config")
 		return err
 	}
 
@@ -37,13 +55,26 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) erro
 		return err
 	}
 	for _, layerSrc := range l {
+		rc.log.WithFields(logrus.Fields{
+			"layer": layerSrc.Digest.String(),
+		}).Info("Copy layer")
 		if err := rc.BlobCopy(ctx, refSrc, refTgt, layerSrc.Digest.String()); err != nil {
+			rc.log.WithFields(logrus.Fields{
+				"source": refSrc.Reference,
+				"target": refTgt.Reference,
+				"layer":  layerSrc.Digest.String(),
+				"err":    err,
+			}).Warn("Failed to copy layer")
 			return err
 		}
 	}
 
 	// push manifest to target
 	if err := rc.ManifestPut(ctx, refTgt, m); err != nil {
+		rc.log.WithFields(logrus.Fields{
+			"target": refTgt.Reference,
+			"err":    err,
+		}).Warn("Failed to push manifest")
 		return err
 	}
 
@@ -60,33 +91,62 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 
 	m, err := rc.ManifestGet(ctx, ref)
 	if err != nil {
+		rc.log.WithFields(logrus.Fields{
+			"ref": ref.Reference,
+			"err": err,
+		}).Warn("Failed to get manifest")
 		return err
 	}
 
 	// write to a temp directory
 	tempDir, err := ioutil.TempDir("", "regcli-export-")
 	if err != nil {
+		rc.log.WithFields(logrus.Fields{
+			"dir": tempDir,
+			"err": err,
+		}).Warn("Failed to create temp directory")
 		return err
 	}
 	defer os.RemoveAll(tempDir)
 
-	fmt.Fprintf(os.Stderr, "Debug: Using temp directory for export \"%s\"\n", tempDir)
+	rc.log.WithFields(logrus.Fields{
+		"dir": tempDir,
+	}).Debug("Using temp directory for export")
 
 	// retrieve the config blob
 	cd, err := m.GetConfigDigest()
 	if err != nil {
+		rc.log.WithFields(logrus.Fields{
+			"err": err,
+		}).Warn("Failed to get config digest from manifest")
 		return err
 	}
 	confio, _, err := rc.BlobGet(ctx, ref, cd.String(), []string{MediaTypeDocker2ImageConfig, ociv1.MediaTypeImageConfig})
 	if err != nil {
+		rc.log.WithFields(logrus.Fields{
+			"ref":    ref.Reference,
+			"digest": cd.String(),
+			"err":    err,
+		}).Warn("Failed to get config")
 		return err
 	}
 	confstr, err := ioutil.ReadAll(confio)
 	if err != nil {
+		rc.log.WithFields(logrus.Fields{
+			"ref":    ref.Reference,
+			"digest": cd.String(),
+			"err":    err,
+		}).Warn("Failed to download config")
 		return err
 	}
 	confDigest := digest.FromBytes(confstr)
 	if cd != confDigest {
+		rc.log.WithFields(logrus.Fields{
+			"ref":        ref.Reference,
+			"expected":   cd.String(),
+			"calculated": confDigest.String(),
+		}).Warn("Config digest mismatch")
+
 		fmt.Fprintf(os.Stderr, "Warning: digest for image config does not match, pulled %s, calculated %s\n", cd.String(), confDigest.String())
 	}
 	conf := ociv1.Image{}
@@ -114,15 +174,16 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 		// request layer
 		layerRComp, _, err := rc.BlobGet(ctx, ref, layerDesc.Digest.String(), []string{})
 		if err != nil {
+			rc.log.WithFields(logrus.Fields{
+				"ref":   ref.Reference,
+				"layer": layerDesc.Digest.String(),
+				"err":   err,
+			}).Warn("Failed to download layer")
 			return err
 		}
-		// handle any failures before reading to a file
 		defer layerRComp.Close()
-		// gather digest of compressed stream to verify downloaded blob
-		digestComp := digest.Canonical.Digester()
-		trComp := io.TeeReader(layerRComp, digestComp.Hash())
 		// decompress layer
-		layerTarStream, err := archive.DecompressStream(trComp)
+		layerTarStream, err := archive.DecompressStream(layerRComp)
 		if err != nil {
 			return err
 		}
@@ -141,11 +202,6 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 			return err
 		}
 		lf.Close()
-
-		// verify digests
-		if layerDesc.Digest != digestComp.Digest() {
-			fmt.Fprintf(os.Stderr, "Warning: digest for layer does not match, pulled %s, calculated %s\n", layerDesc.Digest.String(), digestComp.Digest().String())
-		}
 
 		// update references to uncompressed tar digest in the filesystem, manifest, and image config
 		digestFull := digestTar.Digest()
