@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/url"
+
+	"github.com/sirupsen/logrus"
 )
 
 func (rc *regClient) TagsList(ctx context.Context, ref Ref) (TagList, error) {
@@ -23,10 +25,17 @@ func (rc *regClient) TagsList(ctx context.Context, ref Ref) (TagList, error) {
 	}
 	respBody, err := ioutil.ReadAll(resp)
 	if err != nil {
+		rc.log.WithFields(logrus.Fields{
+			"err": err,
+		}).Warn("Failed to read tag list")
 		return tl, err
 	}
 	err = json.Unmarshal(respBody, &tl)
 	if err != nil {
+		rc.log.WithFields(logrus.Fields{
+			"err":  err,
+			"body": respBody,
+		}).Warn("Failed to unmarshal tag list")
 		return tl, err
 	}
 

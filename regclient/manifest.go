@@ -1,14 +1,19 @@
 package regclient
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/url"
 
 	dockerDistribution "github.com/docker/distribution"
 	dockerManifestList "github.com/docker/distribution/manifest/manifestlist"
 	dockerSchema2 "github.com/docker/distribution/manifest/schema2"
 	digest "github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/sirupsen/logrus"
+	"github.com/sudo-bmitch/regcli/pkg/retryable"
 )
 
 type manifest struct {
@@ -100,4 +105,172 @@ func (m *manifest) MarshalJSON() ([]byte, error) {
 		return json.Marshal(m.ociML)
 	}
 	return []byte{}, ErrUnsupportedMediaType
+}
+
+func (rc *regClient) ManifestDigest(ctx context.Context, ref Ref) (digest.Digest, error) {
+	host := rc.getHost(ref.Registry)
+	var tagOrDigest string
+	if ref.Digest != "" {
+		tagOrDigest = ref.Digest
+	} else if ref.Tag != "" {
+		tagOrDigest = ref.Tag
+	} else {
+		rc.log.WithFields(logrus.Fields{
+			"ref": ref.Reference,
+		}).Warn("Manifest requires a tag or digest")
+		return "", ErrMissingTag
+	}
+
+	manfURL := url.URL{
+		Scheme: host.Scheme,
+		Host:   host.DNS[0],
+		Path:   "/v2/" + ref.Repository + "/manifests/" + tagOrDigest,
+	}
+
+	opts := []retryable.OptsReq{}
+	opts = append(opts, retryable.WithHeader("Accept", []string{
+		MediaTypeDocker2Manifest,
+		MediaTypeDocker2ManifestList,
+		MediaTypeOCI1Manifest,
+		MediaTypeOCI1ManifestList,
+	}))
+
+	rty := rc.getRetryable(host)
+	resp, err := rty.DoRequest(ctx, "GET", manfURL, opts...)
+	if err != nil {
+		return "", err
+	}
+	respBody, err := ioutil.ReadAll(resp)
+	if err != nil {
+		rc.log.WithFields(logrus.Fields{
+			"err": err,
+			"ref": ref.Reference,
+		}).Warn("Failed to read manifest")
+		return "", err
+	}
+	return digest.FromBytes(respBody), nil
+}
+
+func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error) {
+	m := manifest{}
+
+	host := rc.getHost(ref.Registry)
+	var tagOrDigest string
+	if ref.Digest != "" {
+		tagOrDigest = ref.Digest
+	} else if ref.Tag != "" {
+		tagOrDigest = ref.Tag
+	} else {
+		rc.log.WithFields(logrus.Fields{
+			"ref": ref.Reference,
+		}).Warn("Manifest requires a tag or digest")
+		return nil, ErrMissingTag
+	}
+
+	manfURL := url.URL{
+		Scheme: host.Scheme,
+		Host:   host.DNS[0],
+		Path:   "/v2/" + ref.Repository + "/manifests/" + tagOrDigest,
+	}
+
+	opts := []retryable.OptsReq{}
+	opts = append(opts, retryable.WithHeader("Accept", []string{
+		MediaTypeDocker2Manifest,
+		MediaTypeDocker2ManifestList,
+		MediaTypeOCI1Manifest,
+		MediaTypeOCI1ManifestList,
+	}))
+
+	rty := rc.getRetryable(host)
+	resp, err := rty.DoRequest(ctx, "GET", manfURL, opts...)
+	if err != nil {
+		return nil, err
+	}
+	respBody, err := ioutil.ReadAll(resp)
+	if err != nil {
+		rc.log.WithFields(logrus.Fields{
+			"err": err,
+			"ref": ref.Reference,
+		}).Warn("Failed to read manifest")
+		return nil, err
+	}
+	m.mt = resp.HTTPResponse().Header.Get("Content-Type")
+	switch m.mt {
+	case MediaTypeDocker2Manifest:
+		err = json.Unmarshal(respBody, &m.dockerM)
+	case MediaTypeDocker2ManifestList:
+		err = json.Unmarshal(respBody, &m.dockerML)
+	case MediaTypeOCI1Manifest:
+		err = json.Unmarshal(respBody, &m.ociM)
+	case MediaTypeOCI1ManifestList:
+		err = json.Unmarshal(respBody, &m.ociML)
+	default:
+		rc.log.WithFields(logrus.Fields{
+			"mediatype": m.mt,
+			"ref":       ref.Reference,
+		}).Warn("Unsupported media type for manifest")
+		return nil, fmt.Errorf("Unknown manifest media type %s", m.mt)
+	}
+	// TODO: consider making a manifest Unmarshal method that detects which mediatype from the json
+	// err = json.Unmarshal(respBody, &m)
+	if err != nil {
+		rc.log.WithFields(logrus.Fields{
+			"err":       err,
+			"mediatype": m.mt,
+			"ref":       ref.Reference,
+		}).Warn("Failed to unmarshal manifest")
+		return nil, err
+	}
+
+	return &m, nil
+}
+
+func (rc *regClient) ManifestPut(ctx context.Context, ref Ref, m Manifest) error {
+	host := rc.getHost(ref.Registry)
+	if ref.Tag == "" {
+		rc.log.WithFields(logrus.Fields{
+			"ref": ref.Reference,
+		}).Warn("Manifest put requires a tag")
+		return ErrMissingTag
+	}
+
+	manfURL := url.URL{
+		Scheme: host.Scheme,
+		Host:   host.DNS[0],
+		Path:   "/v2/" + ref.Repository + "/manifests/" + ref.Tag,
+	}
+
+	// add body to request
+	opts := []retryable.OptsReq{}
+	opts = append(opts, retryable.WithHeader("Content-Type", []string{m.GetMediaType()}))
+
+	var mj []byte
+	mj, err := json.Marshal(m)
+	if err != nil {
+		rc.log.WithFields(logrus.Fields{
+			"ref": ref.Reference,
+			"err": err,
+		}).Warn("Error marshaling manifest")
+		return err
+	}
+	opts = append(opts, retryable.WithBodyBytes(mj))
+	opts = append(opts, retryable.WithContentLen(int64(len(mj))))
+
+	rty := rc.getRetryable(host)
+	resp, err := rty.DoRequest(ctx, "PUT", manfURL, opts...)
+	if err != nil {
+		return fmt.Errorf("Error calling manifest put request: %w\nResponse object: %v", err, resp)
+	}
+
+	if resp.HTTPResponse().StatusCode < 200 || resp.HTTPResponse().StatusCode > 299 {
+		body, _ := ioutil.ReadAll(resp)
+		rc.log.WithFields(logrus.Fields{
+			"ref":    ref.Reference,
+			"status": resp.HTTPResponse().StatusCode,
+			"body":   body,
+		}).Warn("Unexpected status code for manifest")
+		return fmt.Errorf("Unexpected status code on manifest put %d\nResponse object: %v\nBody: %s", resp.HTTPResponse().StatusCode, resp, body)
+	}
+
+	return nil
 }
