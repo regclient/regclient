@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/opencontainers/go-digest"
+	"github.com/regclient/regclient/pkg/retryable"
 	"github.com/sirupsen/logrus"
-	"github.com/sudo-bmitch/regcli/pkg/retryable"
 )
 
 func (rc *regClient) BlobCopy(ctx context.Context, refSrc Ref, refTgt Ref, d string) error {

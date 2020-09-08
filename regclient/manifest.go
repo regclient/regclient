@@ -12,8 +12,8 @@ import (
 	dockerSchema2 "github.com/docker/distribution/manifest/schema2"
 	digest "github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/regclient/regclient/pkg/retryable"
 	"github.com/sirupsen/logrus"
-	"github.com/sudo-bmitch/regcli/pkg/retryable"
 )
 
 type manifest struct {

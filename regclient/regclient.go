@@ -2,12 +2,13 @@ package regclient
 
 import (
 	"context"
+	"io/ioutil"
+	"path/filepath"
 	"strings"
 
 	// crypto libraries included for go-digest
 	_ "crypto/sha256"
 	_ "crypto/sha512"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,9 +21,20 @@ import (
 	"github.com/docker/distribution/reference"
 	digest "github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/regclient/regclient/pkg/auth"
+	"github.com/regclient/regclient/pkg/retryable"
 	"github.com/sirupsen/logrus"
-	"github.com/sudo-bmitch/regcli/pkg/auth"
-	"github.com/sudo-bmitch/regcli/pkg/retryable"
+)
+
+const (
+	// DockerCertDir default location for docker certs
+	DockerCertDir = "/etc/docker/certs.d"
+	// DockerRegistry is the name resolved in docker images on Hub
+	DockerRegistry = "docker.io"
+	// DockerRegistryAuth is the name provided in docker's config for Hub
+	DockerRegistryAuth = "https://index.docker.io/v1/"
+	// DockerRegistryDNS is the host to connect to for Hub
+	DockerRegistryDNS = "registry-1.docker.io"
 )
 
 var (
@@ -39,62 +51,6 @@ var (
 	// MediaTypeOCI1ImageConfig OCI v1 configuration json object media type
 	MediaTypeOCI1ImageConfig = ociv1.MediaTypeImageConfig
 )
-
-type tlsConf int
-
-const (
-	tlsUndefined tlsConf = iota
-	tlsEnabled
-	tlsInsecure
-	tlsDisabled
-)
-
-func (t tlsConf) MarshalJSON() ([]byte, error) {
-	s, err := t.MarshalText()
-	if err != nil {
-		return []byte(""), err
-	}
-	return json.Marshal(string(s))
-}
-
-func (t tlsConf) MarshalText() ([]byte, error) {
-	var s string
-	switch t {
-	default:
-		s = ""
-	case tlsEnabled:
-		s = "enabled"
-	case tlsInsecure:
-		s = "insecure"
-	case tlsDisabled:
-		s = "disabled"
-	}
-	return []byte(s), nil
-}
-
-func (t *tlsConf) UnmarshalJSON(b []byte) error {
-	var s string
-	if err := json.Unmarshal(b, &s); err != nil {
-		return err
-	}
-	return t.UnmarshalText([]byte(s))
-}
-
-func (t *tlsConf) UnmarshalText(b []byte) error {
-	switch strings.ToLower(string(b)) {
-	default:
-		return fmt.Errorf("Unknown TLS value \"%s\"", b)
-	case "":
-		*t = tlsUndefined
-	case "enabled":
-		*t = tlsEnabled
-	case "insecure":
-		*t = tlsInsecure
-	case "disabled":
-		*t = tlsDisabled
-	}
-	return nil
-}
 
 // RegClient provides an interfaces to working with registries
 type RegClient interface {
@@ -177,13 +133,22 @@ func NewRegClient(opts ...Opt) RegClient {
 
 	// hard code docker hub host config
 	// TODO: change to a global var? merge ConfigHost structs?
-	if _, ok := rc.config.Hosts["docker.io"]; !ok {
-		rc.config.Hosts["docker.io"] = &ConfigHost{}
+	if _, ok := rc.config.Hosts[DockerRegistry]; !ok {
+		rc.config.Hosts[DockerRegistry] = &ConfigHost{}
 	}
-	rc.config.Hosts["docker.io"].Name = "docker.io"
-	rc.config.Hosts["docker.io"].Scheme = "https"
-	rc.config.Hosts["docker.io"].TLS = tlsEnabled
-	rc.config.Hosts["docker.io"].DNS = []string{"registry-1.docker.io"}
+	rc.config.Hosts[DockerRegistry].Name = DockerRegistry
+	rc.config.Hosts[DockerRegistry].Scheme = "https"
+	rc.config.Hosts[DockerRegistry].TLS = tlsEnabled
+	rc.config.Hosts[DockerRegistry].DNS = []string{DockerRegistryDNS}
+
+	// load docker creds/certs if configured
+	if rc.config.IncDockerCred != nil && *rc.config.IncDockerCred == true {
+		if err := rc.loadDockerCreds(); err != nil {
+			rc.log.WithFields(logrus.Fields{
+				"err": err,
+			}).Warn("Failed to load docker creds")
+		}
+	}
 
 	rc.log.Debug("regclient initialized")
 
@@ -195,7 +160,9 @@ func WithConfigDefault() Opt {
 	return func(rc *regClient) {
 		config, err := ConfigLoadDefault()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to load default config: %s\n", err)
+			rc.log.WithFields(logrus.Fields{
+				"err": err,
+			}).Warn("Failed to load default config")
 		} else {
 			rc.config = config
 		}
@@ -207,7 +174,10 @@ func WithConfigFile(filename string) Opt {
 	return func(rc *regClient) {
 		config, err := ConfigLoadFile(filename)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to load config file %s: %s\n", filename, err)
+			rc.log.WithFields(logrus.Fields{
+				"err":  err,
+				"file": filename,
+			}).Warn("Failed to load config")
 		} else {
 			rc.config = config
 		}
@@ -217,48 +187,27 @@ func WithConfigFile(filename string) Opt {
 // WithDockerCerts adds certificates trusted by docker in /etc/docker/certs.d
 func WithDockerCerts() Opt {
 	return func(rc *regClient) {
+		if rc.config == nil {
+			rc.config = ConfigNew()
+		}
+		if rc.config.IncDockerCert == nil {
+			enabled := true
+			rc.config.IncDockerCert = &enabled
+		}
 		return
 	}
 }
 
 // WithDockerCreds adds configuration from users docker config with registry logins
+// This changes the default value from the config file, and should be added after the config file is loaded
 func WithDockerCreds() Opt {
 	return func(rc *regClient) {
 		if rc.config == nil {
 			rc.config = ConfigNew()
 		}
-		conffile := dockercfg.LoadDefaultConfigFile(os.Stderr)
-		creds, err := conffile.GetAllCredentials()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to load docker creds %s\n", err)
-			return
-		}
-		for _, cred := range creds {
-			if cred.ServerAddress == "" || cred.Username == "" || cred.Password == "" {
-				continue
-			}
-			// TODO: move these hostnames into a const (possibly pull from distribution repo)
-			if cred.ServerAddress == "https://index.docker.io/v1/" {
-				cred.ServerAddress = "registry-1.docker.io"
-			}
-			if _, ok := rc.config.Hosts[cred.ServerAddress]; !ok {
-				h := ConfigHost{
-					Name:   cred.ServerAddress,
-					DNS:    []string{cred.ServerAddress},
-					Scheme: "https",
-					TLS:    tlsEnabled,
-					User:   cred.Username,
-					Pass:   cred.Password,
-				}
-				rc.config.Hosts[cred.ServerAddress] = &h
-			} else if rc.config.Hosts[cred.ServerAddress].User != "" || rc.config.Hosts[cred.ServerAddress].Pass != "" {
-				if rc.config.Hosts[cred.ServerAddress].User != cred.Username || rc.config.Hosts[cred.ServerAddress].Pass != cred.Password {
-					fmt.Fprintf(os.Stderr, "Warning: credentials in docker do not match regcli credentials for registry %s\n", cred.ServerAddress)
-				}
-			} else {
-				rc.config.Hosts[cred.ServerAddress].User = cred.Username
-				rc.config.Hosts[cred.ServerAddress].Pass = cred.Password
-			}
+		if rc.config.IncDockerCred == nil {
+			enabled := true
+			rc.config.IncDockerCred = &enabled
 		}
 		return
 	}
@@ -269,6 +218,45 @@ func WithLog(log *logrus.Logger) Opt {
 	return func(rc *regClient) {
 		rc.log = log
 	}
+}
+
+func (rc *regClient) loadDockerCreds() error {
+	if rc.config == nil {
+		rc.config = ConfigNew()
+	}
+	conffile := dockercfg.LoadDefaultConfigFile(os.Stderr)
+	creds, err := conffile.GetAllCredentials()
+	if err != nil {
+		return fmt.Errorf("Failed to load docker creds %s", err)
+	}
+	for _, cred := range creds {
+		if cred.ServerAddress == "" || cred.Username == "" || cred.Password == "" {
+			continue
+		}
+		// TODO: move these hostnames into a const (possibly pull from distribution repo)
+		if cred.ServerAddress == DockerRegistryAuth {
+			cred.ServerAddress = DockerRegistryDNS
+		}
+		if _, ok := rc.config.Hosts[cred.ServerAddress]; !ok {
+			h := ConfigHost{
+				Name:   cred.ServerAddress,
+				DNS:    []string{cred.ServerAddress},
+				Scheme: "https",
+				TLS:    tlsEnabled,
+				User:   cred.Username,
+				Pass:   cred.Password,
+			}
+			rc.config.Hosts[cred.ServerAddress] = &h
+		} else if rc.config.Hosts[cred.ServerAddress].User != "" || rc.config.Hosts[cred.ServerAddress].Pass != "" {
+			if rc.config.Hosts[cred.ServerAddress].User != cred.Username || rc.config.Hosts[cred.ServerAddress].Pass != cred.Password {
+				fmt.Fprintf(os.Stderr, "Warning: credentials in docker do not match regcli credentials for registry %s\n", cred.ServerAddress)
+			}
+		} else {
+			rc.config.Hosts[cred.ServerAddress].User = cred.Username
+			rc.config.Hosts[cred.ServerAddress].Pass = cred.Password
+		}
+	}
+	return nil
 }
 
 // NewRef returns a repository reference including a registry, repository (path), digest, and tag
@@ -331,7 +319,18 @@ func (rc *regClient) getHost(hostname string) *ConfigHost {
 func (rc *regClient) getRetryable(host *ConfigHost) retryable.Retryable {
 	if _, ok := rc.retryables[host.Name]; !ok {
 		a := auth.NewAuth(auth.WithLog(rc.log), auth.WithCreds(rc.authCreds))
-		r := retryable.NewRetryable(retryable.WithLog(rc.log), retryable.WithAuth(a), retryable.WithMirrors(rc.mirrorFunc(host)))
+		rOpts := []retryable.Opts{
+			retryable.WithLog(rc.log),
+			retryable.WithAuth(a),
+			retryable.WithMirrors(rc.mirrorFunc(host)),
+		}
+		if certs := rc.getCerts(host); len(certs) > 0 {
+			rOpts = append(rOpts, retryable.WithCertFiles(certs))
+		}
+		if host.RegCert != "" {
+			rOpts = append(rOpts, retryable.WithCerts([][]byte{[]byte(host.RegCert)}))
+		}
+		r := retryable.NewRetryable(rOpts...)
 		rc.retryables[host.Name] = r
 	}
 	return rc.retryables[host.Name]
@@ -348,6 +347,39 @@ func (rc *regClient) authCreds(host string) (string, string) {
 	fmt.Fprintf(os.Stderr, "No credentials found for %s\n", host)
 	// anonymous request
 	return "", ""
+}
+
+func (rc *regClient) getCerts(host *ConfigHost) []string {
+	var certs []string
+	if rc.config.IncDockerCert == nil || *rc.config.IncDockerCert == false {
+		return certs
+	}
+	hosts := []string{host.Name}
+	if host.DNS != nil {
+		hosts = host.DNS
+	}
+	for _, h := range hosts {
+		dir := filepath.Join(DockerCertDir, h)
+		files, err := ioutil.ReadDir(dir)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				rc.log.WithFields(logrus.Fields{
+					"err": err,
+					"dir": dir,
+				}).Warn("Failed to open docker cert dir")
+			}
+			continue
+		}
+		for _, f := range files {
+			if f.IsDir() {
+				continue
+			}
+			if strings.HasSuffix(f.Name(), ".crt") {
+				certs = append(certs, f.Name())
+			}
+		}
+	}
+	return certs
 }
 
 func (rc *regClient) mirrorFunc(host *ConfigHost) func(url.URL) ([]url.URL, error) {

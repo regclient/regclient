@@ -1,13 +1,13 @@
-package cli
+package main
 
 import (
 	"context"
 	"io"
 	"os"
 
+	"github.com/regclient/regclient/regclient"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/sudo-bmitch/regcli/regclient"
 )
 
 var layerCmd = &cobra.Command{

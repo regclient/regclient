@@ -17,7 +17,7 @@ type charLU byte
 
 var charLUs [256]charLU
 
-var defaultClientID = "regcli"
+var defaultClientID = "regclient"
 
 // minTokenLife tokens are required to last at least 60 seconds to support older docker clients
 var minTokenLife = 60

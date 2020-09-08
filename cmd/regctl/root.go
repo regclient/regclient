@@ -1,21 +1,21 @@
-package cli
+package main
 
 import (
 	"fmt"
 	"os"
 
+	"github.com/regclient/regclient/regclient"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/sudo-bmitch/regcli/regclient"
 )
 
 const usageDesc = `Utility for accessing docker registries
-More details at https://github.com/sudo-bmitch/regcli`
+More details at https://github.com/regclient/regclient`
 
 var log *logrus.Logger
 
 var rootCmd = &cobra.Command{
-	Use:   "regcli",
+	Use:   "regctl",
 	Short: "Utility for accessing docker registries",
 	Long:  usageDesc,
 	Run: func(cmd *cobra.Command, args []string) {

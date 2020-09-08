@@ -1,4 +1,4 @@
-module github.com/sudo-bmitch/regcli
+module github.com/regclient/regclient
 
 go 1.13
 

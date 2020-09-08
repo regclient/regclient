@@ -3,43 +3,106 @@ package regclient
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 	"syscall"
 )
 
-const (
-	configFilename = "config.json"
-	configDir      = ".regcli"
+var (
+	// ConfigFilename is the default filename to read/write configuration
+	ConfigFilename = "config.json"
+	// ConfigDir is the default directory within the user's home directory to read/write configuration
+	ConfigDir = ".regclient"
 )
+
+type tlsConf int
+
+const (
+	tlsUndefined tlsConf = iota
+	tlsEnabled
+	tlsInsecure
+	tlsDisabled
+)
+
+func (t tlsConf) MarshalJSON() ([]byte, error) {
+	s, err := t.MarshalText()
+	if err != nil {
+		return []byte(""), err
+	}
+	return json.Marshal(string(s))
+}
+
+func (t tlsConf) MarshalText() ([]byte, error) {
+	var s string
+	switch t {
+	default:
+		s = ""
+	case tlsEnabled:
+		s = "enabled"
+	case tlsInsecure:
+		s = "insecure"
+	case tlsDisabled:
+		s = "disabled"
+	}
+	return []byte(s), nil
+}
+
+func (t *tlsConf) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	return t.UnmarshalText([]byte(s))
+}
+
+func (t *tlsConf) UnmarshalText(b []byte) error {
+	switch strings.ToLower(string(b)) {
+	default:
+		return fmt.Errorf("Unknown TLS value \"%s\"", b)
+	case "":
+		*t = tlsUndefined
+	case "enabled":
+		*t = tlsEnabled
+	case "insecure":
+		*t = tlsInsecure
+	case "disabled":
+		*t = tlsDisabled
+	}
+	return nil
+}
 
 // Config struct contains contents loaded from / saved to a config file
 type Config struct {
-	Filename string                 `json:"-"`                 // filename that was loaded
-	Version  int                    `json:"version,omitempty"` // version the file in case the config file syntax changes in the future
-	Hosts    map[string]*ConfigHost `json:"hosts"`
+	Filename      string                 `json:"-"`                 // filename that was loaded
+	Version       int                    `json:"version,omitempty"` // version the file in case the config file syntax changes in the future
+	Hosts         map[string]*ConfigHost `json:"hosts"`
+	IncDockerCred *bool                  `json:"incDockerCred,omitempty"`
+	IncDockerCert *bool                  `json:"incDockerCert,omitempty"`
 }
 
 // ConfigHost struct contains host specific settings
 type ConfigHost struct {
-	Name    string   `json:"-"`
-	Scheme  string   `json:"scheme,omitempty"`
-	TLS     tlsConf  `json:"tls,omitempty"`
-	TLSCert string   `json:"tlscert,omitempty"`
-	TLSKey  string   `json:"tlskey,omitempty"`
-	DNS     []string `json:"dns,omitempty"`
-	User    string   `json:"user,omitempty"`
-	Pass    string   `json:"pass,omitempty"`
+	Name       string   `json:"-"`
+	Scheme     string   `json:"scheme,omitempty"`
+	TLS        tlsConf  `json:"tls,omitempty"`
+	RegCert    string   `json:"regcert,omitempty"`
+	ClientCert string   `json:"clientcert,omitempty"`
+	ClientKey  string   `json:"clientkey,omitempty"`
+	DNS        []string `json:"dns,omitempty"`
+	User       string   `json:"user,omitempty"`
+	Pass       string   `json:"pass,omitempty"`
 }
 
 // getConfigFilename returns the filename based on environment variables and defaults
 func getConfigFilename() string {
 	cf := os.Getenv("REGCLI_CONFIG")
 	if cf == "" {
-		return filepath.Join(getHomeDir(), configDir, configFilename)
+		return filepath.Join(getHomeDir(), ConfigDir, ConfigFilename)
 	}
 	return cf
 }

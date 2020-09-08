@@ -3,6 +3,8 @@ package retryable
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -43,6 +45,7 @@ type retryable struct {
 	httpClient *http.Client
 	mirrorFunc func(url.URL) ([]url.URL, error)
 	auth       Auth
+	rootCAPool [][]byte
 	limit      int
 	delayInit  time.Duration
 	delayMax   time.Duration
@@ -54,6 +57,7 @@ func NewRetryable(opts ...Opts) Retryable {
 	r := &retryable{
 		httpClient: &http.Client{},
 		limit:      5,
+		rootCAPool: [][]byte{},
 	}
 	r.delayInit, _ = time.ParseDuration("1s")
 	r.delayMax, _ = time.ParseDuration("30s")
@@ -68,6 +72,39 @@ func NewRetryable(opts ...Opts) Retryable {
 		opt(r)
 	}
 
+	// inject certificates from user
+	if len(r.rootCAPool) > 0 {
+		var tlsc *tls.Config
+		if r.httpClient.Transport == nil {
+			r.httpClient.Transport = &http.Transport{}
+		}
+		t, ok := r.httpClient.Transport.(*http.Transport)
+		if ok {
+			if t.TLSClientConfig != nil {
+				tlsc = t.TLSClientConfig.Clone()
+			} else {
+				tlsc = &tls.Config{}
+			}
+			if tlsc.RootCAs == nil {
+				rootPool, err := x509.SystemCertPool()
+				if err != nil {
+					r.log.WithFields(logrus.Fields{
+						"err": err,
+					}).Warn("Failed to load system cert pool")
+				}
+				tlsc.RootCAs = rootPool
+			}
+			for _, ca := range r.rootCAPool {
+				if ok := tlsc.RootCAs.AppendCertsFromPEM(ca); !ok {
+					r.log.WithFields(logrus.Fields{
+						"cert": string(ca),
+					}).Warn("Failed to load root certificate")
+				}
+			}
+			t.TLSClientConfig = tlsc
+			r.httpClient.Transport = t
+		}
+	}
 	return r
 }
 
@@ -75,6 +112,32 @@ func NewRetryable(opts ...Opts) Retryable {
 func WithAuth(auth Auth) Opts {
 	return func(r *retryable) {
 		r.auth = auth
+	}
+}
+
+// WithCerts adds certificates
+func WithCerts(certs [][]byte) Opts {
+	return func(r *retryable) {
+		for _, c := range certs {
+			r.rootCAPool = append(r.rootCAPool, c)
+		}
+	}
+}
+
+// WithCertFiles adds certificates by filename
+func WithCertFiles(files []string) Opts {
+	return func(r *retryable) {
+		for _, f := range files {
+			c, err := ioutil.ReadFile(f)
+			if err != nil {
+				r.log.WithFields(logrus.Fields{
+					"err":  err,
+					"file": f,
+				}).Warn("Failed to read certificate")
+			} else {
+				r.rootCAPool = append(r.rootCAPool, c)
+			}
+		}
 	}
 }
 
