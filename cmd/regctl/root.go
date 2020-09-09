@@ -54,5 +54,5 @@ func rootPreRun(cmd *cobra.Command, args []string) error {
 }
 
 func newRegClient() regclient.RegClient {
-	return regclient.NewRegClient(regclient.WithLog(log), regclient.WithConfigDefault(), regclient.WithDockerCreds())
+	return regclient.NewRegClient(regclient.WithLog(log), regclient.WithConfigDefault(), regclient.WithDockerCreds(), regclient.WithDockerCerts())
 }

@@ -147,6 +147,8 @@ func NewRegClient(opts ...Opt) RegClient {
 			rc.log.WithFields(logrus.Fields{
 				"err": err,
 			}).Warn("Failed to load docker creds")
+		} else {
+			rc.log.Debug("Docker creds loaded")
 		}
 	}
 
@@ -164,6 +166,16 @@ func WithConfigDefault() Opt {
 				"err": err,
 			}).Warn("Failed to load default config")
 		} else {
+			if rc.config != nil {
+				rc.log.WithFields(logrus.Fields{
+					"oldConfig": rc.config,
+					"newConfig": config,
+				}).Warn("Overwriting existing config")
+			} else {
+				rc.log.WithFields(logrus.Fields{
+					"config": config,
+				}).Debug("Loaded default config")
+			}
 			rc.config = config
 		}
 	}
@@ -230,6 +242,10 @@ func (rc *regClient) loadDockerCreds() error {
 		return fmt.Errorf("Failed to load docker creds %s", err)
 	}
 	for _, cred := range creds {
+		rc.log.WithFields(logrus.Fields{
+			"host": cred.ServerAddress,
+			"user": cred.Username,
+		}).Debug("Loading docker cred")
 		if cred.ServerAddress == "" || cred.Username == "" || cred.Password == "" {
 			continue
 		}
@@ -318,9 +334,11 @@ func (rc *regClient) getHost(hostname string) *ConfigHost {
 
 func (rc *regClient) getRetryable(host *ConfigHost) retryable.Retryable {
 	if _, ok := rc.retryables[host.Name]; !ok {
-		a := auth.NewAuth(auth.WithLog(rc.log), auth.WithCreds(rc.authCreds))
+		c := &http.Client{}
+		a := auth.NewAuth(auth.WithLog(rc.log), auth.WithHTTPClient(c), auth.WithCreds(rc.authCreds))
 		rOpts := []retryable.Opts{
 			retryable.WithLog(rc.log),
+			retryable.WithHTTPClient(c),
 			retryable.WithAuth(a),
 			retryable.WithMirrors(rc.mirrorFunc(host)),
 		}
@@ -338,14 +356,20 @@ func (rc *regClient) getRetryable(host *ConfigHost) retryable.Retryable {
 
 func (rc *regClient) authCreds(host string) (string, string) {
 	if h, ok := rc.config.Hosts[host]; ok {
+		rc.log.WithFields(logrus.Fields{
+			"host": host,
+			"user": h.User,
+		}).Debug("Retrieved cred")
 		return h.User, h.Pass
 	}
 	// default credentials are stored under a blank hostname
 	if h, ok := rc.config.Hosts[""]; ok {
 		return h.User, h.Pass
 	}
-	fmt.Fprintf(os.Stderr, "No credentials found for %s\n", host)
 	// anonymous request
+	rc.log.WithFields(logrus.Fields{
+		"host": host,
+	}).Debug("No credentials found, defaulting to anonymous")
 	return "", ""
 }
 
@@ -375,7 +399,7 @@ func (rc *regClient) getCerts(host *ConfigHost) []string {
 				continue
 			}
 			if strings.HasSuffix(f.Name(), ".crt") {
-				certs = append(certs, f.Name())
+				certs = append(certs, filepath.Join(dir, f.Name()))
 			}
 		}
 	}

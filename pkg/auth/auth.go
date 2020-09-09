@@ -190,7 +190,7 @@ func (a *auth) HandleResponse(resp *http.Response) error {
 		}
 	}
 	if goodChallenge == false {
-		return ErrNoNewChallenge
+		return ErrUnauthorized
 	}
 
 	return nil
@@ -205,10 +205,17 @@ func (a *auth) UpdateRequest(req *http.Request) error {
 	if a.hs[host] == nil {
 		return nil
 	}
+	var err error
+	var ah string
 	for _, at := range a.authTypes {
 		if a.hs[host][at] != nil {
-			ah, err := a.hs[host][at].GenerateAuth()
+			ah, err = a.hs[host][at].GenerateAuth()
 			if err != nil {
+				a.log.WithFields(logrus.Fields{
+					"err":      err,
+					"host":     host,
+					"authtype": at,
+				}).Debug("Failed to generate auth")
 				continue
 			}
 			a.log.WithFields(logrus.Fields{
@@ -220,7 +227,7 @@ func (a *auth) UpdateRequest(req *http.Request) error {
 			break
 		}
 	}
-	return nil
+	return err
 }
 
 func (a *auth) addDefaultHandlers() {
@@ -457,7 +464,7 @@ func (b *BearerHandler) ProcessChallenge(c Challenge) error {
 
 	existingScope := b.scopeExists(c.params["scope"])
 
-	if b.realm == c.params["realm"] && b.service == c.params["service"] && existingScope && !b.isExpired() {
+	if b.realm == c.params["realm"] && b.service == c.params["service"] && existingScope && (b.token.Token == "" || !b.isExpired()) {
 		return ErrNoNewChallenge
 	}
 
@@ -491,11 +498,15 @@ func (b *BearerHandler) GenerateAuth() (string, error) {
 	// attempt to post with oauth form, this also uses refresh tokens
 	if err := b.tryPost(); err == nil {
 		return fmt.Sprintf("Bearer %s", b.token.Token), nil
+	} else if err != ErrUnauthorized {
+		return "", err
 	}
 
 	// attempt a get (with basic auth if user/pass available)
 	if err := b.tryGet(); err == nil {
 		return fmt.Sprintf("Bearer %s", b.token.Token), nil
+	} else if err != ErrUnauthorized {
+		return "", err
 	}
 
 	return "", ErrUnauthorized

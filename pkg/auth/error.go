@@ -7,8 +7,8 @@ var (
 	ErrInvalidChallenge = errors.New("Invalid challenge header")
 	// ErrNoNewChallenge indicates a challenge update did not result in any change
 	ErrNoNewChallenge = errors.New("No new challenge")
-	// ErrNotFound isn't there, search for your value elsewhere
-	ErrNotFound = errors.New("Not found")
+	// ErrNotFound indicates no credentials found for basic auth
+	ErrNotFound = errors.New("No credentials available for basic auth")
 	// ErrNotImplemented returned when method has not been implemented yet
 	ErrNotImplemented = errors.New("Not implemented")
 	// ErrParseFailure indicates the WWW-Authenticate header could not be parsed
