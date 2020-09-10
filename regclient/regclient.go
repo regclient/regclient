@@ -297,6 +297,10 @@ func NewRef(ref string) (Ref, error) {
 		ret.Tag = tagged.Tag()
 	}
 
+	if ret.Tag == "" && ret.Digest == "" {
+		ret.Tag = "latest"
+	}
+
 	return ret, nil
 }
 
