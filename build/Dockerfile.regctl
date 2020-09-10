@@ -1,0 +1,19 @@
+FROM golang:1.14-alpine as dev
+RUN apk add --no-cache git ca-certificates
+RUN adduser -D appuser
+WORKDIR /src
+COPY . /src/
+CMD CGO_ENABLED=0 go build -ldflags '-s -w -extldflags -static' -o regctl ./cmd/regctl/ && ./regctl
+
+FROM dev as build
+RUN CGO_ENABLED=0 \
+    go build -ldflags '-s -w -extldflags -static' -o regctl ./cmd/regctl/
+USER appuser
+CMD [ "./regctl" ]
+
+FROM scratch as release
+COPY --from=build /etc/passwd /etc/group /etc/
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build /src/regctl /regctl
+USER appuser
+ENTRYPOINT [ "/regctl" ]
