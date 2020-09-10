@@ -13,8 +13,8 @@ This includes `regctl` for a command line interface to manage registries.
   only pulled if you are copying between different registries and the target
   registry does not have the layers already.
 - Ability to export an image from a registry without a docker engine.
-- Uses registry logins and /etc/docker/certs.d by default to support private
-  repositories and self signed registries.
+- Uses docker registry logins and /etc/docker/certs.d by default to support
+  private repositories and self signed registries.
 
 ## Building
 
@@ -85,3 +85,16 @@ $ ./regctl image inspect ubuntu:20.10@sha256:bb03a3e24da9704fc94ff11adbbfd9c93bb
     },
 ...
 ```
+
+## Comparison to Other Tools
+
+Registry client API:
+
+- containerd: containerd'd registry APIs focus more on pulling images than on a general purpose registry client API. This means various registry API calls are not provided.
+- docker/distribution: Docker's client libraries would have needed a fair bit of modification to support OCI images, and behave similar to the docker command line with registry logins.
+
+There are also a variety of registry command line tools available:
+
+- genuinetools/img: img works on top of buildkit for image creation and management. Using this for a registry client means including lots of dependencies that many will not need.
+- genuinetools/reg: reg is probably the closest match to this project. Some features included in regctl that aren't included in reg are the ability to inject self signed certs, store login credentials separate from docker, copy or retag images, and export images into a tar file.
+- containers/skopeo: Because of RedHat's push to remove any docker solutions from their stack, their skopeo project wasn't considered when searching for a complement to the docker command line.
