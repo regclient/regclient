@@ -10,12 +10,13 @@ import (
 )
 
 var repoCmd = &cobra.Command{
-	Use:   "repo",
-	Short: "manage repo",
+	Use:   "repo <cmd>",
+	Short: "manage a repository",
 }
 var repoLsCmd = &cobra.Command{
-	Use:   "ls",
+	Use:   "ls <repository>",
 	Short: "list tags in a repo",
+	Long:  `List all tags for a repository`,
 	Args:  cobra.RangeArgs(1, 1),
 	RunE:  runRepoLs,
 }

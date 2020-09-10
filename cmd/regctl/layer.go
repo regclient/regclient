@@ -11,14 +11,17 @@ import (
 )
 
 var layerCmd = &cobra.Command{
-	Use:   "layer",
+	Use:   "layer <cmd>",
 	Short: "manage image layers/blobs",
 }
 var layerPullCmd = &cobra.Command{
-	Use:   "pull",
+	Use:   "pull <repository> <digest>",
 	Short: "download a layer/blob",
-	Args:  cobra.RangeArgs(2, 2),
-	RunE:  runLayerPull,
+	Long: `Download a blob from the registry. The output is the blob itself which may
+be a compressed tar file, a json config, or any other blob supported by the
+registry. The layer or blob digest can be found in the image manifest.`,
+	Args: cobra.RangeArgs(2, 2),
+	RunE: runLayerPull,
 }
 
 func init() {
@@ -36,7 +39,7 @@ func runLayerPull(cmd *cobra.Command, args []string) error {
 	log.WithFields(logrus.Fields{
 		"host":       ref.Registry,
 		"repository": ref.Repository,
-		"digest":     ref.Digest,
+		"digest":     args[1],
 	}).Debug("Pulling layer")
 	blobIO, resp, err := rc.BlobGet(context.Background(), ref, args[1], []string{})
 

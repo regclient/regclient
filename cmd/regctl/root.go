@@ -15,7 +15,7 @@ More details at https://github.com/regclient/regclient`
 var log *logrus.Logger
 
 var rootCmd = &cobra.Command{
-	Use:   "regctl",
+	Use:   "regctl <cmd>",
 	Short: "Utility for accessing docker registries",
 	Long:  usageDesc,
 	Run: func(cmd *cobra.Command, args []string) {

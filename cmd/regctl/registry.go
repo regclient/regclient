@@ -10,30 +10,36 @@ import (
 )
 
 var registryCmd = &cobra.Command{
-	Use:   "registry",
+	Use:   "registry <cmd>",
 	Short: "manage registries",
 }
 var registryConfigCmd = &cobra.Command{
-	Use:   "config",
+	Use:   "config [registry]",
 	Short: "show registry config",
-	Args:  cobra.RangeArgs(0, 1),
-	RunE:  runRegistryConfig,
+	Long: `Displays the configuration used for a registry. Passwords are not included
+in the output.`,
+	Args: cobra.RangeArgs(0, 1),
+	RunE: runRegistryConfig,
 }
 var registryLoginCmd = &cobra.Command{
-	Use:   "login",
+	Use:   "login <registry>",
 	Short: "login to a registry",
-	Args:  cobra.RangeArgs(1, 1),
-	RunE:  runRegistryLogin,
+	Long: `Provide login credentials for a registry. This may not be necessary if you
+have already logged in with docker.`,
+	Args: cobra.RangeArgs(1, 1),
+	RunE: runRegistryLogin,
 }
 var registryLogoutCmd = &cobra.Command{
-	Use:   "logout",
+	Use:   "logout <registry>",
 	Short: "logout of a registry",
+	Long:  `Remove registry credentials from the configuration.`,
 	Args:  cobra.RangeArgs(1, 1),
 	RunE:  runRegistryLogout,
 }
 var registrySetCmd = &cobra.Command{
-	Use:   "set",
+	Use:   "set <registry>",
 	Short: "set options on a registry",
+	Long:  `Set or modify the configuration of a registry.`,
 	Args:  cobra.RangeArgs(1, 1),
 	RunE:  runRegistrySet,
 }

@@ -12,50 +12,63 @@ import (
 )
 
 var imageCmd = &cobra.Command{
-	Use:   "image",
+	Use:   "image <cmd>",
 	Short: "manage images",
 }
 var imageCopyCmd = &cobra.Command{
-	Use:   "copy",
-	Short: "copy images",
-	Args:  cobra.RangeArgs(2, 2),
-	RunE:  runImageCopy,
+	Use:   "copy <src_image_ref> <dst_image_ref>",
+	Short: "copy or retag image",
+	Long: `Copy or retag an image. This works between registries and only pulls layers
+that do not exist at the target. In the same registry it attempts to mount
+the layers between repositories. And within the same repository it only
+sends the manifest with the new tag.`,
+	Args: cobra.RangeArgs(2, 2),
+	RunE: runImageCopy,
 }
 var imageDeleteCmd = &cobra.Command{
-	Use:   "delete",
-	Short: "delete images",
+	Use:   "delete <image_ref>",
+	Short: "delete image",
 	Args:  cobra.RangeArgs(1, 1),
 	RunE:  runImageDelete,
 }
 var imageDigestCmd = &cobra.Command{
-	Use:   "digest",
+	Use:   "digest <image_ref>",
 	Short: "show digest for pinning",
 	Args:  cobra.RangeArgs(1, 1),
 	RunE:  runImageDigest,
 }
 var imageExportCmd = &cobra.Command{
-	Use:   "export",
-	Short: "export images",
-	Args:  cobra.RangeArgs(1, 1),
-	RunE:  runImageExport,
+	Use:   "export <image_ref>",
+	Short: "export image",
+	Long: `Exports an image into a tar file that can be later loaded into a docker
+engine with "docker load". The tar file is output to stdout by default.
+Example usage: regctl image export registry:5000/yourimg:v1 >yourimg-v1.tar`,
+	Args: cobra.RangeArgs(1, 1),
+	RunE: runImageExport,
 }
 var imageImportCmd = &cobra.Command{
-	Use:   "import",
-	Short: "import images",
+	Use:   "import <image_ref>",
+	Short: "import image",
 	Args:  cobra.RangeArgs(1, 1),
 	RunE:  runImageImport,
 }
 var imageInspectCmd = &cobra.Command{
-	Use:   "inspect",
-	Short: "inspect images",
-	Args:  cobra.RangeArgs(1, 1),
-	RunE:  runImageInspect,
+	Use:   "inspect <image_ref>",
+	Short: "inspect image",
+	Long: `Shows the config json for an image and is equivalent to pulling the image
+in docker, and inspecting it, but without pulling any of the image layers.`,
+	Args: cobra.RangeArgs(1, 1),
+	RunE: runImageInspect,
 }
 var imageManifestCmd = &cobra.Command{
-	Use:   "manifest",
-	Short: "show manifest",
-	Args:  cobra.RangeArgs(1, 1),
-	RunE:  runImageManifest,
+	Use:   "manifest <image_ref>",
+	Short: "show manifest or manifest list",
+	Long: `Shows the manifest or manifest list of the specified image. A single manifest
+from a manifest list can be displayed by using the digest. Examples:
+regctl image manifest ubuntu:latest
+regctl image manifest ubuntu@sha256:6f2fb2f9fb5582f8b587837afd6ea8f37d8d1d9e41168c90f410a6ef15fa8ce5`,
+	Args: cobra.RangeArgs(1, 1),
+	RunE: runImageManifest,
 }
 
 func init() {
