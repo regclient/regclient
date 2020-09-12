@@ -375,9 +375,7 @@ func ParseAuthHeader(ah string) ([]Challenge, error) {
 		if len(vb) != 0 {
 			c.params[strings.ToLower(string(kb))] = string(vb)
 		}
-	case "quoted":
-		fallthrough
-	case "escape":
+	case "quoted", "escape":
 		return nil, ErrParseFailure
 	}
 

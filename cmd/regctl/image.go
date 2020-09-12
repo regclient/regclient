@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
+	"github.com/containerd/containerd/platforms"
+	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/regclient"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -63,15 +66,22 @@ in docker, and inspecting it, but without pulling any of the image layers.`,
 var imageManifestCmd = &cobra.Command{
 	Use:   "manifest <image_ref>",
 	Short: "show manifest or manifest list",
-	Long: `Shows the manifest or manifest list of the specified image. A single manifest
-from a manifest list can be displayed by using the digest. Examples:
-regctl image manifest ubuntu:latest
-regctl image manifest ubuntu@sha256:6f2fb2f9fb5582f8b587837afd6ea8f37d8d1d9e41168c90f410a6ef15fa8ce5`,
-	Args: cobra.RangeArgs(1, 1),
-	RunE: runImageManifest,
+	Long:  `Shows the manifest or manifest list of the specified image.`,
+	Args:  cobra.RangeArgs(1, 1),
+	RunE:  runImageManifest,
+}
+
+var imageOpts struct {
+	list        bool
+	platform    string
+	requireList bool
 }
 
 func init() {
+	imageManifestCmd.Flags().BoolVarP(&imageOpts.list, "list", "", false, "Output manifest list if available")
+	imageManifestCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
+	imageManifestCmd.Flags().BoolVarP(&imageOpts.requireList, "require-list", "", false, "Fail is manifest list is not received")
+
 	imageCmd.AddCommand(imageCopyCmd)
 	imageCmd.AddCommand(imageDeleteCmd)
 	imageCmd.AddCommand(imageDigestCmd)
@@ -181,6 +191,62 @@ func runImageManifest(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	// add warning if not list and list required or platform requested
+	if !m.IsList() && imageOpts.requireList {
+		log.Warn("Manifest list unavailable")
+		return ErrNotFound
+	}
+	if !m.IsList() && imageOpts.platform != "" {
+		log.Warn("Manifest list unavailable, ignoring platform flag")
+	}
+
+	// retrieve the specified platform from the manifest list
+	if m.IsList() && !imageOpts.list && !imageOpts.requireList {
+		var plat ociv1.Platform
+		if imageOpts.platform != "" {
+			plat, err = platforms.Parse(imageOpts.platform)
+			if err != nil {
+				log.WithFields(logrus.Fields{
+					"platform": imageOpts.platform,
+					"err":      err,
+				}).Warn("Could not parse platform")
+			}
+		}
+		if plat.OS == "" {
+			plat = platforms.DefaultSpec()
+		}
+		desc, err := m.GetPlatformDesc(&plat)
+		if err != nil {
+			pl, _ := m.GetPlatformList()
+			var ps []string
+			for _, p := range pl {
+				ps = append(ps, platforms.Format(*p))
+			}
+			log.WithFields(logrus.Fields{
+				"platform":  platforms.Format(plat),
+				"err":       err,
+				"platforms": strings.Join(ps, ", "),
+			}).Warn("Platform could not be found in manifest list")
+			return ErrNotFound
+		} else {
+			log.WithFields(logrus.Fields{
+				"platform": platforms.Format(plat),
+				"digest":   desc.Digest.String(),
+			}).Debug("Found platform specific digest in manifest list")
+			ref.Digest = desc.Digest.String()
+			m, err = rc.ManifestGet(context.Background(), ref)
+			if err != nil {
+				log.WithFields(logrus.Fields{
+					"err":      err,
+					"digest":   ref.Digest,
+					"platform": platforms.Format(plat),
+				}).Warn("Could not get platform specific manifest")
+				return err
+			}
+		}
+	}
+
 	mj, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return err

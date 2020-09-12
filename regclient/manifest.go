@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/url"
 
+	"github.com/containerd/containerd/platforms"
 	dockerDistribution "github.com/docker/distribution"
 	dockerManifestList "github.com/docker/distribution/manifest/manifestlist"
 	dockerSchema2 "github.com/docker/distribution/manifest/schema2"
@@ -31,8 +32,11 @@ type Manifest interface {
 	GetDockerManifestList() dockerManifestList.ManifestList
 	GetLayers() ([]ociv1.Descriptor, error)
 	GetMediaType() string
+	GetPlatformDesc(p *ociv1.Platform) (*ociv1.Descriptor, error)
+	GetPlatformList() ([]*ociv1.Platform, error)
 	GetOCIManifest() ociv1.Manifest
 	GetOCIManifestList() ociv1.Index
+	IsList() bool
 	MarshalJSON() ([]byte, error)
 }
 
@@ -43,8 +47,7 @@ func (m *manifest) GetConfigDigest() (digest.Digest, error) {
 	case ociv1.MediaTypeImageManifest:
 		return m.ociM.Config.Digest, nil
 	}
-	// TODO: find config for current OS type?
-	return "", fmt.Errorf("Unsupported manifest mediatype %s", m.mt)
+	return "", ErrUnsupportedMediaType
 }
 
 func (m *manifest) GetDockerManifest() dockerSchema2.Manifest {
@@ -62,27 +65,51 @@ func (m *manifest) GetLayers() ([]ociv1.Descriptor, error) {
 	case ociv1.MediaTypeImageManifest:
 		return m.ociM.Layers, nil
 	}
-	return []ociv1.Descriptor{}, fmt.Errorf("Unsupported manifest mediatype %s", m.mt)
-}
-
-func d2oDescriptorList(src []dockerDistribution.Descriptor) []ociv1.Descriptor {
-	var tgt []ociv1.Descriptor
-	for _, sd := range src {
-		td := ociv1.Descriptor{
-			MediaType:   sd.MediaType,
-			Digest:      sd.Digest,
-			Size:        sd.Size,
-			URLs:        sd.URLs,
-			Annotations: sd.Annotations,
-			Platform:    sd.Platform,
-		}
-		tgt = append(tgt, td)
-	}
-	return tgt
+	return []ociv1.Descriptor{}, ErrUnsupportedMediaType
 }
 
 func (m *manifest) GetMediaType() string {
 	return m.mt
+}
+
+// GetPlatformDesc returns the descriptor for the platform from the manifest list or OCI index
+func (m *manifest) GetPlatformDesc(p *ociv1.Platform) (*ociv1.Descriptor, error) {
+	platformCmp := platforms.NewMatcher(*p)
+	switch m.mt {
+	case MediaTypeDocker2ManifestList:
+		for _, d := range m.dockerML.Manifests {
+			if platformCmp.Match(*dlp2Platform(d.Platform)) {
+				return dl2oDescriptor(d), nil
+			}
+		}
+	case MediaTypeOCI1ManifestList:
+		for _, d := range m.ociML.Manifests {
+			if platformCmp.Match(*d.Platform) {
+				return &d, nil
+			}
+		}
+	default:
+		return nil, ErrUnsupportedMediaType
+	}
+	return nil, ErrNotFound
+}
+
+// GetPlatformList returns the list of platforms in a manifest list
+func (m *manifest) GetPlatformList() ([]*ociv1.Platform, error) {
+	var l []*ociv1.Platform
+	switch m.mt {
+	case MediaTypeDocker2ManifestList:
+		for _, d := range m.dockerML.Manifests {
+			l = append(l, dlp2Platform(d.Platform))
+		}
+	case MediaTypeOCI1ManifestList:
+		for _, d := range m.ociML.Manifests {
+			l = append(l, d.Platform)
+		}
+	default:
+		return nil, ErrUnsupportedMediaType
+	}
+	return l, nil
 }
 
 func (m *manifest) GetOCIManifest() ociv1.Manifest {
@@ -91,6 +118,16 @@ func (m *manifest) GetOCIManifest() ociv1.Manifest {
 
 func (m *manifest) GetOCIManifestList() ociv1.Index {
 	return m.ociML
+}
+
+func (m *manifest) IsList() bool {
+	switch m.mt {
+	case MediaTypeDocker2ManifestList:
+		return true
+	case MediaTypeOCI1ManifestList:
+		return true
+	}
+	return false
 }
 
 func (m *manifest) MarshalJSON() ([]byte, error) {
@@ -273,4 +310,44 @@ func (rc *regClient) ManifestPut(ctx context.Context, ref Ref, m Manifest) error
 	}
 
 	return nil
+}
+
+func d2oDescriptor(sd dockerDistribution.Descriptor) *ociv1.Descriptor {
+	return &ociv1.Descriptor{
+		MediaType:   sd.MediaType,
+		Digest:      sd.Digest,
+		Size:        sd.Size,
+		URLs:        sd.URLs,
+		Annotations: sd.Annotations,
+		Platform:    sd.Platform,
+	}
+}
+
+func dl2oDescriptor(sd dockerManifestList.ManifestDescriptor) *ociv1.Descriptor {
+	return &ociv1.Descriptor{
+		MediaType:   sd.MediaType,
+		Digest:      sd.Digest,
+		Size:        sd.Size,
+		URLs:        sd.URLs,
+		Annotations: sd.Annotations,
+		Platform:    dlp2Platform(sd.Platform),
+	}
+}
+
+func dlp2Platform(sp dockerManifestList.PlatformSpec) *ociv1.Platform {
+	return &ociv1.Platform{
+		Architecture: sp.Architecture,
+		OS:           sp.OS,
+		Variant:      sp.Variant,
+		OSVersion:    sp.OSVersion,
+		OSFeatures:   sp.OSFeatures,
+	}
+}
+
+func d2oDescriptorList(src []dockerDistribution.Descriptor) []ociv1.Descriptor {
+	var tgt []ociv1.Descriptor
+	for _, sd := range src {
+		tgt = append(tgt, *d2oDescriptor(sd))
+	}
+	return tgt
 }
