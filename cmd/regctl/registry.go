@@ -39,14 +39,15 @@ var registryLogoutCmd = &cobra.Command{
 var registrySetCmd = &cobra.Command{
 	Use:   "set <registry>",
 	Short: "set options on a registry",
-	Long:  `Set or modify the configuration of a registry.`,
-	Args:  cobra.RangeArgs(1, 1),
-	RunE:  runRegistrySet,
+	Long: `Set or modify the configuration of a registry. To pass a certificate, include
+the contents of the file, e.g. --cacert "$(cat reg-ca.crt)"`,
+	Args: cobra.RangeArgs(1, 1),
+	RunE: runRegistrySet,
 }
 var registryOpts struct {
-	user, pass  string // login opts
-	scheme, tls string // set opts
-	dns         []string
+	user, pass          string // login opts
+	cacert, scheme, tls string // set opts
+	dns                 []string
 }
 
 func init() {
@@ -57,6 +58,7 @@ func init() {
 	registrySetCmd.Flags().StringVarP(&registryOpts.scheme, "scheme", "", "", "Scheme (http, https)")
 	registrySetCmd.Flags().StringArrayVarP(&registryOpts.dns, "dns", "", nil, "DNS hostname or ip with port")
 	registrySetCmd.Flags().StringVarP(&registryOpts.tls, "tls", "", "", "TLS (enabled, insecure, disabled)")
+	registrySetCmd.Flags().StringVarP(&registryOpts.cacert, "cacert", "", "", "CA Certificate")
 
 	registryCmd.AddCommand(registryConfigCmd)
 	registryCmd.AddCommand(registryLoginCmd)
@@ -172,6 +174,9 @@ func runRegistrySet(cmd *cobra.Command, args []string) error {
 		if err := h.TLS.UnmarshalText([]byte(registryOpts.tls)); err != nil {
 			return err
 		}
+	}
+	if registryOpts.cacert != "" {
+		h.RegCert = registryOpts.cacert
 	}
 
 	err = c.ConfigSave()
