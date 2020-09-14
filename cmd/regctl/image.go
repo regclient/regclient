@@ -81,7 +81,7 @@ func init() {
 
 	imageManifestCmd.Flags().BoolVarP(&imageOpts.list, "list", "", false, "Output manifest list if available")
 	imageManifestCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
-	imageManifestCmd.Flags().BoolVarP(&imageOpts.requireList, "require-list", "", false, "Fail is manifest list is not received")
+	imageManifestCmd.Flags().BoolVarP(&imageOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
 	imageManifestCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{jsonPretty .}}", "Format output with go template syntax")
 
 	imageCmd.AddCommand(imageCopyCmd)
@@ -131,6 +131,9 @@ func runImageDigest(cmd *cobra.Command, args []string) error {
 		"repo": ref.Repository,
 		"tag":  ref.Tag,
 	}).Debug("Image digest")
+	// TODO: consider refactoring this to pull the manifest and handle manifest
+	// list similar to the image manifest command, likely want to save digest
+	// within manifest struct
 	d, err := rc.ManifestDigest(context.Background(), ref)
 	if err != nil {
 		return err

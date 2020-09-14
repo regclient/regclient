@@ -18,15 +18,15 @@ This includes `regctl` for a command line interface to manage registries.
 
 ## Building
 
-```
+```shell
 git clone https://github.com/regclient/regclient.git
 cd regclient
 go build -o regctl ./cmd/regctl/
 ```
 
-## Usage
+## Demo
 
-```
+```shell
 $ ./regctl repo ls ubuntu | grep 20.10
 library/ubuntu:20.10
 
@@ -56,7 +56,7 @@ $ ./regctl image manifest ubuntu:20.10
     },
 ...
 
-$ ./regctl image inspect ubuntu:20.10@sha256:bb03a3e24da9704fc94ff11adbbfd9c93bb84bfab6fd57c9bab3168431a1d1ff                                                                                                     
+$ ./regctl image inspect ubuntu:20.10@sha256:bb03a3e24da9704fc94ff11adbbfd9c93bb84bfab6fd57c9bab3168431a1d1ff
 {
   "created": "2020-08-19T21:15:25.559275011Z",
   "architecture": "amd64",
