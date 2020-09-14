@@ -22,7 +22,11 @@ var rootCmd = &cobra.Command{
 		// Do Stuff Here
 	},
 }
-var verbosity string
+
+var rootOpts struct {
+	verbosity string
+	format    string
+}
 
 func init() {
 	log = &logrus.Logger{
@@ -31,7 +35,7 @@ func init() {
 		Hooks:     make(logrus.LevelHooks),
 		Level:     logrus.WarnLevel,
 	}
-	rootCmd.PersistentFlags().StringVarP(&verbosity, "verbosity", "v", logrus.WarnLevel.String(), "Log level (debug, info, warn, error, fatal, panic")
+	rootCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.WarnLevel.String(), "Log level (debug, info, warn, error, fatal, panic")
 	rootCmd.PersistentPreRunE = rootPreRun
 }
 
@@ -45,7 +49,7 @@ func Execute() {
 }
 
 func rootPreRun(cmd *cobra.Command, args []string) error {
-	lvl, err := logrus.ParseLevel(verbosity)
+	lvl, err := logrus.ParseLevel(rootOpts.verbosity)
 	if err != nil {
 		return err
 	}

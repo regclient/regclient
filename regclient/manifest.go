@@ -36,6 +36,7 @@ type Manifest interface {
 	GetPlatformList() ([]*ociv1.Platform, error)
 	GetOCIManifest() ociv1.Manifest
 	GetOCIManifestList() ociv1.Index
+	GetOrigManifest() interface{}
 	IsList() bool
 	MarshalJSON() ([]byte, error)
 }
@@ -118,6 +119,21 @@ func (m *manifest) GetOCIManifest() ociv1.Manifest {
 
 func (m *manifest) GetOCIManifestList() ociv1.Index {
 	return m.ociML
+}
+
+func (m *manifest) GetOrigManifest() interface{} {
+	switch m.mt {
+	case MediaTypeDocker2Manifest:
+		return m.dockerM
+	case MediaTypeDocker2ManifestList:
+		return m.dockerML
+	case MediaTypeOCI1Manifest:
+		return m.ociM
+	case MediaTypeOCI1ManifestList:
+		return m.ociML
+	default:
+		return nil
+	}
 }
 
 func (m *manifest) IsList() bool {

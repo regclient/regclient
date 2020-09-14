@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -78,9 +77,12 @@ var imageOpts struct {
 }
 
 func init() {
+	imageInspectCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{jsonPretty .}}", "Format output with go template syntax")
+
 	imageManifestCmd.Flags().BoolVarP(&imageOpts.list, "list", "", false, "Output manifest list if available")
 	imageManifestCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
 	imageManifestCmd.Flags().BoolVarP(&imageOpts.requireList, "require-list", "", false, "Fail is manifest list is not received")
+	imageManifestCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{jsonPretty .}}", "Format output with go template syntax")
 
 	imageCmd.AddCommand(imageCopyCmd)
 	imageCmd.AddCommand(imageDeleteCmd)
@@ -170,9 +172,7 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	imgJSON, err := json.MarshalIndent(img, "", "  ")
-	fmt.Println(string(imgJSON))
-	return nil
+	return templateRun(os.Stdout, rootOpts.format, img)
 }
 
 func runImageManifest(cmd *cobra.Command, args []string) error {
@@ -247,10 +247,5 @@ func runImageManifest(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	mj, err := json.MarshalIndent(m, "", "  ")
-	if err != nil {
-		return err
-	}
-	fmt.Println(string(mj))
-	return nil
+	return templateRun(os.Stdout, rootOpts.format, m.GetOrigManifest())
 }
