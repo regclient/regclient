@@ -29,6 +29,12 @@ jobs:
     - name: Test
       run: go test -v ./...
 
-    - name: Build regctl
-      run: go build -v ./cmd/regctl/
+    - name: Build artifacts
+      run: ./build/build-artifacts.sh
+
+    - name: Save artifacts
+      uses: actions/upload-artifact@v2
+      with:
+        name: artifacts
+        path: artifacts/
 

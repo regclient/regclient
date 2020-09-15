@@ -4,7 +4,7 @@ go 1.14
 
 require (
 	github.com/Microsoft/hcsshim v0.8.9 // indirect
-	github.com/containerd/containerd v1.3.6
+	github.com/containerd/containerd v1.4.0
 	github.com/containerd/continuity v0.0.0-20200710164510-efbc4488d8fe // indirect
 	github.com/docker/cli v0.0.0-20200617172703-0ed913b885c8
 	github.com/docker/distribution v2.7.1+incompatible
@@ -20,9 +20,9 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	golang.org/x/net v0.0.0-20200707034311-ab3426394381 // indirect
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208 // indirect
-	golang.org/x/sys v0.0.0-20200728102440-3e129f6d46b1 // indirect
-	google.golang.org/genproto v0.0.0-20200730144737-007c33dbd381 // indirect
-	google.golang.org/grpc v1.31.0 // indirect
+	golang.org/x/sys v0.0.0-20200915084602-288bc346aa39 // indirect
+	google.golang.org/genproto v0.0.0-20200914193844-75d14daec038 // indirect
+	google.golang.org/grpc v1.32.0 // indirect
 	google.golang.org/protobuf v1.25.0 // indirect
 	gotest.tools/v3 v3.0.2 // indirect
 )
