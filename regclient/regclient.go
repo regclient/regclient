@@ -58,7 +58,7 @@ type RegClient interface {
 	BlobGet(ctx context.Context, ref Ref, d string, accepts []string) (io.ReadCloser, *http.Response, error)
 	ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) error
 	ImageExport(ctx context.Context, ref Ref, outStream io.Writer) error
-	ImageInspect(ctx context.Context, ref Ref) (ociv1.Image, error)
+	ImageInspect(ctx context.Context, ref Ref, plat ociv1.Platform) (ociv1.Image, error)
 	ManifestDigest(ctx context.Context, ref Ref) (digest.Digest, error)
 	ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 	TagsList(ctx context.Context, ref Ref) (TagList, error)

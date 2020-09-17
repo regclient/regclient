@@ -77,6 +77,7 @@ var imageOpts struct {
 }
 
 func init() {
+	imageInspectCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
 	imageInspectCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{jsonPretty .}}", "Format output with go template syntax")
 
 	imageManifestCmd.Flags().BoolVarP(&imageOpts.list, "list", "", false, "Output manifest list if available")
@@ -165,13 +166,24 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	var plat ociv1.Platform
+	if imageOpts.platform != "" {
+		plat, err = platforms.Parse(imageOpts.platform)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"platform": imageOpts.platform,
+				"err":      err,
+			}).Warn("Could not parse platform")
+		}
+	}
 	rc := newRegClient()
 	log.WithFields(logrus.Fields{
-		"host": ref.Registry,
-		"repo": ref.Repository,
-		"tag":  ref.Tag,
+		"host":     ref.Registry,
+		"repo":     ref.Repository,
+		"tag":      ref.Tag,
+		"platform": platforms.Format(plat),
 	}).Debug("Image inspect")
-	img, err := rc.ImageInspect(context.Background(), ref)
+	img, err := rc.ImageInspect(context.Background(), ref, plat)
 	if err != nil {
 		return err
 	}
