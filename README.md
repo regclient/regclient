@@ -24,6 +24,41 @@ cd regclient
 go build -o regctl ./cmd/regctl/
 ```
 
+## Running as a Container
+
+You can run regctl completely isolated in a container:
+
+```shell
+docker container run -it --rm --net host \
+  -v regctl-conf:/home/appuser/.regctl/ \
+  regclient/regctl:latest --help
+```
+
+Or on Linux and Mac environments, you can run it as your own user and save
+configuration settings, use docker credentials, and use any docker certs:
+
+```shell
+docker container run -it --rm --net host \
+  -u "$(id -u):$(id -g)" -v $HOME:$HOME \
+  -v /etc/docker/certs.d:/etc/docker/certs.d:ro \
+  regclient/regctl:latest --help
+```
+
+This can be packaged as a shell script with:
+
+```shell
+cat >regctl <<EOF
+#!/bin/sh
+
+docker container run -it --rm --net host \\
+  -u "\$(id -u):\$(id -g)" -v \$HOME:\$HOME \\
+  -v /etc/docker/certs.d:/etc/docker/certs.d:ro \\
+  regclient/regctl:latest "\$@"
+EOF
+chmod 755 regctl
+./regctl --help
+```
+
 ## Demo
 
 ```shell

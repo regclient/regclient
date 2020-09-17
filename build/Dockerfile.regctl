@@ -1,6 +1,8 @@
 FROM golang:1.14-alpine as dev
 RUN apk add --no-cache git ca-certificates
-RUN adduser -D appuser
+RUN adduser -D appuser \
+ && mkdir -p /home/appuser/.regctl \
+ && chown -R appuser /home/appuser/.regctl
 WORKDIR /src
 COPY . /src/
 CMD CGO_ENABLED=0 go build -ldflags '-s -w -extldflags -static' -o regctl ./cmd/regctl/ && ./regctl
@@ -14,6 +16,22 @@ CMD [ "./regctl" ]
 FROM scratch as release
 COPY --from=build /etc/passwd /etc/group /etc/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build /home/appuser /home/appuser
 COPY --from=build /src/regctl /regctl
 USER appuser
 ENTRYPOINT [ "/regctl" ]
+
+ARG BUILD_DATE
+ARG VCS_REF
+LABEL maintainer="" \
+      org.opencontainers.image.created=$BUILD_DATE \
+      org.opencontainers.image.authors="Regclient contributors" \
+      org.opencontainers.image.url="https://github.com/regclient/regclient" \
+      org.opencontainers.image.documentation="https://github.com/regclient/regclient" \
+      org.opencontainers.image.source="https://github.com/regclient/regclient" \
+      org.opencontainers.image.version="latest" \
+      org.opencontainers.image.revision=$VCS_REF \
+      org.opencontainers.image.vendor="" \
+      org.opencontainers.image.licenses="Apache 2.0" \
+      org.opencontainers.image.title="regctl" \
+      org.opencontainers.image.description=""
