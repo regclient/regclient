@@ -8,10 +8,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
-	"github.com/containerd/containerd/platforms"
 	"github.com/docker/docker/pkg/archive"
 	digest "github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -313,54 +311,10 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 	return nil
 }
 
-func (rc *regClient) ImageInspect(ctx context.Context, ref Ref, plat ociv1.Platform) (ociv1.Image, error) {
+func (rc *regClient) ImageGetConfig(ctx context.Context, ref Ref, d string) (ociv1.Image, error) {
 	img := ociv1.Image{}
 
-	// retrieve manifest
-	m, err := rc.ManifestGet(ctx, ref)
-	if err != nil {
-		return img, err
-	}
-	// for manifest list, resolve the platform and pull the specific platform's manifest
-	if m.IsList() {
-		if plat.OS == "" {
-			plat = platforms.DefaultSpec()
-		}
-		desc, err := m.GetPlatformDesc(&plat)
-		if err != nil {
-			pl, _ := m.GetPlatformList()
-			var ps []string
-			for _, p := range pl {
-				ps = append(ps, platforms.Format(*p))
-			}
-			rc.log.WithFields(logrus.Fields{
-				"platform":  platforms.Format(plat),
-				"err":       err,
-				"platforms": strings.Join(ps, ", "),
-			}).Warn("Platform could not be found in manifest list")
-			return img, ErrNotFound
-		}
-		rc.log.WithFields(logrus.Fields{
-			"platform": platforms.Format(plat),
-			"digest":   desc.Digest.String(),
-		}).Debug("Found platform specific digest in manifest list")
-		ref.Digest = desc.Digest.String()
-		m, err = rc.ManifestGet(context.Background(), ref)
-		if err != nil {
-			return img, err
-		}
-	}
-
-	// retrieve config blob
-	cd, err := m.GetConfigDigest()
-	if err != nil {
-		rc.log.WithFields(logrus.Fields{
-			"ref": ref.Reference,
-			"err": err,
-		}).Warn("Failed to get config digest from manifest")
-		return img, err
-	}
-	imgIO, _, err := rc.BlobGet(ctx, ref, cd.String(), []string{MediaTypeDocker2ImageConfig, ociv1.MediaTypeImageConfig})
+	imgIO, _, err := rc.BlobGet(ctx, ref, d, []string{MediaTypeDocker2ImageConfig, ociv1.MediaTypeImageConfig})
 	if err != nil {
 		return img, err
 	}
@@ -369,7 +323,7 @@ func (rc *regClient) ImageInspect(ctx context.Context, ref Ref, plat ociv1.Platf
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"ref":    ref.Reference,
-			"degest": cd.String(),
+			"digest": d,
 			"err":    err,
 		}).Warn("Error reading config blog")
 		return img, err

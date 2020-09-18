@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/url"
 
@@ -18,6 +19,7 @@ import (
 )
 
 type manifest struct {
+	digest   digest.Digest
 	dockerM  dockerSchema2.Manifest
 	dockerML dockerManifestList.ManifestList
 	mt       string
@@ -28,6 +30,7 @@ type manifest struct {
 // Manifest abstracts the various types of manifests that are supported
 type Manifest interface {
 	GetConfigDigest() (digest.Digest, error)
+	GetDigest() digest.Digest
 	GetDockerManifest() dockerSchema2.Manifest
 	GetDockerManifestList() dockerManifestList.ManifestList
 	GetLayers() ([]ociv1.Descriptor, error)
@@ -49,6 +52,10 @@ func (m *manifest) GetConfigDigest() (digest.Digest, error) {
 		return m.ociM.Config.Digest, nil
 	}
 	return "", ErrUnsupportedMediaType
+}
+
+func (m *manifest) GetDigest() digest.Digest {
+	return m.digest
 }
 
 func (m *manifest) GetDockerManifest() dockerSchema2.Manifest {
@@ -207,6 +214,7 @@ func (rc *regClient) ManifestDigest(ctx context.Context, ref Ref) (digest.Digest
 func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error) {
 	m := manifest{}
 
+	// build the request
 	host := rc.getHost(ref.Registry)
 	var tagOrDigest string
 	if ref.Digest != "" {
@@ -234,12 +242,16 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 		MediaTypeOCI1ManifestList,
 	}))
 
+	// send the request
 	rty := rc.getRetryable(host)
 	resp, err := rty.DoRequest(ctx, "GET", manfURL, opts...)
 	if err != nil {
 		return nil, err
 	}
-	respBody, err := ioutil.ReadAll(resp)
+	// read manifest and compute digest
+	digester := digest.Canonical.Digester()
+	reader := io.TeeReader(resp, digester.Hash())
+	respBody, err := ioutil.ReadAll(reader)
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"err": err,
@@ -247,6 +259,9 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 		}).Warn("Failed to read manifest")
 		return nil, err
 	}
+	m.digest = digester.Digest()
+
+	// parse body into variable according to media type
 	m.mt = resp.HTTPResponse().Header.Get("Content-Type")
 	switch m.mt {
 	case MediaTypeDocker2Manifest:

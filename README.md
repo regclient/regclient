@@ -51,7 +51,7 @@ cat >regctl <<EOF
 #!/bin/sh
 
 docker container run -it --rm --net host \\
-  -u "\$(id -u):\$(id -g)" -v \$HOME:\$HOME \\
+  -u "\$(id -u):\$(id -g)" -e HOME -v \$HOME:\$HOME \\
   -v /etc/docker/certs.d:/etc/docker/certs.d:ro \\
   regclient/regctl:latest "\$@"
 EOF
