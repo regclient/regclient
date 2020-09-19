@@ -39,7 +39,7 @@ configuration settings, use docker credentials, and use any docker certs:
 
 ```shell
 docker container run -it --rm --net host \
-  -u "$(id -u):$(id -g)" -v $HOME:$HOME \
+  -u "$(id -u):$(id -g)" -e HOME -v $HOME:$HOME \
   -v /etc/docker/certs.d:/etc/docker/certs.d:ro \
   regclient/regctl:latest --help
 ```

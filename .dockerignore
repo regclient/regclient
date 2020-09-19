@@ -1,0 +1,5 @@
+*
+!cmd/
+!go.*
+!pkg/
+!regclient/

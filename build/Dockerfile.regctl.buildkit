@@ -19,6 +19,9 @@ RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
 USER appuser
 CMD [ "./regctl" ]
 
+FROM scratch as artifact
+COPY --from=build /src/regctl /regctl
+
 FROM scratch as release
 COPY --from=build /etc/passwd /etc/group /etc/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
@@ -41,8 +44,3 @@ LABEL maintainer="" \
       org.opencontainers.image.licenses="Apache 2.0" \
       org.opencontainers.image.title="regctl" \
       org.opencontainers.image.description=""
-
-FROM scratch as artifact
-COPY --from=build /src/regctl /regctl
-
-FROM release
