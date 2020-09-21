@@ -131,8 +131,7 @@ func NewRegClient(opts ...Opt) RegClient {
 		rc.config = ConfigNew()
 	}
 
-	// hard code docker hub host config
-	// TODO: change to a global var? merge ConfigHost structs?
+	// inject Docker Hub settings
 	if _, ok := rc.config.Hosts[DockerRegistry]; !ok {
 		rc.config.Hosts[DockerRegistry] = &ConfigHost{}
 	}
@@ -249,7 +248,7 @@ func (rc *regClient) loadDockerCreds() error {
 		if cred.ServerAddress == "" || cred.Username == "" || cred.Password == "" {
 			continue
 		}
-		// TODO: move these hostnames into a const (possibly pull from distribution repo)
+		// Docker Hub is a special case
 		if cred.ServerAddress == DockerRegistryAuth {
 			cred.ServerAddress = DockerRegistryDNS
 		}

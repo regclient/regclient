@@ -4,7 +4,7 @@ proj_dir="$(dirname "$0")/../"
 cd "$proj_dir"
 mkdir -p "artifacts"
 
-targets="linux/amd64 linux/arm64 darwin/amd64"
+targets="linux/amd64 linux/arm64 darwin/amd64 windows/amd64"
 
 for target in $targets; do
   GOOS="${target%%/*}"

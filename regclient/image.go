@@ -10,9 +10,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/docker/docker/pkg/archive"
+	// "github.com/docker/docker/pkg/archive"
 	digest "github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/regclient/regclient/pkg/archive"
 	"github.com/sirupsen/logrus"
 )
 
@@ -186,7 +187,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 		}
 		defer layerRComp.Close()
 		// decompress layer
-		layerTarStream, err := archive.DecompressStream(layerRComp)
+		layerTarStream, err := archive.Decompress(layerRComp)
 		if err != nil {
 			rc.log.WithFields(logrus.Fields{
 				"err":    err,
@@ -234,6 +235,13 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 				"src": layerDir,
 				"tgt": digestDir,
 			}).Warn("Failed to rename layer temp dir")
+			return err
+		}
+		if err := os.Chtimes(digestDir, *conf.Created, *conf.Created); err != nil {
+			rc.log.WithFields(logrus.Fields{
+				"err":  err,
+				"file": digestDir,
+			}).Warn("Failed to adjust creation time")
 			return err
 		}
 		if err := os.Chtimes(digestFileFull, *conf.Created, *conf.Created); err != nil {
@@ -297,16 +305,13 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 	}
 
 	// package in tar file
-	fs, err := archive.Tar(tempDir, archive.Uncompressed)
+	err = archive.Tar(ctx, tempDir, outStream, archive.Uncompressed)
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"err": err,
 		}).Warn("Error taring temp dir")
 		return err
 	}
-	defer fs.Close()
-
-	_, err = io.Copy(outStream, fs)
 
 	return nil
 }

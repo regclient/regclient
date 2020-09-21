@@ -10,7 +10,6 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
-	"syscall"
 )
 
 var (
@@ -246,11 +245,7 @@ func (c *Config) ConfigSave() error {
 		if stat.Mode().IsRegular() {
 			mode = stat.Mode()
 		}
-		// why doesn't Go make uid/gid easier to retrieve?
-		if sysstat, ok := stat.Sys().(*syscall.Stat_t); ok {
-			uid = int(sysstat.Uid)
-			gid = int(sysstat.Gid)
-		}
+		uid, gid, _ = getFileOwner(stat)
 	} else if !os.IsNotExist(err) {
 		return err
 	}
