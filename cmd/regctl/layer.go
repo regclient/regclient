@@ -42,6 +42,9 @@ func runLayerPull(cmd *cobra.Command, args []string) error {
 		"digest":     args[1],
 	}).Debug("Pulling layer")
 	blobIO, resp, err := rc.BlobGet(context.Background(), ref, args[1], []string{})
+	if err != nil {
+		return err
+	}
 
 	_ = resp
 	_, err = io.Copy(os.Stdout, blobIO)
