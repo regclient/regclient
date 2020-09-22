@@ -28,46 +28,80 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) erro
 		return err
 	}
 
-	// transfer the config
-	cd, err := m.GetConfigDigest()
-	if err != nil {
-		rc.log.WithFields(logrus.Fields{
-			"ref": refSrc.Reference,
-			"err": err,
-		}).Warn("Failed to get config digest from manifest")
-		return err
-	}
-	rc.log.WithFields(logrus.Fields{
-		"digest": cd.String(),
-	}).Info("Copy config")
-	if err := rc.BlobCopy(ctx, refSrc, refTgt, cd.String()); err != nil {
-		rc.log.WithFields(logrus.Fields{
-			"source": refSrc.Reference,
-			"target": refTgt.Reference,
-			"digest": cd.String(),
-			"err":    err,
-		}).Warn("Failed to copy config")
-		return err
-	}
+	switch m.GetMediaType() {
+	case MediaTypeDocker2ManifestList:
+		dml := m.GetDockerManifestList()
+		for _, entry := range dml.Manifests {
+			entrySrc := refSrc
+			entryTgt := refTgt
+			entrySrc.Tag = ""
+			entryTgt.Tag = ""
+			entrySrc.Digest = entry.Digest.String()
+			entryTgt.Digest = entry.Digest.String()
+			if err := rc.ImageCopy(ctx, entrySrc, entryTgt); err != nil {
+				return err
+			}
+		}
 
-	// for each layer from the source
-	l, err := m.GetLayers()
-	if err != nil {
-		return err
-	}
-	for _, layerSrc := range l {
+	case MediaTypeOCI1ManifestList:
+		oml := m.GetOCIManifestList()
+		for _, entry := range oml.Manifests {
+			entrySrc := refSrc
+			entryTgt := refTgt
+			entrySrc.Tag = ""
+			entryTgt.Tag = ""
+			entrySrc.Digest = entry.Digest.String()
+			entryTgt.Digest = entry.Digest.String()
+			if err := rc.ImageCopy(ctx, entrySrc, entryTgt); err != nil {
+				return err
+			}
+		}
+
+	case MediaTypeDocker2Manifest, MediaTypeOCI1Manifest:
+		// transfer the config
+		cd, err := m.GetConfigDigest()
+		if err != nil {
+			rc.log.WithFields(logrus.Fields{
+				"ref": refSrc.Reference,
+				"err": err,
+			}).Warn("Failed to get config digest from manifest")
+			return err
+		}
 		rc.log.WithFields(logrus.Fields{
-			"layer": layerSrc.Digest.String(),
-		}).Info("Copy layer")
-		if err := rc.BlobCopy(ctx, refSrc, refTgt, layerSrc.Digest.String()); err != nil {
+			"digest": cd.String(),
+		}).Info("Copy config")
+		if err := rc.BlobCopy(ctx, refSrc, refTgt, cd.String()); err != nil {
 			rc.log.WithFields(logrus.Fields{
 				"source": refSrc.Reference,
 				"target": refTgt.Reference,
-				"layer":  layerSrc.Digest.String(),
+				"digest": cd.String(),
 				"err":    err,
-			}).Warn("Failed to copy layer")
+			}).Warn("Failed to copy config")
 			return err
 		}
+
+		// for each layer from the source
+		l, err := m.GetLayers()
+		if err != nil {
+			return err
+		}
+		for _, layerSrc := range l {
+			rc.log.WithFields(logrus.Fields{
+				"layer": layerSrc.Digest.String(),
+			}).Info("Copy layer")
+			if err := rc.BlobCopy(ctx, refSrc, refTgt, layerSrc.Digest.String()); err != nil {
+				rc.log.WithFields(logrus.Fields{
+					"source": refSrc.Reference,
+					"target": refTgt.Reference,
+					"layer":  layerSrc.Digest.String(),
+					"err":    err,
+				}).Warn("Failed to copy layer")
+				return err
+			}
+		}
+
+	default:
+		return ErrUnsupportedMediaType
 	}
 
 	// push manifest to target

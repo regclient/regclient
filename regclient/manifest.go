@@ -25,6 +25,7 @@ type manifest struct {
 	mt       string
 	ociM     ociv1.Manifest
 	ociML    ociv1.Index
+	origByte []byte
 }
 
 // Manifest abstracts the various types of manifests that are supported
@@ -154,6 +155,10 @@ func (m *manifest) IsList() bool {
 }
 
 func (m *manifest) MarshalJSON() ([]byte, error) {
+	if len(m.origByte) > 0 {
+		return m.origByte, nil
+	}
+
 	switch m.mt {
 	case MediaTypeDocker2Manifest:
 		return json.Marshal(m.dockerM)
@@ -251,7 +256,7 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 	// read manifest and compute digest
 	digester := digest.Canonical.Digester()
 	reader := io.TeeReader(resp, digester.Hash())
-	respBody, err := ioutil.ReadAll(reader)
+	m.origByte, err = ioutil.ReadAll(reader)
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"err": err,
@@ -265,13 +270,13 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 	m.mt = resp.HTTPResponse().Header.Get("Content-Type")
 	switch m.mt {
 	case MediaTypeDocker2Manifest:
-		err = json.Unmarshal(respBody, &m.dockerM)
+		err = json.Unmarshal(m.origByte, &m.dockerM)
 	case MediaTypeDocker2ManifestList:
-		err = json.Unmarshal(respBody, &m.dockerML)
+		err = json.Unmarshal(m.origByte, &m.dockerML)
 	case MediaTypeOCI1Manifest:
-		err = json.Unmarshal(respBody, &m.ociM)
+		err = json.Unmarshal(m.origByte, &m.ociM)
 	case MediaTypeOCI1ManifestList:
-		err = json.Unmarshal(respBody, &m.ociML)
+		err = json.Unmarshal(m.origByte, &m.ociML)
 	default:
 		rc.log.WithFields(logrus.Fields{
 			"mediatype": m.mt,
@@ -280,7 +285,7 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 		return nil, fmt.Errorf("Unknown manifest media type %s", m.mt)
 	}
 	// TODO: consider making a manifest Unmarshal method that detects which mediatype from the json
-	// err = json.Unmarshal(respBody, &m)
+	// err = json.Unmarshal(m.origByte, &m)
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"err":       err,
@@ -295,25 +300,28 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 
 func (rc *regClient) ManifestPut(ctx context.Context, ref Ref, m Manifest) error {
 	host := rc.getHost(ref.Registry)
-	if ref.Tag == "" {
+	manfURL := url.URL{
+		Scheme: host.Scheme,
+		Host:   host.DNS[0],
+		Path:   "/v2/" + ref.Repository + "/manifests/",
+	}
+	if ref.Tag != "" {
+		manfURL.Path += ref.Tag
+	} else if ref.Digest != "" {
+		manfURL.Path += ref.Digest
+	} else {
 		rc.log.WithFields(logrus.Fields{
 			"ref": ref.Reference,
 		}).Warn("Manifest put requires a tag")
 		return ErrMissingTag
 	}
 
-	manfURL := url.URL{
-		Scheme: host.Scheme,
-		Host:   host.DNS[0],
-		Path:   "/v2/" + ref.Repository + "/manifests/" + ref.Tag,
-	}
-
 	// add body to request
 	opts := []retryable.OptsReq{}
 	opts = append(opts, retryable.WithHeader("Content-Type", []string{m.GetMediaType()}))
 
-	var mj []byte
-	mj, err := json.Marshal(m)
+	// mj, err := json.MarshalIndent(m, "", "  ")
+	mj, err := m.MarshalJSON()
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"ref": ref.Reference,
@@ -321,6 +329,8 @@ func (rc *regClient) ManifestPut(ctx context.Context, ref Ref, m Manifest) error
 		}).Warn("Error marshaling manifest")
 		return err
 	}
+
+	// TODO: if pushing by digest, recompute digest on mj?
 	opts = append(opts, retryable.WithBodyBytes(mj))
 	opts = append(opts, retryable.WithContentLen(int64(len(mj))))
 
