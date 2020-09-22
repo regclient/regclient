@@ -172,8 +172,48 @@ func (m *manifest) MarshalJSON() ([]byte, error) {
 	return []byte{}, ErrUnsupportedMediaType
 }
 
-func (rc *regClient) ManifestDigest(ctx context.Context, ref Ref) (digest.Digest, error) {
+func (rc *regClient) ManifestDelete(ctx context.Context, ref Ref) error {
+	if ref.Digest == "" {
+		return ErrMissingDigest
+	}
+
+	// build request
 	host := rc.getHost(ref.Registry)
+	manfURL := url.URL{
+		Scheme: host.Scheme,
+		Host:   host.DNS[0],
+		Path:   "/v2/" + ref.Repository + "/manifests/" + ref.Digest,
+	}
+	opts := []retryable.OptsReq{}
+	opts = append(opts, retryable.WithHeader("Accept", []string{
+		MediaTypeDocker2Manifest,
+		MediaTypeDocker2ManifestList,
+		MediaTypeOCI1Manifest,
+		MediaTypeOCI1ManifestList,
+	}))
+
+	// send the request
+	rty := rc.getRetryable(host)
+	resp, err := rty.DoRequest(ctx, "DELETE", manfURL, opts...)
+	if err != nil {
+		return err
+	}
+
+	// validate response
+	if resp.HTTPResponse().StatusCode != 202 {
+		body, _ := ioutil.ReadAll(resp)
+		rc.log.WithFields(logrus.Fields{
+			"ref":    ref.Reference,
+			"status": resp.HTTPResponse().StatusCode,
+			"body":   body,
+		}).Warn("Unexpected status code for manifest delete")
+		return fmt.Errorf("Unexpected status code on manifest delete %d\nResponse object: %v\nBody: %s", resp.HTTPResponse().StatusCode, resp, body)
+	}
+
+	return nil
+}
+
+func (rc *regClient) ManifestDigest(ctx context.Context, ref Ref) (digest.Digest, error) {
 	var tagOrDigest string
 	if ref.Digest != "" {
 		tagOrDigest = ref.Digest
@@ -183,9 +223,9 @@ func (rc *regClient) ManifestDigest(ctx context.Context, ref Ref) (digest.Digest
 		rc.log.WithFields(logrus.Fields{
 			"ref": ref.Reference,
 		}).Warn("Manifest requires a tag or digest")
-		return "", ErrMissingTag
+		return "", ErrMissingTagOrDigest
 	}
-
+	host := rc.getHost(ref.Registry)
 	manfURL := url.URL{
 		Scheme: host.Scheme,
 		Host:   host.DNS[0],
@@ -230,7 +270,7 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 		rc.log.WithFields(logrus.Fields{
 			"ref": ref.Reference,
 		}).Warn("Manifest requires a tag or digest")
-		return nil, ErrMissingTag
+		return nil, ErrMissingTagOrDigest
 	}
 
 	manfURL := url.URL{

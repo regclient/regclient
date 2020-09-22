@@ -183,7 +183,23 @@ func runImageCopy(cmd *cobra.Command, args []string) error {
 }
 
 func runImageDelete(cmd *cobra.Command, args []string) error {
-	return ErrNotImplemented
+	ref, err := regclient.NewRef(args[0])
+	if err != nil {
+		return err
+	}
+	rc := newRegClient()
+
+	log.WithFields(logrus.Fields{
+		"host": ref.Registry,
+		"repo": ref.Repository,
+		"tag":  ref.Tag,
+	}).Debug("Image digest")
+
+	err = rc.ManifestDelete(context.Background(), ref)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func runImageDigest(cmd *cobra.Command, args []string) error {

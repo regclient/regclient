@@ -59,6 +59,7 @@ type RegClient interface {
 	ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) error
 	ImageExport(ctx context.Context, ref Ref, outStream io.Writer) error
 	ImageGetConfig(ctx context.Context, ref Ref, d string) (ociv1.Image, error)
+	ManifestDelete(ctx context.Context, ref Ref) error
 	ManifestDigest(ctx context.Context, ref Ref) (digest.Digest, error)
 	ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 	TagsList(ctx context.Context, ref Ref) (TagList, error)
