@@ -62,6 +62,7 @@ type RegClient interface {
 	ManifestDelete(ctx context.Context, ref Ref) error
 	ManifestDigest(ctx context.Context, ref Ref) (digest.Digest, error)
 	ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
+	TagDelete(ctx context.Context, ref Ref) error
 	TagsList(ctx context.Context, ref Ref) (TagList, error)
 }
 
