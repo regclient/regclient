@@ -33,78 +33,84 @@ jobs:
       run: go test -v ./...
 
     - name: Build artifacts
+      if: startsWith( github.ref, 'refs/tags/v' )
       run: ./build/build-artifacts.sh
 
-    - name: Save artifacts
-      uses: actions/upload-artifact@v2
-      with:
-        name: artifacts
-        path: artifacts/
-
-  docker:
-    name: Docker
-    runs-on: ubuntu-latest
-    steps:
-    - name: Prepare
-      id: prep
+    - name: Gather release details
+      if: startsWith( github.ref, 'refs/tags/v' )
+      id: release_details
       run: |
-        REGCTL_IMAGE=regclient/regctl
-        VERSION=noop
-        if [ "${{ github.event_name }}" = "schedule" ]; then
-          VERSION=nightly
-        elif [[ $GITHUB_REF == refs/tags/* ]]; then
-          VERSION=${GITHUB_REF#refs/tags/}
-        elif [[ $GITHUB_REF == refs/heads/* ]]; then
-          VERSION=$(echo ${GITHUB_REF#refs/heads/} | sed -r 's#/+#-#g')
-          if [ "${{ github.event.repository.default_branch }}" = "$VERSION" ]; then
-            VERSION=edge
-          fi
-        elif [[ $GITHUB_REF == refs/pull/* ]]; then
-          VERSION=pr-${{ github.event.number }}
+        VERSION=${GITHUB_REF#refs/tags/}
+        VALID_RELEASE=false
+        if [ -f "release.md" ] && grep -q "Release $VERSION" release.md; then
+          VALID_RELEASE=true
         fi
-        TAGS="${REGCTL_IMAGE}:${VERSION}"
-        if [[ $VERSION =~ ^v[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
-          MINOR=${VERSION%.*}
-          MAJOR=${MINOR%.*}
-          TAGS="$TAGS,${REGCTL_IMAGE}:${MINOR},${REGCTL_IMAGE}:${MAJOR},${REGCTL_IMAGE}:latest"
-        fi
+        RELEASE_NOTES=$(cat release.md || echo release notes unavailable)
+        # escape % and linefeeds
+        RELEASE_NOTES="${RELEASE_NOTES//'%'/'%25'}"
+        RELEASE_NOTES="${RELEASE_NOTES//$'\n'/'%0A'}"
+        RELEASE_NOTES="${RELEASE_NOTES//$'\r'/'%0D'}"
         echo ::set-output name=version::${VERSION}
-        echo ::set-output name=regctl_tags::${TAGS}
-        echo ::set-output name=created::$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+        echo ::set-output name=valid::${VALID_RELEASE}
+        echo ::set-output name=release_notes::${RELEASE_NOTES}
 
-    - name: Check out code
-      uses: actions/checkout@v2
-
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v1
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v1
-     
-    - name: Login to DockerHub
-      uses: docker/login-action@v1 
+    - name: Create release
+      if: steps.release_details.outputs.valid == 'true'
+      id: release_create
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        username: ${{ secrets.DOCKERHUB_USERNAME }}
-        password: ${{ secrets.DOCKERHUB_TOKEN }}
-     
-    - name: Cache docker build
-      uses: actions/cache@v2
-      with:
-        path: /tmp/.buildx-cache
-        key: ${{ runner.os }}-buildx
+        tag_name: ${{ steps.release_details.outputs.version }}
+        release_name: ${{ steps.release_details.outputs.version }}
+        body: ${{ steps.release_details.outputs.release_notes }}
+        draft: false
+        prerelease: false
 
-    - name: Build and push
-      uses: docker/build-push-action@v2
+    - name: Upload Release Asset - regctl-linux-amd64
+      if: steps.release_details.outputs.valid == 'true'
+      id: release_assets_regctl_linux_amd64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        context: .
-        file: ./build/Dockerfile.regctl.buildkit
-        platforms: linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x
-        push: ${{ github.event_name != 'pull_request' }}
-        tags: ${{ steps.prep.outputs.regctl_tags }}
-        cache-from: type=local,src=/tmp/.buildx-cache
-        cache-to: type=local,dest=/tmp/.buildx-cache
-        labels: |
-          org.opencontainers.image.created=${{ steps.prep.outputs.created }}
-          org.opencontainers.image.source=${{ github.repositoryUrl }}
-          org.opencontainers.image.version=${{ steps.prep.outputs.version }}
-          org.opencontainers.image.revision=${{ github.sha }}
+        upload_url: ${{ steps.release_create.outputs.upload_url }}
+        asset_path: ./artifacts/regctl-linux-amd64
+        asset_name: regctl-linux-amd64
+        asset_content_type: application/octet-stream
+
+    - name: Upload Release Asset - regctl-linux-arm64
+      if: steps.release_details.outputs.valid == 'true'
+      id: release_assets_regctl_linux_arm64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.release_create.outputs.upload_url }}
+        asset_path: ./artifacts/regctl-linux-arm64
+        asset_name: regctl-linux-arm64
+        asset_content_type: application/octet-stream
+
+    - name: Upload Release Asset - regctl-darwin-amd64
+      if: steps.release_details.outputs.valid == 'true'
+      id: release_assets_regctl_darwin_amd64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.release_create.outputs.upload_url }}
+        asset_path: ./artifacts/regctl-darwin-amd64
+        asset_name: regctl-darwin-amd64
+        asset_content_type: application/octet-stream
+
+    - name: Upload Release Asset - regctl-windows-amd64
+      if: steps.release_details.outputs.valid == 'true'
+      id: release_assets_regctl_windows_amd64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.release_create.outputs.upload_url }}
+        asset_path: ./artifacts/regctl-windows-amd64
+        asset_name: regctl-windows-amd64
+        asset_content_type: application/octet-stream
