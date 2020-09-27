@@ -85,6 +85,10 @@ func (rc *regClient) TagDelete(ctx context.Context, ref Ref) error {
 		origByte: manfB,
 	}
 
+	rc.log.WithFields(logrus.Fields{
+		"ref": ref.Reference,
+	}).Debug("Sending dummy manifest to replace tag")
+
 	// push config
 	err = rc.BlobPut(ctx, ref, confDigest.String(), ioutil.NopCloser(bytes.NewReader(confB)), MediaTypeDocker2ImageConfig, int64(len(confB)))
 	if err != nil {
@@ -100,6 +104,10 @@ func (rc *regClient) TagDelete(ctx context.Context, ref Ref) error {
 	ref.Digest = manfDigest.String()
 
 	// delete manifest by digest
+	rc.log.WithFields(logrus.Fields{
+		"ref":    ref.Reference,
+		"digest": ref.Digest,
+	}).Debug("Deleting dummy manifest")
 	err = rc.ManifestDelete(ctx, ref)
 	if err != nil {
 		return err
