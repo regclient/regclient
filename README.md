@@ -38,6 +38,19 @@ cd regclient
 go build -o regctl ./cmd/regctl/
 ```
 
+## Downloading Binaries
+
+Binaries are available on the [releases
+page](https://github.com/regclient/regclient/releases).
+
+The latest release can be downloaded using curl (adjust "linux-amd64" for your
+own system):
+
+```shell
+curl -L https://github.com/regclient/regclient/releases/latest/download/regctl-linux-amd64 >regctl
+chmod 755 regctl
+```
+
 ## Running as a Container
 
 You can run regctl completely isolated in a container:
