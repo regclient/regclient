@@ -25,7 +25,8 @@ var rootCmd = &cobra.Command{
 
 var rootOpts struct {
 	verbosity string
-	format    string
+	logopts   []string
+	format    string // for Go template formatting of various commands
 }
 
 func init() {
@@ -36,6 +37,7 @@ func init() {
 		Level:     logrus.WarnLevel,
 	}
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.WarnLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
+	rootCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
 	rootCmd.PersistentPreRunE = rootPreRun
 }
 
@@ -54,6 +56,11 @@ func rootPreRun(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	log.SetLevel(lvl)
+	for _, opt := range rootOpts.logopts {
+		if opt == "json" {
+			log.Formatter = new(logrus.JSONFormatter)
+		}
+	}
 	return nil
 }
 
