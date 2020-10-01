@@ -4,7 +4,7 @@ IMAGE_TAGS=regctl
 IMAGES=$(addprefix docker-,$(IMAGE_TAGS))
 GO_BUILD_FLAGS=
 
-.PHONY: all binaries docker test .FORCE
+.PHONY: all binaries vendor docker test .FORCE
 
 .FORCE:
 
@@ -13,10 +13,13 @@ all: test binaries
 test:
 	go test ./...
 
-binaries: $(BINARIES)
+binaries: vendor $(BINARIES)
 
 bin/regctl: .FORCE
 	go build ${GO_BUILD_FLAGS} -o bin/regctl ./cmd/regctl
+
+vendor:
+	go mod vendor
 
 docker: $(IMAGES)
 
