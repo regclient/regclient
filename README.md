@@ -86,6 +86,35 @@ chmod 755 regctl
 ./regctl --help
 ```
 
+## Installing as a Docker CLI Plugin
+
+To install this as a docker CLI plugin:
+
+```shell
+make plugin-user # install for the current user
+make plugin-host # install for all users on the host (requires sudo)
+```
+
+Once installed as a plugin, you can access it from the docker CLI:
+
+```shell
+$ docker regctl --help
+Utility for accessing docker registries
+More details at https://github.com/regclient/regclient
+
+Usage:
+  regctl <cmd> [flags]
+  regctl [command]
+
+Available Commands:
+  help        Help about any command
+  image       manage images
+  layer       manage image layers/blobs
+  registry    manage registries
+  tag         manage tags
+...
+```
+
 ## Usage
 
 See the [project documentation](docs/README.md).
