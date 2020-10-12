@@ -17,6 +17,8 @@ var (
 	ErrNotImplemented = errors.New("Not implemented")
 	// ErrParsingFailed when a string cannot be parsed
 	ErrParsingFailed = errors.New("Parsing failed")
+	// ErrUnavailable when a requested value is not available
+	ErrUnavailable = errors.New("Unavailable")
 	// ErrUnsupportedMediaType returned when media type is unknown or unsupported
 	ErrUnsupportedMediaType = errors.New("Unsupported media type")
 )

@@ -22,6 +22,7 @@ type manifest struct {
 	digest   digest.Digest
 	dockerM  dockerSchema2.Manifest
 	dockerML dockerManifestList.ManifestList
+	manifSet bool
 	mt       string
 	ociM     ociv1.Manifest
 	ociML    ociv1.Index
@@ -106,6 +107,9 @@ func (m *manifest) GetPlatformDesc(p *ociv1.Platform) (*ociv1.Descriptor, error)
 // GetPlatformList returns the list of platforms in a manifest list
 func (m *manifest) GetPlatformList() ([]*ociv1.Platform, error) {
 	var l []*ociv1.Platform
+	if !m.manifSet {
+		return l, ErrUnavailable
+	}
 	switch m.mt {
 	case MediaTypeDocker2ManifestList:
 		for _, d := range m.dockerML.Manifests {
@@ -130,6 +134,9 @@ func (m *manifest) GetOCIManifestList() ociv1.Index {
 }
 
 func (m *manifest) GetOrigManifest() interface{} {
+	if !m.manifSet {
+		return nil
+	}
 	switch m.mt {
 	case MediaTypeDocker2Manifest:
 		return m.dockerM
@@ -155,6 +162,10 @@ func (m *manifest) IsList() bool {
 }
 
 func (m *manifest) MarshalJSON() ([]byte, error) {
+	if !m.manifSet {
+		return []byte{}, ErrUnavailable
+	}
+
 	if len(m.origByte) > 0 {
 		return m.origByte, nil
 	}
@@ -213,7 +224,7 @@ func (rc *regClient) ManifestDelete(ctx context.Context, ref Ref) error {
 	return nil
 }
 
-func (rc *regClient) ManifestDigest(ctx context.Context, ref Ref) (digest.Digest, error) {
+/* func (rc *regClient) ManifestDigest(ctx context.Context, ref Ref) (digest.Digest, error) {
 	var tagOrDigest string
 	if ref.Digest != "" {
 		tagOrDigest = ref.Digest
@@ -254,7 +265,7 @@ func (rc *regClient) ManifestDigest(ctx context.Context, ref Ref) (digest.Digest
 		return "", err
 	}
 	return digest.FromBytes(respBody), nil
-}
+} */
 
 func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error) {
 	m := manifest{}
@@ -293,6 +304,10 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 	if err != nil {
 		return nil, err
 	}
+	if resp.HTTPResponse().StatusCode != 200 {
+		return nil, fmt.Errorf("Unexpected http response code %d", resp.HTTPResponse().StatusCode)
+	}
+
 	// read manifest and compute digest
 	digester := digest.Canonical.Digester()
 	reader := io.TeeReader(resp, digester.Hash())
@@ -305,6 +320,13 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 		return nil, err
 	}
 	m.digest = digester.Digest()
+
+	if m.digest.String() != resp.HTTPResponse().Header.Get("Docker-Content-Digest") {
+		rc.log.WithFields(logrus.Fields{
+			"computed": m.digest.String(),
+			"returned": resp.HTTPResponse().Header.Get("Docker-Content-Digest"),
+		}).Warn("Computed digest does not match header from registry")
+	}
 
 	// parse body into variable according to media type
 	m.mt = resp.HTTPResponse().Header.Get("Content-Type")
@@ -332,6 +354,59 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 			"mediatype": m.mt,
 			"ref":       ref.Reference,
 		}).Warn("Failed to unmarshal manifest")
+		return nil, err
+	}
+	m.manifSet = true
+
+	return &m, nil
+}
+
+func (rc *regClient) ManifestHead(ctx context.Context, ref Ref) (Manifest, error) {
+	m := manifest{}
+
+	// build the request
+	host := rc.getHost(ref.Registry)
+	var tagOrDigest string
+	if ref.Digest != "" {
+		tagOrDigest = ref.Digest
+	} else if ref.Tag != "" {
+		tagOrDigest = ref.Tag
+	} else {
+		rc.log.WithFields(logrus.Fields{
+			"ref": ref.Reference,
+		}).Warn("Manifest requires a tag or digest")
+		return nil, ErrMissingTagOrDigest
+	}
+
+	manfURL := url.URL{
+		Scheme: host.Scheme,
+		Host:   host.DNS[0],
+		Path:   "/v2/" + ref.Repository + "/manifests/" + tagOrDigest,
+	}
+
+	opts := []retryable.OptsReq{}
+	opts = append(opts, retryable.WithHeader("Accept", []string{
+		MediaTypeDocker2Manifest,
+		MediaTypeDocker2ManifestList,
+		MediaTypeOCI1Manifest,
+		MediaTypeOCI1ManifestList,
+	}))
+
+	// send the request
+	rty := rc.getRetryable(host)
+	resp, err := rty.DoRequest(ctx, "HEAD", manfURL, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.HTTPResponse().StatusCode != 200 {
+		return nil, fmt.Errorf("Unexpected http response code %d", resp.HTTPResponse().StatusCode)
+	}
+
+	// extract media type and digest from header
+	m.mt = resp.HTTPResponse().Header.Get("Content-Type")
+	m.digest, err = digest.Parse(resp.HTTPResponse().Header.Get("Docker-Content-Digest"))
+	if err != nil {
 		return nil, err
 	}
 
