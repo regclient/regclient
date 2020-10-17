@@ -1,4 +1,7 @@
-# Release v0.0.1
+# Release v0.0.2
 
-- regclient API is usable, but not considered stable yet, there's a potential for refactoring and breaking changes.
-- regctl CLI is ready for testing, please report any issues you encounter.
+- Add support for json log output
+- Prompt for user and password on registry login if not set with flag
+- Adding wrapper for docker CLI plugin
+- Using manifest HEAD requests for digests
+- Check manifest HEAD before pulling manifest in copy
