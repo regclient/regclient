@@ -18,6 +18,17 @@ import (
 )
 
 func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) error {
+	// check if source and destination already match
+	msh, errS := rc.ManifestHead(ctx, refSrc)
+	mdh, errD := rc.ManifestHead(ctx, refTgt)
+	if errS == nil && errD == nil && msh.GetDigest() == mdh.GetDigest() {
+		rc.log.WithFields(logrus.Fields{
+			"source": refSrc.Reference,
+			"target": refTgt.Reference,
+		}).Info("Copy not needed, target already up to date")
+		return nil
+	}
+
 	// get the manifest for the source
 	m, err := rc.ManifestGet(ctx, refSrc)
 	if err != nil {

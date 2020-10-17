@@ -77,7 +77,7 @@ var imageOpts struct {
 }
 
 func init() {
-	imageDigestCmd.Flags().BoolVarP(&imageOpts.list, "list", "", false, "Output manifest list if available")
+	imageDigestCmd.Flags().BoolVarP(&imageOpts.list, "list", "", false, "Do not resolve platform from manifest list (recommended)")
 	imageDigestCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
 	imageDigestCmd.Flags().BoolVarP(&imageOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
 
@@ -215,9 +215,28 @@ func runImageDigest(cmd *cobra.Command, args []string) error {
 		"tag":  ref.Tag,
 	}).Debug("Image digest")
 
-	m, err := getManifest(rc, ref)
+	// attempt to request only the headers, avoids Docker Hub rate limits
+	m, err := rc.ManifestHead(context.Background(), ref)
 	if err != nil {
 		return err
+	}
+
+	// add warning if not list and list required or platform requested
+	if !m.IsList() && imageOpts.requireList {
+		log.Warn("Manifest list unavailable")
+		return ErrNotFound
+	}
+	if !m.IsList() && imageOpts.platform != "" {
+		log.Info("Manifest list unavailable, ignoring platform flag")
+	}
+
+	// if a manifest list was received and we need the platform specific
+	// manifest, run the http GET calls
+	if m.IsList() && !imageOpts.list && !imageOpts.requireList {
+		m, err = getManifest(rc, ref)
+		if err != nil {
+			return err
+		}
 	}
 
 	fmt.Println(m.GetDigest().String())

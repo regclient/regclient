@@ -1,12 +1,16 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/regclient/regclient/regclient"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 var registryCmd = &cobra.Command{
@@ -53,7 +57,6 @@ var registryOpts struct {
 func init() {
 	registryLoginCmd.Flags().StringVarP(&registryOpts.user, "user", "u", "", "Username")
 	registryLoginCmd.Flags().StringVarP(&registryOpts.pass, "pass", "p", "", "Password")
-	registryLoginCmd.MarkFlagRequired("user")
 
 	registrySetCmd.Flags().StringVarP(&registryOpts.scheme, "scheme", "", "", "Scheme (http, https)")
 	registrySetCmd.Flags().StringArrayVarP(&registryOpts.dns, "dns", "", nil, "DNS hostname or ip with port")
@@ -101,21 +104,51 @@ func runRegistryConfig(cmd *cobra.Command, args []string) error {
 }
 
 func runRegistryLogin(cmd *cobra.Command, args []string) error {
-	// prompt for password if not provided on cli
-	if registryOpts.pass == "" {
-		return ErrNotImplemented
-	}
 	c, err := regclient.ConfigLoadDefault()
 	if err != nil {
 		return err
 	}
+	reader := bufio.NewReader(os.Stdin)
 	h, ok := c.Hosts[args[0]]
 	if !ok {
 		h = &regclient.ConfigHost{}
 		c.Hosts[args[0]] = h
 	}
-	h.User = registryOpts.user
-	h.Pass = registryOpts.pass
+	if registryOpts.user != "" {
+		h.User = registryOpts.user
+	} else {
+		// prompt for username
+		defUser := ""
+		if h.User != "" {
+			defUser = " [" + h.User + "]"
+		}
+		fmt.Printf("Enter Username%s: ", defUser)
+		user, _ := reader.ReadString('\n')
+		user = strings.TrimSpace(user)
+		if user != "" {
+			h.User = user
+		} else if h.User == "" {
+			log.Error("Username is required")
+			return ErrMissingInput
+		}
+	}
+	if registryOpts.pass != "" {
+		h.Pass = registryOpts.pass
+	} else {
+		// prompt for a password
+		fmt.Print("Enter Password: ")
+		pass, err := terminal.ReadPassword(0)
+		if err != nil {
+			return err
+		}
+		passwd := strings.TrimSpace(string(pass))
+		if passwd != "" {
+			h.Pass = passwd
+		} else {
+			log.Error("Password is required")
+			return ErrMissingInput
+		}
+	}
 	err = c.ConfigSave()
 	if err != nil {
 		return err

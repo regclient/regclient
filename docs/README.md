@@ -25,11 +25,15 @@ Available Commands:
   repo        manage a repository
 
 Flags:
-  -h, --help               help for regctl
-  -v, --verbosity string   Log level (debug, info, warn, error, fatal, panic) (default "warning")
+  -h, --help                 help for regctl
+      --logopt stringArray   Log options
+  -v, --verbosity string     Log level (debug, info, warn, error, fatal, panic) (default "warning")
 
 Use "regctl [command] --help" for more information about a command.
 ```
+
+`--logopt` currently accepts `json` to format all logs as json instead of text.
+This is useful for parsing in external tools like Elastic/Splunk.
 
 ### Registry commands
 

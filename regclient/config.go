@@ -17,6 +17,8 @@ var (
 	ConfigFilename = "config.json"
 	// ConfigDir is the default directory within the user's home directory to read/write configuration
 	ConfigDir = ".regclient"
+	// ConfigEnv is the environment variable to override the config filename
+	ConfigEnv = "REGCLIENT_CONFIG"
 )
 
 type tlsConf int
@@ -99,7 +101,7 @@ type ConfigHost struct {
 
 // getConfigFilename returns the filename based on environment variables and defaults
 func getConfigFilename() string {
-	cf := os.Getenv("REGCLI_CONFIG")
+	cf := os.Getenv(ConfigEnv)
 	if cf == "" {
 		return filepath.Join(getHomeDir(), ConfigDir, ConfigFilename)
 	}

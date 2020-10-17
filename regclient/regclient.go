@@ -19,7 +19,6 @@ import (
 	dockerManifestList "github.com/docker/distribution/manifest/manifestlist"
 	dockerSchema2 "github.com/docker/distribution/manifest/schema2"
 	"github.com/docker/distribution/reference"
-	digest "github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/pkg/auth"
 	"github.com/regclient/regclient/pkg/retryable"
@@ -60,8 +59,9 @@ type RegClient interface {
 	ImageExport(ctx context.Context, ref Ref, outStream io.Writer) error
 	ImageGetConfig(ctx context.Context, ref Ref, d string) (ociv1.Image, error)
 	ManifestDelete(ctx context.Context, ref Ref) error
-	ManifestDigest(ctx context.Context, ref Ref) (digest.Digest, error)
+	// ManifestDigest(ctx context.Context, ref Ref) (digest.Digest, error)
 	ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
+	ManifestHead(ctx context.Context, ref Ref) (Manifest, error)
 	TagDelete(ctx context.Context, ref Ref) error
 	TagsList(ctx context.Context, ref Ref) (TagList, error)
 }

@@ -38,6 +38,19 @@ cd regclient
 go build -o regctl ./cmd/regctl/
 ```
 
+## Downloading Binaries
+
+Binaries are available on the [releases
+page](https://github.com/regclient/regclient/releases).
+
+The latest release can be downloaded using curl (adjust "linux-amd64" for your
+own system):
+
+```shell
+curl -L https://github.com/regclient/regclient/releases/latest/download/regctl-linux-amd64 >regctl
+chmod 755 regctl
+```
+
 ## Running as a Container
 
 You can run regctl completely isolated in a container:
@@ -71,6 +84,35 @@ docker container run -it --rm --net host \\
 EOF
 chmod 755 regctl
 ./regctl --help
+```
+
+## Installing as a Docker CLI Plugin
+
+To install this as a docker CLI plugin:
+
+```shell
+make plugin-user # install for the current user
+make plugin-host # install for all users on the host (requires sudo)
+```
+
+Once installed as a plugin, you can access it from the docker CLI:
+
+```shell
+$ docker regctl --help
+Utility for accessing docker registries
+More details at https://github.com/regclient/regclient
+
+Usage:
+  regctl <cmd> [flags]
+  regctl [command]
+
+Available Commands:
+  help        Help about any command
+  image       manage images
+  layer       manage image layers/blobs
+  registry    manage registries
+  tag         manage tags
+...
 ```
 
 ## Usage

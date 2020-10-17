@@ -1,0 +1,29 @@
+#!/bin/sh
+
+docker_cli_plugin_metadata() {
+  vendor="regclient"
+  version="0.1"
+  url="https://github.com/regclient/regclient"
+  description="Manage docker registries"
+  cat <<-EOF
+  {"SchemaVersion":"0.1.0","Vendor":"${vendor}","Version":"${version}","ShortDescription":"${description}","URL":"${url}"}
+EOF
+}
+
+case "$1" in
+  docker-cli-plugin-metadata)
+    docker_cli_plugin_metadata
+    ;;
+
+  regctl|*)
+    shift # remove command name from first arg
+    if [ -x "$(command -v regctl)" ]; then
+      regctl "$@"
+    else
+      docker container run -it --rm --net host \
+        -u "$(id -u):$(id -g)" -e HOME -v $HOME:$HOME \
+        -v /etc/docker/certs.d:/etc/docker/certs.d:ro \
+        regclient/regctl:latest "$@"
+    fi
+    ;;
+esac

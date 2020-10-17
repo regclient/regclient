@@ -81,6 +81,7 @@ func (rc *regClient) TagDelete(ctx context.Context, ref Ref) error {
 	m := manifest{
 		digest:   manfDigest,
 		dockerM:  manf,
+		manifSet: true,
 		mt:       MediaTypeDocker2Manifest,
 		origByte: manfB,
 	}
