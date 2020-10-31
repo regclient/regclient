@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/url"
+	"strconv"
 	"time"
 
 	dockerDistribution "github.com/docker/distribution"
@@ -15,8 +16,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// TagOpts is used for options to the tag functions
+type TagOpts struct {
+	Limit int
+	Last  string
+}
+
 // TagDelete deletes a tag from the registry. Since there's no API for this,
-// you'd want to normally just delete the manifest However multiple tags may
+// you'd want to normally just delete the manifest. However multiple tags may
 // point to the same manifest, so instead you must:
 // 1. Make a manifest, for this we put a few labels and timestamps to be unique.
 // 2. Push that manifest to the tag.
@@ -118,6 +125,10 @@ func (rc *regClient) TagDelete(ctx context.Context, ref Ref) error {
 }
 
 func (rc *regClient) TagsList(ctx context.Context, ref Ref) (TagList, error) {
+	return rc.TagsListWithOpts(ctx, ref, TagOpts{})
+}
+
+func (rc *regClient) TagsListWithOpts(ctx context.Context, ref Ref, opts TagOpts) (TagList, error) {
 	tl := TagList{}
 	host := rc.getHost(ref.Registry)
 	repoURL := url.URL{
@@ -125,6 +136,14 @@ func (rc *regClient) TagsList(ctx context.Context, ref Ref) (TagList, error) {
 		Host:   host.DNS[0],
 		Path:   "/v2/" + ref.Repository + "/tags/list",
 	}
+	query := url.Values{}
+	if opts.Last != "" {
+		query.Set("last", opts.Last)
+	}
+	if opts.Limit > 0 {
+		query.Set("n", strconv.Itoa(opts.Limit))
+	}
+	repoURL.RawQuery = query.Encode()
 
 	rty := rc.getRetryable(host)
 	resp, err := rty.DoRequest(ctx, "GET", repoURL)
