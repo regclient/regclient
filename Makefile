@@ -25,6 +25,7 @@ docker: $(IMAGES)
 
 docker-regctl:
 	docker build -t regclient/regctl -f build/Dockerfile.regctl .
+	docker build -t regclient/regctl:alpine -f build/Dockerfile.regctl --target release-alpine .
 
 plugin-user:
 	mkdir -p ${HOME}/.docker/cli-plugins/
