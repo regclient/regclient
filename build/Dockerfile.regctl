@@ -13,7 +13,30 @@ RUN CGO_ENABLED=0 \
 USER appuser
 CMD [ "./regctl" ]
 
-FROM scratch as release
+FROM alpine as release-alpine
+COPY --from=build /etc/passwd /etc/group /etc/
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build /home/appuser /home/appuser
+COPY --from=build /src/regctl /usr/local/bin/regctl
+USER appuser
+CMD [ "regctl", "--help" ]
+
+ARG BUILD_DATE
+ARG VCS_REF
+LABEL maintainer="" \
+      org.opencontainers.image.created=$BUILD_DATE \
+      org.opencontainers.image.authors="Regclient contributors" \
+      org.opencontainers.image.url="https://github.com/regclient/regclient" \
+      org.opencontainers.image.documentation="https://github.com/regclient/regclient" \
+      org.opencontainers.image.source="https://github.com/regclient/regclient" \
+      org.opencontainers.image.version="latest" \
+      org.opencontainers.image.revision=$VCS_REF \
+      org.opencontainers.image.vendor="" \
+      org.opencontainers.image.licenses="Apache 2.0" \
+      org.opencontainers.image.title="regctl" \
+      org.opencontainers.image.description=""
+
+FROM scratch as release-scratch
 COPY --from=build /etc/passwd /etc/group /etc/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /home/appuser /home/appuser
