@@ -64,6 +64,7 @@ type RegClient interface {
 	ManifestHead(ctx context.Context, ref Ref) (Manifest, error)
 	TagDelete(ctx context.Context, ref Ref) error
 	TagsList(ctx context.Context, ref Ref) (TagList, error)
+	TagsListWithOpts(ctx context.Context, ref Ref, opts TagOpts) (TagList, error)
 }
 
 // TagList comes from github.com/opencontainers/distribution-spec,

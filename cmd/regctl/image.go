@@ -18,8 +18,9 @@ var imageCmd = &cobra.Command{
 	Short: "manage images",
 }
 var imageCopyCmd = &cobra.Command{
-	Use:   "copy <src_image_ref> <dst_image_ref>",
-	Short: "copy or retag image",
+	Use:     "copy <src_image_ref> <dst_image_ref>",
+	Aliases: []string{"cp"},
+	Short:   "copy or retag image",
 	Long: `Copy or retag an image. This works between registries and only pulls layers
 that do not exist at the target. In the same registry it attempts to mount
 the layers between repositories. And within the same repository it only
@@ -28,10 +29,11 @@ sends the manifest with the new tag.`,
 	RunE: runImageCopy,
 }
 var imageDeleteCmd = &cobra.Command{
-	Use:   "delete <image_ref>",
-	Short: "delete image",
-	Args:  cobra.RangeArgs(1, 1),
-	RunE:  runImageDelete,
+	Use:     "delete <image_ref>",
+	Aliases: []string{"del", "rm", "remove"},
+	Short:   "delete image",
+	Args:    cobra.RangeArgs(1, 1),
+	RunE:    runImageDelete,
 }
 var imageDigestCmd = &cobra.Command{
 	Use:   "digest <image_ref>",

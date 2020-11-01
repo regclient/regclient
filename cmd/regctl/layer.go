@@ -15,8 +15,9 @@ var layerCmd = &cobra.Command{
 	Short: "manage image layers/blobs",
 }
 var layerPullCmd = &cobra.Command{
-	Use:   "pull <repository> <digest>",
-	Short: "download a layer/blob",
+	Use:     "pull <repository> <digest>",
+	Aliases: []string{"get"},
+	Short:   "download a layer/blob",
 	Long: `Download a blob from the registry. The output is the blob itself which may
 be a compressed tar file, a json config, or any other blob supported by the
 registry. The layer or blob digest can be found in the image manifest.`,

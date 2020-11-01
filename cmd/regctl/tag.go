@@ -14,22 +14,29 @@ var tagCmd = &cobra.Command{
 	Short: "manage tags",
 }
 var tagDeleteCmd = &cobra.Command{
-	Use:   "delete <image_ref>",
-	Short: "delete a tag in a repo",
+	Use:     "delete <image_ref>",
+	Aliases: []string{"del", "rm", "remove"},
+	Short:   "delete a tag in a repo",
 	Long: `Delete a tag in a repository without removing other tags pointing to the
 same manifest`,
 	Args: cobra.RangeArgs(1, 1),
 	RunE: runTagDelete,
 }
 var tagLsCmd = &cobra.Command{
-	Use:   "ls <repository>",
-	Short: "list tags in a repo",
-	Long:  `List all tags for a repository`,
-	Args:  cobra.RangeArgs(1, 1),
-	RunE:  runTagLs,
+	Use:     "ls <repository>",
+	Aliases: []string{"list"},
+	Short:   "list tags in a repo",
+	Long:    `List all tags for a repository`,
+	Args:    cobra.RangeArgs(1, 1),
+	RunE:    runTagLs,
 }
 
+var tagOpts regclient.TagOpts
+
 func init() {
+	tagLsCmd.Flags().StringVarP(&tagOpts.Last, "last", "", "", "Specify the last tag from a previous request for pagenation")
+	tagLsCmd.Flags().IntVarP(&tagOpts.Limit, "limit", "", 0, "Specify the number of tags to retrieve")
+
 	tagCmd.AddCommand(tagDeleteCmd)
 	tagCmd.AddCommand(tagLsCmd)
 	rootCmd.AddCommand(tagCmd)
@@ -63,7 +70,7 @@ func runTagLs(cmd *cobra.Command, args []string) error {
 		"host":       ref.Registry,
 		"repository": ref.Repository,
 	}).Debug("Listing tags")
-	tl, err := rc.TagsList(context.Background(), ref)
+	tl, err := rc.TagsListWithOpts(context.Background(), ref, tagOpts)
 	if err != nil {
 		return err
 	}
