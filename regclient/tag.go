@@ -124,11 +124,11 @@ func (rc *regClient) TagDelete(ctx context.Context, ref Ref) error {
 	return nil
 }
 
-func (rc *regClient) TagsList(ctx context.Context, ref Ref) (TagList, error) {
-	return rc.TagsListWithOpts(ctx, ref, TagOpts{})
+func (rc *regClient) TagList(ctx context.Context, ref Ref) (TagList, error) {
+	return rc.TagListWithOpts(ctx, ref, TagOpts{})
 }
 
-func (rc *regClient) TagsListWithOpts(ctx context.Context, ref Ref, opts TagOpts) (TagList, error) {
+func (rc *regClient) TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts) (TagList, error) {
 	tl := TagList{}
 	host := rc.getHost(ref.Registry)
 	repoURL := url.URL{
