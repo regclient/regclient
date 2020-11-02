@@ -75,10 +75,16 @@ type TagList struct {
 	Tags []string `json:"tags"`
 }
 
-// TagList comes from github.com/opencontainers/distribution-spec,
+// RepositoryList comes from github.com/opencontainers/distribution-spec,
 // switch to their implementation when it becomes stable
 type RepositoryList struct {
 	Repositories []string `json:"repositories"`
+}
+
+// RateLimit is returned from some http requests
+type RateLimit struct {
+	Remain, Limit, Reset int
+	Set                  bool
 }
 
 // Ref reference to a registry/repository

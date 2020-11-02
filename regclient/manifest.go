@@ -7,6 +7,8 @@ import (
 	"io"
 	"io/ioutil"
 	"net/url"
+	"strconv"
+	"strings"
 
 	"github.com/containerd/containerd/platforms"
 	dockerDistribution "github.com/docker/distribution"
@@ -19,14 +21,15 @@ import (
 )
 
 type manifest struct {
-	digest   digest.Digest
-	dockerM  dockerSchema2.Manifest
-	dockerML dockerManifestList.ManifestList
-	manifSet bool
-	mt       string
-	ociM     ociv1.Manifest
-	ociML    ociv1.Index
-	origByte []byte
+	digest    digest.Digest
+	dockerM   dockerSchema2.Manifest
+	dockerML  dockerManifestList.ManifestList
+	manifSet  bool
+	mt        string
+	ociM      ociv1.Manifest
+	ociML     ociv1.Index
+	origByte  []byte
+	ratelimit RateLimit
 }
 
 // Manifest abstracts the various types of manifests that are supported
@@ -42,6 +45,8 @@ type Manifest interface {
 	GetOCIManifest() ociv1.Manifest
 	GetOCIManifestList() ociv1.Index
 	GetOrigManifest() interface{}
+	GetRateLimit() RateLimit
+	HasRateLimit() bool
 	IsList() bool
 	MarshalJSON() ([]byte, error)
 }
@@ -151,6 +156,14 @@ func (m *manifest) GetOrigManifest() interface{} {
 	}
 }
 
+func (m *manifest) GetRateLimit() RateLimit {
+	return m.ratelimit
+}
+
+func (m *manifest) HasRateLimit() bool {
+	return m.ratelimit.Set
+}
+
 func (m *manifest) IsList() bool {
 	switch m.mt {
 	case MediaTypeDocker2ManifestList:
@@ -224,49 +237,6 @@ func (rc *regClient) ManifestDelete(ctx context.Context, ref Ref) error {
 	return nil
 }
 
-/* func (rc *regClient) ManifestDigest(ctx context.Context, ref Ref) (digest.Digest, error) {
-	var tagOrDigest string
-	if ref.Digest != "" {
-		tagOrDigest = ref.Digest
-	} else if ref.Tag != "" {
-		tagOrDigest = ref.Tag
-	} else {
-		rc.log.WithFields(logrus.Fields{
-			"ref": ref.Reference,
-		}).Warn("Manifest requires a tag or digest")
-		return "", ErrMissingTagOrDigest
-	}
-	host := rc.getHost(ref.Registry)
-	manfURL := url.URL{
-		Scheme: host.Scheme,
-		Host:   host.DNS[0],
-		Path:   "/v2/" + ref.Repository + "/manifests/" + tagOrDigest,
-	}
-
-	opts := []retryable.OptsReq{}
-	opts = append(opts, retryable.WithHeader("Accept", []string{
-		MediaTypeDocker2Manifest,
-		MediaTypeDocker2ManifestList,
-		MediaTypeOCI1Manifest,
-		MediaTypeOCI1ManifestList,
-	}))
-
-	rty := rc.getRetryable(host)
-	resp, err := rty.DoRequest(ctx, "GET", manfURL, opts...)
-	if err != nil {
-		return "", err
-	}
-	respBody, err := ioutil.ReadAll(resp)
-	if err != nil {
-		rc.log.WithFields(logrus.Fields{
-			"err": err,
-			"ref": ref.Reference,
-		}).Warn("Failed to read manifest")
-		return "", err
-	}
-	return digest.FromBytes(respBody), nil
-} */
-
 func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error) {
 	m := manifest{}
 
@@ -304,8 +274,44 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 	if err != nil {
 		return nil, err
 	}
+	// TODO: handle return codes with appropriate errors
 	if resp.HTTPResponse().StatusCode != 200 {
 		return nil, fmt.Errorf("Unexpected http response code %d", resp.HTTPResponse().StatusCode)
+	}
+
+	// check for rate limit headers
+	rlLimit := resp.HTTPResponse().Header.Get("RateLimit-Limit")
+	rlRemain := resp.HTTPResponse().Header.Get("RateLimit-Remaining")
+	rlReset := resp.HTTPResponse().Header.Get("RateLimit-Reset")
+	if rlLimit != "" {
+		lSplit := strings.Split(rlLimit, ";")
+		m.ratelimit.Limit, err = strconv.Atoi(lSplit[0])
+		if err != nil {
+			m.ratelimit.Limit = 0
+		}
+	}
+	if rlRemain != "" {
+		m.ratelimit.Set = true
+		rSplit := strings.Split(rlRemain, ";")
+		m.ratelimit.Remain, err = strconv.Atoi(rSplit[0])
+		if err != nil {
+			m.ratelimit.Remain = 0
+		} else {
+			m.ratelimit.Set = true
+		}
+	}
+	if rlReset != "" {
+		m.ratelimit.Reset, err = strconv.Atoi(rlReset)
+		if err != nil {
+			m.ratelimit.Reset = 0
+		}
+	}
+	if m.ratelimit.Set {
+		rc.log.WithFields(logrus.Fields{
+			"limit":  m.ratelimit.Limit,
+			"remain": m.ratelimit.Remain,
+			"reset":  m.ratelimit.Reset,
+		}).Debug("Rate limit found")
 	}
 
 	// read manifest and compute digest
