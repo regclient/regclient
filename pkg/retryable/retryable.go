@@ -449,6 +449,7 @@ func (req *request) backoff(removeMirror bool) error {
 		return ErrBackoffLimit
 	}
 	failedURL := req.urls[req.curURL]
+	lastResp := req.responses[len(req.responses)-1]
 	// next mirror based on whether remove flag is set
 	if removeMirror {
 		req.urls = append(req.urls[:req.curURL], req.urls[req.curURL+1:]...)
@@ -460,8 +461,25 @@ func (req *request) backoff(removeMirror bool) error {
 	}
 	// sleep for backoff time
 	sleepTime := req.r.delayInit << req.backoffs
+	// limit to max delay
 	if sleepTime > req.r.delayMax {
 		sleepTime = req.r.delayMax
+	}
+	// process rate limit header
+	if !removeMirror && len(req.urls) == 1 && lastResp.Header.Get("Retry-After") != "" {
+		ras := lastResp.Header.Get("Retry-After")
+		ra, _ := time.ParseDuration(ras + "s")
+		if ra > req.r.delayMax {
+			req.log.WithFields(logrus.Fields{
+				"Host":        failedURL.Host,
+				"Retry-After": ra.Seconds(),
+				"Max":         req.r.delayMax.Seconds(),
+			}).Warn("Retry-After header exceeds max backoff time")
+			return ErrBackoffLimit
+		}
+		if ra > sleepTime {
+			sleepTime = ra
+		}
 	}
 	req.log.WithFields(logrus.Fields{
 		"Host":    failedURL.Host,
