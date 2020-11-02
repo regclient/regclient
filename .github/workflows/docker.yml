@@ -36,8 +36,8 @@ jobs:
         if [[ $VERSION =~ ^v[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
           MINOR=${VERSION%.*}
           MAJOR=${MINOR%.*}
-          TAGS="$TAGS,${REGCTL_IMAGE}:${MINOR},${REGCTL_IMAGE}:${MAJOR},${REGCTL_IMAGE}:latest"
-          TAGS="$TAGS,${REGCTL_IMAGE}:${MINOR}-alpine,${REGCTL_IMAGE}:${MAJOR}-alpine,${REGCTL_IMAGE}:alpine"
+          TAGS_SCRATCH="${TAGS_SCRATCH},${REGCTL_IMAGE}:${MINOR},${REGCTL_IMAGE}:${MAJOR},${REGCTL_IMAGE}:latest"
+          TAGS_ALPINE="${TAGS_ALPINE},${REGCTL_IMAGE}:${MINOR}-alpine,${REGCTL_IMAGE}:${MAJOR}-alpine,${REGCTL_IMAGE}:alpine"
         fi
         echo ::set-output name=version::${VERSION}
         echo ::set-output name=regctl_tags_scratch::${TAGS_SCRATCH}
