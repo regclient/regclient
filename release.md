@@ -1,7 +1,6 @@
-# Release v0.0.2
+# Release v0.0.3
 
-- Add support for json log output
-- Prompt for user and password on registry login if not set with flag
-- Adding wrapper for docker CLI plugin
-- Using manifest HEAD requests for digests
-- Check manifest HEAD before pulling manifest in copy
+- Add alpine image variant for CI pipelines
+- Add support for `repo ls` command and _catalog API
+- Add pagination support on tags and repo ls
+- Add support for rate limit headers in manifest API
