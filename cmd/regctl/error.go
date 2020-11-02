@@ -5,6 +5,8 @@ import "errors"
 var (
 	// ErrCredsNotFound returned when creds needed and cannot be found
 	ErrCredsNotFound = errors.New("Auth creds not found")
+	// ErrInvalidInput indicates a required field is invalid
+	ErrInvalidInput = errors.New("Invalid input")
 	// ErrMissingInput indicates a required field is missing
 	ErrMissingInput = errors.New("Required input missing")
 	// ErrNotImplemented returned when method has not been implemented yet

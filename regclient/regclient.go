@@ -59,11 +59,13 @@ type RegClient interface {
 	ImageExport(ctx context.Context, ref Ref, outStream io.Writer) error
 	ImageGetConfig(ctx context.Context, ref Ref, d string) (ociv1.Image, error)
 	ManifestDelete(ctx context.Context, ref Ref) error
-	// ManifestDigest(ctx context.Context, ref Ref) (digest.Digest, error)
 	ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 	ManifestHead(ctx context.Context, ref Ref) (Manifest, error)
+	RepoList(ctx context.Context, hostname string) (RepositoryList, error)
+	RepoListWithOpts(ctx context.Context, hostname string, opts RepoOpts) (RepositoryList, error)
 	TagDelete(ctx context.Context, ref Ref) error
-	TagsList(ctx context.Context, ref Ref) (TagList, error)
+	TagList(ctx context.Context, ref Ref) (TagList, error)
+	TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts) (TagList, error)
 }
 
 // TagList comes from github.com/opencontainers/distribution-spec,
@@ -71,6 +73,18 @@ type RegClient interface {
 type TagList struct {
 	Name string   `json:"name"`
 	Tags []string `json:"tags"`
+}
+
+// RepositoryList comes from github.com/opencontainers/distribution-spec,
+// switch to their implementation when it becomes stable
+type RepositoryList struct {
+	Repositories []string `json:"repositories"`
+}
+
+// RateLimit is returned from some http requests
+type RateLimit struct {
+	Remain, Limit, Reset int
+	Set                  bool
 }
 
 // Ref reference to a registry/repository
