@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -279,40 +280,7 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 		return nil, fmt.Errorf("Unexpected http response code %d", resp.HTTPResponse().StatusCode)
 	}
 
-	// check for rate limit headers
-	rlLimit := resp.HTTPResponse().Header.Get("RateLimit-Limit")
-	rlRemain := resp.HTTPResponse().Header.Get("RateLimit-Remaining")
-	rlReset := resp.HTTPResponse().Header.Get("RateLimit-Reset")
-	if rlLimit != "" {
-		lSplit := strings.Split(rlLimit, ";")
-		m.ratelimit.Limit, err = strconv.Atoi(lSplit[0])
-		if err != nil {
-			m.ratelimit.Limit = 0
-		}
-	}
-	if rlRemain != "" {
-		m.ratelimit.Set = true
-		rSplit := strings.Split(rlRemain, ";")
-		m.ratelimit.Remain, err = strconv.Atoi(rSplit[0])
-		if err != nil {
-			m.ratelimit.Remain = 0
-		} else {
-			m.ratelimit.Set = true
-		}
-	}
-	if rlReset != "" {
-		m.ratelimit.Reset, err = strconv.Atoi(rlReset)
-		if err != nil {
-			m.ratelimit.Reset = 0
-		}
-	}
-	if m.ratelimit.Set {
-		rc.log.WithFields(logrus.Fields{
-			"limit":  m.ratelimit.Limit,
-			"remain": m.ratelimit.Remain,
-			"reset":  m.ratelimit.Reset,
-		}).Debug("Rate limit found")
-	}
+	rc.ratelimitHeader(&m, resp.HTTPResponse())
 
 	// read manifest and compute digest
 	digester := digest.Canonical.Digester()
@@ -409,6 +377,8 @@ func (rc *regClient) ManifestHead(ctx context.Context, ref Ref) (Manifest, error
 		return nil, fmt.Errorf("Unexpected http response code %d", resp.HTTPResponse().StatusCode)
 	}
 
+	rc.ratelimitHeader(&m, resp.HTTPResponse())
+
 	// extract media type and digest from header
 	m.mt = resp.HTTPResponse().Header.Get("Content-Type")
 	m.digest, err = digest.Parse(resp.HTTPResponse().Header.Get("Docker-Content-Digest"))
@@ -472,6 +442,48 @@ func (rc *regClient) ManifestPut(ctx context.Context, ref Ref, m Manifest) error
 	}
 
 	return nil
+}
+
+func (rc *regClient) ratelimitHeader(m *manifest, r *http.Response) {
+	// check for rate limit headers
+	rlLimit := r.Header.Get("RateLimit-Limit")
+	rlRemain := r.Header.Get("RateLimit-Remaining")
+	rlReset := r.Header.Get("RateLimit-Reset")
+	if rlLimit != "" {
+		lSplit := strings.Split(rlLimit, ";")
+		rlLimitI, err := strconv.Atoi(lSplit[0])
+		if err != nil {
+			m.ratelimit.Limit = 0
+		} else {
+			m.ratelimit.Limit = rlLimitI
+		}
+	}
+	if rlRemain != "" {
+		m.ratelimit.Set = true
+		rSplit := strings.Split(rlRemain, ";")
+		rlRemainI, err := strconv.Atoi(rSplit[0])
+		if err != nil {
+			m.ratelimit.Remain = 0
+		} else {
+			m.ratelimit.Remain = rlRemainI
+			m.ratelimit.Set = true
+		}
+	}
+	if rlReset != "" {
+		rlResetI, err := strconv.Atoi(rlReset)
+		if err != nil {
+			m.ratelimit.Reset = 0
+		} else {
+			m.ratelimit.Reset = rlResetI
+		}
+	}
+	if m.ratelimit.Set {
+		rc.log.WithFields(logrus.Fields{
+			"limit":  m.ratelimit.Limit,
+			"remain": m.ratelimit.Remain,
+			"reset":  m.ratelimit.Reset,
+		}).Debug("Rate limit found")
+	}
 }
 
 func d2oDescriptor(sd dockerDistribution.Descriptor) *ociv1.Descriptor {
