@@ -71,6 +71,15 @@ var imageManifestCmd = &cobra.Command{
 	Args:  cobra.RangeArgs(1, 1),
 	RunE:  runImageManifest,
 }
+var imageRateLimitCmd = &cobra.Command{
+	Use:   "ratelimit <image_ref>",
+	Short: "show the current rate limit",
+	Long: `Shows the rate limit using an http head request against the image manifest.
+If Set is false, the Remain value was not provided.
+The other values may be 0 if not provided by the registry.`,
+	Args: cobra.RangeArgs(1, 1),
+	RunE: runImageRateLimit,
+}
 
 var imageOpts struct {
 	list        bool
@@ -91,6 +100,8 @@ func init() {
 	imageManifestCmd.Flags().BoolVarP(&imageOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
 	imageManifestCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{jsonPretty .}}", "Format output with go template syntax")
 
+	imageRateLimitCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{jsonPretty .}}", "Format output with go template syntax")
+
 	imageCmd.AddCommand(imageCopyCmd)
 	imageCmd.AddCommand(imageDeleteCmd)
 	imageCmd.AddCommand(imageDigestCmd)
@@ -98,6 +109,7 @@ func init() {
 	imageCmd.AddCommand(imageImportCmd)
 	imageCmd.AddCommand(imageInspectCmd)
 	imageCmd.AddCommand(imageManifestCmd)
+	imageCmd.AddCommand(imageRateLimitCmd)
 	rootCmd.AddCommand(imageCmd)
 }
 
@@ -306,4 +318,26 @@ func runImageManifest(cmd *cobra.Command, args []string) error {
 	}
 
 	return templateRun(os.Stdout, rootOpts.format, m.GetOrigManifest())
+}
+
+func runImageRateLimit(cmd *cobra.Command, args []string) error {
+	ref, err := regclient.NewRef(args[0])
+	if err != nil {
+		return err
+	}
+	rc := newRegClient()
+
+	log.WithFields(logrus.Fields{
+		"host": ref.Registry,
+		"repo": ref.Repository,
+		"tag":  ref.Tag,
+	}).Debug("Image rate limit")
+
+	// request only the headers, avoids adding to Docker Hub rate limits
+	m, err := rc.ManifestHead(context.Background(), ref)
+	if err != nil {
+		return err
+	}
+
+	return templateRun(os.Stdout, rootOpts.format, m.GetRateLimit())
 }
