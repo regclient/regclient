@@ -1,3 +1,3 @@
-# Release v0.0.4
+# Release v0.0.5
 
-- CI fix to build latest image
+- Adding `regctl image ratelimit` command
