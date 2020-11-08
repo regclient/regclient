@@ -240,6 +240,33 @@ func WithDockerCreds() Opt {
 	}
 }
 
+// WithConfigHosts adds a list of config host settings
+func WithConfigHosts(configHosts []ConfigHost) Opt {
+	return func(rc *regClient) {
+		if configHosts == nil || len(configHosts) == 0 {
+			return
+		}
+		if rc.config == nil {
+			rc.config = ConfigNew()
+		}
+		for _, configHost := range configHosts {
+			if configHost.Name == "" || configHost.User == "" || configHost.Pass == "" {
+				continue
+			}
+			if configHost.Name == DockerRegistryAuth {
+				configHost.Name = DockerRegistryDNS
+			}
+			rc.config.Hosts[configHost.Name] = &configHost
+		}
+		return
+	}
+}
+
+// WithConfigHost adds config host settings
+func WithConfigHost(configHost ConfigHost) Opt {
+	return WithConfigHosts([]ConfigHost{configHost})
+}
+
 // WithLog overrides default logrus Logger
 func WithLog(log *logrus.Logger) Opt {
 	return func(rc *regClient) {
