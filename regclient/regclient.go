@@ -52,6 +52,7 @@ var (
 )
 
 // RegClient provides an interfaces to working with registries
+// TODO: split up interface into multiple interfaces that are merged in RegClient
 type RegClient interface {
 	Config() Config
 	BlobGet(ctx context.Context, ref Ref, d string, accepts []string) (io.ReadCloser, *http.Response, error)
@@ -68,8 +69,9 @@ type RegClient interface {
 	TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts) (TagList, error)
 }
 
-// TagList comes from github.com/opencontainers/distribution-spec,
-// switch to their implementation when it becomes stable
+// TagList comes from github.com/opencontainers/distribution-spec
+// TODO: switch to their implementation when it becomes stable
+// TODO: rename to avoid confusion with (*regClient).TagList
 type TagList struct {
 	Name string   `json:"name"`
 	Tags []string `json:"tags"`
@@ -108,7 +110,7 @@ type regClient struct {
 
 type regHost struct {
 	scheme    string
-	tls       tlsConf
+	tls       TLSConf
 	dnsNames  []string
 	transport *http.Transport
 }
@@ -153,7 +155,7 @@ func NewRegClient(opts ...Opt) RegClient {
 	}
 	rc.config.Hosts[DockerRegistry].Name = DockerRegistry
 	rc.config.Hosts[DockerRegistry].Scheme = "https"
-	rc.config.Hosts[DockerRegistry].TLS = tlsEnabled
+	rc.config.Hosts[DockerRegistry].TLS = TLSEnabled
 	rc.config.Hosts[DockerRegistry].DNS = []string{DockerRegistryDNS}
 
 	// load docker creds/certs if configured
@@ -250,11 +252,33 @@ func WithConfigHosts(configHosts []ConfigHost) Opt {
 			rc.config = ConfigNew()
 		}
 		for _, configHost := range configHosts {
-			if configHost.Name == "" || configHost.User == "" || configHost.Pass == "" {
+			if configHost.Name == "" {
 				continue
 			}
 			if configHost.Name == DockerRegistryAuth {
 				configHost.Name = DockerRegistryDNS
+			}
+			// merge updated host with original values
+			if orig, ok := rc.config.Hosts[configHost.Name]; ok {
+				if configHost.User == "" || configHost.Pass == "" {
+					configHost.User = orig.User
+					configHost.Pass = orig.Pass
+				}
+				if configHost.RegCert == "" {
+					configHost.RegCert = orig.RegCert
+				}
+				if configHost.Scheme == "" {
+					configHost.RegCert = orig.RegCert
+				}
+				if configHost.TLS == TLSUndefined {
+					configHost.TLS = orig.TLS
+				}
+				if len(configHost.DNS) == 0 {
+					configHost.DNS = orig.DNS
+				}
+			}
+			if len(configHost.DNS) == 0 {
+				configHost.DNS = []string{configHost.Name}
 			}
 			rc.config.Hosts[configHost.Name] = &configHost
 		}
@@ -300,7 +324,7 @@ func (rc *regClient) loadDockerCreds() error {
 				Name:   cred.ServerAddress,
 				DNS:    []string{cred.ServerAddress},
 				Scheme: "https",
-				TLS:    tlsEnabled,
+				TLS:    TLSEnabled,
 				User:   cred.Username,
 				Pass:   cred.Password,
 			}
@@ -372,7 +396,7 @@ func (rc *regClient) Config() Config {
 func (rc *regClient) getHost(hostname string) *ConfigHost {
 	host, ok := rc.config.Hosts[hostname]
 	if !ok {
-		host = &ConfigHost{Scheme: "https", TLS: tlsEnabled, DNS: []string{hostname}}
+		host = &ConfigHost{Scheme: "https", TLS: TLSEnabled, DNS: []string{hostname}}
 		rc.config.Hosts[hostname] = host
 	}
 	return host

@@ -21,16 +21,22 @@ var (
 	ConfigEnv = "REGCLIENT_CONFIG"
 )
 
-type tlsConf int
+// TLSConf specifies whether TLS is enabled for a host
+type TLSConf int
 
 const (
-	tlsUndefined tlsConf = iota
-	tlsEnabled
-	tlsInsecure
-	tlsDisabled
+	// TLSUndefined indicates TLS is not passed, defaults to Enabled
+	TLSUndefined TLSConf = iota
+	// TLSEnabled uses TLS (https) for the connection
+	TLSEnabled
+	// TLSInsecure uses TLS but does not verify CA
+	TLSInsecure
+	// TLSDisabled does not use TLS (http)
+	TLSDisabled
 )
 
-func (t tlsConf) MarshalJSON() ([]byte, error) {
+// MarshalJSON converts to a json string using MarshalText
+func (t TLSConf) MarshalJSON() ([]byte, error) {
 	s, err := t.MarshalText()
 	if err != nil {
 		return []byte(""), err
@@ -38,22 +44,24 @@ func (t tlsConf) MarshalJSON() ([]byte, error) {
 	return json.Marshal(string(s))
 }
 
-func (t tlsConf) MarshalText() ([]byte, error) {
+// MarshalText converts TLSConf to a string
+func (t TLSConf) MarshalText() ([]byte, error) {
 	var s string
 	switch t {
 	default:
 		s = ""
-	case tlsEnabled:
+	case TLSEnabled:
 		s = "enabled"
-	case tlsInsecure:
+	case TLSInsecure:
 		s = "insecure"
-	case tlsDisabled:
+	case TLSDisabled:
 		s = "disabled"
 	}
 	return []byte(s), nil
 }
 
-func (t *tlsConf) UnmarshalJSON(b []byte) error {
+// UnmarshalJSON converts TLSConf from a json string
+func (t *TLSConf) UnmarshalJSON(b []byte) error {
 	var s string
 	if err := json.Unmarshal(b, &s); err != nil {
 		return err
@@ -61,18 +69,19 @@ func (t *tlsConf) UnmarshalJSON(b []byte) error {
 	return t.UnmarshalText([]byte(s))
 }
 
-func (t *tlsConf) UnmarshalText(b []byte) error {
+// UnmarshalText converts TLSConf from a string
+func (t *TLSConf) UnmarshalText(b []byte) error {
 	switch strings.ToLower(string(b)) {
 	default:
 		return fmt.Errorf("Unknown TLS value \"%s\"", b)
 	case "":
-		*t = tlsUndefined
+		*t = TLSUndefined
 	case "enabled":
-		*t = tlsEnabled
+		*t = TLSEnabled
 	case "insecure":
-		*t = tlsInsecure
+		*t = TLSInsecure
 	case "disabled":
-		*t = tlsDisabled
+		*t = TLSDisabled
 	}
 	return nil
 }
@@ -90,7 +99,7 @@ type Config struct {
 type ConfigHost struct {
 	Name       string   `json:"-"`
 	Scheme     string   `json:"scheme,omitempty"`
-	TLS        tlsConf  `json:"tls,omitempty"`
+	TLS        TLSConf  `json:"tls,omitempty"`
 	RegCert    string   `json:"regcert,omitempty"`
 	ClientCert string   `json:"clientcert,omitempty"`
 	ClientKey  string   `json:"clientkey,omitempty"`
@@ -130,7 +139,7 @@ func ConfigNew() *Config {
 func ConfigHostNew() *ConfigHost {
 	h := ConfigHost{
 		Scheme: "https",
-		TLS:    tlsEnabled,
+		TLS:    TLSEnabled,
 	}
 	return &h
 }
@@ -153,8 +162,8 @@ func ConfigLoadReader(r io.Reader) (*Config, error) {
 		if c.Hosts[h].Scheme == "" {
 			c.Hosts[h].Scheme = "https"
 		}
-		if c.Hosts[h].TLS == tlsUndefined {
-			c.Hosts[h].TLS = tlsEnabled
+		if c.Hosts[h].TLS == TLSUndefined {
+			c.Hosts[h].TLS = TLSEnabled
 		}
 	}
 	return c, nil
