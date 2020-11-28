@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -145,7 +146,7 @@ func rootPreRun(cmd *cobra.Command, args []string) error {
 
 // runOnce processes the file in one pass, ignoring cron
 func runOnce(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 	for _, s := range config.Sync {
 		s := s
@@ -164,6 +165,15 @@ func runOnce(cmd *cobra.Command, args []string) error {
 			}
 		}()
 	}
+	// wait on interrupt signal
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sig
+		log.WithFields(logrus.Fields{}).Debug("Interrupt received, stopping")
+		// clean shutdown
+		cancel()
+	}()
 	wg.Wait()
 	return nil
 }
@@ -297,6 +307,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, acti
 		}).Debug("Image matches")
 		return nil
 	}
+	tgtExists := (err == nil)
 	log.WithFields(logrus.Fields{
 		"source": src.CommonName(),
 		"target": tgt.CommonName(),
@@ -318,6 +329,13 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, acti
 		rlSrc := mSrc.GetRateLimit()
 		for rlSrc.Remain < s.RateLimit.Min {
 			sem.Release(1)
+			log.WithFields(logrus.Fields{
+				"source":        src.CommonName(),
+				"source-remain": rlSrc.Remain,
+				"source-limit":  rlSrc.Limit,
+				"step-min":      s.RateLimit.Min,
+				"sleep":         s.RateLimit.Retry,
+			}).Debug("Delaying for rate limit")
 			time.Sleep(s.RateLimit.Retry)
 			sem.Acquire(ctx, 1)
 			mSrc, err = rc.ManifestHead(ctx, src)
@@ -329,7 +347,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, acti
 		log.WithFields(logrus.Fields{
 			"source":        src.CommonName(),
 			"source-remain": rlSrc.Remain,
-			"step-limit":    s.RateLimit.Min,
+			"step-min":      s.RateLimit.Min,
 		}).Debug("Rate limit passed")
 	}
 	defer sem.Release(1)
@@ -338,6 +356,52 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, acti
 	case <-ctx.Done():
 		return ErrCanceled
 	default:
+	}
+	// run backup
+	if tgtExists && s.Backup != "" {
+		// expand template
+		data := struct {
+			Ref  regclient.Ref
+			Step ConfigSync
+		}{Ref: tgt, Step: s}
+		backupStr, err := templateString(s.Backup, data)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"target":          tgt,
+				"backup-template": s.Backup,
+				"error":           err,
+			}).Error("Failed to expand backup template")
+			return err
+		}
+		backupStr = strings.TrimSpace(backupStr)
+		backupRef := tgt
+		if strings.ContainsAny(backupStr, ":/") {
+			// if the : or / are in the string, parse it as a full reference
+			backupRef, err = regclient.NewRef(backupStr)
+			if err != nil {
+				log.WithFields(logrus.Fields{
+					"target":           tgt,
+					"backup-template":  s.Backup,
+					"backup-reference": backupStr,
+					"error":            err,
+				}).Error("Failed to parse backup reference")
+				return err
+			}
+		} else {
+			// else parse backup string as just a tag
+			backupRef.Tag = backupStr
+		}
+		// run copy from tgt ref to backup ref
+		err = rc.ImageCopy(ctx, tgt, backupRef)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"target":           tgt,
+				"backup-template":  s.Backup,
+				"backup-reference": backupRef.CommonName(),
+				"error":            err,
+			}).Error("Failed to backup existing image")
+			return err
+		}
 	}
 	log.WithFields(logrus.Fields{
 		"source": src.CommonName(),
