@@ -1,7 +1,7 @@
 FROM golang:1.14-alpine as dev
 RUN apk add --no-cache git ca-certificates
 RUN adduser -D appuser \
- && mkdir -p /home/appuser \
+ && mkdir -p /home/appuser/.docker \
  && chown -R appuser /home/appuser
 WORKDIR /src
 COPY . /src/
@@ -16,7 +16,7 @@ CMD [ "./regsync" ]
 FROM alpine as release-alpine
 COPY --from=build /etc/passwd /etc/group /etc/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=build /home/appuser /home/appuser
+COPY --from=build --chown=appuser /home/appuser /home/appuser
 COPY --from=build /src/regsync /usr/local/bin/regsync
 USER appuser
 CMD [ "regsync", "--help" ]
@@ -39,7 +39,7 @@ LABEL maintainer="" \
 FROM scratch as release-scratch
 COPY --from=build /etc/passwd /etc/group /etc/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=build /home/appuser /home/appuser
+COPY --from=build --chown=appuser /home/appuser /home/appuser
 COPY --from=build /src/regsync /regsync
 USER appuser
 ENTRYPOINT [ "/regsync" ]

@@ -16,7 +16,7 @@ CMD [ "./regctl" ]
 FROM alpine as release-alpine
 COPY --from=build /etc/passwd /etc/group /etc/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=build /home/appuser /home/appuser
+COPY --from=build --chown=appuser /home/appuser /home/appuser
 COPY --from=build /src/regctl /usr/local/bin/regctl
 USER appuser
 CMD [ "regctl", "--help" ]
@@ -39,7 +39,7 @@ LABEL maintainer="" \
 FROM scratch as release-scratch
 COPY --from=build /etc/passwd /etc/group /etc/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=build /home/appuser /home/appuser
+COPY --from=build --chown=appuser /home/appuser /home/appuser
 COPY --from=build /src/regctl /regctl
 USER appuser
 ENTRYPOINT [ "/regctl" ]
