@@ -18,6 +18,7 @@ jobs:
       id: prep
       run: |
         REGCTL_IMAGE=regclient/regctl
+        REGSYNC_IMAGE=regclient/regsync
         VERSION=noop
         if [ "${{ github.event_name }}" = "schedule" ]; then
           VERSION=nightly
@@ -31,17 +32,23 @@ jobs:
         elif [[ $GITHUB_REF == refs/pull/* ]]; then
           VERSION=pr-${{ github.event.number }}
         fi
-        TAGS_SCRATCH="${REGCTL_IMAGE}:${VERSION}"
-        TAGS_ALPINE="${REGCTL_IMAGE}:${VERSION}-alpine"
+        REGCTL_TAGS_SCRATCH="${REGCTL_IMAGE}:${VERSION}"
+        REGCTL_TAGS_ALPINE="${REGCTL_IMAGE}:${VERSION}-alpine"
+        REGSYNC_TAGS_SCRATCH="${REGSYNC_IMAGE}:${VERSION}"
+        REGSYNC_TAGS_ALPINE="${REGSYNC_IMAGE}:${VERSION}-alpine"
         if [[ $VERSION =~ ^v[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
           MINOR=${VERSION%.*}
           MAJOR=${MINOR%.*}
-          TAGS_SCRATCH="${TAGS_SCRATCH},${REGCTL_IMAGE}:${MINOR},${REGCTL_IMAGE}:${MAJOR},${REGCTL_IMAGE}:latest"
-          TAGS_ALPINE="${TAGS_ALPINE},${REGCTL_IMAGE}:${MINOR}-alpine,${REGCTL_IMAGE}:${MAJOR}-alpine,${REGCTL_IMAGE}:alpine"
+          REGCTL_TAGS_SCRATCH="${REGCTL_TAGS_SCRATCH},${REGCTL_IMAGE}:${MINOR},${REGCTL_IMAGE}:${MAJOR},${REGCTL_IMAGE}:latest"
+          REGCTL_TAGS_ALPINE="${REGCTL_TAGS_ALPINE},${REGCTL_IMAGE}:${MINOR}-alpine,${REGCTL_IMAGE}:${MAJOR}-alpine,${REGCTL_IMAGE}:alpine"
+          REGSYNC_TAGS_SCRATCH="${REGSYNC_TAGS_SCRATCH},${REGSYNC_IMAGE}:${MINOR},${REGSYNC_IMAGE}:${MAJOR},${REGSYNC_IMAGE}:latest"
+          REGSYNC_TAGS_ALPINE="${REGSYNC_TAGS_ALPINE},${REGSYNC_IMAGE}:${MINOR}-alpine,${REGSYNC_IMAGE}:${MAJOR}-alpine,${REGSYNC_IMAGE}:alpine"
         fi
         echo ::set-output name=version::${VERSION}
-        echo ::set-output name=regctl_tags_scratch::${TAGS_SCRATCH}
-        echo ::set-output name=regctl_tags_alpine::${TAGS_ALPINE}
+        echo ::set-output name=regctl_tags_scratch::${REGCTL_TAGS_SCRATCH}
+        echo ::set-output name=regctl_tags_alpine::${REGCTL_TAGS_ALPINE}
+        echo ::set-output name=regsync_tags_scratch::${REGSYNC_TAGS_SCRATCH}
+        echo ::set-output name=regsync_tags_alpine::${REGSYNC_TAGS_ALPINE}
         echo ::set-output name=created::$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 
     - name: Check out code
@@ -65,7 +72,7 @@ jobs:
         path: /tmp/.buildx-cache
         key: ${{ runner.os }}-buildx
 
-    - name: Build and push scratch
+    - name: Build and push regctl scratch
       uses: docker/build-push-action@v2
       with:
         context: .
@@ -74,15 +81,15 @@ jobs:
         push: ${{ github.event_name != 'pull_request' }}
         target: release-scratch
         tags: ${{ steps.prep.outputs.regctl_tags_scratch }}
-        cache-from: type=local,src=/tmp/.buildx-cache
-        cache-to: type=local,dest=/tmp/.buildx-cache
+        cache-from: type=local,src=/tmp/.buildx-regctl-cache
+        cache-to: type=local,dest=/tmp/.buildx-regctl-cache
         labels: |
           org.opencontainers.image.created=${{ steps.prep.outputs.created }}
           org.opencontainers.image.source=${{ github.repositoryUrl }}
           org.opencontainers.image.version=${{ steps.prep.outputs.version }}
           org.opencontainers.image.revision=${{ github.sha }}
 
-    - name: Build and push alpine
+    - name: Build and push regctl alpine
       uses: docker/build-push-action@v2
       with:
         context: .
@@ -91,8 +98,42 @@ jobs:
         push: ${{ github.event_name != 'pull_request' }}
         target: release-alpine
         tags: ${{ steps.prep.outputs.regctl_tags_alpine }}
-        cache-from: type=local,src=/tmp/.buildx-cache
-        cache-to: type=local,dest=/tmp/.buildx-cache
+        cache-from: type=local,src=/tmp/.buildx-regctl-cache
+        cache-to: type=local,dest=/tmp/.buildx-regctl-cache
+        labels: |
+          org.opencontainers.image.created=${{ steps.prep.outputs.created }}
+          org.opencontainers.image.source=${{ github.repositoryUrl }}
+          org.opencontainers.image.version=${{ steps.prep.outputs.version }}
+          org.opencontainers.image.revision=${{ github.sha }}
+
+    - name: Build and push regsync scratch
+      uses: docker/build-push-action@v2
+      with:
+        context: .
+        file: ./build/Dockerfile.regsync.buildkit
+        platforms: linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x
+        push: ${{ github.event_name != 'pull_request' }}
+        target: release-scratch
+        tags: ${{ steps.prep.outputs.regsync_tags_scratch }}
+        cache-from: type=local,src=/tmp/.buildx-regsync-cache
+        cache-to: type=local,dest=/tmp/.buildx-regsync-cache
+        labels: |
+          org.opencontainers.image.created=${{ steps.prep.outputs.created }}
+          org.opencontainers.image.source=${{ github.repositoryUrl }}
+          org.opencontainers.image.version=${{ steps.prep.outputs.version }}
+          org.opencontainers.image.revision=${{ github.sha }}
+
+    - name: Build and push regsync alpine
+      uses: docker/build-push-action@v2
+      with:
+        context: .
+        file: ./build/Dockerfile.regsync.buildkit
+        platforms: linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x
+        push: ${{ github.event_name != 'pull_request' }}
+        target: release-alpine
+        tags: ${{ steps.prep.outputs.regsync_tags_alpine }}
+        cache-from: type=local,src=/tmp/.buildx-regsync-cache
+        cache-to: type=local,dest=/tmp/.buildx-regsync-cache
         labels: |
           org.opencontainers.image.created=${{ steps.prep.outputs.created }}
           org.opencontainers.image.source=${{ github.repositoryUrl }}

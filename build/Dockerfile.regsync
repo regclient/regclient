@@ -1,0 +1,60 @@
+FROM golang:1.14-alpine as dev
+RUN apk add --no-cache git ca-certificates
+RUN adduser -D appuser \
+ && mkdir -p /home/appuser \
+ && chown -R appuser /home/appuser
+WORKDIR /src
+COPY . /src/
+CMD CGO_ENABLED=0 go build -ldflags '-s -w -extldflags -static' -o regctl ./cmd/regsync/ && ./regsync
+
+FROM dev as build
+RUN CGO_ENABLED=0 \
+    go build -ldflags '-s -w -extldflags -static' -o regsync ./cmd/regsync/
+USER appuser
+CMD [ "./regsync" ]
+
+FROM alpine as release-alpine
+COPY --from=build /etc/passwd /etc/group /etc/
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build /home/appuser /home/appuser
+COPY --from=build /src/regsync /usr/local/bin/regsync
+USER appuser
+CMD [ "regsync", "--help" ]
+
+ARG BUILD_DATE
+ARG VCS_REF
+LABEL maintainer="" \
+      org.opencontainers.image.created=$BUILD_DATE \
+      org.opencontainers.image.authors="Regclient contributors" \
+      org.opencontainers.image.url="https://github.com/regclient/regclient" \
+      org.opencontainers.image.documentation="https://github.com/regclient/regclient" \
+      org.opencontainers.image.source="https://github.com/regclient/regclient" \
+      org.opencontainers.image.version="latest" \
+      org.opencontainers.image.revision=$VCS_REF \
+      org.opencontainers.image.vendor="" \
+      org.opencontainers.image.licenses="Apache 2.0" \
+      org.opencontainers.image.title="regsync" \
+      org.opencontainers.image.description=""
+
+FROM scratch as release-scratch
+COPY --from=build /etc/passwd /etc/group /etc/
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build /home/appuser /home/appuser
+COPY --from=build /src/regsync /regsync
+USER appuser
+ENTRYPOINT [ "/regsync" ]
+
+ARG BUILD_DATE
+ARG VCS_REF
+LABEL maintainer="" \
+      org.opencontainers.image.created=$BUILD_DATE \
+      org.opencontainers.image.authors="Regclient contributors" \
+      org.opencontainers.image.url="https://github.com/regclient/regclient" \
+      org.opencontainers.image.documentation="https://github.com/regclient/regclient" \
+      org.opencontainers.image.source="https://github.com/regclient/regclient" \
+      org.opencontainers.image.version="latest" \
+      org.opencontainers.image.revision=$VCS_REF \
+      org.opencontainers.image.vendor="" \
+      org.opencontainers.image.licenses="Apache 2.0" \
+      org.opencontainers.image.title="regsync" \
+      org.opencontainers.image.description=""
