@@ -3,6 +3,8 @@ package auth
 import "errors"
 
 var (
+	// ErrEmptyChallenge indicates an issue with the received challenge in the WWW-Authenticate header
+	ErrEmptyChallenge = errors.New("Empty challenge header")
 	// ErrInvalidChallenge indicates an issue with the received challenge in the WWW-Authenticate header
 	ErrInvalidChallenge = errors.New("Invalid challenge header")
 	// ErrNoNewChallenge indicates a challenge update did not result in any change

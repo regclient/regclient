@@ -197,6 +197,7 @@ func WithTransport(t *http.Transport) Opts {
 
 type request struct {
 	r          *retryable
+	context    context.Context
 	method     string
 	urls       []url.URL
 	curURL     int
@@ -219,6 +220,7 @@ type request struct {
 func (r *retryable) DoRequest(ctx context.Context, method string, u url.URL, opts ...OptsReq) (Response, error) {
 	req := &request{
 		r:          r,
+		context:    ctx,
 		method:     method,
 		urls:       []url.URL{u},
 		curURL:     0,
@@ -324,7 +326,7 @@ func WithProgressCB(cb func(int64, error)) OptsReq {
 
 func (req *request) httpDo() error {
 	// build the http reqest for the current mirror url
-	httpReq, err := http.NewRequest(req.method, req.urls[req.curURL].String(), nil)
+	httpReq, err := http.NewRequestWithContext(req.context, req.method, req.urls[req.curURL].String(), nil)
 	if err != nil {
 		return err
 	}
@@ -400,47 +402,82 @@ func (req *request) checkResp() error {
 	}
 	curURL := req.urls[req.curURL]
 	lastResp := req.responses[len(req.responses)-1]
-	if lastResp.StatusCode == http.StatusUnauthorized {
-		if req.r.auth != nil {
-			if err := req.r.auth.HandleResponse(lastResp); err != nil {
-				req.log.WithFields(logrus.Fields{
-					"URL": curURL.String(),
-					"Err": err,
-				}).Warn("Failed to handle auth request")
-				if boerr := req.backoff(true); boerr == nil {
-					return nil
-				}
-				return err
-			}
+	statusCode := lastResp.StatusCode
+	removeHost := false
+	runBackoff := false
+
+	switch {
+	case 200 <= statusCode && statusCode < 300:
+		// all 200 status codes are successful
+		return nil
+	case statusCode == http.StatusUnauthorized:
+		// for unauthorized requests, try to setup auth and retry without backoff
+		if req.r.auth == nil {
+			return ErrUnauthorized
+		}
+		err := req.r.auth.HandleResponse(lastResp)
+		if err != nil {
 			req.log.WithFields(logrus.Fields{
 				"URL": curURL.String(),
-			}).Debug("Retry needed with auth header")
+				"Err": err,
+			}).Warn("Failed to handle auth request")
+			_ = req.backoff(true)
+			return err
+		}
+		if len(req.responses) <= 1 {
 			return ErrRetryNeeded
 		}
-		return ErrUnauthorized
-	} else if lastResp.StatusCode == http.StatusRequestTimeout || lastResp.StatusCode == http.StatusTooManyRequests {
+		prevResp := req.responses[len(req.responses)-2]
+		if prevResp.Request.URL == lastResp.Request.URL {
+			// repeated requests to same mirror indicates an auth failure
+			if boerr := req.backoff(false); boerr == nil {
+				return ErrRetryNeeded
+			}
+			return ErrUnauthorized
+		}
+	case statusCode == http.StatusForbidden:
 		req.log.WithFields(logrus.Fields{
 			"URL":    curURL.String(),
 			"Status": lastResp.Status,
-		}).Debug("Backoff and retry needed")
-		// backoff, next mirror
+		}).Debug("Forbidden")
+		removeHost = true
+	case statusCode == http.StatusNotFound:
+		req.log.WithFields(logrus.Fields{
+			"URL":    curURL.String(),
+			"Status": lastResp.Status,
+		}).Debug("Not found")
+		removeHost = true
+	case statusCode == http.StatusRequestTimeout:
+		req.log.WithFields(logrus.Fields{
+			"URL":    curURL.String(),
+			"Status": lastResp.Status,
+		}).Debug("Timeout")
+		runBackoff = true
+	case statusCode == http.StatusTooManyRequests:
+		req.log.WithFields(logrus.Fields{
+			"URL":    curURL.String(),
+			"Status": lastResp.Status,
+		}).Debug("Rate limit exceeded")
+		runBackoff = true
+	default:
+		req.log.WithFields(logrus.Fields{
+			"URL":    curURL.String(),
+			"Status": lastResp.Status,
+		}).Debug("Unexpected status, removing mirror")
+		removeHost = true
+	}
+
+	if removeHost {
+		if boerr := req.backoff(true); boerr == nil {
+			return ErrRetryNeeded
+		}
+	} else if runBackoff {
 		if boerr := req.backoff(false); boerr == nil {
 			return ErrRetryNeeded
 		}
-		return fmt.Errorf("Unexpected http status code %d", lastResp.StatusCode)
-	} else if lastResp.StatusCode >= 200 && lastResp.StatusCode < 300 {
-		return nil
 	}
-
-	// any other return codes are unexpected, remove mirror from list
-	req.log.WithFields(logrus.Fields{
-		"URL":    curURL.String(),
-		"Status": lastResp.Status,
-	}).Debug("Backoff and retry needed, removing failing mirror")
-	if boerr := req.backoff(true); boerr == nil {
-		return ErrRetryNeeded
-	}
-	return fmt.Errorf("Unexpected http status code %d", lastResp.StatusCode)
+	// unexpected error and backoff was unsuccessful (limit reached, no more mirrors)
+	return fmt.Errorf("Unexpected http status code %d", statusCode)
 }
 
 func (req *request) backoff(removeMirror bool) error {

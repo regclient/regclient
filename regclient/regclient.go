@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	// crypto libraries included for go-digest
 	_ "crypto/sha256"
@@ -106,6 +107,7 @@ type regClient struct {
 	retryLimit int
 	transports map[string]*http.Transport
 	retryables map[string]retryable.Retryable
+	mu         sync.Mutex
 }
 
 type regHost struct {
@@ -255,7 +257,9 @@ func WithConfigHosts(configHosts []ConfigHost) Opt {
 			if configHost.Name == "" {
 				continue
 			}
-			if configHost.Name == DockerRegistryAuth {
+			if configHost.Name == DockerRegistry {
+				configHost.Name = DockerRegistryDNS
+			} else if configHost.Name == DockerRegistryAuth {
 				configHost.Name = DockerRegistryDNS
 			}
 			// merge updated host with original values
@@ -394,6 +398,8 @@ func (rc *regClient) Config() Config {
 }
 
 func (rc *regClient) getHost(hostname string) *ConfigHost {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
 	host, ok := rc.config.Hosts[hostname]
 	if !ok {
 		host = &ConfigHost{Scheme: "https", TLS: TLSEnabled, DNS: []string{hostname}}
@@ -403,6 +409,8 @@ func (rc *regClient) getHost(hostname string) *ConfigHost {
 }
 
 func (rc *regClient) getRetryable(host *ConfigHost) retryable.Retryable {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
 	if _, ok := rc.retryables[host.Name]; !ok {
 		c := &http.Client{}
 		a := auth.NewAuth(auth.WithLog(rc.log), auth.WithHTTPClient(c), auth.WithCreds(rc.authCreds))
