@@ -100,6 +100,16 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) erro
 			return err
 		}
 		for _, layerSrc := range l {
+			// skip blobs where the URLs are defined, these aren't hosted and won't be pulled from the source
+			if len(layerSrc.URLs) > 0 {
+				rc.log.WithFields(logrus.Fields{
+					"source":        refSrc.Reference,
+					"target":        refTgt.Reference,
+					"layer":         layerSrc.Digest.String(),
+					"external-urls": layerSrc.URLs,
+				}).Debug("Skipping external layer")
+				continue
+			}
 			rc.log.WithFields(logrus.Fields{
 				"source": refSrc.Reference,
 				"target": refTgt.Reference,
