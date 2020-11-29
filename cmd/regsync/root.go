@@ -286,8 +286,8 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 
 	default:
 		log.WithFields(logrus.Fields{
-			"action": action,
-		}).Error("Unhandled action")
+			"step": s,
+		}).Error("Type not recognized, must be image or repository")
 		return ErrInvalidInput
 	}
 	return nil
@@ -335,11 +335,16 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, acti
 				"source-limit":  rlSrc.Limit,
 				"step-min":      s.RateLimit.Min,
 				"sleep":         s.RateLimit.Retry,
-			}).Debug("Delaying for rate limit")
-			time.Sleep(s.RateLimit.Retry)
+			}).Info("Delaying for rate limit")
+			select {
+			case <-ctx.Done():
+				return ErrCanceled
+			case <-time.After(s.RateLimit.Retry):
+			}
 			sem.Acquire(ctx, 1)
 			mSrc, err = rc.ManifestHead(ctx, src)
 			if err != nil {
+				sem.Release(1)
 				return err
 			}
 			rlSrc = mSrc.GetRateLimit()
@@ -367,7 +372,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, acti
 		backupStr, err := templateString(s.Backup, data)
 		if err != nil {
 			log.WithFields(logrus.Fields{
-				"target":          tgt,
+				"original":        tgt.CommonName(),
 				"backup-template": s.Backup,
 				"error":           err,
 			}).Error("Failed to expand backup template")
@@ -380,10 +385,10 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, acti
 			backupRef, err = regclient.NewRef(backupStr)
 			if err != nil {
 				log.WithFields(logrus.Fields{
-					"target":           tgt,
-					"backup-template":  s.Backup,
-					"backup-reference": backupStr,
-					"error":            err,
+					"original": tgt.CommonName(),
+					"template": s.Backup,
+					"backup":   backupStr,
+					"error":    err,
 				}).Error("Failed to parse backup reference")
 				return err
 			}
@@ -392,13 +397,17 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, acti
 			backupRef.Tag = backupStr
 		}
 		// run copy from tgt ref to backup ref
+		log.WithFields(logrus.Fields{
+			"original": tgt.CommonName(),
+			"backup":   backupRef.CommonName(),
+		}).Info("Saving backup")
 		err = rc.ImageCopy(ctx, tgt, backupRef)
 		if err != nil {
 			log.WithFields(logrus.Fields{
-				"target":           tgt,
-				"backup-template":  s.Backup,
-				"backup-reference": backupRef.CommonName(),
-				"error":            err,
+				"original": tgt.CommonName(),
+				"template": s.Backup,
+				"backup":   backupRef.CommonName(),
+				"error":    err,
 			}).Error("Failed to backup existing image")
 			return err
 		}

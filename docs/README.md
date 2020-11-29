@@ -216,3 +216,139 @@ regctl image inspect --format '{{range $k, $v := .Config.Labels}}{{$k}} = {{$v}}
 
 regctl image inspect --format '{{range $k, $v := .Config.Labels}}{{if eq $k "org.label-schema.build-date"}}{{$v}}{{end}}{{end}}' ... # output a specific label
 ```
+
+## regsync
+
+### Top Level Commands
+
+```text
+$ regsync --help
+Utility for mirroring docker repositories
+More details at https://github.com/regclient/regclient
+
+Usage:
+  regsync [command]
+
+Available Commands:
+  check       processes each sync command once but skip actual copy
+  help        Help about any command
+  once        processes each sync command once, ignoring cron schedule
+  server      run the regsync server
+
+Flags:
+  -c, --config string        Config file
+  -h, --help                 help for regsync
+      --logopt stringArray   Log options
+  -v, --verbosity string     Log level (debug, info, warn, error, fatal, panic) (default "info")
+```
+
+The `check` command is useful for reporting any stale images that need to be
+updated.
+
+The `once` command can be placed in a cron or CI job to perform the
+synchronization immediately rather than following the schedule.
+
+The `server` command is useful to run a background process that continuously
+updates the target repositories as the source changes.
+
+`--logopt` currently accepts `json` to format all logs as json instead of text.
+This is useful for parsing in external tools like Elastic/Splunk.
+
+### regsync Configuration File
+
+The `regsync` configuration file is yaml formatted with the following layout:
+
+```yaml
+version: 1
+creds:
+  - registry: localhost:5000
+    tls: disabled
+    scheme: http
+defaults:
+  ratelimit:
+    min: 100
+    retry: 15m
+  parallel: 2
+sync:
+  - source: busybox:latest
+    target: localhost:5000/library/busybox:latest
+    type: image
+    interval: 60m
+    backup: "backup-{{.Ref.Tag}}"
+  - source: alpine:latest
+    target: localhost:5000/library/alpine:latest
+    type: image
+    schedule: "*/15 * * * *"
+    backup: "{{$t := time.Now}}{{printf \"%s/backups/%s:%s-%d%d%d\" .Ref.Registry .Ref.Repository .Ref.Tag $t.Year $t.Month $t.Day}}"
+```
+
+- `version`: This should be left at version 1 or not included at all. This may
+  be incremented if future `regsync` releases change the configuration file
+  structure.
+
+- `creds`: Array of registry credentials and settings for connecting. To avoid
+  saving credentials in the same file with the other settings, consider using
+  the `${HOME}/.docker/config.json`. Each entry supports the following options:
+  - `registry`: Hostname and port of the registry server used in later lines. Use `docker.io` for Docker Hub.
+  - `user`: Username
+  - `pass`: Password
+  - `tls`: Whether TLS is enabled/verified. Values include "enabled" (default), "insecure", or "disabled".
+  - `scheme`: http or https (default)
+  - `regcert`: Registry CA certificate for self signed certificates. This may be a string with `\n` for line breaks, or the yaml multi-line syntax may be used like:
+
+    ```yaml
+    regcert: |
+      -----BEGIN CERTIFICATE-----
+      MIIJDDCCBPSgAwIB....
+      -----END CERTIFICATE-----
+    ```
+
+- `defaults`: Global settings and default values applied to each sync entry:
+  - `interval`: How often to run each sync step in `server` mode.
+  - `schedule`: Cron like schedule to run each step, overrides `interval`.
+  - `ratelimit`: Settings to throttle based on source rate limits.
+    - `min`: Minimum number of pulls remaining to start the step. Actions while
+      running the step can result in going below this limit. Note that parallel
+      steps and multi-platform images may each result in more than one pull
+      happening beyond this threshold.
+    - `retry`: How long to wait before checking if the rate limit has increased.
+  - `parallel`: Number of concurrent image copies to run. All sync steps may be
+    started concurrently to check if a mirror is needed, but will wait on this
+    limit when a copy is needed. Defaults to 1.
+  - `skipDockerConfig`: Do not read the user credentials in
+    `${HOME}/.docker/config.json`.
+
+- `sync`: Array of steps to run for copying images from the source to target
+  repository.
+  - `source`: Source image or repository.
+  - `target`: Target image or repository.
+  - `type`: "repository" or "image". Repository will copy all tags from the
+    source repository.
+  - `backup`: Tag or image reference for backing up target image before
+    overwriting. This may include a Go template syntax.
+  - `interval`, `schedule`, and `ratelimit`: See description under `defaults`.
+
+The [Go template](https://golang.org/pkg/text/template/) used in the `backup`
+command supports the following:
+
+- `.Ref`: reference object about to be overwritten
+  - `.Ref.Reference`: full reference
+  - `.Ref.Registry`: registry name
+  - `.Ref.Repository`: repository
+  - `.Ref.Tag`: tag
+- `.Step`: values from the current step
+  - `.Step.Source`: source
+  - `.Step.Target`: target
+  - `.Step.Type`: type
+  - `.Step.Backup`: backup
+  - `.Step.Interval`: interval
+  - `.Step.Schedule`: schedule
+- `json`: output the variable with json formatting
+- `jsonPretty`: same as json with linefeeds and indentation
+- `split`: split a string based on a separator
+- `join`: append array entries into a string with a separator
+- `title`: makes the first letter of each word uppercase
+- `lower`: converts a string to lowercase
+- `upper`: converts a string to uppercase
+- `time.Now`: current time object, see the Go time package for more details
+- `time.Parse`: parse a string into a time object

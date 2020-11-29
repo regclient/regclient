@@ -1,6 +1,6 @@
-COMMANDS=regctl
+COMMANDS=regctl regsync
 BINARIES=$(addprefix bin/,$(COMMANDS))
-IMAGE_TAGS=regctl
+IMAGE_TAGS=regctl regsync
 IMAGES=$(addprefix docker-,$(IMAGE_TAGS))
 GO_BUILD_FLAGS=
 
@@ -18,6 +18,9 @@ binaries: vendor $(BINARIES)
 bin/regctl: .FORCE
 	go build ${GO_BUILD_FLAGS} -o bin/regctl ./cmd/regctl
 
+bin/regsync: .FORCE
+	go build ${GO_BUILD_FLAGS} -o bin/regsync ./cmd/regsync
+
 vendor:
 	go mod vendor
 
@@ -26,6 +29,10 @@ docker: $(IMAGES)
 docker-regctl:
 	docker build -t regclient/regctl -f build/Dockerfile.regctl .
 	docker build -t regclient/regctl:alpine -f build/Dockerfile.regctl --target release-alpine .
+
+docker-regsync:
+	docker build -t regclient/regsync -f build/Dockerfile.regsync .
+	docker build -t regclient/regsync:alpine -f build/Dockerfile.regsync --target release-alpine .
 
 plugin-user:
 	mkdir -p ${HOME}/.docker/cli-plugins/
