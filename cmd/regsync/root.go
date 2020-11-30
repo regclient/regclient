@@ -148,6 +148,7 @@ func rootPreRun(cmd *cobra.Command, args []string) error {
 func runOnce(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
+	var mainErr error
 	for _, s := range config.Sync {
 		s := s
 		wg.Add(1)
@@ -155,12 +156,9 @@ func runOnce(cmd *cobra.Command, args []string) error {
 			defer wg.Done()
 			err := s.process(ctx, "copy")
 			if err != nil {
-				log.WithFields(logrus.Fields{
-					"source": s.Source,
-					"target": s.Target,
-					"type":   s.Type,
-					"error":  err,
-				}).Error("Failed processing sync")
+				if mainErr == nil {
+					mainErr = err
+				}
 				return
 			}
 		}()
@@ -175,13 +173,14 @@ func runOnce(cmd *cobra.Command, args []string) error {
 		cancel()
 	}()
 	wg.Wait()
-	return nil
+	return mainErr
 }
 
 // runServer stays running with cron scheduled tasks
 func runServer(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
+	var mainErr error
 	c := cron.New(cron.WithChain(
 		cron.SkipIfStillRunning(cron.DefaultLogger),
 	))
@@ -206,7 +205,10 @@ func runServer(cmd *cobra.Command, args []string) error {
 				}).Debug("Running task")
 				wg.Add(1)
 				defer wg.Done()
-				s.process(ctx, "copy")
+				err := s.process(ctx, "copy")
+				if mainErr == nil {
+					mainErr = err
+				}
 			})
 		} else {
 			log.WithFields(logrus.Fields{
@@ -227,20 +229,22 @@ func runServer(cmd *cobra.Command, args []string) error {
 	cancel()
 	log.WithFields(logrus.Fields{}).Debug("Waiting on running tasks")
 	wg.Wait()
-	return nil
+	return mainErr
 }
 
 // run check is used for a dry-run
 func runCheck(cmd *cobra.Command, args []string) error {
+	var mainErr error
 	ctx := context.Background()
 	for _, s := range config.Sync {
 		err := s.process(ctx, "check")
 		if err != nil {
-			return err
+			if mainErr == nil {
+				mainErr = err
+			}
 		}
 	}
-
-	return nil
+	return mainErr
 }
 
 // process a sync step
@@ -249,14 +253,26 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 	case "repository":
 		sRepoRef, err := regclient.NewRef(s.Source)
 		if err != nil {
+			log.WithFields(logrus.Fields{
+				"source": s.Source,
+				"error":  err,
+			}).Error("Failed parsing source")
 			return err
 		}
 		sTags, err := rc.TagList(ctx, sRepoRef)
 		if err != nil {
+			log.WithFields(logrus.Fields{
+				"source": sRepoRef.CommonName(),
+				"error":  err,
+			}).Error("Failed getting source tags")
 			return err
 		}
 		tRepoRef, err := regclient.NewRef(s.Target)
 		if err != nil {
+			log.WithFields(logrus.Fields{
+				"target": s.Target,
+				"error":  err,
+			}).Error("Failed parsing target")
 			return err
 		}
 		for _, tag := range sTags.Tags {
@@ -273,10 +289,18 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 	case "image":
 		sRef, err := regclient.NewRef(s.Source)
 		if err != nil {
+			log.WithFields(logrus.Fields{
+				"source": s.Source,
+				"error":  err,
+			}).Error("Failed parsing source")
 			return err
 		}
 		tRef, err := regclient.NewRef(s.Target)
 		if err != nil {
+			log.WithFields(logrus.Fields{
+				"target": s.Target,
+				"error":  err,
+			}).Error("Failed parsing target")
 			return err
 		}
 		err = s.processRef(ctx, sRef, tRef, action)
@@ -297,6 +321,10 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, action string) error {
 	mSrc, err := rc.ManifestHead(ctx, src)
 	if err != nil {
+		log.WithFields(logrus.Fields{
+			"source": src.CommonName(),
+			"error":  err,
+		}).Error("Failed to lookup source manifest")
 		return err
 	}
 	mTgt, err := rc.ManifestHead(ctx, tgt)
@@ -320,9 +348,13 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, acti
 	sem.Acquire(ctx, 1)
 	// delay for rate limit on source
 	if s.RateLimit.Min > 0 && mSrc.GetRateLimit().Set {
-		// refresh current rate limit
+		// refresh current rate limit after acquiring semaphore
 		mSrc, err = rc.ManifestHead(ctx, src)
 		if err != nil {
+			log.WithFields(logrus.Fields{
+				"source": src.CommonName(),
+				"error":  err,
+			}).Error("Failed to lookup source manifest")
 			return err
 		}
 		// delay if rate limit exceeded
@@ -345,6 +377,10 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, acti
 			mSrc, err = rc.ManifestHead(ctx, src)
 			if err != nil {
 				sem.Release(1)
+				log.WithFields(logrus.Fields{
+					"source": src.CommonName(),
+					"error":  err,
+				}).Error("Failed to lookup source manifest")
 				return err
 			}
 			rlSrc = mSrc.GetRateLimit()
@@ -416,5 +452,13 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, acti
 		"source": src.CommonName(),
 		"target": tgt.CommonName(),
 	}).Debug("Image sync running")
-	return rc.ImageCopy(ctx, src, tgt)
+	err = rc.ImageCopy(ctx, src, tgt)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"source": src.CommonName(),
+			"target": tgt.CommonName(),
+			"error":  err,
+		}).Error("Failed to copy image")
+	}
+	return err
 }

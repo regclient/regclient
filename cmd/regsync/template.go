@@ -5,11 +5,31 @@ import (
 	"encoding/json"
 	"html/template"
 	"io"
+	"io/ioutil"
+	"os"
+	"reflect"
 	"strings"
 	"time"
 )
 
 var tmplFuncs = template.FuncMap{
+	"default": func(def, orig interface{}) interface{} {
+		if orig == nil || orig == reflect.Zero(reflect.TypeOf(orig)).Interface() {
+			return def
+		}
+		return orig
+	},
+	"env": func(key string) string {
+		return os.Getenv(key)
+	},
+	"file": func(filename string) string {
+		b, err := ioutil.ReadFile(filename)
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(string(b))
+	},
+	"join": strings.Join,
 	"json": func(v interface{}) string {
 		buf := &bytes.Buffer{}
 		enc := json.NewEncoder(buf)
@@ -25,12 +45,11 @@ var tmplFuncs = template.FuncMap{
 		enc.Encode(v)
 		return buf.String()
 	},
-	"split": strings.Split,
-	"join":  strings.Join,
-	"title": strings.Title,
 	"lower": strings.ToLower,
-	"upper": strings.ToUpper,
+	"split": strings.Split,
 	"time":  TimeFunc,
+	"title": strings.Title,
+	"upper": strings.ToUpper,
 }
 
 func templateWritter(out io.Writer, tmpl string, data interface{}) error {
