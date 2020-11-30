@@ -37,6 +37,7 @@ type ConfigCreds struct {
 
 // ConfigDefaults is uses for general options and defaults for ConfigSync entries
 type ConfigDefaults struct {
+	Backup         string          `json:"backup"`
 	Interval       time.Duration   `json:"interval"`
 	Schedule       string          `json:"schedule"`
 	RateLimit      ConfigRateLimit `json:"ratelimit"`
@@ -107,6 +108,10 @@ func ConfigLoadReader(r io.Reader) (*Config, error) {
 	for i := range c.Sync {
 		syncSetDefaults(&c.Sync[i], c.Defaults)
 	}
+	err := configExpandTemplates(c)
+	if err != nil {
+		return nil, err
+	}
 	return c, nil
 }
 
@@ -128,8 +133,40 @@ func ConfigLoadFile(filename string) (*Config, error) {
 	return nil, err
 }
 
+// expand templates in various parts of the config
+func configExpandTemplates(c *Config) error {
+	for i := range c.Creds {
+		val, err := templateString(c.Creds[i].User, nil)
+		if err != nil {
+			return err
+		}
+		c.Creds[i].User = val
+		val, err = templateString(c.Creds[i].Pass, nil)
+		if err != nil {
+			return err
+		}
+		c.Creds[i].Pass = val
+	}
+	for i := range c.Sync {
+		val, err := templateString(c.Sync[i].Source, nil)
+		if err != nil {
+			return err
+		}
+		c.Sync[i].Source = val
+		val, err = templateString(c.Sync[i].Target, nil)
+		if err != nil {
+			return err
+		}
+		c.Sync[i].Target = val
+	}
+	return nil
+}
+
 // updates sync entry with defaults
 func syncSetDefaults(s *ConfigSync, d ConfigDefaults) {
+	if s.Backup == "" && d.Backup != "" {
+		s.Backup = d.Backup
+	}
 	if s.Schedule == "" && d.Schedule != "" {
 		s.Schedule = d.Schedule
 	}

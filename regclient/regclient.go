@@ -272,7 +272,7 @@ func WithConfigHosts(configHosts []ConfigHost) Opt {
 					configHost.RegCert = orig.RegCert
 				}
 				if configHost.Scheme == "" {
-					configHost.RegCert = orig.RegCert
+					configHost.Scheme = orig.Scheme
 				}
 				if configHost.TLS == TLSUndefined {
 					configHost.TLS = orig.TLS
@@ -280,6 +280,12 @@ func WithConfigHosts(configHosts []ConfigHost) Opt {
 				if len(configHost.DNS) == 0 {
 					configHost.DNS = orig.DNS
 				}
+			}
+			if configHost.Scheme == "" {
+				configHost.Scheme = "https"
+			}
+			if configHost.TLS == TLSUndefined {
+				configHost.TLS = TLSEnabled
 			}
 			if len(configHost.DNS) == 0 {
 				configHost.DNS = []string{configHost.Name}
