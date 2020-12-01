@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/containerd/containerd/platforms"
+	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/regclient"
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
@@ -337,51 +338,18 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, acti
 		return nil
 	}
 	tgtExists := (err == nil)
+
 	// if platform is defined and source is a list, resolve the source platform
 	if mSrc.IsList() && s.Platform != "" {
-		plat, err := platforms.Parse(s.Platform)
+		platDigest, err := getPlatformDigest(ctx, src, s.Platform, mSrc)
 		if err != nil {
+			return err
+		}
+		src.Digest = platDigest.String()
+		if tgtExists && platDigest.String() == mTgt.GetDigest().String() {
 			log.WithFields(logrus.Fields{
+				"source":   src.CommonName(),
 				"platform": s.Platform,
-				"err":      err,
-			}).Warn("Could not parse platform")
-		}
-		mSrc, err = rc.ManifestGet(ctx, src)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"source": src.CommonName(),
-				"error":  err,
-			}).Error("Failed to get source manifest")
-			return err
-		}
-		descSrc, err := mSrc.GetPlatformDesc(&plat)
-		if err != nil {
-			pl, _ := mSrc.GetPlatformList()
-			var ps []string
-			for _, p := range pl {
-				ps = append(ps, platforms.Format(*p))
-			}
-			log.WithFields(logrus.Fields{
-				"platform":  platforms.Format(plat),
-				"err":       err,
-				"platforms": strings.Join(ps, ", "),
-			}).Warn("Platform could not be found in source manifest list")
-			return ErrNotFound
-		}
-		src.Digest = descSrc.Digest.String()
-		mSrc, err = rc.ManifestHead(ctx, src)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"source":   src.CommonName(),
-				"platform": platforms.Format(plat),
-				"error":    err,
-			}).Error("Failed to get source manifest for platform")
-			return err
-		}
-		if tgtExists && mSrc.GetDigest().String() == mTgt.GetDigest().String() {
-			log.WithFields(logrus.Fields{
-				"source":   src.CommonName(),
-				"platform": platforms.Format(plat),
 				"target":   tgt.CommonName(),
 			}).Debug("Image matches for platform")
 			return nil
@@ -443,12 +411,14 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, acti
 		}).Debug("Rate limit passed")
 	}
 	defer sem.Release(1)
-	// verify context has not been canceled
+
+	// verify context has not been canceled while waiting for semaphore
 	select {
 	case <-ctx.Done():
 		return ErrCanceled
 	default:
 	}
+
 	// run backup
 	if tgtExists && s.Backup != "" {
 		// expand template
@@ -499,6 +469,8 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, acti
 			return err
 		}
 	}
+
+	// Copy the image
 	log.WithFields(logrus.Fields{
 		"source": src.CommonName(),
 		"target": tgt.CommonName(),
@@ -513,4 +485,57 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, acti
 		return err
 	}
 	return nil
+}
+
+var manifestCache struct {
+	mu        sync.Mutex
+	manifests map[string]regclient.Manifest
+}
+
+func init() {
+	manifestCache.manifests = map[string]regclient.Manifest{}
+}
+
+// getPlatformDigest resolves a manifest list to a specific platform's digest
+// This uses the above cache to only call ManifestGet when a new manifest list digest is seen
+func getPlatformDigest(ctx context.Context, ref regclient.Ref, platStr string, origMan regclient.Manifest) (digest.Digest, error) {
+	plat, err := platforms.Parse(platStr)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"platform": platStr,
+			"err":      err,
+		}).Warn("Could not parse platform")
+		return "", err
+	}
+	// cache manifestGet response
+	manifestCache.mu.Lock()
+	getMan, ok := manifestCache.manifests[origMan.GetDigest().String()]
+	if !ok {
+		getMan, err = rc.ManifestGet(ctx, ref)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"source": ref.CommonName(),
+				"error":  err,
+			}).Error("Failed to get source manifest")
+			manifestCache.mu.Unlock()
+			return "", err
+		}
+		manifestCache.manifests[origMan.GetDigest().String()] = getMan
+	}
+	manifestCache.mu.Unlock()
+	descPlat, err := getMan.GetPlatformDesc(&plat)
+	if err != nil {
+		pl, _ := getMan.GetPlatformList()
+		var ps []string
+		for _, p := range pl {
+			ps = append(ps, platforms.Format(*p))
+		}
+		log.WithFields(logrus.Fields{
+			"platform":  platforms.Format(plat),
+			"err":       err,
+			"platforms": strings.Join(ps, ", "),
+		}).Warn("Platform could not be found in source manifest list")
+		return "", ErrNotFound
+	}
+	return descPlat.Digest, nil
 }
