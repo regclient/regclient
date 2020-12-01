@@ -253,13 +253,12 @@ func WithConfigHosts(configHosts []ConfigHost) Opt {
 		if rc.config == nil {
 			rc.config = ConfigNew()
 		}
-		for _, configHost := range configHosts {
+		for i := range configHosts {
+			configHost := configHosts[i]
 			if configHost.Name == "" {
 				continue
 			}
-			if configHost.Name == DockerRegistry {
-				configHost.Name = DockerRegistryDNS
-			} else if configHost.Name == DockerRegistryAuth {
+			if configHost.Name == DockerRegistry || configHost.Name == DockerRegistryAuth {
 				configHost.Name = DockerRegistryDNS
 			}
 			// merge updated host with original values
@@ -341,7 +340,12 @@ func (rc *regClient) loadDockerCreds() error {
 			rc.config.Hosts[cred.ServerAddress] = &h
 		} else if rc.config.Hosts[cred.ServerAddress].User != "" || rc.config.Hosts[cred.ServerAddress].Pass != "" {
 			if rc.config.Hosts[cred.ServerAddress].User != cred.Username || rc.config.Hosts[cred.ServerAddress].Pass != cred.Password {
-				fmt.Fprintf(os.Stderr, "Warning: credentials in docker do not match regcli credentials for registry %s\n", cred.ServerAddress)
+				rc.log.WithFields(logrus.Fields{
+					"registry":    cred.ServerAddress,
+					"docker-user": cred.Username,
+					"config-user": rc.config.Hosts[cred.ServerAddress].User,
+					"pass-same":   (cred.Password == rc.config.Hosts[cred.ServerAddress].Pass),
+				}).Warn("Docker credentials mismatch")
 			}
 		} else {
 			rc.config.Hosts[cred.ServerAddress].User = cred.Username
