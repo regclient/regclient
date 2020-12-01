@@ -58,6 +58,7 @@ type ConfigSync struct {
 	Target    string          `json:"target"`
 	Type      string          `json:"type"`
 	Filter    string          `json:"filter"`
+	Platform  string          `json:"platform"`
 	Backup    string          `json:"backup"`
 	Interval  time.Duration   `json:"interval"`
 	Schedule  string          `json:"schedule"`

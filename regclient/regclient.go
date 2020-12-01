@@ -63,6 +63,7 @@ type RegClient interface {
 	ManifestDelete(ctx context.Context, ref Ref) error
 	ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 	ManifestHead(ctx context.Context, ref Ref) (Manifest, error)
+	ManifestPut(ctx context.Context, ref Ref, m Manifest) error
 	RepoList(ctx context.Context, hostname string) (RepositoryList, error)
 	RepoListWithOpts(ctx context.Context, hostname string, opts RepoOpts) (RepositoryList, error)
 	TagDelete(ctx context.Context, ref Ref) error
