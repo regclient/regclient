@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/containerd/containerd/platforms"
 	"github.com/regclient/regclient/regclient"
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
@@ -336,6 +337,56 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, acti
 		return nil
 	}
 	tgtExists := (err == nil)
+	// if platform is defined and source is a list, resolve the source platform
+	if mSrc.IsList() && s.Platform != "" {
+		plat, err := platforms.Parse(s.Platform)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"platform": s.Platform,
+				"err":      err,
+			}).Warn("Could not parse platform")
+		}
+		mSrc, err = rc.ManifestGet(ctx, src)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"source": src.CommonName(),
+				"error":  err,
+			}).Error("Failed to get source manifest")
+			return err
+		}
+		descSrc, err := mSrc.GetPlatformDesc(&plat)
+		if err != nil {
+			pl, _ := mSrc.GetPlatformList()
+			var ps []string
+			for _, p := range pl {
+				ps = append(ps, platforms.Format(*p))
+			}
+			log.WithFields(logrus.Fields{
+				"platform":  platforms.Format(plat),
+				"err":       err,
+				"platforms": strings.Join(ps, ", "),
+			}).Warn("Platform could not be found in source manifest list")
+			return ErrNotFound
+		}
+		src.Digest = descSrc.Digest.String()
+		mSrc, err = rc.ManifestHead(ctx, src)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"source":   src.CommonName(),
+				"platform": platforms.Format(plat),
+				"error":    err,
+			}).Error("Failed to get source manifest for platform")
+			return err
+		}
+		if tgtExists && mSrc.GetDigest().String() == mTgt.GetDigest().String() {
+			log.WithFields(logrus.Fields{
+				"source":   src.CommonName(),
+				"platform": platforms.Format(plat),
+				"target":   tgt.CommonName(),
+			}).Debug("Image matches for platform")
+			return nil
+		}
+	}
 	log.WithFields(logrus.Fields{
 		"source": src.CommonName(),
 		"target": tgt.CommonName(),
@@ -459,6 +510,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, acti
 			"target": tgt.CommonName(),
 			"error":  err,
 		}).Error("Failed to copy image")
+		return err
 	}
-	return err
+	return nil
 }
