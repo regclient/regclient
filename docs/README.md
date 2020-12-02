@@ -57,13 +57,28 @@ will import credentials from the docker logins stored in
 `/etc/docker/certs.d/$registry/*.crt`. These commands are useful for running in
 an environment without docker to configure the `$HOME/.regctl/config.json` file.
 One use case for that is to run `regctl` within an unpriviliged container in a
-CI pipeline.
+CI pipeline. With the `regclient/regctl` image, the docker configuration is
+pulled from `/home/appuser/.docker/config.json` by default.
 
 Note that it is possible to configure multiple registry servers under a single
 name as a mirror with automatic failover. This is useful for pulling content,
 but may have unexpected results when pushing changes to the registry since each
 http request will be sent to the first server in the list that is currently
 available.
+
+### Repo commands
+
+```text
+Usage:
+  regctl repo [command]
+
+Available Commands:
+  ls          list repositories in a registry
+```
+
+The `ls` command lists repositories within a registry server. This may not be
+implemented by every registry server. Notably missing from the supported list is
+Docker Hub.
 
 ### Tag commands
 
@@ -98,6 +113,7 @@ Available Commands:
   import      import image
   inspect     inspect image
   manifest    show manifest or manifest list
+  ratelimit   show the current rate limit
 ```
 
 The `copy` command allows images to be copied between registries, between
@@ -126,6 +142,9 @@ The `manifest` command shows the low level layers and digests that can be pulled
 from the registry to retrieve individual components of an image. This is also
 useful for analyzing multi-platform manifest lists to see what platforms are
 available for a particular image.
+
+The `ratelimit` command shows the current rate limit on the manifest API using a
+http HEAD request that does not count against the Docker Hub limits.
 
 ### Layer Commands
 
@@ -184,20 +203,11 @@ $ regctl layer pull busybox sha256:6858809bf669cc5da7cb6af83d0fae838284d12e1be01
 ### Format Flag
 
 The `--format` flag allows you to apply a Go template to the output of some
-commands. The following functions have been added in addition to the defaults
-available with Go:
-
-- `json`: output the variable with json formatting
-- `jsonPretty`: same as json with linefeeds and indentation
-- `split`: split a string based on a separator
-- `join`: append array entries into a string with a separator
-- `title`: makes the first letter of each word uppercase
-- `lower`: converts a string to lowercase
-- `upper`: converts a string to uppercase
-
-For more details, see:
+commands. For more details of Go templates, see:
 
 - Go templates: <https://golang.org/pkg/text/template/>
+
+For a list of added template functions, see [Template Functions](#Template-Functions)
 
 Additionally for available fields, review the source for various types:
 
@@ -259,11 +269,15 @@ This is useful for parsing in external tools like Elastic/Splunk.
 The `regsync` configuration file is yaml formatted with the following layout:
 
 ```yaml
+x-sched-a: &sched-a "15 01 * * *"
 version: 1
 creds:
   - registry: localhost:5000
     tls: disabled
     scheme: http
+  - registry: docker.io
+    user: "{{env \"HUB_USER\"}}"
+    pass: "{{file \"/var/run/secrets/hub_token\"}}"
 defaults:
   ratelimit:
     min: 100
@@ -277,8 +291,16 @@ sync:
     backup: "backup-{{.Ref.Tag}}"
   - source: alpine:latest
     target: localhost:5000/library/alpine:latest
-    type: image
-    schedule: "*/15 * * * *"
+    type: repository
+    tags:
+      allow:
+      - "latest"
+      - "edge"
+      - "3"
+      - "3.\\d+"
+      deny:
+      - "3.0"
+    schedule: *sched-a
     backup: "{{$t := time.Now}}{{printf \"%s/backups/%s:%s-%d%d%d\" .Ref.Registry .Ref.Repository .Ref.Tag $t.Year $t.Month $t.Day}}"
 ```
 
@@ -288,7 +310,11 @@ sync:
 
 - `creds`: Array of registry credentials and settings for connecting. To avoid
   saving credentials in the same file with the other settings, consider using
-  the `${HOME}/.docker/config.json`. Each entry supports the following options:
+  the `${HOME}/.docker/config.json` or a template in the `user` and `pass`
+  fields to expand a variable or file contents. When using the
+  `regclient/regsync` image, the docker config is read from
+  `/home/appuser/.docker/config.json`. Each `creds` entry supports the following
+  options:
   - `registry`: Hostname and port of the registry server used in later lines. Use `docker.io` for Docker Hub.
   - `user`: Username
   - `pass`: Password
@@ -304,6 +330,10 @@ sync:
     ```
 
 - `defaults`: Global settings and default values applied to each sync entry:
+  - `backup`: Tag or image reference for backing up target image before
+    overwriting. This may include a Go template syntax. This backup is only run
+    when the source changes and the target exists that is about to be
+    overwritten. If the backup tag already exists, it will be overwritten.
   - `interval`: How often to run each sync step in `server` mode.
   - `schedule`: Cron like schedule to run each step, overrides `interval`.
   - `ratelimit`: Settings to throttle based on source rate limits.
@@ -324,12 +354,26 @@ sync:
   - `target`: Target image or repository.
   - `type`: "repository" or "image". Repository will copy all tags from the
     source repository.
-  - `backup`: Tag or image reference for backing up target image before
-    overwriting. This may include a Go template syntax.
-  - `interval`, `schedule`, and `ratelimit`: See description under `defaults`.
+  - `tags`: implements filters on tags for "repository" types, regex values are automatically bound to the beginning and ending of each string (`^` and `$`).
+    - `allow`: array of regex strings to allow specific tags.
+    - `deny`: array of regex strings to deny specific tags.
+  - `platform`: single platform to pull from a multi-platform image, e.g.
+    `linux/amd64`. By default all platforms are copied along with the original
+    upstream manifest list. Note that looking up the platform from a
+    multi-platform image counts against the Docker Hub rate limit, and that rate
+    limits are not checked prior to resolving the platform. When run with
+    "server", the platform is only resolved once for each multi-platform digest
+    seen.
+  - `backup`, `interval`, `schedule`, and `ratelimit`: See description under `defaults`.
 
-The [Go template](https://golang.org/pkg/text/template/) used in the `backup`
-command supports the following:
+- `x-*`: Any field beginning with `x-` is considered a user extension and will
+  not be parsed in current for future versions of the project. These are useful
+  for integrating your own tooling, or setting values for yaml anchors and
+  aliases.
+
+[Go templates](https://golang.org/pkg/text/template/) are used to expand values
+in `user`, `pass`, `regcert`, `source`, `target`, and `backup`. The `backup`
+template supports the following objects:
 
 - `.Ref`: reference object about to be overwritten
   - `.Ref.Reference`: full reference
@@ -343,12 +387,29 @@ command supports the following:
   - `.Step.Backup`: backup
   - `.Step.Interval`: interval
   - `.Step.Schedule`: schedule
+
+See [Template Functions](#Template-Functions) for more details on the custom
+functions available in templates.
+
+## Template Functions
+
+The following functions have been added in addition to the defaults
+available with Go:
+
+- `default`: provide a default value when input is empty, e.g. `{{ env "VAR" |
+  default "undefined" }}`
+- `env`: expands provided environment variable, e.g. `{{ env "USER" }}`
+- `file`: outputs contents of the file, leading and trailing whitespace is
+  removed
+- `join`: append array entries into a string with a separator
 - `json`: output the variable with json formatting
 - `jsonPretty`: same as json with linefeeds and indentation
-- `split`: split a string based on a separator
-- `join`: append array entries into a string with a separator
-- `title`: makes the first letter of each word uppercase
 - `lower`: converts a string to lowercase
+- `split`: split a string based on a separator
+- `time`: see Go time package for more details on implemented functions
+  - `time.Now`: returns current time object, e.g. `{{ $t := time.Now }}{{printf
+    "%d%d%d" $t.Year $t.Month $t.Day}}`
+  - `time.Parse`: parses string using layout into time object, e.g. `{{ $t :=
+    time.Parse "1970-12-31" "2020-06-07"}}`
+- `title`: makes the first letter of each word uppercase
 - `upper`: converts a string to uppercase
-- `time.Now`: current time object, see the Go time package for more details
-- `time.Parse`: parse a string into a time object

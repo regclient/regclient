@@ -153,6 +153,11 @@ func configExpandTemplates(c *Config) error {
 			return err
 		}
 		c.Creds[i].Pass = val
+		val, err = templateString(c.Creds[i].RegCert, nil)
+		if err != nil {
+			return err
+		}
+		c.Creds[i].RegCert = val
 	}
 	for i := range c.Sync {
 		val, err := templateString(c.Sync[i].Source, nil)
