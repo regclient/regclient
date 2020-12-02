@@ -57,13 +57,19 @@ type ConfigSync struct {
 	Source    string          `json:"source"`
 	Target    string          `json:"target"`
 	Type      string          `json:"type"`
-	Filter    string          `json:"filter"`
+	Tags      ConfigTags      `json:"tags"`
 	Platform  string          `json:"platform"`
 	Backup    string          `json:"backup"`
 	Interval  time.Duration   `json:"interval"`
 	Schedule  string          `json:"schedule"`
 	RateLimit ConfigRateLimit `json:"ratelimit"`
 	Hooks     ConfigHooks     `json:"hooks"`
+}
+
+// ConfigTags is an allow and deny list of tag regex strings
+type ConfigTags struct {
+	Allow []string `json:"allow"`
+	Deny  []string `json:"deny"`
 }
 
 // ConfigHooks for commands that run during the sync

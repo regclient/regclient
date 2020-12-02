@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -269,6 +270,25 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 			}).Error("Failed getting source tags")
 			return err
 		}
+		sTagList, err := s.filterTags(sTags.Tags)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"source": sRepoRef.CommonName(),
+				"allow":  s.Tags.Allow,
+				"deny":   s.Tags.Deny,
+				"error":  err,
+			}).Error("Failed processing tag filters")
+			return err
+		}
+		if len(sTagList) == 0 {
+			log.WithFields(logrus.Fields{
+				"source":    sRepoRef.CommonName(),
+				"allow":     s.Tags.Allow,
+				"deny":      s.Tags.Deny,
+				"available": sTags.Tags,
+			}).Warn("No matching tags found")
+			return nil
+		}
 		tRepoRef, err := regclient.NewRef(s.Target)
 		if err != nil {
 			log.WithFields(logrus.Fields{
@@ -277,7 +297,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 			}).Error("Failed parsing target")
 			return err
 		}
-		for _, tag := range sTags.Tags {
+		for _, tag := range sTagList {
 			sRef := sRepoRef
 			sRef.Tag = tag
 			tRef := tRepoRef
@@ -485,6 +505,53 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, acti
 		return err
 	}
 	return nil
+}
+
+func (s ConfigSync) filterTags(in []string) ([]string, error) {
+	var result []string
+	// apply allow list
+	if len(s.Tags.Allow) > 0 {
+		result = make([]string, len(in))
+		for _, filter := range s.Tags.Allow {
+			exp, err := regexp.Compile("^" + filter + "$")
+			if err != nil {
+				return result, err
+			}
+			for i := range in {
+				if result[i] == "" && exp.MatchString(in[i]) {
+					result[i] = in[i]
+				}
+			}
+		}
+	} else {
+		// by default, everything is allowed
+		result = in
+	}
+
+	// apply deny list
+	if len(s.Tags.Deny) > 0 {
+		for _, filter := range s.Tags.Deny {
+			exp, err := regexp.Compile("^" + filter + "$")
+			if err != nil {
+				return result, err
+			}
+			for i := range result {
+				if result[i] != "" && exp.MatchString(result[i]) {
+					result[i] = ""
+				}
+			}
+		}
+	}
+
+	// compress result list, removing empty elements
+	var compressed = make([]string, 0, len(in))
+	for i := range result {
+		if result[i] != "" {
+			compressed = append(compressed, result[i])
+		}
+	}
+
+	return compressed, nil
 }
 
 var manifestCache struct {
