@@ -17,6 +17,17 @@ This includes `regctl` for a command line interface to manage registries.
 - Ability to delete a tag without removing the entire manifest.
 - Uses docker registry logins and /etc/docker/certs.d by default to support
   private repositories and self signed registries.
+- Shows current usage of Docker Hub's rate limit.
+
+## regsync features
+
+- Mirrors repositories or images based on a yaml configuration.
+- Can use user's docker configuration for registry credentials.
+- Ability to run on a cron schedule, one time synchronization, or only check
+  for stale images.
+- Ability to backup previous target image before overwriting.
+- Ability to postpone mirror step when rate limit is below a threshold.
+- Ability to mirror multiple images concurrently.
 
 ## Development Status
 
@@ -43,8 +54,8 @@ go build -o regctl ./cmd/regctl/
 Binaries are available on the [releases
 page](https://github.com/regclient/regclient/releases).
 
-The latest release can be downloaded using curl (adjust "linux-amd64" for your
-own system):
+The latest release can be downloaded using curl (adjust "regctl" and
+"linux-amd64" for the desired command and your own platform):
 
 ```shell
 curl -L https://github.com/regclient/regclient/releases/latest/download/regctl-linux-amd64 >regctl
@@ -53,7 +64,7 @@ chmod 755 regctl
 
 ## Running as a Container
 
-You can run regctl completely isolated in a container:
+You can run `regctl` and `regsync` in a container. For regctl:
 
 ```shell
 docker container run -it --rm --net host \
@@ -61,7 +72,15 @@ docker container run -it --rm --net host \
   regclient/regctl:latest --help
 ```
 
-Or on Linux and Mac environments, you can run it as your own user and save
+And for `regsync`:
+
+```shell
+docker container run -it --rm --net host \
+  -v "$(pwd)/regsync.yml:/home/appuser/regsync.yml" \
+  regclient/regsync:latest -c /home/appuser/regsync.yml check
+```
+
+Or on Linux and Mac environments, you can run `regctl` as your own user and save
 configuration settings, use docker credentials, and use any docker certs:
 
 ```shell
@@ -71,7 +90,7 @@ docker container run -it --rm --net host \
   regclient/regctl:latest --help
 ```
 
-This can be packaged as a shell script with:
+And `regctl` can be packaged as a shell script with:
 
 ```shell
 cat >regctl <<EOF
@@ -88,7 +107,7 @@ chmod 755 regctl
 
 ## Installing as a Docker CLI Plugin
 
-To install this as a docker CLI plugin:
+To install `regctl` as a docker CLI plugin:
 
 ```shell
 make plugin-user # install for the current user

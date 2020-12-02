@@ -1,34 +1,25 @@
-# syntax=docker/dockerfile:experimental
-
-FROM --platform=$BUILDPLATFORM golang:1.14-alpine as dev
+FROM golang:1.14-alpine as dev
 RUN apk add --no-cache git ca-certificates
 RUN adduser -D appuser \
- && mkdir -p /home/appuser/.regctl \
- && chown -R appuser /home/appuser/.regctl
+ && mkdir -p /home/appuser/.docker \
+ && chown -R appuser /home/appuser
 WORKDIR /src
 COPY . /src/
-CMD CGO_ENABLED=0 go build -ldflags '-s -w -extldflags -static' -o regctl ./cmd/regctl/ && ./regctl
+CMD CGO_ENABLED=0 go build -ldflags '-s -w -extldflags -static' -o regctl ./cmd/regsync/ && ./regsync
 
-FROM --platform=$BUILDPLATFORM dev as build
-ARG TARGETOS
-ARG TARGETARCH
-RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
-    --mount=type=cache,id=goroot,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -ldflags '-s -w -extldflags -static' -o regctl ./cmd/regctl/
+FROM dev as build
+RUN CGO_ENABLED=0 \
+    go build -ldflags '-s -w -extldflags -static' -o regsync ./cmd/regsync/
 USER appuser
-CMD [ "./regctl" ]
-
-FROM scratch as artifact
-COPY --from=build /src/regctl /regctl
+CMD [ "./regsync" ]
 
 FROM alpine as release-alpine
 COPY --from=build /etc/passwd /etc/group /etc/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build --chown=appuser /home/appuser /home/appuser
-COPY --from=build /src/regctl /usr/local/bin/regctl
+COPY --from=build /src/regsync /usr/local/bin/regsync
 USER appuser
-CMD [ "regctl", "--help" ]
+CMD [ "regsync", "--help" ]
 
 ARG BUILD_DATE
 ARG VCS_REF
@@ -42,16 +33,16 @@ LABEL maintainer="" \
       org.opencontainers.image.revision=$VCS_REF \
       org.opencontainers.image.vendor="" \
       org.opencontainers.image.licenses="Apache 2.0" \
-      org.opencontainers.image.title="regctl" \
+      org.opencontainers.image.title="regsync" \
       org.opencontainers.image.description=""
 
 FROM scratch as release-scratch
 COPY --from=build /etc/passwd /etc/group /etc/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build --chown=appuser /home/appuser /home/appuser
-COPY --from=build /src/regctl /regctl
+COPY --from=build /src/regsync /regsync
 USER appuser
-ENTRYPOINT [ "/regctl" ]
+ENTRYPOINT [ "/regsync" ]
 
 ARG BUILD_DATE
 ARG VCS_REF
@@ -65,5 +56,5 @@ LABEL maintainer="" \
       org.opencontainers.image.revision=$VCS_REF \
       org.opencontainers.image.vendor="" \
       org.opencontainers.image.licenses="Apache 2.0" \
-      org.opencontainers.image.title="regctl" \
+      org.opencontainers.image.title="regsync" \
       org.opencontainers.image.description=""

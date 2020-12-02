@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -73,6 +74,7 @@ type auth struct {
 	hs         map[string]map[string]Handler // handlers based on url and authType
 	authTypes  []string
 	log        *logrus.Logger
+	mu         sync.Mutex
 }
 
 // NewAuth creates a new Auth
@@ -151,6 +153,8 @@ func (a *auth) HandleResponse(resp *http.Response) error {
 	   	  - If handler doesn't exist, create handler
 	   	  - Call handler specific HandleResponse
 	*/
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	// verify response is an access denied
 	if resp.StatusCode != http.StatusUnauthorized {
 		return ErrUnsupported
@@ -166,6 +170,9 @@ func (a *auth) HandleResponse(resp *http.Response) error {
 	a.log.WithFields(logrus.Fields{
 		"challenge": cl,
 	}).Debug("Auth request parsed")
+	if len(cl) < 1 {
+		return ErrEmptyChallenge
+	}
 	goodChallenge := false
 	for _, c := range cl {
 		if _, ok := a.hbs[c.authType]; !ok {
@@ -185,7 +192,15 @@ func (a *auth) HandleResponse(resp *http.Response) error {
 		err := a.hs[host][c.authType].ProcessChallenge(c)
 		if err == nil {
 			goodChallenge = true
-		} else if err != ErrNoNewChallenge {
+		} else if err == ErrNoNewChallenge {
+			// handle race condition when another request updates the challenge
+			// detect that by seeing the current auth header is different
+			prevAH := resp.Request.Header.Get("Authorization")
+			ah, err := a.hs[host][c.authType].GenerateAuth()
+			if err == nil && prevAH != ah {
+				goodChallenge = true
+			}
+		} else {
 			return err
 		}
 	}
@@ -201,6 +216,8 @@ func (a *auth) UpdateRequest(req *http.Request) error {
 	   	- Lookup handler, noop if no handler for URL's host
 	   	- Call handler updateRequest func, add returned header
 	*/
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	host := req.URL.Host
 	if a.hs[host] == nil {
 		return nil
@@ -218,11 +235,6 @@ func (a *auth) UpdateRequest(req *http.Request) error {
 				}).Debug("Failed to generate auth")
 				continue
 			}
-			a.log.WithFields(logrus.Fields{
-				"host":     host,
-				"authtype": at,
-				"header":   ah[0:17] + "...",
-			}).Debug("Auth header added")
 			req.Header.Set("Authorization", ah)
 			break
 		}

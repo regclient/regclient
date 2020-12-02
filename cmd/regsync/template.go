@@ -3,12 +3,12 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"html/template"
 	"io"
 	"io/ioutil"
 	"os"
 	"reflect"
 	"strings"
-	"text/template"
 	"time"
 )
 
@@ -52,12 +52,21 @@ var tmplFuncs = template.FuncMap{
 	"upper": strings.ToUpper,
 }
 
-func templateRun(out io.Writer, tmpl string, data interface{}) error {
+func templateWritter(out io.Writer, tmpl string, data interface{}) error {
 	t, err := template.New("out").Funcs(tmplFuncs).Parse(tmpl)
 	if err != nil {
 		return err
 	}
 	return t.Execute(out, data)
+}
+
+func templateString(tmpl string, data interface{}) (string, error) {
+	var sb strings.Builder
+	err := templateWritter(&sb, tmpl, data)
+	if err != nil {
+		return "", err
+	}
+	return sb.String(), nil
 }
 
 // TimeFunc provides the "time" template, returning a struct with methods

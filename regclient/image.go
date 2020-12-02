@@ -25,6 +25,7 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) erro
 		rc.log.WithFields(logrus.Fields{
 			"source": refSrc.Reference,
 			"target": refTgt.Reference,
+			"digest": msh.GetDigest().String(),
 		}).Info("Copy not needed, target already up to date")
 		return nil
 	}
@@ -79,6 +80,8 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) erro
 			return err
 		}
 		rc.log.WithFields(logrus.Fields{
+			"source": refSrc.Reference,
+			"target": refTgt.Reference,
 			"digest": cd.String(),
 		}).Info("Copy config")
 		if err := rc.BlobCopy(ctx, refSrc, refTgt, cd.String()); err != nil {
@@ -97,8 +100,20 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) erro
 			return err
 		}
 		for _, layerSrc := range l {
+			// skip blobs where the URLs are defined, these aren't hosted and won't be pulled from the source
+			if len(layerSrc.URLs) > 0 {
+				rc.log.WithFields(logrus.Fields{
+					"source":        refSrc.Reference,
+					"target":        refTgt.Reference,
+					"layer":         layerSrc.Digest.String(),
+					"external-urls": layerSrc.URLs,
+				}).Debug("Skipping external layer")
+				continue
+			}
 			rc.log.WithFields(logrus.Fields{
-				"layer": layerSrc.Digest.String(),
+				"source": refSrc.Reference,
+				"target": refTgt.Reference,
+				"layer":  layerSrc.Digest.String(),
 			}).Info("Copy layer")
 			if err := rc.BlobCopy(ctx, refSrc, refTgt, layerSrc.Digest.String()); err != nil {
 				rc.log.WithFields(logrus.Fields{

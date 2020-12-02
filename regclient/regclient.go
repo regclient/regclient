@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	// crypto libraries included for go-digest
 	_ "crypto/sha256"
@@ -52,6 +53,7 @@ var (
 )
 
 // RegClient provides an interfaces to working with registries
+// TODO: split up interface into multiple interfaces that are merged in RegClient
 type RegClient interface {
 	Config() Config
 	BlobGet(ctx context.Context, ref Ref, d string, accepts []string) (io.ReadCloser, *http.Response, error)
@@ -61,6 +63,7 @@ type RegClient interface {
 	ManifestDelete(ctx context.Context, ref Ref) error
 	ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 	ManifestHead(ctx context.Context, ref Ref) (Manifest, error)
+	ManifestPut(ctx context.Context, ref Ref, m Manifest) error
 	RepoList(ctx context.Context, hostname string) (RepositoryList, error)
 	RepoListWithOpts(ctx context.Context, hostname string, opts RepoOpts) (RepositoryList, error)
 	TagDelete(ctx context.Context, ref Ref) error
@@ -68,8 +71,9 @@ type RegClient interface {
 	TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts) (TagList, error)
 }
 
-// TagList comes from github.com/opencontainers/distribution-spec,
-// switch to their implementation when it becomes stable
+// TagList comes from github.com/opencontainers/distribution-spec
+// TODO: switch to their implementation when it becomes stable
+// TODO: rename to avoid confusion with (*regClient).TagList
 type TagList struct {
 	Name string   `json:"name"`
 	Tags []string `json:"tags"`
@@ -104,11 +108,12 @@ type regClient struct {
 	retryLimit int
 	transports map[string]*http.Transport
 	retryables map[string]retryable.Retryable
+	mu         sync.Mutex
 }
 
 type regHost struct {
 	scheme    string
-	tls       tlsConf
+	tls       TLSConf
 	dnsNames  []string
 	transport *http.Transport
 }
@@ -153,7 +158,7 @@ func NewRegClient(opts ...Opt) RegClient {
 	}
 	rc.config.Hosts[DockerRegistry].Name = DockerRegistry
 	rc.config.Hosts[DockerRegistry].Scheme = "https"
-	rc.config.Hosts[DockerRegistry].TLS = tlsEnabled
+	rc.config.Hosts[DockerRegistry].TLS = TLSEnabled
 	rc.config.Hosts[DockerRegistry].DNS = []string{DockerRegistryDNS}
 
 	// load docker creds/certs if configured
@@ -240,6 +245,62 @@ func WithDockerCreds() Opt {
 	}
 }
 
+// WithConfigHosts adds a list of config host settings
+func WithConfigHosts(configHosts []ConfigHost) Opt {
+	return func(rc *regClient) {
+		if configHosts == nil || len(configHosts) == 0 {
+			return
+		}
+		if rc.config == nil {
+			rc.config = ConfigNew()
+		}
+		for i := range configHosts {
+			configHost := configHosts[i]
+			if configHost.Name == "" {
+				continue
+			}
+			if configHost.Name == DockerRegistry || configHost.Name == DockerRegistryAuth {
+				configHost.Name = DockerRegistryDNS
+			}
+			// merge updated host with original values
+			if orig, ok := rc.config.Hosts[configHost.Name]; ok {
+				if configHost.User == "" || configHost.Pass == "" {
+					configHost.User = orig.User
+					configHost.Pass = orig.Pass
+				}
+				if configHost.RegCert == "" {
+					configHost.RegCert = orig.RegCert
+				}
+				if configHost.Scheme == "" {
+					configHost.Scheme = orig.Scheme
+				}
+				if configHost.TLS == TLSUndefined {
+					configHost.TLS = orig.TLS
+				}
+				if len(configHost.DNS) == 0 {
+					configHost.DNS = orig.DNS
+				}
+			}
+			if configHost.Scheme == "" {
+				configHost.Scheme = "https"
+			}
+			if configHost.TLS == TLSUndefined {
+				configHost.TLS = TLSEnabled
+			}
+			if len(configHost.DNS) == 0 {
+				configHost.DNS = []string{configHost.Name}
+			}
+			rc.config.Hosts[configHost.Name] = &configHost
+		}
+		return
+	}
+}
+
+// WithConfigHost adds config host settings
+func WithConfigHost(configHost ConfigHost) Opt {
+	return WithConfigHosts([]ConfigHost{configHost})
+}
+
 // WithLog overrides default logrus Logger
 func WithLog(log *logrus.Logger) Opt {
 	return func(rc *regClient) {
@@ -273,14 +334,19 @@ func (rc *regClient) loadDockerCreds() error {
 				Name:   cred.ServerAddress,
 				DNS:    []string{cred.ServerAddress},
 				Scheme: "https",
-				TLS:    tlsEnabled,
+				TLS:    TLSEnabled,
 				User:   cred.Username,
 				Pass:   cred.Password,
 			}
 			rc.config.Hosts[cred.ServerAddress] = &h
 		} else if rc.config.Hosts[cred.ServerAddress].User != "" || rc.config.Hosts[cred.ServerAddress].Pass != "" {
 			if rc.config.Hosts[cred.ServerAddress].User != cred.Username || rc.config.Hosts[cred.ServerAddress].Pass != cred.Password {
-				fmt.Fprintf(os.Stderr, "Warning: credentials in docker do not match regcli credentials for registry %s\n", cred.ServerAddress)
+				rc.log.WithFields(logrus.Fields{
+					"registry":    cred.ServerAddress,
+					"docker-user": cred.Username,
+					"config-user": rc.config.Hosts[cred.ServerAddress].User,
+					"pass-same":   (cred.Password == rc.config.Hosts[cred.ServerAddress].Pass),
+				}).Warn("Docker credentials mismatch")
 			}
 		} else {
 			rc.config.Hosts[cred.ServerAddress].User = cred.Username
@@ -343,15 +409,19 @@ func (rc *regClient) Config() Config {
 }
 
 func (rc *regClient) getHost(hostname string) *ConfigHost {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
 	host, ok := rc.config.Hosts[hostname]
 	if !ok {
-		host = &ConfigHost{Scheme: "https", TLS: tlsEnabled, DNS: []string{hostname}}
+		host = &ConfigHost{Scheme: "https", TLS: TLSEnabled, DNS: []string{hostname}}
 		rc.config.Hosts[hostname] = host
 	}
 	return host
 }
 
 func (rc *regClient) getRetryable(host *ConfigHost) retryable.Retryable {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
 	if _, ok := rc.retryables[host.Name]; !ok {
 		c := &http.Client{}
 		a := auth.NewAuth(auth.WithLog(rc.log), auth.WithHTTPClient(c), auth.WithCreds(rc.authCreds))
