@@ -8,6 +8,7 @@ import (
 
 	"github.com/containerd/containerd/platforms"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/regclient"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -302,7 +303,7 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return templateRun(os.Stdout, rootOpts.format, img)
+	return template.Writer(os.Stdout, rootOpts.format, img)
 }
 
 func runImageManifest(cmd *cobra.Command, args []string) error {
@@ -317,7 +318,7 @@ func runImageManifest(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	return templateRun(os.Stdout, rootOpts.format, m.GetOrigManifest())
+	return template.Writer(os.Stdout, rootOpts.format, m.GetOrigManifest())
 }
 
 func runImageRateLimit(cmd *cobra.Command, args []string) error {
@@ -339,5 +340,5 @@ func runImageRateLimit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	return templateRun(os.Stdout, rootOpts.format, m.GetRateLimit())
+	return template.Writer(os.Stdout, rootOpts.format, m.GetRateLimit())
 }

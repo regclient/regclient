@@ -289,8 +289,8 @@ sync:
     type: image
     interval: 60m
     backup: "backup-{{.Ref.Tag}}"
-  - source: alpine:latest
-    target: localhost:5000/library/alpine:latest
+  - source: alpine
+    target: localhost:5000/library/alpine
     type: repository
     tags:
       allow:

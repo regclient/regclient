@@ -12,6 +12,7 @@ import (
 
 	"github.com/containerd/containerd/platforms"
 	"github.com/opencontainers/go-digest"
+	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/regclient"
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
@@ -446,7 +447,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, acti
 			Ref  regclient.Ref
 			Step ConfigSync
 		}{Ref: tgt, Step: s}
-		backupStr, err := templateString(s.Backup, data)
+		backupStr, err := template.String(s.Backup, data)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"original":        tgt.CommonName(),
