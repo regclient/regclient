@@ -89,6 +89,7 @@ type RepositoryList struct {
 type RateLimit struct {
 	Remain, Limit, Reset int
 	Set                  bool
+	Policies             []string
 }
 
 // Ref reference to a registry/repository
