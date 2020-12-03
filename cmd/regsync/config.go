@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/regclient"
 	"gopkg.in/yaml.v2"
 )
@@ -143,29 +144,29 @@ func ConfigLoadFile(filename string) (*Config, error) {
 // expand templates in various parts of the config
 func configExpandTemplates(c *Config) error {
 	for i := range c.Creds {
-		val, err := templateString(c.Creds[i].User, nil)
+		val, err := template.String(c.Creds[i].User, nil)
 		if err != nil {
 			return err
 		}
 		c.Creds[i].User = val
-		val, err = templateString(c.Creds[i].Pass, nil)
+		val, err = template.String(c.Creds[i].Pass, nil)
 		if err != nil {
 			return err
 		}
 		c.Creds[i].Pass = val
-		val, err = templateString(c.Creds[i].RegCert, nil)
+		val, err = template.String(c.Creds[i].RegCert, nil)
 		if err != nil {
 			return err
 		}
 		c.Creds[i].RegCert = val
 	}
 	for i := range c.Sync {
-		val, err := templateString(c.Sync[i].Source, nil)
+		val, err := template.String(c.Sync[i].Source, nil)
 		if err != nil {
 			return err
 		}
 		c.Sync[i].Source = val
-		val, err = templateString(c.Sync[i].Target, nil)
+		val, err = template.String(c.Sync[i].Target, nil)
 		if err != nil {
 			return err
 		}
