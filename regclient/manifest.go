@@ -295,10 +295,14 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 	}
 	m.digest = digester.Digest()
 
-	if m.digest.String() != resp.HTTPResponse().Header.Get("Docker-Content-Digest") {
+	headDigest := resp.HTTPResponse().Header.Get("OCI-Content-Digest")
+	if headDigest == "" {
+		headDigest = resp.HTTPResponse().Header.Get("Docker-Content-Digest")
+	}
+	if headDigest != "" && headDigest != m.digest.String() {
 		rc.log.WithFields(logrus.Fields{
 			"computed": m.digest.String(),
-			"returned": resp.HTTPResponse().Header.Get("Docker-Content-Digest"),
+			"returned": headDigest,
 		}).Warn("Computed digest does not match header from registry")
 	}
 
@@ -450,12 +454,18 @@ func (rc *regClient) ratelimitHeader(m *manifest, r *http.Response) {
 	rlRemain := r.Header.Get("RateLimit-Remaining")
 	rlReset := r.Header.Get("RateLimit-Reset")
 	if rlLimit != "" {
-		lSplit := strings.Split(rlLimit, ";")
+		lpSplit := strings.Split(rlLimit, ",")
+		lSplit := strings.Split(lpSplit[0], ";")
 		rlLimitI, err := strconv.Atoi(lSplit[0])
 		if err != nil {
 			m.ratelimit.Limit = 0
 		} else {
 			m.ratelimit.Limit = rlLimitI
+		}
+		if len(lSplit) > 1 {
+			m.ratelimit.Policies = lpSplit
+		} else if len(lpSplit) > 1 {
+			m.ratelimit.Policies = lpSplit[1:]
 		}
 	}
 	if rlRemain != "" {
