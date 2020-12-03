@@ -3,16 +3,15 @@ package template
 import (
 	"bytes"
 	"encoding/json"
-	"html/template"
-	gotemplate "html/template"
 	"io"
 	"io/ioutil"
 	"os"
 	"reflect"
 	"strings"
+	gotemplate "text/template"
 )
 
-var tmplFuncs = template.FuncMap{
+var tmplFuncs = gotemplate.FuncMap{
 	"default": func(def, orig interface{}) interface{} {
 		if orig == nil || orig == reflect.Zero(reflect.TypeOf(orig)).Interface() {
 			return def
