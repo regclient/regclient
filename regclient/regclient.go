@@ -50,6 +50,10 @@ var (
 	MediaTypeOCI1ManifestList = ociv1.MediaTypeImageIndex
 	// MediaTypeOCI1ImageConfig OCI v1 configuration json object media type
 	MediaTypeOCI1ImageConfig = ociv1.MediaTypeImageConfig
+	// UserAgent sets the header on http requests
+	UserAgent = "regclient/regclient"
+	// VCSRef is injected from a build flag, used to version the UserAgent header
+	VCSRef = "unknown"
 )
 
 // RegClient provides an interfaces to working with registries
@@ -110,6 +114,7 @@ type regClient struct {
 	transports map[string]*http.Transport
 	retryables map[string]retryable.Retryable
 	mu         sync.Mutex
+	useragent  string
 }
 
 type regHost struct {
@@ -136,6 +141,7 @@ func NewRegClient(opts ...Opt) RegClient {
 	rc.retryLimit = 5
 	rc.retryables = map[string]retryable.Retryable{}
 	rc.transports = map[string]*http.Transport{}
+	rc.useragent = UserAgent + " (" + VCSRef + ")"
 
 	// configure default logging
 	rc.log = &logrus.Logger{
@@ -431,6 +437,7 @@ func (rc *regClient) getRetryable(host *ConfigHost) retryable.Retryable {
 			retryable.WithHTTPClient(c),
 			retryable.WithAuth(a),
 			retryable.WithMirrors(rc.mirrorFunc(host)),
+			retryable.WithUserAgent(rc.useragent),
 		}
 		if certs := rc.getCerts(host); len(certs) > 0 {
 			rOpts = append(rOpts, retryable.WithCertFiles(certs))

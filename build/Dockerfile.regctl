@@ -8,8 +8,9 @@ COPY . /src/
 CMD CGO_ENABLED=0 go build -ldflags '-s -w -extldflags -static' -o regctl ./cmd/regctl/ && ./regctl
 
 FROM dev as build
+ARG LD_FLAGS
 RUN CGO_ENABLED=0 \
-    go build -ldflags '-s -w -extldflags -static' -o regctl ./cmd/regctl/
+    go build -ldflags "-s -w -extldflags -static ${LD_FLAGS}" -o regctl ./cmd/regctl/
 USER appuser
 CMD [ "./regctl" ]
 

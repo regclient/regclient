@@ -2,7 +2,10 @@ COMMANDS=regctl regsync
 BINARIES=$(addprefix bin/,$(COMMANDS))
 IMAGE_TAGS=regctl regsync
 IMAGES=$(addprefix docker-,$(IMAGE_TAGS))
-GO_BUILD_FLAGS=
+VCS_REF=$(shell git rev-list -1 HEAD)
+LD_FLAGS=-X \"github.com/regclient/regclient/regclient.VCSRef=$(VCS_REF)\"
+GO_BUILD_FLAGS=-ldflags "$(LD_FLAGS)"
+DOCKER_ARGS=--build-arg "VCS_REF=$(VCS_REF)" --build-arg "LD_FLAGS=$(LD_FLAGS)"
 
 .PHONY: all binaries vendor docker test plugin-user plugin-host .FORCE
 
@@ -27,12 +30,12 @@ vendor:
 docker: $(IMAGES)
 
 docker-regctl:
-	docker build -t regclient/regctl -f build/Dockerfile.regctl .
-	docker build -t regclient/regctl:alpine -f build/Dockerfile.regctl --target release-alpine .
+	docker build -t regclient/regctl -f build/Dockerfile.regctl $(DOCKER_ARGS) .
+	docker build -t regclient/regctl:alpine -f build/Dockerfile.regctl --target release-alpine $(DOCKER_ARGS) .
 
 docker-regsync:
-	docker build -t regclient/regsync -f build/Dockerfile.regsync .
-	docker build -t regclient/regsync:alpine -f build/Dockerfile.regsync --target release-alpine .
+	docker build -t regclient/regsync -f build/Dockerfile.regsync $(DOCKER_ARGS) .
+	docker build -t regclient/regsync:alpine -f build/Dockerfile.regsync --target release-alpine $(DOCKER_ARGS) .
 
 plugin-user:
 	mkdir -p ${HOME}/.docker/cli-plugins/

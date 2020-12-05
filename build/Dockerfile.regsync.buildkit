@@ -12,10 +12,11 @@ CMD CGO_ENABLED=0 go build -ldflags '-s -w -extldflags -static' -o regsync ./cmd
 FROM --platform=$BUILDPLATFORM dev as build
 ARG TARGETOS
 ARG TARGETARCH
+ARG LD_FLAGS
 RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
     --mount=type=cache,id=goroot,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -ldflags '-s -w -extldflags -static' -o regsync ./cmd/regsync/
+    go build -ldflags "-s -w -extldflags -static ${LD_FLAGS}" -o regsync ./cmd/regsync/
 USER appuser
 CMD [ "./regsync" ]
 
