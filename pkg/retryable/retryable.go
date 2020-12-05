@@ -50,6 +50,7 @@ type retryable struct {
 	delayInit  time.Duration
 	delayMax   time.Duration
 	log        *logrus.Logger
+	useragent  string
 }
 
 // NewRetryable returns a retryable interface
@@ -192,6 +193,13 @@ func WithMirrors(mirrorFunc func(url.URL) ([]url.URL, error)) Opts {
 func WithTransport(t *http.Transport) Opts {
 	return func(r *retryable) {
 		r.httpClient = &http.Client{Transport: t}
+	}
+}
+
+// WithUserAgent sets a user agent header
+func WithUserAgent(ua string) Opts {
+	return func(r *retryable) {
+		r.useragent = ua
 	}
 }
 
@@ -340,6 +348,9 @@ func (req *request) httpDo() error {
 	}
 	if len(req.header) > 0 {
 		httpReq.Header = req.header
+	}
+	if req.r.useragent != "" && httpReq.Header.Get("User-Agent") == "" {
+		httpReq.Header.Add("User-Agent", req.r.useragent)
 	}
 	if req.offset > 0 {
 		// TODO: implement range requests
