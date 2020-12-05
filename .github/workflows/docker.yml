@@ -84,7 +84,7 @@ jobs:
         cache-from: type=local,src=/tmp/.buildx-regctl-cache
         cache-to: type=local,dest=/tmp/.buildx-regctl-cache
         build-args: |
-          LD_FLAGS=-X \"github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }}\"
+          LD_FLAGS=-X "github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }}"
         labels: |
           org.opencontainers.image.created=${{ steps.prep.outputs.created }}
           org.opencontainers.image.source=${{ github.repositoryUrl }}
@@ -103,7 +103,7 @@ jobs:
         cache-from: type=local,src=/tmp/.buildx-regctl-cache
         cache-to: type=local,dest=/tmp/.buildx-regctl-cache
         build-args: |
-          LD_FLAGS=-X \"github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }}\"
+          LD_FLAGS=-X "github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }}"
         labels: |
           org.opencontainers.image.created=${{ steps.prep.outputs.created }}
           org.opencontainers.image.source=${{ github.repositoryUrl }}
@@ -122,7 +122,7 @@ jobs:
         cache-from: type=local,src=/tmp/.buildx-regsync-cache
         cache-to: type=local,dest=/tmp/.buildx-regsync-cache
         build-args: |
-          LD_FLAGS=-X \"github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }}\"
+          LD_FLAGS=-X "github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }}"
         labels: |
           org.opencontainers.image.created=${{ steps.prep.outputs.created }}
           org.opencontainers.image.source=${{ github.repositoryUrl }}
@@ -141,7 +141,7 @@ jobs:
         cache-from: type=local,src=/tmp/.buildx-regsync-cache
         cache-to: type=local,dest=/tmp/.buildx-regsync-cache
         build-args: |
-          LD_FLAGS=-X \"github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }}\"
+          LD_FLAGS=-X "github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }}"
         labels: |
           org.opencontainers.image.created=${{ steps.prep.outputs.created }}
           org.opencontainers.image.source=${{ github.repositoryUrl }}
