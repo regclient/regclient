@@ -3,16 +3,18 @@ package sandbox
 import (
 	"context"
 
+	"github.com/regclient/regclient/pkg/go2lua"
 	"github.com/regclient/regclient/regclient"
 	"github.com/sirupsen/logrus"
 	lua "github.com/yuin/gopher-lua"
 )
 
 const (
-	luaReferenceName = "reference"
-	luaTagName       = "tag"
-	luaManifestName  = "manifest"
-	luaImageName     = "image"
+	luaReferenceName   = "reference"
+	luaTagName         = "tag"
+	luaManifestName    = "manifest"
+	luaImageName       = "image"
+	luaImageConfigName = "imageconfig"
 )
 
 // Sandbox defines a lua sandbox
@@ -35,6 +37,7 @@ var luaMods = []LuaMod{
 // New creates a new sandbox
 func New(ctx context.Context, rc regclient.RegClient, log *logrus.Logger) *Sandbox {
 	ls := lua.NewState()
+	ls.SetContext(ctx)
 	s := &Sandbox{Ctx: ctx, L: ls, RC: rc, log: log}
 
 	for _, mod := range luaMods {
@@ -62,4 +65,34 @@ func (s *Sandbox) RunScript(script string) error {
 // Close is use to stop the sandbox
 func (s *Sandbox) Close() {
 	s.L.Close()
+}
+
+// wrapUserData creates a userdata -> wrapped table -> userdata metatable
+// structure. This allows references to a struct to resolve for read access,
+// while providing access to only the desired methods on the userdata.
+func wrapUserData(L *lua.LState, udVal interface{}, wrapVal interface{}, udType string) (lua.LValue, error) {
+	ud := L.NewUserData()
+	ud.Value = udVal
+	wrapTab := go2lua.Convert(L, wrapVal)
+	if wrapTab.Type() != lua.LTTable {
+		return nil, ErrInvalidWrappedValue
+	}
+	wrapMTLV := L.GetTypeMetatable(udType)
+	wrapMT, ok := wrapMTLV.(*lua.LTable)
+	if !ok {
+		return nil, ErrInvalidInput
+	}
+	L.SetMetatable(wrapTab, wrapMT)
+	udMT := L.NewTable()
+	// TODO: this may only be needed for the "__tostring" method instead of all methods
+	wrapMT.ForEach(func(k, v lua.LValue) {
+		if k.Type() != lua.LTString || k.String() == "__index" {
+			return
+		}
+		// copy k/v from wrapMT to udMT, handles things like "__tostring"
+		udMT.RawSet(k, v)
+	})
+	udMT.RawSetString("__index", wrapTab)
+	L.SetMetatable(ud, udMT)
+	return ud, nil
 }

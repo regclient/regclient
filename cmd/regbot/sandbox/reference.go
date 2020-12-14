@@ -72,6 +72,8 @@ func checkReference(L *lua.LState, i int) *reference {
 			L.ArgError(i, "reference expected")
 		}
 		ref = r
+	default:
+		L.ArgError(i, "reference expected")
 	}
 	return ref
 }
