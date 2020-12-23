@@ -240,16 +240,14 @@ func (s ConfigScript) process(ctx context.Context) error {
 	log.WithFields(logrus.Fields{
 		"name": s.Name,
 	}).Debug("Starting script")
-	sb := sandbox.New(ctx, rc, log)
+	// add a timeout to the context
+	if s.Timeout > 0 {
+		ctxTimeout, cancel := context.WithTimeout(ctx, s.Timeout)
+		ctx = ctxTimeout
+		defer cancel()
+	}
+	sb := sandbox.New(ctx, s.Name, rc, log)
 	defer sb.Close()
-	defer func() {
-		if r := recover(); r != nil {
-			log.WithFields(logrus.Fields{
-				"name":  s.Name,
-				"error": r,
-			}).Error("Runtime error from script")
-		}
-	}()
 	err := sb.RunScript(s.Script)
 	if err != nil {
 		log.WithFields(logrus.Fields{

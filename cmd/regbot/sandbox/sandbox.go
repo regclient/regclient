@@ -10,6 +10,7 @@ import (
 )
 
 const (
+	luaRepoName        = "repo"
 	luaReferenceName   = "reference"
 	luaTagName         = "tag"
 	luaManifestName    = "manifest"
@@ -19,26 +20,29 @@ const (
 
 // Sandbox defines a lua sandbox
 type Sandbox struct {
-	L   *lua.LState
-	RC  regclient.RegClient
-	Ctx context.Context
-	log *logrus.Logger
+	name string
+	ctx  context.Context
+	log  *logrus.Logger
+	ls   *lua.LState
+	rc   regclient.RegClient
 }
 
 // LuaMod defines a mod to add to Lua's sandbox
 type LuaMod func(*Sandbox)
 
 var luaMods = []LuaMod{
+	setupRepo,
 	setupReference,
 	setupTag,
 	setupImage,
 }
 
 // New creates a new sandbox
-func New(ctx context.Context, rc regclient.RegClient, log *logrus.Logger) *Sandbox {
+func New(ctx context.Context, name string, rc regclient.RegClient, log *logrus.Logger) *Sandbox {
 	ls := lua.NewState()
+	// TODO: consider removing default methods from lua
 	ls.SetContext(ctx)
-	s := &Sandbox{Ctx: ctx, L: ls, RC: rc, log: log}
+	s := &Sandbox{name: name, ctx: ctx, log: log, ls: ls, rc: rc}
 
 	for _, mod := range luaMods {
 		mod(s)
@@ -47,52 +51,68 @@ func New(ctx context.Context, rc regclient.RegClient, log *logrus.Logger) *Sandb
 }
 
 func (s *Sandbox) setupMod(name string, funcs map[string]lua.LGFunction, tables map[string]map[string]lua.LGFunction) {
-	mt := s.L.NewTypeMetatable(name)
-	s.L.SetGlobal(name, mt)
+	mt := s.ls.NewTypeMetatable(name)
+	s.ls.SetGlobal(name, mt)
 	for key, fn := range funcs {
-		s.L.SetField(mt, key, s.L.NewFunction(fn))
+		s.ls.SetField(mt, key, s.ls.NewFunction(fn))
 	}
 	for key, fns := range tables {
-		s.L.SetField(mt, key, s.L.SetFuncs(s.L.NewTable(), fns))
+		s.ls.SetField(mt, key, s.ls.SetFuncs(s.ls.NewTable(), fns))
 	}
 }
 
 // RunScript is used to execute a script in the sandbox
 func (s *Sandbox) RunScript(script string) error {
-	return s.L.DoString(script)
+	var err error
+	defer func() {
+		if r := recover(); r != nil {
+			s.log.WithFields(logrus.Fields{
+				"name":  s.name,
+				"error": r,
+			}).Error("Runtime error from script")
+		}
+		err = ErrScriptFailed
+	}()
+	err = s.ls.DoString(script)
+	return err
 }
 
 // Close is use to stop the sandbox
 func (s *Sandbox) Close() {
-	s.L.Close()
+	s.ls.Close()
 }
 
 // wrapUserData creates a userdata -> wrapped table -> userdata metatable
 // structure. This allows references to a struct to resolve for read access,
 // while providing access to only the desired methods on the userdata.
-func wrapUserData(L *lua.LState, udVal interface{}, wrapVal interface{}, udType string) (lua.LValue, error) {
-	ud := L.NewUserData()
+func wrapUserData(ls *lua.LState, udVal interface{}, wrapVal interface{}, udType string) (lua.LValue, error) {
+	ud := ls.NewUserData()
 	ud.Value = udVal
-	wrapTab := go2lua.Convert(L, wrapVal)
-	if wrapTab.Type() != lua.LTTable {
-		return nil, ErrInvalidWrappedValue
-	}
-	wrapMTLV := L.GetTypeMetatable(udType)
-	wrapMT, ok := wrapMTLV.(*lua.LTable)
+	udTypeMT, ok := (ls.GetTypeMetatable(udType)).(*lua.LTable)
 	if !ok {
 		return nil, ErrInvalidInput
 	}
-	L.SetMetatable(wrapTab, wrapMT)
-	udMT := L.NewTable()
-	// TODO: this may only be needed for the "__tostring" method instead of all methods
-	wrapMT.ForEach(func(k, v lua.LValue) {
-		if k.Type() != lua.LTString || k.String() == "__index" {
-			return
+	wrapTab := go2lua.Convert(ls, wrapVal)
+	if wrapTab.Type() == lua.LTTable {
+		wrapMT := ls.NewTable()
+		// copy "__tostring" method instead of all methods, overwrite default method on table
+		udToString := udTypeMT.RawGetString("__tostring")
+		if udToString.Type() == lua.LTFunction {
+			wrapMT.RawSetString("__tostring", udToString)
 		}
-		// copy k/v from wrapMT to udMT, handles things like "__tostring"
-		udMT.RawSet(k, v)
-	})
-	udMT.RawSetString("__index", wrapTab)
-	L.SetMetatable(ud, udMT)
+		// alternate method copies most fields from the userdata metatable
+		// udTypeMT.ForEach(func(k, v lua.LValue) {
+		// 	if k.Type() != lua.LTString || k.String() == "__index" {
+		// 		return
+		// 	}
+		// 	wrapMT.RawSet(k, v)
+		// })
+		wrapMT.RawSetString("__index", wrapTab)
+		ls.SetMetatable(ud, wrapMT)
+		ls.SetMetatable(wrapTab, udTypeMT)
+	} else {
+		ls.SetMetatable(ud, udTypeMT)
+	}
+
 	return ud, nil
 }

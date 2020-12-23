@@ -26,11 +26,16 @@ func setupImage(s *Sandbox) {
 	s.setupMod(
 		luaManifestName,
 		map[string]lua.LGFunction{
-			"__tostring": s.imageManifestJSON,
+			"__tostring": s.manifestJSON,
+			"get":        s.manifestGet,
+			"head":       s.manifestHead,
 		},
 		map[string]map[string]lua.LGFunction{
 			"__index": {
-				"config":    s.imageConfig,
+				"config": s.configGet,
+				"delete": s.manifestDelete,
+				"get":    s.manifestGet,
+				// "head":      s.manifestHead,
 				"ratelimit": s.imageRateLimit,
 			},
 		},
@@ -38,10 +43,11 @@ func setupImage(s *Sandbox) {
 	s.setupMod(
 		luaImageName,
 		map[string]lua.LGFunction{
-			"config":       s.imageConfig,
-			"manifest":     s.imageManifest,
-			"manifestHead": s.imageManifestHead,
-			"manifestList": s.imageManifestList,
+			"config":       s.configGet,
+			"copy":         s.imageCopy,
+			"manifest":     s.manifestGet,
+			"manifestHead": s.manifestHead,
+			"manifestList": s.manifestGetList,
 		},
 		map[string]map[string]lua.LGFunction{
 			"__index": {
@@ -52,7 +58,7 @@ func setupImage(s *Sandbox) {
 	s.setupMod(
 		luaImageConfigName,
 		map[string]lua.LGFunction{
-			"__tostring": s.imageConfigJSON,
+			"__tostring": s.configJSON,
 		},
 		map[string]map[string]lua.LGFunction{
 			"__index": {},
@@ -60,32 +66,167 @@ func setupImage(s *Sandbox) {
 	)
 }
 
-func (s *Sandbox) checkManifest(L *lua.LState, i int, list bool) *manifest {
-	var m *manifest
-	switch L.Get(i).Type() {
-	case lua.LTString:
-		ref, err := regclient.NewRef(L.CheckString(1))
-		if err != nil {
-			L.RaiseError("reference parsing failed: %v", err)
+func (s *Sandbox) checkConfig(ls *lua.LState, i int) *config {
+	var c *config
+	switch ls.Get(i).Type() {
+	case lua.LTUserData:
+		ud := ls.CheckUserData(i)
+		udc, ok := ud.Value.(*config)
+		if !ok {
+			ls.ArgError(i, "config expected")
 		}
-		rcM, err := s.getManifest(ref, list, "")
+		c = udc
+	default:
+		ls.ArgError(i, "config expected")
+	}
+	return c
+}
+
+func (s *Sandbox) checkManifest(ls *lua.LState, i int, list bool) *manifest {
+	var m *manifest
+	switch ls.Get(i).Type() {
+	case lua.LTString:
+		ref, err := regclient.NewRef(ls.CheckString(1))
 		if err != nil {
-			L.RaiseError("manifest pull failed: %v", err)
+			ls.RaiseError("reference parsing failed: %v", err)
+		}
+		rcM, err := s.rcManifestGet(ref, list, "")
+		if err != nil {
+			ls.RaiseError("manifest pull failed: %v", err)
 		}
 		m = &manifest{m: rcM, ref: ref}
 	case lua.LTUserData:
-		ud := L.CheckUserData(i)
-		udM, ok := ud.Value.(*manifest)
-		if !ok {
-			L.ArgError(i, "manifest expected")
+		ud := ls.CheckUserData(i)
+		switch ud.Value.(type) {
+		case *manifest:
+			m = ud.Value.(*manifest)
+		case *config:
+			c := ud.Value.(*config)
+			m = &manifest{ref: c.ref, m: c.m}
+		default:
+			ls.ArgError(i, "manifest expected")
 		}
-		m = udM
+	default:
+		ls.ArgError(i, "manifest expected")
 	}
 	return m
 }
 
-func (s *Sandbox) getManifest(ref regclient.Ref, list bool, platform string) (regclient.Manifest, error) {
-	m, err := s.RC.ManifestGet(s.Ctx, ref)
+func (s *Sandbox) configGet(ls *lua.LState) int {
+	m := s.checkManifest(ls, 1, false)
+	confDigest, err := m.m.GetConfigDigest()
+	if err != nil {
+		ls.RaiseError("Failed looking up \"%s\" config digest: %v", m.ref.CommonName(), err)
+	}
+
+	conf, err := s.rc.ImageGetConfig(s.ctx, m.ref, confDigest.String())
+	if err != nil {
+		ls.RaiseError("Failed retrieving \"%s\" config: %v", m.ref.CommonName(), err)
+	}
+	ud, err := wrapUserData(ls, &config{conf: &conf, m: m.m, ref: m.ref}, conf, luaImageConfigName)
+	if err != nil {
+		ls.RaiseError("Failed packaging \"%s\" config: %v", m.ref.CommonName(), err)
+	}
+	ls.Push(ud)
+	return 1
+}
+
+func (s *Sandbox) configJSON(ls *lua.LState) int {
+	c := s.checkConfig(ls, 1)
+	cJSON, err := json.MarshalIndent(c.conf, "", "  ")
+	if err != nil {
+		ls.RaiseError("Failed outputing config: %v", err)
+	}
+	ls.Push(lua.LString(string(cJSON)))
+	return 1
+}
+
+func (s *Sandbox) imageCopy(ls *lua.LState) int {
+	src := s.checkReference(ls, 1)
+	tgt := s.checkReference(ls, 2)
+	err := s.rc.ImageCopy(s.ctx, src.Ref, tgt.Ref)
+	if err != nil {
+		ls.RaiseError("Failed copying \"%s\" to \"%s\": %v", src.Ref.CommonName(), tgt.Ref.CommonName(), err)
+	}
+	return 0
+}
+
+func (s *Sandbox) manifestGet(ls *lua.LState) int {
+	return s.manifestGetWithOpts(ls, false)
+}
+
+func (s *Sandbox) manifestGetList(ls *lua.LState) int {
+	return s.manifestGetWithOpts(ls, true)
+}
+
+func (s *Sandbox) manifestGetWithOpts(ls *lua.LState, list bool) int {
+	ref := s.checkReference(ls, 1)
+	plat := ""
+	if !list && ls.GetTop() == 2 {
+		plat = ls.CheckString(2)
+	}
+	m, err := s.rcManifestGet(ref.Ref, list, plat)
+	if err != nil {
+		ls.RaiseError("Failed retrieving \"%s\" manifest: %v", ref.Ref.CommonName(), err)
+	}
+
+	ud, err := wrapUserData(ls, &manifest{m: m, ref: ref.Ref}, m.GetOrigManifest(), luaManifestName)
+	if err != nil {
+		ls.RaiseError("Failed packaging \"%s\" manifest: %v", ref.Ref.CommonName(), err)
+	}
+	ls.Push(ud)
+	return 1
+}
+
+func (s *Sandbox) manifestHead(ls *lua.LState) int {
+	ref := s.checkReference(ls, 1)
+
+	m, err := s.rc.ManifestHead(s.ctx, ref.Ref)
+	if err != nil {
+		ls.RaiseError("Failed retrieving \"%s\" manifest: %v", ref.Ref.CommonName(), err)
+	}
+
+	ud, err := wrapUserData(ls, &manifest{m: m, ref: ref.Ref}, m, luaManifestName)
+	if err != nil {
+		ls.RaiseError("Failed packaging \"%s\" manifest: %v", ref.Ref.CommonName(), err)
+	}
+	ls.Push(ud)
+	return 1
+}
+
+func (s *Sandbox) imageRateLimit(ls *lua.LState) int {
+	m := s.checkManifest(ls, 1, false)
+	rl := go2lua.Convert(ls, m.m.GetRateLimit())
+	ls.Push(rl)
+	return 1
+}
+
+func (s *Sandbox) manifestDelete(ls *lua.LState) int {
+	m := s.checkManifest(ls, 1, true)
+	ref := m.ref
+	if ref.Digest == "" {
+		d := m.m.GetDigest()
+		ref.Digest = d.String()
+	}
+	err := s.rc.ManifestDelete(s.ctx, ref)
+	if err != nil {
+		ls.RaiseError("Failed deleting \"%s\": %v", ref.CommonName(), err)
+	}
+	return 0
+}
+
+func (s *Sandbox) manifestJSON(ls *lua.LState) int {
+	m := s.checkManifest(ls, 1, false)
+	mJSON, err := json.MarshalIndent(m.m, "", "  ")
+	if err != nil {
+		ls.RaiseError("Failed outputing manifest: %v", err)
+	}
+	ls.Push(lua.LString(string(mJSON)))
+	return 1
+}
+
+func (s *Sandbox) rcManifestGet(ref regclient.Ref, list bool, platform string) (regclient.Manifest, error) {
+	m, err := s.rc.ManifestGet(s.ctx, ref)
 	if err != nil {
 		return m, err
 	}
@@ -109,7 +250,7 @@ func (s *Sandbox) getManifest(ref regclient.Ref, list bool, platform string) (re
 			return m, err
 		}
 		ref.Digest = desc.Digest.String()
-		m, err = s.RC.ManifestGet(s.Ctx, ref)
+		m, err = s.rc.ManifestGet(s.ctx, ref)
 		if err != nil {
 			return m, err
 		}
@@ -117,135 +258,3 @@ func (s *Sandbox) getManifest(ref regclient.Ref, list bool, platform string) (re
 
 	return m, nil
 }
-
-func (s *Sandbox) imageConfig(L *lua.LState) int {
-	m := s.checkManifest(L, 1, false)
-	confDigest, err := m.m.GetConfigDigest()
-	if err != nil {
-		L.RaiseError("Failed looking up \"%s\" config digest: %v", m.ref.CommonName(), err)
-	}
-
-	conf, err := s.RC.ImageGetConfig(s.Ctx, m.ref, confDigest.String())
-	if err != nil {
-		L.RaiseError("Failed retrieving \"%s\" config: %v", m.ref.CommonName(), err)
-	}
-	ud, err := wrapUserData(L, &config{conf: &conf, m: m.m, ref: m.ref}, conf, luaImageConfigName)
-	if err != nil {
-		L.RaiseError("Failed packaging \"%s\" config: %v", m.ref.CommonName(), err)
-	}
-	L.Push(ud)
-	return 1
-}
-
-func (s *Sandbox) imageManifest(L *lua.LState) int {
-	return s.imageManifestWithOpts(L, false)
-}
-
-func (s *Sandbox) imageManifestList(L *lua.LState) int {
-	return s.imageManifestWithOpts(L, true)
-}
-
-func (s *Sandbox) imageManifestWithOpts(L *lua.LState, list bool) int {
-	ref := checkReference(L, 1)
-	plat := ""
-	if !list && L.GetTop() == 2 {
-		plat = L.CheckString(2)
-	}
-	m, err := s.getManifest(ref.Ref, list, plat)
-	if err != nil {
-		L.RaiseError("Failed retrieving \"%s\" manifest: %v", ref.Ref.CommonName(), err)
-	}
-
-	ud, err := wrapUserData(L, &manifest{m: m, ref: ref.Ref}, m.GetOrigManifest(), luaManifestName)
-	if err != nil {
-		L.RaiseError("Failed packaging \"%s\" manifest: %v", ref.Ref.CommonName(), err)
-	}
-	L.Push(ud)
-	return 1
-}
-
-func (s *Sandbox) imageManifestHead(L *lua.LState) int {
-	ref := checkReference(L, 1)
-
-	m, err := s.RC.ManifestHead(s.Ctx, ref.Ref)
-	if err != nil {
-		L.RaiseError("Failed retrieving \"%s\" manifest: %v", ref.Ref.CommonName(), err)
-	}
-
-	ud, err := wrapUserData(L, &manifest{m: m, ref: ref.Ref}, m, luaManifestName)
-	if err != nil {
-		L.RaiseError("Failed packaging \"%s\" manifest: %v", ref.Ref.CommonName(), err)
-	}
-	L.Push(ud)
-	return 1
-}
-
-func (s *Sandbox) imageConfigJSON(L *lua.LState) int {
-	c := checkConfig(L, 1)
-	cJSON, err := json.MarshalIndent(c.conf, "", "  ")
-	if err != nil {
-		L.RaiseError("Failed outputing config: %v", err)
-	}
-	L.Push(lua.LString(string(cJSON)))
-	return 1
-}
-
-func (s *Sandbox) imageManifestJSON(L *lua.LState) int {
-	m := s.checkManifest(L, 1, false)
-	mJSON, err := json.MarshalIndent(m.m, "", "  ")
-	if err != nil {
-		L.RaiseError("Failed outputing manifest: %v", err)
-	}
-	L.Push(lua.LString(string(mJSON)))
-	return 1
-}
-
-func (s *Sandbox) imageRateLimit(L *lua.LState) int {
-	m := s.checkManifest(L, 1, false)
-	rl := go2lua.Convert(L, m.m.GetRateLimit())
-	L.Push(rl)
-	return 1
-}
-
-func checkConfig(L *lua.LState, i int) *config {
-	var c *config
-	switch L.Get(i).Type() {
-	case lua.LTUserData:
-		ud := L.CheckUserData(i)
-		udc, ok := ud.Value.(*config)
-		if !ok {
-			L.ArgError(i, "config expected")
-		}
-		c = udc
-	default:
-		L.ArgError(i, "config expected")
-	}
-	return c
-}
-
-/* func checkManifest(L *lua.LState, i int) *manifest {
-	var man *manifest
-	switch L.Get(i).Type() {
-	case lua.LTUserData:
-		ud := L.CheckUserData(i)
-		m, ok := ud.Value.(*manifest)
-		if !ok {
-			L.ArgError(i, "manifest expected")
-		}
-		man = m
-	default:
-		L.ArgError(i, "manifest expected")
-	}
-	return man
-} */
-
-/* func isManifest(L *lua.LState, i int) bool {
-	if L.Get(i).Type() != lua.LTUserData {
-		return false
-	}
-	ud := L.CheckUserData(i)
-	if _, ok := ud.Value.(*manifest); ok {
-		return true
-	}
-	return false
-} */

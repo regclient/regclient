@@ -9,8 +9,9 @@ func setupTag(s *Sandbox) {
 		luaTagName,
 		map[string]lua.LGFunction{
 			// "new": s.newTag,
-			// "__tostring": s.referenceString,
-			"ls": s.tagLs,
+			// "__tostring": s.tagString,
+			"delete": s.tagDelete,
+			"ls":     s.tagLs,
 		},
 		map[string]map[string]lua.LGFunction{
 			"__index": {},
@@ -18,16 +19,25 @@ func setupTag(s *Sandbox) {
 	)
 }
 
-func (s *Sandbox) tagLs(L *lua.LState) int {
-	ref := checkReference(L, 1)
-	tl, err := s.RC.TagList(s.Ctx, ref.Ref)
+func (s *Sandbox) tagDelete(ls *lua.LState) int {
+	ref := s.checkReference(ls, 1)
+	err := s.rc.TagDelete(s.ctx, ref.Ref)
 	if err != nil {
-		L.RaiseError("Failed retrieving tag list: %v", err)
+		ls.RaiseError("Failed deleting \"%s\": %v", ref.Ref.CommonName(), err)
 	}
-	lTags := L.NewTable()
+	return 0
+}
+
+func (s *Sandbox) tagLs(ls *lua.LState) int {
+	ref := s.checkReference(ls, 1)
+	tl, err := s.rc.TagList(s.ctx, ref.Ref)
+	if err != nil {
+		ls.RaiseError("Failed retrieving tag list: %v", err)
+	}
+	lTags := ls.NewTable()
 	for _, tag := range tl.Tags {
 		lTags.Append(lua.LString(tag))
 	}
-	L.Push(lTags)
+	ls.Push(lTags)
 	return 1
 }

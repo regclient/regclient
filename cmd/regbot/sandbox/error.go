@@ -11,4 +11,6 @@ var (
 	ErrMissingInput = errors.New("Required input missing")
 	// ErrNotImplemented returned when method has not been implemented yet
 	ErrNotImplemented = errors.New("Not implemented")
+	// ErrScriptFailed when the script fails to run
+	ErrScriptFailed = errors.New("Failure in user script")
 )

@@ -43,6 +43,7 @@ type ConfigDefaults struct {
 	RateLimit      ConfigRateLimit `json:"ratelimit"`
 	Parallel       int             `json:"parallel"`
 	SkipDockerConf bool            `json:"skipDockerConfig`
+	Timeout        time.Duration   `json:"timeout"`
 }
 
 // ConfigRateLimit is for rate limit settings
@@ -58,6 +59,7 @@ type ConfigScript struct {
 	Interval  time.Duration   `json:"interval"`
 	Schedule  string          `json:"schedule"`
 	RateLimit ConfigRateLimit `json:"ratelimit"`
+	Timeout   time.Duration   `json:"timeout"`
 }
 
 // ConfigNew creates an empty configuration
@@ -159,5 +161,8 @@ func scriptSetDefaults(s *ConfigScript, d ConfigDefaults) {
 		s.RateLimit.Retry = d.RateLimit.Retry
 	} else if s.RateLimit.Retry < rateLimitRetryMin {
 		s.RateLimit.Retry = rateLimitRetryMin
+	}
+	if s.Timeout == 0 && d.Timeout != 0 {
+		s.Timeout = d.Timeout
 	}
 }

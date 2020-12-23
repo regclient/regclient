@@ -1,7 +1,9 @@
 package go2lua
 
 import (
+	"fmt"
 	"reflect"
+	"strings"
 
 	lua "github.com/yuin/gopher-lua"
 )
@@ -52,13 +54,33 @@ func convertReflect(ls *lua.LState, v reflect.Value) lua.LValue {
 	case reflect.Struct:
 		vType := v.Type()
 		lTab := ls.NewTable()
-		// TODO: should only exported struct fields be copied? And should the
-		// copy be done to json keys in addition to Go struct keys?
+		foundExported := false
 		for i := 0; i < vType.NumField(); i++ {
 			field := vType.Field(i)
-			lTab.RawSetString(field.Name, convertReflect(ls, v.FieldByName(field.Name)))
+			// skip unexported fields
+			if !v.FieldByName(field.Name).CanInterface() {
+				continue
+			}
+			foundExported = true
+			lVal := convertReflect(ls, v.FieldByName(field.Name))
+			lTab.RawSetString(field.Name, lVal)
+			// map json keys to values if defined
+			jsonName := strings.Split(field.Tag.Get("json"), ",")[0]
+			if jsonName != "" && jsonName != "-" {
+				lTab.RawSetString(jsonName, lVal)
+			}
 		}
-		return lTab
+		if foundExported {
+			return lTab
+		}
+		// fallback to trying to export as a string
+		vInterface := v.Interface()
+		vStringer, ok := vInterface.(fmt.Stringer)
+		if ok {
+			return lua.LString(vStringer.String())
+		}
+		// Unsupported struct, no exported fields and no string interface
+		return lua.LNil
 	case reflect.Ptr:
 		if v.IsNil() {
 			return lua.LNil
