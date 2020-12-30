@@ -11,13 +11,6 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-// delay checking for at least 5 minutes when rate limit is exceeded
-var rateLimitRetryMin time.Duration
-
-func init() {
-	rateLimitRetryMin, _ = time.ParseDuration("5m")
-}
-
 // Config is parsed configuration file for regsync
 type Config struct {
 	Version  int            `json:"version"`
@@ -38,28 +31,20 @@ type ConfigCreds struct {
 
 // ConfigDefaults is uses for general options and defaults for ConfigScript entries
 type ConfigDefaults struct {
-	Interval       time.Duration   `json:"interval"`
-	Schedule       string          `json:"schedule"`
-	RateLimit      ConfigRateLimit `json:"ratelimit"`
-	Parallel       int             `json:"parallel"`
-	SkipDockerConf bool            `json:"skipDockerConfig`
-	Timeout        time.Duration   `json:"timeout"`
-}
-
-// ConfigRateLimit is for rate limit settings
-type ConfigRateLimit struct {
-	Min   int           `json:"min"`
-	Retry time.Duration `json:"retry"`
+	Interval       time.Duration `json:"interval"`
+	Schedule       string        `json:"schedule"`
+	Parallel       int           `json:"parallel"`
+	SkipDockerConf bool          `json:"skipDockerConfig`
+	Timeout        time.Duration `json:"timeout"`
 }
 
 // ConfigScript defines a source/target repository to sync
 type ConfigScript struct {
-	Name      string          `json:"name"`
-	Script    string          `json:"script"`
-	Interval  time.Duration   `json:"interval"`
-	Schedule  string          `json:"schedule"`
-	RateLimit ConfigRateLimit `json:"ratelimit"`
-	Timeout   time.Duration   `json:"timeout"`
+	Name     string        `json:"name"`
+	Script   string        `json:"script"`
+	Interval time.Duration `json:"interval"`
+	Schedule string        `json:"schedule"`
+	Timeout  time.Duration `json:"timeout"`
 }
 
 // ConfigNew creates an empty configuration
@@ -84,9 +69,6 @@ func ConfigLoadReader(r io.Reader) (*Config, error) {
 	// apply top level defaults
 	if c.Defaults.Parallel <= 0 {
 		c.Defaults.Parallel = 1
-	}
-	if c.Defaults.RateLimit.Retry < rateLimitRetryMin {
-		c.Defaults.RateLimit.Retry = rateLimitRetryMin
 	}
 	// apply defaults to each step
 	for i := range c.Scripts {
@@ -153,14 +135,6 @@ func scriptSetDefaults(s *ConfigScript, d ConfigDefaults) {
 	}
 	if s.Interval == 0 && s.Schedule == "" && d.Interval != 0 {
 		s.Interval = d.Interval
-	}
-	if s.RateLimit.Min == 0 && d.RateLimit.Min != 0 {
-		s.RateLimit.Min = d.RateLimit.Min
-	}
-	if s.RateLimit.Retry == 0 {
-		s.RateLimit.Retry = d.RateLimit.Retry
-	} else if s.RateLimit.Retry < rateLimitRetryMin {
-		s.RateLimit.Retry = rateLimitRetryMin
 	}
 	if s.Timeout == 0 && d.Timeout != 0 {
 		s.Timeout = d.Timeout

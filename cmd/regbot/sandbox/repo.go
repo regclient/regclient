@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"github.com/sirupsen/logrus"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -23,6 +24,10 @@ func (s *Sandbox) repoLs(ls *lua.LState) int {
 		ls.ArgError(1, "Expected registry name (host and optional port)")
 	}
 	host := hostLVS.String()
+	s.log.WithFields(logrus.Fields{
+		"script": s.name,
+		"host":   host,
+	}).Debug("Listing repositories")
 	repos, err := s.rc.RepoList(s.ctx, host)
 	if err != nil {
 		ls.RaiseError("Failed retrieving repo list: %v", err)

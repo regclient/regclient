@@ -22,18 +22,14 @@ func setupReference(s *Sandbox) {
 
 // reference refers to a repository or image name
 type reference struct {
-	Ref regclient.Ref
+	ref regclient.Ref
 }
 
 // newReference creates a reference
 func (s *Sandbox) newReference(ls *lua.LState) int {
-	ref, err := regclient.NewRef(ls.CheckString(1))
-	if err != nil {
-		ls.ArgError(1, "reference parsing failed: "+err.Error())
-	}
-	reference := &reference{Ref: ref}
+	ref := s.checkReference(ls, 1)
 	ud := ls.NewUserData()
-	ud.Value = reference
+	ud.Value = ref
 	ls.SetMetatable(ud, ls.GetTypeMetatable(luaReferenceName))
 	ls.Push(ud)
 	return 1
@@ -47,7 +43,7 @@ func (s *Sandbox) checkReference(ls *lua.LState, i int) *reference {
 		if err != nil {
 			ls.ArgError(i, "reference parsing failed: "+err.Error())
 		}
-		ref = &reference{Ref: nr}
+		ref = &reference{ref: nr}
 	case lua.LTUserData:
 		ud := ls.CheckUserData(i)
 		switch ud.Value.(type) {
@@ -55,10 +51,10 @@ func (s *Sandbox) checkReference(ls *lua.LState, i int) *reference {
 			ref = ud.Value.(*reference)
 		case *manifest:
 			m := ud.Value.(*manifest)
-			ref = &reference{Ref: m.ref}
+			ref = &reference{ref: m.ref}
 		case *config:
 			c := ud.Value.(*config)
-			ref = &reference{Ref: c.ref}
+			ref = &reference{ref: c.ref}
 		default:
 			ls.ArgError(i, "reference expected")
 		}
@@ -82,16 +78,16 @@ func isReference(ls *lua.LState, i int) bool {
 // referenceString converts a reference back to a common name
 func (s *Sandbox) referenceString(ls *lua.LState) int {
 	r := s.checkReference(ls, 1)
-	ls.Push(lua.LString(r.Ref.CommonName()))
+	ls.Push(lua.LString(r.ref.CommonName()))
 	return 1
 }
 
 func (s *Sandbox) referenceGetSetTag(ls *lua.LState) int {
 	r := s.checkReference(ls, 1)
 	if ls.GetTop() == 2 {
-		r.Ref.Tag = ls.CheckString(2)
+		r.ref.Tag = ls.CheckString(2)
 		return 0
 	}
-	ls.Push(lua.LString(r.Ref.Tag))
+	ls.Push(lua.LString(r.ref.Tag))
 	return 1
 }

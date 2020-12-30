@@ -15,11 +15,12 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-const usageDesc = `Utility for mirroring docker repositories
+const usageDesc = `Utility for automating repository actions
 More details at https://github.com/regclient/regclient`
 
 var rootOpts struct {
 	confFile  string
+	dryRun    bool
 	verbosity string
 	logopts   []string
 }
@@ -45,15 +46,6 @@ var serverCmd = &cobra.Command{
 	Args:  cobra.RangeArgs(0, 0),
 	RunE:  runServer,
 }
-var checkCmd = &cobra.Command{
-	Use:   "check",
-	Short: "runs each script once in a dry-run mode",
-	Long: `Each script is executed once, and commands that would take external
-action are only logged rather than executed. The command returns after the last
-script completes.`,
-	Args: cobra.RangeArgs(0, 0),
-	RunE: runCheck,
-}
 var onceCmd = &cobra.Command{
 	Use:   "once",
 	Short: "runs each script once",
@@ -71,13 +63,13 @@ func init() {
 		Level:     logrus.InfoLevel,
 	}
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.confFile, "config", "c", "", "Config file")
+	rootCmd.PersistentFlags().BoolVarP(&rootOpts.dryRun, "dry-run", "", false, "Dry Run, skip all external actions")
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.InfoLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
 	rootCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
 	rootCmd.MarkPersistentFlagFilename("config")
 	rootCmd.MarkPersistentFlagRequired("config")
 
 	rootCmd.AddCommand(serverCmd)
-	rootCmd.AddCommand(checkCmd)
 	rootCmd.AddCommand(onceCmd)
 	rootCmd.PersistentPreRunE = rootPreRun
 }
@@ -220,25 +212,10 @@ func runServer(cmd *cobra.Command, args []string) error {
 	return mainErr
 }
 
-// run check is used for a dry-run
-func runCheck(cmd *cobra.Command, args []string) error {
-	var mainErr error
-	ctx := context.Background()
-	for _, s := range config.Scripts {
-		err := s.process(ctx)
-		if err != nil {
-			if mainErr == nil {
-				mainErr = err
-			}
-		}
-	}
-	return mainErr
-}
-
 // process a sync step
 func (s ConfigScript) process(ctx context.Context) error {
 	log.WithFields(logrus.Fields{
-		"name": s.Name,
+		"script": s.Name,
 	}).Debug("Starting script")
 	// add a timeout to the context
 	if s.Timeout > 0 {
@@ -246,18 +223,27 @@ func (s ConfigScript) process(ctx context.Context) error {
 		ctx = ctxTimeout
 		defer cancel()
 	}
-	sb := sandbox.New(ctx, s.Name, rc, log)
+	sbOpts := []sandbox.Opt{
+		sandbox.WithContext(ctx),
+		sandbox.WithRegClient(rc),
+		sandbox.WithLog(log),
+		sandbox.WithSemaphore(sem),
+	}
+	if rootOpts.dryRun {
+		sbOpts = append(sbOpts, sandbox.WithDryRun())
+	}
+	sb := sandbox.New(s.Name, sbOpts...)
 	defer sb.Close()
 	err := sb.RunScript(s.Script)
 	if err != nil {
 		log.WithFields(logrus.Fields{
-			"name":  s.Name,
-			"error": err,
+			"script": s.Name,
+			"error":  err,
 		}).Debug("Error running script")
 		return ErrScriptFailed
 	}
 	log.WithFields(logrus.Fields{
-		"name": s.Name,
+		"script": s.Name,
 	}).Debug("Finished script")
 
 	return nil
