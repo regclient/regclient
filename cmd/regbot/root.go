@@ -239,7 +239,7 @@ func (s ConfigScript) process(ctx context.Context) error {
 		log.WithFields(logrus.Fields{
 			"script": s.Name,
 			"error":  err,
-		}).Debug("Error running script")
+		}).Warn("Error running script")
 		return ErrScriptFailed
 	}
 	log.WithFields(logrus.Fields{
