@@ -1,9 +1,6 @@
-# Release v0.1.0
+# Release v0.2.0
 
-- Adding regsync command and image to copy images between registries.
-- Locking added to regclient to handle concurrent requests.
-- Improved formatting / templating functionality.
-- Handling images with external layers (copying Windows images).
-- Fixing permissions of `/home/appuser` in the `regclient/regctl` and
-  `regclient/regsync` images.
-- Bug fix for passing multiple host configs to regclient.
+- Adding regbot command and image to support Lua scripts with the regclient api.
+  The regbot scripts allow complex mirroring logic and enable registry cleanup
+  policies to be automated.
+- Support registry auth without service or scope in the challenge header.
