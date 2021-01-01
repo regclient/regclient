@@ -29,6 +29,22 @@ This includes `regctl` for a command line interface to manage registries.
 - Ability to postpone mirror step when rate limit is below a threshold.
 - Ability to mirror multiple images concurrently.
 
+## regbot features
+
+- Runs user provided scripts based on a yaml configuration.
+- Scripts are written in Lua and executed directly in Go.
+- Can run on a cron schedule or a one time execution.
+- Dry-run option can be used for testing.
+- Built-in functions include:
+  - Repository list
+  - Tag list
+  - Image manifest (either head or get, and optional resolving multi-platform reference)
+  - Image config (this includes the creation time, labels, and other details shown in a `docker image inspect`)
+  - Image ratelimit and a wait function to delay the script when ratelimit remaining is below a threshold
+  - Image copy
+  - Manifest delete
+  - Tag delete
+
 ## Development Status
 
 This project is in active development, a few features are not complete.
@@ -64,7 +80,9 @@ chmod 755 regctl
 
 ## Running as a Container
 
-You can run `regctl` and `regsync` in a container. For regctl:
+You can run `regctl`, `regsync`, and `regbot` in a container.
+
+For `regctl`:
 
 ```shell
 docker container run -it --rm --net host \
@@ -72,12 +90,20 @@ docker container run -it --rm --net host \
   regclient/regctl:latest --help
 ```
 
-And for `regsync`:
+For `regsync`:
 
 ```shell
 docker container run -it --rm --net host \
   -v "$(pwd)/regsync.yml:/home/appuser/regsync.yml" \
   regclient/regsync:latest -c /home/appuser/regsync.yml check
+```
+
+For `regbot`:
+
+```shell
+docker container run -it --rm --net host \
+  -v "$(pwd)/regbot.yml:/home/appuser/regbot.yml" \
+  regclient/regbot:latest -c /home/appuser/regbot.yml once --dry-run
 ```
 
 Or on Linux and Mac environments, you can run `regctl` as your own user and save

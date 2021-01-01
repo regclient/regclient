@@ -27,3 +27,11 @@ for target in $targets; do
   echo "Building regsync-${GOOS}-${GOARCH}"
   go build -o "artifacts/regsync-${GOOS}-${GOARCH}" -ldflags "$LD_FLAGS" ${GO_BUILD_FLAGS} ./cmd/regsync/
 done
+
+for target in $targets; do
+  GOOS="${target%%/*}"
+  GOARCH="${target#*/}"
+  export GOOS GOARCH
+  echo "Building regbot-${GOOS}-${GOARCH}"
+  go build -o "artifacts/regbot-${GOOS}-${GOARCH}" -ldflags "$LD_FLAGS" ${GO_BUILD_FLAGS} ./cmd/regbot/
+done

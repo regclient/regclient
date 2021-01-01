@@ -1,0 +1,70 @@
+# syntax=docker/dockerfile:experimental
+
+FROM --platform=$BUILDPLATFORM golang:1.14-alpine as dev
+RUN apk add --no-cache git ca-certificates
+RUN adduser -D appuser \
+ && mkdir -p /home/appuser/.docker \
+ && chown -R appuser /home/appuser
+WORKDIR /src
+COPY . /src/
+CMD CGO_ENABLED=0 go build -ldflags '-s -w -extldflags -static' -o regbot ./cmd/regbot/ && ./regbot
+
+FROM --platform=$BUILDPLATFORM dev as build
+ARG TARGETOS
+ARG TARGETARCH
+ARG LD_FLAGS
+RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
+    --mount=type=cache,id=goroot,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -ldflags "-s -w -extldflags -static ${LD_FLAGS}" -o regbot ./cmd/regbot/
+USER appuser
+CMD [ "./regbot" ]
+
+FROM scratch as artifact
+COPY --from=build /src/regbot /regbot
+
+FROM alpine as release-alpine
+COPY --from=build /etc/passwd /etc/group /etc/
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build --chown=appuser /home/appuser /home/appuser
+COPY --from=build /src/regbot /usr/local/bin/regbot
+USER appuser
+CMD [ "regbot", "--help" ]
+
+ARG BUILD_DATE
+ARG VCS_REF
+LABEL maintainer="" \
+      org.opencontainers.image.created=$BUILD_DATE \
+      org.opencontainers.image.authors="Regclient contributors" \
+      org.opencontainers.image.url="https://github.com/regclient/regclient" \
+      org.opencontainers.image.documentation="https://github.com/regclient/regclient" \
+      org.opencontainers.image.source="https://github.com/regclient/regclient" \
+      org.opencontainers.image.version="latest" \
+      org.opencontainers.image.revision=$VCS_REF \
+      org.opencontainers.image.vendor="" \
+      org.opencontainers.image.licenses="Apache 2.0" \
+      org.opencontainers.image.title="regbot" \
+      org.opencontainers.image.description=""
+
+FROM scratch as release-scratch
+COPY --from=build /etc/passwd /etc/group /etc/
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build --chown=appuser /home/appuser /home/appuser
+COPY --from=build /src/regbot /regbot
+USER appuser
+ENTRYPOINT [ "/regbot" ]
+
+ARG BUILD_DATE
+ARG VCS_REF
+LABEL maintainer="" \
+      org.opencontainers.image.created=$BUILD_DATE \
+      org.opencontainers.image.authors="Regclient contributors" \
+      org.opencontainers.image.url="https://github.com/regclient/regclient" \
+      org.opencontainers.image.documentation="https://github.com/regclient/regclient" \
+      org.opencontainers.image.source="https://github.com/regclient/regclient" \
+      org.opencontainers.image.version="latest" \
+      org.opencontainers.image.revision=$VCS_REF \
+      org.opencontainers.image.vendor="" \
+      org.opencontainers.image.licenses="Apache 2.0" \
+      org.opencontainers.image.title="regbot" \
+      org.opencontainers.image.description=""
