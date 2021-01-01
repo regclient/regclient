@@ -138,3 +138,27 @@ jobs:
         asset_path: ./artifacts/regsync-linux-arm64
         asset_name: regsync-linux-arm64
         asset_content_type: application/octet-stream
+
+    - name: Upload Release Asset - regbot-linux-amd64
+      if: steps.release_details.outputs.valid == 'true'
+      id: release_assets_regbot_linux_amd64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.release_create.outputs.upload_url }}
+        asset_path: ./artifacts/regbot-linux-amd64
+        asset_name: regbot-linux-amd64
+        asset_content_type: application/octet-stream
+
+    - name: Upload Release Asset - regbot-linux-arm64
+      if: steps.release_details.outputs.valid == 'true'
+      id: release_assets_regbot_linux_arm64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.release_create.outputs.upload_url }}
+        asset_path: ./artifacts/regbot-linux-arm64
+        asset_name: regbot-linux-arm64
+        asset_content_type: application/octet-stream
