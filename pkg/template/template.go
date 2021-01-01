@@ -1,18 +1,17 @@
-package main
+package template
 
 import (
 	"bytes"
 	"encoding/json"
-	"html/template"
 	"io"
 	"io/ioutil"
 	"os"
 	"reflect"
 	"strings"
-	"time"
+	gotemplate "text/template"
 )
 
-var tmplFuncs = template.FuncMap{
+var tmplFuncs = gotemplate.FuncMap{
 	"default": func(def, orig interface{}) interface{} {
 		if orig == nil || orig == reflect.Zero(reflect.TypeOf(orig)).Interface() {
 			return def
@@ -47,42 +46,26 @@ var tmplFuncs = template.FuncMap{
 	},
 	"lower": strings.ToLower,
 	"split": strings.Split,
-	"time":  TimeFunc,
+	"time":  func() *TimeFuncs { return &TimeFuncs{} },
 	"title": strings.Title,
 	"upper": strings.ToUpper,
 }
 
-func templateWritter(out io.Writer, tmpl string, data interface{}) error {
-	t, err := template.New("out").Funcs(tmplFuncs).Parse(tmpl)
+// Writer outputs a template to an io.Writer
+func Writer(out io.Writer, tmpl string, data interface{}) error {
+	t, err := gotemplate.New("out").Funcs(tmplFuncs).Parse(tmpl)
 	if err != nil {
 		return err
 	}
 	return t.Execute(out, data)
 }
 
-func templateString(tmpl string, data interface{}) (string, error) {
+// String converts a template to a string
+func String(tmpl string, data interface{}) (string, error) {
 	var sb strings.Builder
-	err := templateWritter(&sb, tmpl, data)
+	err := Writer(&sb, tmpl, data)
 	if err != nil {
 		return "", err
 	}
 	return sb.String(), nil
-}
-
-// TimeFunc provides the "time" template, returning a struct with methods
-func TimeFunc() *TimeFuncs {
-	return &TimeFuncs{}
-}
-
-// TimeFuncs wraps all time based templates
-type TimeFuncs struct{}
-
-// Now returns current time
-func (t *TimeFuncs) Now() time.Time {
-	return time.Now()
-}
-
-// Parse parses the current time according to layout
-func (t *TimeFuncs) Parse(layout string, value string) (time.Time, error) {
-	return time.Parse(layout, value)
 }

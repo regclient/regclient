@@ -18,6 +18,7 @@ type charLU byte
 
 var charLUs [256]charLU
 
+// TODO: allow clientID to be modified
 var defaultClientID = "regclient"
 
 // minTokenLife tokens are required to last at least 60 seconds to support older docker clients
@@ -466,10 +467,10 @@ func (b *BearerHandler) ProcessChallenge(c Challenge) error {
 		return ErrInvalidChallenge
 	}
 	if _, ok := c.params["service"]; !ok {
-		return ErrInvalidChallenge
+		c.params["service"] = ""
 	}
 	if _, ok := c.params["scope"]; !ok {
-		return ErrInvalidChallenge
+		c.params["scope"] = ""
 	}
 
 	existingScope := b.scopeExists(c.params["scope"])
@@ -539,7 +540,9 @@ func (b *BearerHandler) tryGet() error {
 	reqParams := req.URL.Query()
 	reqParams.Add("client_id", defaultClientID)
 	reqParams.Add("offline_token", "true")
-	reqParams.Add("service", b.service)
+	if b.service != "" {
+		reqParams.Add("service", b.service)
+	}
 
 	for _, s := range b.scopes {
 		reqParams.Add("scope", s)
@@ -563,8 +566,12 @@ func (b *BearerHandler) tryGet() error {
 
 func (b *BearerHandler) tryPost() error {
 	form := url.Values{}
-	form.Set("scope", strings.Join(b.scopes, " "))
-	form.Set("service", b.service)
+	if len(b.scopes) > 0 {
+		form.Set("scope", strings.Join(b.scopes, " "))
+	}
+	if b.service != "" {
+		form.Set("service", b.service)
+	}
 	form.Set("client_id", defaultClientID)
 	if b.token.RefreshToken != "" {
 		form.Set("grant_type", "refresh_token")
@@ -592,6 +599,9 @@ func (b *BearerHandler) tryPost() error {
 
 // check if the scope already exists within the list of scopes
 func (b *BearerHandler) scopeExists(search string) bool {
+	if search == "" {
+		return true
+	}
 	for _, scope := range b.scopes {
 		if scope == search {
 			return true

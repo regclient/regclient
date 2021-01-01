@@ -6,7 +6,7 @@ API docs are still needed
 
 ## regctl
 
-### Top level commands
+### regctl Top level commands
 
 ```text
 $ regctl --help
@@ -229,7 +229,7 @@ regctl image inspect --format '{{range $k, $v := .Config.Labels}}{{if eq $k "org
 
 ## regsync
 
-### Top Level Commands
+### regsync Top Level Commands
 
 ```text
 $ regsync --help
@@ -289,8 +289,8 @@ sync:
     type: image
     interval: 60m
     backup: "backup-{{.Ref.Tag}}"
-  - source: alpine:latest
-    target: localhost:5000/library/alpine:latest
+  - source: alpine
+    target: localhost:5000/library/alpine
     type: repository
     tags:
       allow:
@@ -390,6 +390,173 @@ template supports the following objects:
 
 See [Template Functions](#Template-Functions) for more details on the custom
 functions available in templates.
+
+## regbot
+
+### regbot Top Level Commands
+
+```text
+$ regbot --help
+Utility for automating repository actions
+More details at https://github.com/regclient/regclient
+
+Usage:
+  regbot [command]
+
+Available Commands:
+  help        Help about any command
+  once        runs each script once
+  server      run the regbot server
+
+Flags:
+  -c, --config string        Config file
+      --dry-run              Dry Run, skip all external actions
+  -h, --help                 help for regbot
+      --logopt stringArray   Log options
+  -v, --verbosity string     Log level (debug, info, warn, error, fatal, panic) (default "info")
+
+Use "regbot [command] --help" for more information about a command.
+```
+
+The `once` command can be placed in a cron or CI job to perform the
+synchronization immediately rather than following the schedule.
+
+The `server` command is useful to run a background process that continuously
+updates the target repositories as the source changes.
+
+The `--dry-run` option is useful for testing scripts without actually copying or
+deleting images.
+
+`--logopt` currently accepts `json` to format all logs as json instead of text.
+This is useful for parsing in external tools like Elastic/Splunk.
+
+### regbot Configuration File
+
+The `regbot` configuration file is yaml formatted with the following layout:
+
+```yaml
+x-sched-a: &sched-a "15 01 * * *"
+version: 1
+creds:
+  - registry: localhost:5000
+    tls: disabled
+    scheme: http
+  - registry: docker.io
+    user: "{{env \"HUB_USER\"}}"
+    pass: "{{file \"/var/run/secrets/hub_token\"}}"
+defaults:
+  parallel: 2
+  timeout: 300s
+scripts:
+  - name: Hello World
+    timeout: 10s
+    script: |
+      log "hello world"
+  - name: Busybox Tags
+    timeout: 30s
+    script: |
+      tags = tag.ls("busybox")
+      table.sort(tags)
+      for k, t in ipairs(tags) do
+        log "Found tag " .. t
+      end
+```
+
+- `version`: This should be left at version 1 or not included at all. This may
+  be incremented if future `regbot` releases change the configuration file
+  structure.
+
+- `creds`: Array of registry credentials and settings for connecting. To avoid
+  saving credentials in the same file with the other settings, consider using
+  the `${HOME}/.docker/config.json` or a template in the `user` and `pass`
+  fields to expand a variable or file contents. When using the
+  `regclient/regsync` image, the docker config is read from
+  `/home/appuser/.docker/config.json`. Each `creds` entry supports the following
+  options:
+  - `registry`: Hostname and port of the registry server used in later lines. Use `docker.io` for Docker Hub.
+  - `user`: Username
+  - `pass`: Password
+  - `tls`: Whether TLS is enabled/verified. Values include "enabled" (default), "insecure", or "disabled".
+  - `scheme`: http or https (default)
+  - `regcert`: Registry CA certificate for self signed certificates. This may be a string with `\n` for line breaks, or the yaml multi-line syntax may be used like:
+
+    ```yaml
+    regcert: |
+      -----BEGIN CERTIFICATE-----
+      MIIJDDCCBPSgAwIB....
+      -----END CERTIFICATE-----
+    ```
+
+- `defaults`: Global settings and default values applied to each sync entry:
+  - `interval`: How often to run each sync step in `server` mode.
+  - `schedule`: Cron like schedule to run each step, overrides `interval`.
+  - `parallel`: Number of concurrent actions to run. All scripts may be started
+    concurrently, but will wait on this limit when specific actions are
+    performed like an image copy. Defaults to 1.
+  - `timeout`: Time until the script is aborted. This timeout is enforced when
+    calling various actions like an image copy.
+  - `skipDockerConfig`: Do not read the user credentials in
+    `${HOME}/.docker/config.json`.
+
+- `scripts`: Array of Lua scripts to run.
+  - `script`: Text of the Lua script.
+  - `interval`, `schedule`, and `timeout`: See description under `defaults`.
+
+- `x-*`: Any field beginning with `x-` is considered a user extension and will
+  not be parsed in current for future versions of the project. These are useful
+  for integrating your own tooling, or setting values for yaml anchors and
+  aliases.
+
+[Go templates](https://golang.org/pkg/text/template/) are used to expand values
+in `user`, `pass`, and `regcert`. See [Template Functions](#Template-Functions)
+for more details on the custom functions available in templates.
+
+The Lua script interface is based on Lua 5.1. The [Lua manual is available
+online](https://www.lua.org/manual/5.1/index.html). The following additional
+functions are available:
+
+- `log <msg>`: log a message (preferred over Lua's print).
+- `reference.new <ref>`: accepts an image reference, returning a reference
+  object. Other functions that accept an image name or repository will accept a
+  reference object.
+- `<ref>:tag`: get or set the tag on a reference. This is useful when iterating
+  over tags within a repository.
+- `repo.ls <host:port>`: list the repositories on a registry server. This
+  depends on the registry supporting the API call.
+- `tag.ls <repo>`: returns an array of tags found within a repository.
+- `tag.delete <ref>`: deletes a tag from a registry. This uses the regclient tag
+  delete method that first pushes a dummy manifest to the tag, which avoids
+  deleting other tags that point to the same manifest.
+- `manifest.get`: returns the image manifest. The current platform will
+  be resolved, or it may be specified as a second arg.
+- `manifest.getList`: retrieves a manifest list without resolving the
+  current platform. If the manifest is not a multi-platform manifest list, the
+  single manifest will be returned instead.
+- `manifest.head`: retrieves the manifest using a head request. This
+  pulls the digest and current rate limit and can be used with the manifest
+  delete and ratelimit functions.
+- `<manifest>:config`: see `image.config`
+- `<manifest>:delete`: deletes a manifest. Note that a manifest list or manifest
+  head request to retrieve the manifest is recommended, otherwise the registry
+  may delete a single platform's manifest without deleting the entire
+  multi-platform image, leading to errors when attempting to access the
+  remaining manifest. If multiple tags can point to the same manifest, then
+  using `tag.delete` is recommended.
+- `<manifest>:get`: see `image.manifest`. This is useful for pulling a manifest
+  when you've only run a head request.
+- `<manifest>:ratelimit`: return the ratelimit seen when the manifest was last
+  retrieved. The ratelimit object includes `Set` (boolean indicating if a rate
+  limit was returned with the manifest), `Remain` (requests remaining), `Limit`
+  (maximum limit possible).
+- `<manifest>:ratelimitWait <limit> <poll> <timeout>`: see `image.ratelimitWait`
+- `image.config <ref>`: returns the image configuration, see `docker image
+  inspect`.
+- `image.copy <src-ref> <tgt-ref>`: copies an image. This may be retagging
+  within the same repository, copying between repositories, or copying between
+  registries.
+- `image.ratelimitWait <ref> <limit> <poll> <timeout>`: polls a registry for the
+  rate limit remaining to increase at or above the specified limit. By default
+  the polling interval is `5m` and timeout is `6h`.
 
 ## Template Functions
 
