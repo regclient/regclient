@@ -30,14 +30,14 @@ var registryLoginCmd = &cobra.Command{
 	Short: "login to a registry",
 	Long: `Provide login credentials for a registry. This may not be necessary if you
 have already logged in with docker.`,
-	Args: cobra.RangeArgs(1, 1),
+	Args: cobra.RangeArgs(0, 1),
 	RunE: runRegistryLogin,
 }
 var registryLogoutCmd = &cobra.Command{
 	Use:   "logout <registry>",
 	Short: "logout of a registry",
 	Long:  `Remove registry credentials from the configuration.`,
-	Args:  cobra.RangeArgs(1, 1),
+	Args:  cobra.RangeArgs(0, 1),
 	RunE:  runRegistryLogout,
 }
 var registrySetCmd = &cobra.Command{
@@ -45,7 +45,7 @@ var registrySetCmd = &cobra.Command{
 	Short: "set options on a registry",
 	Long: `Set or modify the configuration of a registry. To pass a certificate, include
 the contents of the file, e.g. --cacert "$(cat reg-ca.crt)"`,
-	Args: cobra.RangeArgs(1, 1),
+	Args: cobra.RangeArgs(0, 1),
 	RunE: runRegistrySet,
 }
 var registryOpts struct {
@@ -109,6 +109,9 @@ func runRegistryLogin(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	reader := bufio.NewReader(os.Stdin)
+	if len(args) < 1 || args[0] == regclient.DockerRegistry || args[0] == regclient.DockerRegistryAuth {
+		args = []string{regclient.DockerRegistryDNS}
+	}
 	h, ok := c.Hosts[args[0]]
 	if !ok {
 		h = &regclient.ConfigHost{}
@@ -165,6 +168,9 @@ func runRegistryLogout(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if len(args) < 1 || args[0] == regclient.DockerRegistry || args[0] == regclient.DockerRegistryAuth {
+		args = []string{regclient.DockerRegistryDNS}
+	}
 	h, ok := c.Hosts[args[0]]
 	if !ok {
 		log.WithFields(logrus.Fields{
@@ -189,6 +195,9 @@ func runRegistrySet(cmd *cobra.Command, args []string) error {
 	c, err := regclient.ConfigLoadDefault()
 	if err != nil {
 		return err
+	}
+	if len(args) < 1 || args[0] == regclient.DockerRegistry || args[0] == regclient.DockerRegistryAuth {
+		args = []string{regclient.DockerRegistryDNS}
 	}
 	h, ok := c.Hosts[args[0]]
 	if !ok {
