@@ -1,6 +1,5 @@
-# Release v0.2.0
+# Release v0.2.1
 
-- Adding regbot command and image to support Lua scripts with the regclient api.
-  The regbot scripts allow complex mirroring logic and enable registry cleanup
-  policies to be automated.
-- Support registry auth without service or scope in the challenge header.
+- `regctl registry` commands `login`, `logout`, and `set` previously required
+  the nonintuitive DNS name "registry-1.docker.io" for Hub. They now accept
+  "docker.io" and default to Hub when no registry is provided.
