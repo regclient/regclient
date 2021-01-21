@@ -1,4 +1,4 @@
-# regsync Quick Start
+# regbot Quick Start
 
 ## Setup a Registry
 
