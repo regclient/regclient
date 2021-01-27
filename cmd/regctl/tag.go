@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"os"
 
+	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/regclient"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -37,6 +38,7 @@ var tagOpts regclient.TagOpts
 func init() {
 	tagLsCmd.Flags().StringVarP(&tagOpts.Last, "last", "", "", "Specify the last tag from a previous request for pagination")
 	tagLsCmd.Flags().IntVarP(&tagOpts.Limit, "limit", "", 0, "Specify the number of tags to retrieve")
+	tagLsCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{jsonPretty .}}", "Format output with go template syntax")
 
 	tagCmd.AddCommand(tagDeleteCmd)
 	tagCmd.AddCommand(tagLsCmd)
@@ -75,8 +77,5 @@ func runTagLs(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	for _, tag := range tl.Tags {
-		fmt.Printf("%s:%s\n", tl.Name, tag)
-	}
-	return nil
+	return template.Writer(os.Stdout, rootOpts.format, tl)
 }
