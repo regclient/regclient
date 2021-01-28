@@ -7,5 +7,6 @@ import (
 func main() {
 	regclient.ConfigDir = ".regctl"
 	regclient.ConfigEnv = "REGCLI_CONFIG"
+	regclient.UserAgent = "regclient/regctl"
 	Execute()
 }
