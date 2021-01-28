@@ -108,6 +108,7 @@ func rootPreRun(cmd *cobra.Command, args []string) error {
 	}).Debug("Configuring parallel settings")
 	sem = semaphore.NewWeighted(int64(config.Defaults.Parallel))
 	// set the regclient, loading docker creds unless disabled, and inject logins from config file
+	regclient.UserAgent = "regclient/regbot"
 	rcOpts := []regclient.Opt{regclient.WithLog(log)}
 	if !config.Defaults.SkipDockerConf {
 		rcOpts = append(rcOpts, regclient.WithDockerCreds(), regclient.WithDockerCerts())
