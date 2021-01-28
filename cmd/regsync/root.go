@@ -35,13 +35,11 @@ var rc regclient.RegClient
 var sem *semaphore.Weighted
 
 var rootCmd = &cobra.Command{
-	Use:   "regsync <cmd>",
-	Short: "Utility for mirroring docker repositories",
-	Long:  usageDesc,
-	// Run: func(cmd *cobra.Command, args []string) {
-	// 	// Do Stuff Here
-	// },
-	// RunE: runServer,
+	Use:           "regsync <cmd>",
+	Short:         "Utility for mirroring docker repositories",
+	Long:          usageDesc,
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 var serverCmd = &cobra.Command{
 	Use: "server",
