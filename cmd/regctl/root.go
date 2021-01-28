@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/regclient/regclient/regclient"
@@ -15,12 +14,11 @@ More details at https://github.com/regclient/regclient`
 var log *logrus.Logger
 
 var rootCmd = &cobra.Command{
-	Use:   "regctl <cmd>",
-	Short: "Utility for accessing docker registries",
-	Long:  usageDesc,
-	Run: func(cmd *cobra.Command, args []string) {
-		// Do Stuff Here
-	},
+	Use:           "regctl <cmd>",
+	Short:         "Utility for accessing docker registries",
+	Long:          usageDesc,
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 
 var rootOpts struct {
@@ -39,15 +37,6 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.WarnLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
 	rootCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
 	rootCmd.PersistentPreRunE = rootPreRun
-}
-
-// Execute runs the CLI using cobra
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-	os.Exit(0)
 }
 
 func rootPreRun(cmd *cobra.Command, args []string) error {

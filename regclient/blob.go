@@ -2,6 +2,7 @@ package regclient
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/pkg/retryable"
+	"github.com/regclient/regclient/pkg/wraperr"
 	"github.com/sirupsen/logrus"
 )
 
@@ -86,7 +88,7 @@ func (rc *regClient) BlobGet(ctx context.Context, ref Ref, d string, accepts []s
 			"err":    err,
 			"digest": d,
 		}).Warn("Failed to parse digest")
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("Failed to parse blob digest %s, ref %s: %w", d, ref.CommonName(), err)
 	}
 
 	headers := http.Header{}
@@ -96,12 +98,27 @@ func (rc *regClient) BlobGet(ctx context.Context, ref Ref, d string, accepts []s
 
 	rty := rc.getRetryable(host)
 	resp, err := rty.DoRequest(ctx, "GET", blobURL, retryable.WithHeaders(headers), retryable.WithDigest(dp))
-	if err != nil {
-		return nil, nil, err
+	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
+		return nil, nil, fmt.Errorf("Failed to retrieve blob, digest %s, ref %s: %w", d, ref.CommonName(), err)
 	}
+	switch resp.HTTPResponse().StatusCode {
+	case 200: // success
+	case 401:
+		return nil, nil, wraperr.New(fmt.Errorf("Unauthorized request for blob, digest %s, ref %s", d, ref.CommonName()), ErrUnauthorized)
+	case 403:
+		return nil, nil, wraperr.New(fmt.Errorf("Forbidden request for blob, digest %s, ref %s", d, ref.CommonName()), ErrUnauthorized)
+	case 404:
+		return nil, nil, wraperr.New(fmt.Errorf("Blob not found: digest %s, ref %s", d, ref.CommonName()), ErrNotFound)
+	case 429:
+		return nil, nil, wraperr.New(fmt.Errorf("Rate limit exceeded pulling blob, digest %s, ref %s", d, ref.CommonName()), ErrRateLimit)
+	default:
+		return nil, nil, fmt.Errorf("Request failed for blob, digest %s, ref %s, http status %d", d, ref.CommonName(), resp.HTTPResponse().StatusCode)
+	}
+
 	return resp, resp.HTTPResponse(), nil
 }
 
+// BlobHead is used to verify if a blob exists and is accessible
 func (rc *regClient) BlobHead(ctx context.Context, ref Ref, d string) error {
 	host := rc.getHost(ref.Registry)
 
@@ -113,13 +130,23 @@ func (rc *regClient) BlobHead(ctx context.Context, ref Ref, d string) error {
 
 	rty := rc.getRetryable(host)
 	resp, err := rty.DoRequest(ctx, "HEAD", blobURL)
-	if err != nil {
-		return err
+	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
+		return fmt.Errorf("Failed to request blob head, digest %s, ref %s: %w", d, ref.CommonName(), err)
 	}
 	defer resp.Close()
 
-	if resp.HTTPResponse().StatusCode < 200 || resp.HTTPResponse().StatusCode > 299 {
-		return ErrNotFound
+	switch resp.HTTPResponse().StatusCode {
+	case 200: // success
+	case 401:
+		return wraperr.New(fmt.Errorf("Unauthorized request for blob head, digest %s, ref %s", d, ref.CommonName()), ErrUnauthorized)
+	case 403:
+		return wraperr.New(fmt.Errorf("Forbidden request for blob head, digest %s, ref %s", d, ref.CommonName()), ErrUnauthorized)
+	case 404:
+		return wraperr.New(fmt.Errorf("Blob not found: digest %s, ref %s", d, ref.CommonName()), ErrNotFound)
+	case 429:
+		return wraperr.New(fmt.Errorf("Rate limit exceeded pulling blob head, digest %s, ref %s", d, ref.CommonName()), ErrRateLimit)
+	default:
+		return fmt.Errorf("Request failed for blob, digest %s, ref %s, http status %d", d, ref.CommonName(), resp.HTTPResponse().StatusCode)
 	}
 
 	return nil
@@ -140,12 +167,25 @@ func (rc *regClient) BlobMount(ctx context.Context, refSrc Ref, refTgt Ref, d st
 
 	rty := rc.getRetryable(host)
 	resp, err := rty.DoRequest(ctx, "POST", mountURL)
-	if err != nil {
-		return fmt.Errorf("Error calling blob mount request: %w\nResponse object: %v", err, resp)
+	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
+		return fmt.Errorf("Error calling blob mount request, digest %s, ref %s, error: %w, response: %v", d, refTgt.CommonName(), err, resp)
 	}
 	defer resp.Close()
-	if resp.HTTPResponse().StatusCode != 201 {
-		return fmt.Errorf("Blob mount did not return a 201 status, status code: %d\nResponse object: %v", resp.HTTPResponse().StatusCode, resp)
+
+	switch resp.HTTPResponse().StatusCode {
+	case 201: // success: accepted
+	case 202: // success: completed
+	case 204: // success: no content
+	case 401:
+		return wraperr.New(fmt.Errorf("Unauthorized request for blob mount, digest %s, ref %s", d, refTgt.CommonName()), ErrUnauthorized)
+	case 403:
+		return wraperr.New(fmt.Errorf("Forbidden request for blob mount, digest %s, ref %s", d, refTgt.CommonName()), ErrUnauthorized)
+	case 404:
+		return wraperr.New(fmt.Errorf("Blob repo not found: digest %s, ref %s", d, refTgt.CommonName()), ErrNotFound)
+	case 429:
+		return wraperr.New(fmt.Errorf("Rate limit exceeded on blob mount, digest %s, ref %s", d, refTgt.CommonName()), ErrRateLimit)
+	default:
+		return fmt.Errorf("Blob mount status %d != 201, digest %s, ref %s, response: %v", resp.HTTPResponse().StatusCode, d, refTgt.CommonName(), resp)
 	}
 
 	return nil
@@ -172,19 +212,28 @@ func (rc *regClient) BlobPut(ctx context.Context, ref Ref, d string, rdr io.Read
 	}).Debug("Requesting upload location")
 	rty := rc.getRetryable(host)
 	resp, err := rty.DoRequest(ctx, "POST", uploadURL)
-	if err != nil {
+	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
 		rc.log.WithFields(logrus.Fields{
 			"err": err,
 			"ref": ref.Reference,
 		}).Warn("Error calling BlobPut")
-		return err
+		return fmt.Errorf("Failed sending blob put, digest %s, ref %s: %w", d, ref.CommonName(), err)
 	}
-	if resp.HTTPResponse().StatusCode != 202 {
-		rc.log.WithFields(logrus.Fields{
-			"statusCode": resp.HTTPResponse().StatusCode,
-			"url":        uploadURL.String(),
-		}).Warn("Unexpected status code on BlobPut")
-		return fmt.Errorf("Blob upload request did not return a 202 status, status code: %d\nResponse object: %v", resp.HTTPResponse().StatusCode, resp)
+	defer resp.Close()
+	switch resp.HTTPResponse().StatusCode {
+	case 201: // success: accepted
+	case 202: // success: completed
+	case 204: // success: no content
+	case 401:
+		return wraperr.New(fmt.Errorf("Unauthorized request for blob upload, digest %s, ref %s", d, ref.CommonName()), ErrUnauthorized)
+	case 403:
+		return wraperr.New(fmt.Errorf("Forbidden request for blob upload, digest %s, ref %s", d, ref.CommonName()), ErrUnauthorized)
+	case 404:
+		return wraperr.New(fmt.Errorf("Blob repo not found: digest %s, ref %s", d, ref.CommonName()), ErrNotFound)
+	case 429:
+		return wraperr.New(fmt.Errorf("Rate limit exceeded on blob upload, digest %s, ref %s", d, ref.CommonName()), ErrRateLimit)
+	default:
+		return fmt.Errorf("Blob upload status %d != 202, digest %s, ref %s, response: %v", resp.HTTPResponse().StatusCode, d, ref.CommonName(), resp)
 	}
 
 	// extract the location into a new putURL based on whether it's relative, fqdn with a scheme, or without a scheme
@@ -204,7 +253,7 @@ func (rc *regClient) BlobPut(ctx context.Context, ref Ref, d string, rdr io.Read
 			"location": location,
 			"err":      err,
 		}).Warn("Location url failed to parse")
-		return err
+		return fmt.Errorf("Blob upload url invalid, digest %s, ref %s: %w", d, ref.CommonName(), err)
 	}
 
 	// append digest to request to use the monolithic upload option
@@ -223,23 +272,30 @@ func (rc *regClient) BlobPut(ctx context.Context, ref Ref, d string, rdr io.Read
 	opts = append(opts, retryable.WithContentLen(cl))
 	opts = append(opts, retryable.WithHeader("Content-Type", []string{ct}))
 	resp, err = rty.DoRequest(ctx, "PUT", *putURL, opts...)
-	if err != nil {
+	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
 		rc.log.WithFields(logrus.Fields{
 			"err":    err,
 			"url":    putURL.String(),
 			"ref":    ref.Reference,
 			"digest": d,
 		}).Warn("Failed to upload blob")
-		return err
+		return fmt.Errorf("Blob upload failed, digest %s, ref %s: %w", d, ref.CommonName(), err)
 	}
-	if resp.HTTPResponse().StatusCode < 200 || resp.HTTPResponse().StatusCode > 299 {
-		rc.log.WithFields(logrus.Fields{
-			"statusCode": resp.HTTPResponse().StatusCode,
-			"url":        putURL.String(),
-			"ref":        ref.Reference,
-			"digest":     d,
-		}).Warn("Unexpected status code while uploading blob")
-		return fmt.Errorf("Blob put request status code: %d\nResponse object: %v", resp.HTTPResponse().StatusCode, resp)
+	defer resp.Close()
+	switch resp.HTTPResponse().StatusCode {
+	case 201: // success: accepted
+	case 202: // success: completed
+	case 204: // success: no content
+	case 401:
+		return wraperr.New(fmt.Errorf("Unauthorized request for blob upload, digest %s, ref %s", d, ref.CommonName()), ErrUnauthorized)
+	case 403:
+		return wraperr.New(fmt.Errorf("Forbidden request for blob upload, digest %s, ref %s", d, ref.CommonName()), ErrUnauthorized)
+	case 404:
+		return wraperr.New(fmt.Errorf("Blob repo not found: digest %s, ref %s", d, ref.CommonName()), ErrNotFound)
+	case 429:
+		return wraperr.New(fmt.Errorf("Rate limit exceeded on blob upload, digest %s, ref %s", d, ref.CommonName()), ErrRateLimit)
+	default:
+		return fmt.Errorf("Blob upload status %d != 201, digest %s, ref %s, response: %v", resp.HTTPResponse().StatusCode, d, ref.CommonName(), resp)
 	}
 
 	return nil

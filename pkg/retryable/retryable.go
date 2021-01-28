@@ -14,6 +14,7 @@ import (
 	"time"
 
 	digest "github.com/opencontainers/go-digest"
+	"github.com/regclient/regclient/pkg/wraperr"
 	"github.com/sirupsen/logrus"
 )
 
@@ -488,13 +489,13 @@ func (req *request) checkResp() error {
 		}
 	}
 	// unexpected error and backoff was unsuccessful (limit reached, no more mirrors)
-	return fmt.Errorf("Unexpected http status code %d", statusCode)
+	return wraperr.New(fmt.Errorf("Request failed, http status code %d", statusCode), ErrStatusCode)
 }
 
 func (req *request) backoff(removeMirror bool) error {
 	req.backoffs++
 	if req.backoffs >= req.r.limit {
-		return ErrBackoffLimit
+		return fmt.Errorf("%w: backoffs %d, limit %d", ErrBackoffLimit, req.backoffs, req.r.limit)
 	}
 	failedURL := req.urls[req.curURL]
 	// next mirror based on whether remove flag is set

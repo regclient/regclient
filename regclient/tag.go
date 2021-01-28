@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/url"
 	"strconv"
@@ -13,6 +15,8 @@ import (
 	dockerSchema2 "github.com/docker/distribution/manifest/schema2"
 	"github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/regclient/regclient/pkg/retryable"
+	"github.com/regclient/regclient/pkg/wraperr"
 	"github.com/sirupsen/logrus"
 )
 
@@ -100,13 +104,13 @@ func (rc *regClient) TagDelete(ctx context.Context, ref Ref) error {
 	// push config
 	err = rc.BlobPut(ctx, ref, confDigest.String(), ioutil.NopCloser(bytes.NewReader(confB)), MediaTypeDocker2ImageConfig, int64(len(confB)))
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed sending dummy config to delete %s: %w", ref.CommonName(), err)
 	}
 
 	// push manifest to tag
 	err = rc.ManifestPut(ctx, ref, &m)
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed sending dummy manifest to delete %s: %w", ref.CommonName(), err)
 	}
 
 	ref.Digest = manfDigest.String()
@@ -118,7 +122,7 @@ func (rc *regClient) TagDelete(ctx context.Context, ref Ref) error {
 	}).Debug("Deleting dummy manifest")
 	err = rc.ManifestDelete(ctx, ref)
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed deleting dummy manifest for %s: %w", ref.CommonName(), err)
 	}
 
 	return nil
@@ -147,23 +151,43 @@ func (rc *regClient) TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts)
 
 	rty := rc.getRetryable(host)
 	resp, err := rty.DoRequest(ctx, "GET", repoURL)
-	if err != nil {
-		return tl, err
+	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
+		rc.log.WithFields(logrus.Fields{
+			"err": err,
+			"ref": ref.CommonName(),
+		}).Warn("Failed to list tags")
+		return tl, fmt.Errorf("Failed to list tags for %s: %w", ref.CommonName(), err)
+	}
+	defer resp.Close()
+	switch resp.HTTPResponse().StatusCode {
+	case 200: // success
+	case 401:
+		return tl, wraperr.New(fmt.Errorf("Unauthorized request for tags %s", ref.CommonName()), ErrUnauthorized)
+	case 403:
+		return tl, wraperr.New(fmt.Errorf("Forbidden request for tags %s", ref.CommonName()), ErrUnauthorized)
+	case 404:
+		return tl, wraperr.New(fmt.Errorf("Repository not found: %s", ref.CommonName()), ErrNotFound)
+	case 429:
+		return tl, wraperr.New(fmt.Errorf("Rate limit exceeded pulling tags %s", ref.CommonName()), ErrRateLimit)
+	default:
+		return tl, fmt.Errorf("Error getting tags for %s: http response code %d != 200", ref.CommonName(), resp.HTTPResponse().StatusCode)
 	}
 	respBody, err := ioutil.ReadAll(resp)
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"err": err,
+			"ref": ref.CommonName(),
 		}).Warn("Failed to read tag list")
-		return tl, err
+		return tl, fmt.Errorf("Failed to read tags for %s: %w", ref.CommonName(), err)
 	}
 	err = json.Unmarshal(respBody, &tl)
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"err":  err,
 			"body": respBody,
+			"ref":  ref.CommonName(),
 		}).Warn("Failed to unmarshal tag list")
-		return tl, err
+		return tl, fmt.Errorf("Failed to unmarshal tag list for %s: %w", ref.CommonName(), err)
 	}
 
 	return tl, nil

@@ -77,7 +77,7 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) erro
 				"ref": refSrc.Reference,
 				"err": err,
 			}).Warn("Failed to get config digest from manifest")
-			return err
+			return fmt.Errorf("Failed to get config digest for %s: %w", refSrc.CommonName(), err)
 		}
 		rc.log.WithFields(logrus.Fields{
 			"source": refSrc.Reference,
@@ -143,30 +143,27 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) erro
 }
 
 func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writer) error {
-	if ref.CommonName() == "" {
-		return ErrNotFound
-	}
-
 	expManifest := dockerTarManifest{}
 	expManifest.RepoTags = append(expManifest.RepoTags, ref.CommonName())
 
 	m, err := rc.ManifestGet(ctx, ref)
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
-			"ref": ref.Reference,
+			"ref": ref.CommonName(),
 			"err": err,
 		}).Warn("Failed to get manifest")
 		return err
 	}
 
 	// write to a temp directory
-	tempDir, err := ioutil.TempDir("", "regcli-export-")
+	tempDir, err := ioutil.TempDir("", "regclient-export-")
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
+			"ref": ref.CommonName(),
 			"dir": tempDir,
 			"err": err,
 		}).Warn("Failed to create temp directory")
-		return err
+		return fmt.Errorf("Export failed for %s, unable to create temp dir: %w", ref.CommonName(), err)
 	}
 	defer os.RemoveAll(tempDir)
 
@@ -178,6 +175,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 	cd, err := m.GetConfigDigest()
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
+			"ref": ref.CommonName(),
 			"err": err,
 		}).Warn("Failed to get config digest from manifest")
 		return err
@@ -194,7 +192,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 	confstr, err := ioutil.ReadAll(confio)
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
-			"ref":    ref.Reference,
+			"ref":    ref.CommonName(),
 			"digest": cd.String(),
 			"err":    err,
 		}).Warn("Failed to download config")
@@ -203,7 +201,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 	confDigest := digest.FromBytes(confstr)
 	if cd != confDigest {
 		rc.log.WithFields(logrus.Fields{
-			"ref":        ref.Reference,
+			"ref":        ref.CommonName(),
 			"expected":   cd.String(),
 			"calculated": confDigest.String(),
 		}).Warn("Config digest mismatch")
@@ -239,7 +237,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 		layerRComp, _, err := rc.BlobGet(ctx, ref, layerDesc.Digest.String(), []string{})
 		if err != nil {
 			rc.log.WithFields(logrus.Fields{
-				"ref":   ref.Reference,
+				"ref":   ref.CommonName(),
 				"layer": layerDesc.Digest.String(),
 				"err":   err,
 			}).Warn("Failed to download layer")
@@ -251,7 +249,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 		if err != nil {
 			rc.log.WithFields(logrus.Fields{
 				"err":    err,
-				"ref":    ref.Reference,
+				"ref":    ref.CommonName(),
 				"digest": layerDesc.Digest.String(),
 			}).Warn("Failed to decompress layer")
 			return err
@@ -266,6 +264,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 		lf, err := os.OpenFile(layerTarFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 		if err != nil {
 			rc.log.WithFields(logrus.Fields{
+				"ref":  ref.CommonName(),
 				"err":  err,
 				"file": layerTarFile,
 			}).Warn("Failed to create temp layer file")
@@ -275,7 +274,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 		if err != nil {
 			rc.log.WithFields(logrus.Fields{
 				"err":    err,
-				"ref":    ref.Reference,
+				"ref":    ref.CommonName(),
 				"digest": layerDesc.Digest.String(),
 				"file":   layerTarFile,
 			}).Warn("Failed to download layer")
@@ -320,6 +319,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 	confstr, err = json.Marshal(conf)
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
+			"ref": ref.CommonName(),
 			"err": err,
 		}).Warn("Error marshaling conf json")
 		return err
@@ -329,12 +329,14 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 	confFileFull := filepath.Join(tempDir, confFile)
 	if err := ioutil.WriteFile(confFileFull, confstr, 0644); err != nil {
 		rc.log.WithFields(logrus.Fields{
+			"ref": ref.CommonName(),
 			"err": err,
 		}).Warn("Error writing conf json")
 		return err
 	}
 	if err := os.Chtimes(confFileFull, *conf.Created, *conf.Created); err != nil {
 		rc.log.WithFields(logrus.Fields{
+			"ref": ref.CommonName(),
 			"err": err,
 		}).Warn("Error changing conf json timestamp")
 		return err
@@ -346,6 +348,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 	mlj, err := json.Marshal(ml)
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
+			"ref": ref.CommonName(),
 			"err": err,
 		}).Warn("Error marshaling manifest")
 		return err
@@ -353,12 +356,14 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 	manifestFile := filepath.Join(tempDir, "manifest.json")
 	if err := ioutil.WriteFile(manifestFile, mlj, 0644); err != nil {
 		rc.log.WithFields(logrus.Fields{
+			"ref": ref.CommonName(),
 			"err": err,
 		}).Warn("Error writing manifest")
 		return err
 	}
 	if err := os.Chtimes(manifestFile, time.Unix(0, 0), time.Unix(0, 0)); err != nil {
 		rc.log.WithFields(logrus.Fields{
+			"ref": ref.CommonName(),
 			"err": err,
 		}).Warn("Error changing manifest timestamp")
 		return err
@@ -368,6 +373,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 	err = archive.Tar(ctx, tempDir, outStream, archive.Uncompressed)
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
+			"ref": ref.CommonName(),
 			"err": err,
 		}).Warn("Error taring temp dir")
 		return err
@@ -387,21 +393,21 @@ func (rc *regClient) ImageGetConfig(ctx context.Context, ref Ref, d string) (oci
 	imgBody, err := ioutil.ReadAll(imgIO)
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
-			"ref":    ref.Reference,
+			"ref":    ref.CommonName(),
 			"digest": d,
 			"err":    err,
 		}).Warn("Error reading config blog")
-		return img, err
+		return img, fmt.Errorf("Error reading image config for %s: %w", ref.CommonName(), err)
 	}
 
 	err = json.Unmarshal(imgBody, &img)
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
-			"ref":  ref.Reference,
+			"ref":  ref.CommonName(),
 			"body": imgBody,
 			"err":  err,
 		}).Warn("Error unmarshaling conf json")
-		return img, err
+		return img, fmt.Errorf("Error parsing image config for %s: %w", ref.CommonName(), err)
 	}
 	return img, nil
 }

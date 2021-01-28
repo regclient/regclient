@@ -31,13 +31,11 @@ var rc regclient.RegClient
 var sem *semaphore.Weighted
 
 var rootCmd = &cobra.Command{
-	Use:   "regbot <cmd>",
-	Short: "Utility for automating repository actions",
-	Long:  usageDesc,
-	// Run: func(cmd *cobra.Command, args []string) {
-	// 	// Do Stuff Here
-	// },
-	// RunE: runServer,
+	Use:           "regbot <cmd>",
+	Short:         "Utility for automating repository actions",
+	Long:          usageDesc,
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 var serverCmd = &cobra.Command{
 	Use:   "server",

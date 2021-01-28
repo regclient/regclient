@@ -3,6 +3,7 @@ package regclient
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -18,6 +19,7 @@ import (
 	digest "github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/pkg/retryable"
+	"github.com/regclient/regclient/pkg/wraperr"
 	"github.com/sirupsen/logrus"
 )
 
@@ -59,7 +61,7 @@ func (m *manifest) GetConfigDigest() (digest.Digest, error) {
 	case ociv1.MediaTypeImageManifest:
 		return m.ociM.Config.Digest, nil
 	}
-	return "", ErrUnsupportedMediaType
+	return "", wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.mt), ErrUnsupportedMediaType)
 }
 
 func (m *manifest) GetDigest() digest.Digest {
@@ -81,7 +83,7 @@ func (m *manifest) GetLayers() ([]ociv1.Descriptor, error) {
 	case ociv1.MediaTypeImageManifest:
 		return m.ociM.Layers, nil
 	}
-	return []ociv1.Descriptor{}, ErrUnsupportedMediaType
+	return []ociv1.Descriptor{}, wraperr.New(fmt.Errorf("Layers are not available for media type %s", m.mt), ErrUnsupportedMediaType)
 }
 
 func (m *manifest) GetMediaType() string {
@@ -105,16 +107,16 @@ func (m *manifest) GetPlatformDesc(p *ociv1.Platform) (*ociv1.Descriptor, error)
 			}
 		}
 	default:
-		return nil, ErrUnsupportedMediaType
+		return nil, wraperr.New(fmt.Errorf("Platform lookup not available for media type %s", m.mt), ErrUnsupportedMediaType)
 	}
-	return nil, ErrNotFound
+	return nil, wraperr.New(fmt.Errorf("Platform not found: %v", p), ErrNotFound)
 }
 
 // GetPlatformList returns the list of platforms in a manifest list
 func (m *manifest) GetPlatformList() ([]*ociv1.Platform, error) {
 	var l []*ociv1.Platform
 	if !m.manifSet {
-		return l, ErrUnavailable
+		return l, wraperr.New(fmt.Errorf("Platform list unavailable, perform a ManifestGet first"), ErrUnavailable)
 	}
 	switch m.mt {
 	case MediaTypeDocker2ManifestList:
@@ -126,7 +128,7 @@ func (m *manifest) GetPlatformList() ([]*ociv1.Platform, error) {
 			l = append(l, d.Platform)
 		}
 	default:
-		return nil, ErrUnsupportedMediaType
+		return nil, wraperr.New(fmt.Errorf("Platform list not available for media type %s", m.mt), ErrUnsupportedMediaType)
 	}
 	return l, nil
 }
@@ -167,17 +169,16 @@ func (m *manifest) HasRateLimit() bool {
 
 func (m *manifest) IsList() bool {
 	switch m.mt {
-	case MediaTypeDocker2ManifestList:
+	case MediaTypeDocker2ManifestList, MediaTypeOCI1ManifestList:
 		return true
-	case MediaTypeOCI1ManifestList:
-		return true
+	default:
+		return false
 	}
-	return false
 }
 
 func (m *manifest) MarshalJSON() ([]byte, error) {
 	if !m.manifSet {
-		return []byte{}, ErrUnavailable
+		return []byte{}, wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), ErrUnavailable)
 	}
 
 	if len(m.origByte) > 0 {
@@ -194,12 +195,12 @@ func (m *manifest) MarshalJSON() ([]byte, error) {
 	case MediaTypeOCI1ManifestList:
 		return json.Marshal(m.ociML)
 	}
-	return []byte{}, ErrUnsupportedMediaType
+	return []byte{}, wraperr.New(fmt.Errorf("Json marshalling not available for media type %s", m.mt), ErrUnsupportedMediaType)
 }
 
 func (rc *regClient) ManifestDelete(ctx context.Context, ref Ref) error {
 	if ref.Digest == "" {
-		return ErrMissingDigest
+		return wraperr.New(fmt.Errorf("Digest required to delete manifest, reference %s", ref.CommonName()), ErrMissingDigest)
 	}
 
 	// build request
@@ -221,7 +222,7 @@ func (rc *regClient) ManifestDelete(ctx context.Context, ref Ref) error {
 	rty := rc.getRetryable(host)
 	resp, err := rty.DoRequest(ctx, "DELETE", manfURL, opts...)
 	if err != nil {
-		return err
+		return fmt.Errorf("Manifest delete failed for %s: %w", ref.CommonName(), err)
 	}
 
 	// validate response
@@ -249,10 +250,7 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 	} else if ref.Tag != "" {
 		tagOrDigest = ref.Tag
 	} else {
-		rc.log.WithFields(logrus.Fields{
-			"ref": ref.Reference,
-		}).Warn("Manifest requires a tag or digest")
-		return nil, ErrMissingTagOrDigest
+		return nil, wraperr.New(fmt.Errorf("Reference missing tag and digest: %s", ref.CommonName()), ErrMissingTagOrDigest)
 	}
 
 	manfURL := url.URL{
@@ -272,12 +270,21 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 	// send the request
 	rty := rc.getRetryable(host)
 	resp, err := rty.DoRequest(ctx, "GET", manfURL, opts...)
-	if err != nil {
-		return nil, err
+	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
+		return nil, fmt.Errorf("Error getting manifest for %s: %w", ref.CommonName(), err)
 	}
-	// TODO: handle return codes with appropriate errors
-	if resp.HTTPResponse().StatusCode != 200 {
-		return nil, fmt.Errorf("Unexpected http response code %d", resp.HTTPResponse().StatusCode)
+	switch resp.HTTPResponse().StatusCode {
+	case 200: // success
+	case 401:
+		return nil, wraperr.New(fmt.Errorf("Unauthorized request for manifest %s", ref.CommonName()), ErrUnauthorized)
+	case 403:
+		return nil, wraperr.New(fmt.Errorf("Forbidden request for manifest %s", ref.CommonName()), ErrUnauthorized)
+	case 404:
+		return nil, wraperr.New(fmt.Errorf("Manifest not found: %s", ref.CommonName()), ErrNotFound)
+	case 429:
+		return nil, wraperr.New(fmt.Errorf("Rate limit exceeded pulling manifest %s", ref.CommonName()), ErrRateLimit)
+	default:
+		return nil, fmt.Errorf("Error getting manifest for %s: http response code %d != 200", ref.CommonName(), resp.HTTPResponse().StatusCode)
 	}
 
 	rc.ratelimitHeader(&m, resp.HTTPResponse())
@@ -291,7 +298,7 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 			"err": err,
 			"ref": ref.Reference,
 		}).Warn("Failed to read manifest")
-		return nil, err
+		return nil, fmt.Errorf("Error reading manifest for %s: %w", ref.CommonName(), err)
 	}
 	m.digest = digester.Digest()
 
@@ -322,7 +329,7 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 			"mediatype": m.mt,
 			"ref":       ref.Reference,
 		}).Warn("Unsupported media type for manifest")
-		return nil, fmt.Errorf("Unknown manifest media type %s", m.mt)
+		return nil, wraperr.New(fmt.Errorf("Unsupported media type: %s, reference: %s", m.mt, ref.CommonName()), ErrUnsupportedMediaType)
 	}
 	// TODO: consider making a manifest Unmarshal method that detects which mediatype from the json
 	// err = json.Unmarshal(m.origByte, &m)
@@ -332,7 +339,7 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 			"mediatype": m.mt,
 			"ref":       ref.Reference,
 		}).Warn("Failed to unmarshal manifest")
-		return nil, err
+		return nil, fmt.Errorf("Error unmarshalling manifest for %s: %w", ref.CommonName(), err)
 	}
 	m.manifSet = true
 
@@ -353,7 +360,7 @@ func (rc *regClient) ManifestHead(ctx context.Context, ref Ref) (Manifest, error
 		rc.log.WithFields(logrus.Fields{
 			"ref": ref.Reference,
 		}).Warn("Manifest requires a tag or digest")
-		return nil, ErrMissingTagOrDigest
+		return nil, wraperr.New(fmt.Errorf("Reference missing tag and digest: %s", ref.CommonName()), ErrMissingTagOrDigest)
 	}
 
 	manfURL := url.URL{
@@ -374,7 +381,7 @@ func (rc *regClient) ManifestHead(ctx context.Context, ref Ref) (Manifest, error
 	rty := rc.getRetryable(host)
 	resp, err := rty.DoRequest(ctx, "HEAD", manfURL, opts...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Error getting manifest (head) for %s: %w", ref.CommonName(), err)
 	}
 
 	if resp.HTTPResponse().StatusCode != 200 {
@@ -387,7 +394,7 @@ func (rc *regClient) ManifestHead(ctx context.Context, ref Ref) (Manifest, error
 	m.mt = resp.HTTPResponse().Header.Get("Content-Type")
 	m.digest, err = digest.Parse(resp.HTTPResponse().Header.Get("Docker-Content-Digest"))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Error getting digest for %s: %w", ref.CommonName(), err)
 	}
 
 	return &m, nil
@@ -422,7 +429,7 @@ func (rc *regClient) ManifestPut(ctx context.Context, ref Ref, m Manifest) error
 			"ref": ref.Reference,
 			"err": err,
 		}).Warn("Error marshaling manifest")
-		return err
+		return fmt.Errorf("Error marshalling manifest for %s: %w", ref.CommonName(), err)
 	}
 
 	// TODO: if pushing by digest, recompute digest on mj?

@@ -15,6 +15,8 @@ var (
 	ErrNotImplemented = errors.New("Not implemented")
 	// ErrRetryNeeded indicates a request needs to be retried
 	ErrRetryNeeded = errors.New("Retry needed")
+	// ErrStatusCode indicates an unsuccessful status code
+	ErrStatusCode = errors.New("Status code indicates the request failed")
 	// ErrUnauthorized request was not authorized
 	ErrUnauthorized = errors.New("Unauthorized")
 )
