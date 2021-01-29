@@ -19,7 +19,6 @@ import (
 	dockercfg "github.com/docker/cli/cli/config"
 	dockerManifestList "github.com/docker/distribution/manifest/manifestlist"
 	dockerSchema2 "github.com/docker/distribution/manifest/schema2"
-	"github.com/docker/distribution/reference"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/pkg/auth"
 	"github.com/regclient/regclient/pkg/retryable"
@@ -96,15 +95,6 @@ type RateLimit struct {
 	Policies             []string
 }
 
-// Ref reference to a registry/repository
-// If the tag or digest is available, it's also included in the reference.
-// Reference itself is the unparsed string.
-// While this is currently a struct, that may change in the future and access
-// to contents should not be assumed/used.
-type Ref struct {
-	Reference, Registry, Repository, Tag, Digest string
-}
-
 type regClient struct {
 	// hosts      map[string]*regHost
 	// auth       AuthClient
@@ -143,12 +133,9 @@ func NewRegClient(opts ...Opt) RegClient {
 	rc.transports = map[string]*http.Transport{}
 	rc.useragent = UserAgent + " (" + VCSRef + ")"
 
-	// configure default logging
+	// logging is disabled by default
 	rc.log = &logrus.Logger{
-		Out:       os.Stderr,
-		Formatter: new(logrus.TextFormatter),
-		Hooks:     make(logrus.LevelHooks),
-		Level:     logrus.WarnLevel,
+		Out: ioutil.Discard,
 	}
 
 	for _, opt := range opts {
@@ -361,54 +348,6 @@ func (rc *regClient) loadDockerCreds() error {
 		}
 	}
 	return nil
-}
-
-// NewRef returns a repository reference including a registry, repository (path), digest, and tag
-func NewRef(ref string) (Ref, error) {
-	parsed, err := reference.ParseNormalizedNamed(ref)
-
-	var ret Ref
-	ret.Reference = ref
-
-	if err != nil {
-		return ret, err
-	}
-
-	ret.Registry = reference.Domain(parsed)
-	ret.Repository = reference.Path(parsed)
-
-	if canonical, ok := parsed.(reference.Canonical); ok {
-		ret.Digest = canonical.Digest().String()
-	}
-
-	if tagged, ok := parsed.(reference.Tagged); ok {
-		ret.Tag = tagged.Tag()
-	}
-
-	if ret.Tag == "" && ret.Digest == "" {
-		ret.Tag = "latest"
-	}
-
-	return ret, nil
-}
-
-// CommonName outputs a parsable name from a reference
-func (r Ref) CommonName() string {
-	cn := ""
-	if r.Registry != "" {
-		cn = r.Registry + "/"
-	}
-	if r.Repository == "" {
-		return ""
-	}
-	cn = cn + r.Repository
-	if r.Tag != "" {
-		cn = cn + ":" + r.Tag
-	}
-	if r.Digest != "" {
-		cn = cn + "@" + r.Digest
-	}
-	return cn
 }
 
 func (rc *regClient) Config() Config {
