@@ -1,0 +1,162 @@
+version: 1
+creds:
+  - registry: registry:5000
+    tls: disabled
+    scheme: http
+  - registry: docker.io
+    user: "{{env \"HUB_USER\"}}"
+    pass: "{{file \"/home/appuser/.docker/hub_token\"}}"
+defaults:
+  parallel: 1
+  interval: 60m
+  timeout: 600s
+scripts:
+  - name: mirror minor versions
+    timeout: 59m
+    script: |
+      imageList = {"library/alpine", "library/debian"}
+      localReg = "registry:5000"
+      tagExp = "^%d+%.%d+$"
+      minRateLimit = 100
+      maxKeep = 3
+
+      -- define functions for semver sorting
+      function string.split (inputStr, sep)
+        if sep == nil then
+          sep = "%s"
+        end
+        local t={}
+        for str in string.gmatch(inputStr, "([^"..sep.."]+)") do
+          table.insert(t, str)
+        end
+        return t
+      end
+      function isNumber (inputStr)
+        if string.gmatch(inputStr, "^%d+$") then
+          return true
+        else
+          return false
+        end
+      end
+      function orderSemVer(a, b)
+        aSplit = string.split(a, "%.-")
+        bSplit = string.split(b, "%.-")
+        min = (#aSplit > #bSplit) and #aSplit or #bSplit
+        for i = 1, min do
+          if isNumber(aSplit[i]) and isNumber(bSplit[i]) then
+            aNum = tonumber(aSplit[i])
+            bNum = tonumber(bSplit[i])
+            if aNum ~= bNum then
+              return aNum < bNum
+            end
+          elseif aSplit[i] ~= bSplit[i] then
+            return aSplit[i] < bSplit[i]
+          end
+        end
+        -- TODO: should check for rc/alpha/beta versions on longer string (sorting before GA), and 0 is the same as no value
+        return #aSplit < #bSplit
+      end
+
+      -- loop through images
+      for k, imageName in ipairs(imageList) do
+        upstreamRef = reference.new(imageName)
+        localRef = reference.new(localReg .. "/" .. imageName)
+        -- loop through tags on each image
+        tags = tag.ls(upstreamRef)
+        matchTags = {}
+        for k, t in pairs(tags) do
+          if string.match(t, tagExp) then
+            table.insert(matchTags, t)
+          end
+        end
+        table.sort(matchTags, orderSemVer)
+        if #matchTags > maxKeep then
+          matchTags = {unpack(matchTags, #matchTags - maxKeep + 1)}
+        end
+        for k, t in ipairs(matchTags) do
+          upstreamRef:tag(t)
+          localRef:tag(t)
+          if not image.ratelimitWait(upstreamRef, minRateLimit) then
+            error "Timed out waiting on rate limit"
+          end
+          image.copy(upstreamRef, localRef)
+        end
+      end
+
+  - name: debian date stamped mirror
+    timeout: 59m
+    script: |
+      imageName = "library/debian"
+      tagExp = "^testing%-%d+$"
+      maxKeep = 3
+      minRateLimit = 150
+
+      upstreamRef = reference.new(imageName)
+      localRef = reference.new("registry:5000/" .. imageName)
+
+      -- first copy new date stamped images
+      tags = tag.ls(upstreamRef)
+      matchTags = {}
+      for k, t in pairs(tags) do
+        if string.match(t, tagExp) then
+          table.insert(matchTags, t)
+        end
+      end
+      table.sort(matchTags)
+      if #matchTags > maxKeep then
+        matchTags = {unpack(matchTags, #matchTags - maxKeep + 1)}
+      end
+      for k, t in ipairs(matchTags) do
+        upstreamRef:tag(t)
+        localRef:tag(t)
+        if not image.ratelimitWait(upstreamRef, minRateLimit) then
+          error "Timed out waiting on rate limit"
+        end
+        log("Copying " .. t)
+        image.copy(upstreamRef, localRef)
+      end
+
+      -- next delete old date stamped images
+      tags = tag.ls(localRef)
+      matchTags = {}
+      for k, t in pairs(tags) do
+        if string.match(t, tagExp) then
+          table.insert(matchTags, t)
+        end
+      end
+      table.sort(matchTags)
+      if #matchTags > maxKeep then
+        matchTags = {unpack(matchTags, 1, #matchTags - maxKeep)}
+        for k, t in ipairs(matchTags) do
+          localRef:tag(t)
+          log("Deleting " .. t)
+          tag.delete(localRef)
+        end
+      end
+
+  - name: delete old builds
+    script: |
+      imageName = "registry:5000/regclient/example"
+      tagExp = "^ci%-%d+$"
+      maxDays = 30
+      imageLabel = "org.opencontainers.image.created"
+      dateFmt = "!%Y-%m-%dT%H:%M:%SZ"
+
+      timeRef = os.time() - (86400*maxDays)
+      cutoff = os.date(dateFmt, timeRef)
+      log("Searching for images before: " .. cutoff)
+      ref = reference.new(imageName)
+      tags = tag.ls(ref)
+      table.sort(tags)
+      for k, t in pairs(tags) do
+        if string.match(t, tagExp) then
+          ref:tag(t)
+          ic = image.config(ref)
+          if ic.Config.Labels[imageLabel] < cutoff then
+            log("Deleting " .. t .. " created on " .. ic.Config.Labels[imageLabel])
+            tag.delete(ref)
+          else
+            log("Skipping " .. t .. " created on " .. ic.Config.Labels[imageLabel])
+          end
+        end
+      end

@@ -580,3 +580,17 @@ available with Go:
     time.Parse "1970-12-31" "2020-06-07"}}`
 - `title`: makes the first letter of each word uppercase
 - `upper`: converts a string to uppercase
+
+## FAQ
+
+1. Q: After deleting tags and images on the registry, I'm still seeing disk space being used.
+
+   A: Registries require garbage collection to run to cleanup untagged manifests and unused blobs. The [registry GC documentation](https://docs.docker.com/registry/garbage-collection/) includes more details and there are various [pull requests](https://github.com/distribution/distribution/pull/3195) that improve garbage collection. With the PR-3195 applied, I use the following for GC of anything at least 1 hour old:
+
+   ```shell
+   docker exec registry /bin/registry garbage-collect \
+     --delete-repositories \
+     --delete-untagged \
+     --modification-timeout 3600 \
+     /etc/docker/registry/config.yml
+   ```
