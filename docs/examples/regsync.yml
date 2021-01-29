@@ -1,0 +1,30 @@
+version: 1
+creds:
+  - registry: registry:5000
+    tls: disabled
+    scheme: http
+  - registry: docker.io
+    user: "{{env \"HUB_USER\"}}"
+    pass: "{{file \"/home/appuser/.docker/hub_token\"}}"
+defaults:
+  ratelimit:
+    min: 100
+    retry: 15m
+  parallel: 2
+  interval: 60m
+  backup: "bkup-{{.Ref.Tag}}"
+sync:
+  - source: busybox:latest
+    target: registry:5000/library/busybox:latest
+    type: image
+  - source: alpine
+    target: registry:5000/library/alpine
+    type: repository
+    tags:
+      allow:
+      - "latest"
+      - "3"
+      - "3.\\d+"
+  - source: regclient/regctl:latest
+    target: registry:5000/regclient/regctl:latest
+    type: image
