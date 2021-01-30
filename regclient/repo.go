@@ -14,6 +14,18 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// RepoClient provides registry client requests to repositories
+type RepoClient interface {
+	RepoList(ctx context.Context, hostname string) (RepositoryList, error)
+	RepoListWithOpts(ctx context.Context, hostname string, opts RepoOpts) (RepositoryList, error)
+}
+
+// RepositoryList comes from github.com/opencontainers/distribution-spec,
+// switch to their implementation when it becomes stable
+type RepositoryList struct {
+	Repositories []string `json:"repositories"`
+}
+
 // RepoOpts is used for options to the repo functions
 type RepoOpts struct {
 	Limit int

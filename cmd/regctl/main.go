@@ -8,8 +8,6 @@ import (
 )
 
 func main() {
-	regclient.ConfigDir = ".regctl"
-	regclient.ConfigEnv = "REGCLI_CONFIG"
 	regclient.UserAgent = "regclient/regctl"
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)

@@ -54,5 +54,39 @@ func rootPreRun(cmd *cobra.Command, args []string) error {
 }
 
 func newRegClient() regclient.RegClient {
-	return regclient.NewRegClient(regclient.WithLog(log), regclient.WithConfigDefault(), regclient.WithDockerCreds(), regclient.WithDockerCerts())
+	config, err := ConfigLoadDefault()
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"err": err,
+		}).Warn("Failed to load default config")
+	} else {
+		log.WithFields(logrus.Fields{
+			"config": config,
+		}).Debug("Loaded default config")
+	}
+
+	rcOpts := []regclient.Opt{regclient.WithLog(log)}
+	if config.IncDockerCred == nil || *config.IncDockerCred {
+		rcOpts = append(rcOpts, regclient.WithDockerCreds())
+	}
+	if config.IncDockerCert == nil || *config.IncDockerCert {
+		rcOpts = append(rcOpts, regclient.WithDockerCerts())
+	}
+
+	rcHosts := []regclient.ConfigHost{}
+	for name, host := range config.Hosts {
+		rcHosts = append(rcHosts, regclient.ConfigHost{
+			Name:    name,
+			User:    host.User,
+			Pass:    host.Pass,
+			TLS:     host.TLS,
+			Scheme:  host.Scheme,
+			RegCert: host.RegCert,
+		})
+	}
+	if len(rcHosts) > 0 {
+		rcOpts = append(rcOpts, regclient.WithConfigHosts(rcHosts))
+	}
+
+	return regclient.NewRegClient(rcOpts...)
 }

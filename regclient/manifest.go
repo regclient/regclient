@@ -23,6 +23,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// ManifestClient provides registry client requests to manifests
+type ManifestClient interface {
+	ManifestDelete(ctx context.Context, ref Ref) error
+	ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
+	ManifestHead(ctx context.Context, ref Ref) (Manifest, error)
+	ManifestPut(ctx context.Context, ref Ref, m Manifest) error
+}
+
 type manifest struct {
 	digest    digest.Digest
 	dockerM   dockerSchema2.Manifest

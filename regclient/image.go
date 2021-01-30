@@ -17,6 +17,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// ImageClient provides registry client requests to images
+type ImageClient interface {
+	ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) error
+	ImageExport(ctx context.Context, ref Ref, outStream io.Writer) error
+	ImageGetConfig(ctx context.Context, ref Ref, d string) (ociv1.Image, error)
+}
+
 func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) error {
 	// check if source and destination already match
 	msh, errS := rc.ManifestHead(ctx, refSrc)
@@ -140,6 +147,13 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) erro
 	}
 
 	return nil
+}
+
+// used by import/export to match docker tar expected format
+type dockerTarManifest struct {
+	Config   string
+	RepoTags []string
+	Layers   []string
 }
 
 func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writer) error {

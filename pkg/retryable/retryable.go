@@ -3,6 +3,10 @@ package retryable
 import (
 	"bytes"
 	"context"
+
+	// crypto libraries included for go-digest
+	_ "crypto/sha256"
+	_ "crypto/sha512"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"

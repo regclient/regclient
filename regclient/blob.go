@@ -16,6 +16,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// BlobClient provides registry client requests to Blobs
+type BlobClient interface {
+	BlobCopy(ctx context.Context, refSrc Ref, refTgt Ref, d string) error
+	BlobGet(ctx context.Context, ref Ref, d string, accepts []string) (io.ReadCloser, *http.Response, error)
+	BlobMount(ctx context.Context, refSrc Ref, refTgt Ref, d string) error
+	BlobPut(ctx context.Context, ref Ref, d string, rdr io.ReadCloser, ct string, cl int64) error
+}
+
 func (rc *regClient) BlobCopy(ctx context.Context, refSrc Ref, refTgt Ref, d string) error {
 	// for the same repository, there's nothing to copy
 	if refSrc.Registry == refTgt.Registry && refSrc.Repository == refTgt.Repository {

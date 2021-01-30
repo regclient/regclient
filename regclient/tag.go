@@ -20,6 +20,21 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// TagClient wraps calls to tag list and delete
+type TagClient interface {
+	TagDelete(ctx context.Context, ref Ref) error
+	TagList(ctx context.Context, ref Ref) (TagList, error)
+	TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts) (TagList, error)
+}
+
+// TagList comes from github.com/opencontainers/distribution-spec
+// TODO: switch to their implementation when it becomes stable
+// TODO: rename to avoid confusion with (*regClient).TagList
+type TagList struct {
+	Name string   `json:"name"`
+	Tags []string `json:"tags"`
+}
+
 // TagOpts is used for options to the tag functions
 type TagOpts struct {
 	Limit int

@@ -71,7 +71,7 @@ func init() {
 }
 
 func runRegistryConfig(cmd *cobra.Command, args []string) error {
-	c, err := regclient.ConfigLoadDefault()
+	c, err := ConfigLoadDefault()
 	if err != nil {
 		return err
 	}
@@ -104,7 +104,7 @@ func runRegistryConfig(cmd *cobra.Command, args []string) error {
 }
 
 func runRegistryLogin(cmd *cobra.Command, args []string) error {
-	c, err := regclient.ConfigLoadDefault()
+	c, err := ConfigLoadDefault()
 	if err != nil {
 		return err
 	}
@@ -114,7 +114,7 @@ func runRegistryLogin(cmd *cobra.Command, args []string) error {
 	}
 	h, ok := c.Hosts[args[0]]
 	if !ok {
-		h = &regclient.ConfigHost{}
+		h = &ConfigHost{}
 		c.Hosts[args[0]] = h
 	}
 	if registryOpts.user != "" {
@@ -164,7 +164,7 @@ func runRegistryLogin(cmd *cobra.Command, args []string) error {
 }
 
 func runRegistryLogout(cmd *cobra.Command, args []string) error {
-	c, err := regclient.ConfigLoadDefault()
+	c, err := ConfigLoadDefault()
 	if err != nil {
 		return err
 	}
@@ -192,7 +192,7 @@ func runRegistryLogout(cmd *cobra.Command, args []string) error {
 }
 
 func runRegistrySet(cmd *cobra.Command, args []string) error {
-	c, err := regclient.ConfigLoadDefault()
+	c, err := ConfigLoadDefault()
 	if err != nil {
 		return err
 	}
@@ -201,7 +201,7 @@ func runRegistrySet(cmd *cobra.Command, args []string) error {
 	}
 	h, ok := c.Hosts[args[0]]
 	if !ok {
-		h = regclient.ConfigHostNew()
+		h = ConfigHostNew()
 		h.DNS = []string{args[0]}
 		c.Hosts[args[0]] = h
 	}

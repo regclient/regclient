@@ -1,7 +1,6 @@
 package regclient
 
 import (
-	"context"
 	"io/ioutil"
 	"path/filepath"
 	"strings"
@@ -11,7 +10,6 @@ import (
 	_ "crypto/sha256"
 	_ "crypto/sha512"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -56,36 +54,12 @@ var (
 )
 
 // RegClient provides an interfaces to working with registries
-// TODO: split up interface into multiple interfaces that are merged in RegClient
 type RegClient interface {
-	Config() Config
-	BlobGet(ctx context.Context, ref Ref, d string, accepts []string) (io.ReadCloser, *http.Response, error)
-	ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) error
-	ImageExport(ctx context.Context, ref Ref, outStream io.Writer) error
-	ImageGetConfig(ctx context.Context, ref Ref, d string) (ociv1.Image, error)
-	ManifestDelete(ctx context.Context, ref Ref) error
-	ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
-	ManifestHead(ctx context.Context, ref Ref) (Manifest, error)
-	ManifestPut(ctx context.Context, ref Ref, m Manifest) error
-	RepoList(ctx context.Context, hostname string) (RepositoryList, error)
-	RepoListWithOpts(ctx context.Context, hostname string, opts RepoOpts) (RepositoryList, error)
-	TagDelete(ctx context.Context, ref Ref) error
-	TagList(ctx context.Context, ref Ref) (TagList, error)
-	TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts) (TagList, error)
-}
-
-// TagList comes from github.com/opencontainers/distribution-spec
-// TODO: switch to their implementation when it becomes stable
-// TODO: rename to avoid confusion with (*regClient).TagList
-type TagList struct {
-	Name string   `json:"name"`
-	Tags []string `json:"tags"`
-}
-
-// RepositoryList comes from github.com/opencontainers/distribution-spec,
-// switch to their implementation when it becomes stable
-type RepositoryList struct {
-	Repositories []string `json:"repositories"`
+	RepoClient
+	TagClient
+	ManifestClient
+	ImageClient
+	BlobClient
 }
 
 // RateLimit is returned from some http requests
@@ -96,8 +70,6 @@ type RateLimit struct {
 }
 
 type regClient struct {
-	// hosts      map[string]*regHost
-	// auth       AuthClient
 	config     *Config
 	log        *logrus.Logger
 	retryLimit int
@@ -105,20 +77,6 @@ type regClient struct {
 	retryables map[string]retryable.Retryable
 	mu         sync.Mutex
 	useragent  string
-}
-
-type regHost struct {
-	scheme    string
-	tls       TLSConf
-	dnsNames  []string
-	transport *http.Transport
-}
-
-// used by image import/export to match docker tar expected format
-type dockerTarManifest struct {
-	Config   string
-	RepoTags []string
-	Layers   []string
 }
 
 // Opt functions are used to configure NewRegClient
@@ -169,45 +127,6 @@ func NewRegClient(opts ...Opt) RegClient {
 	rc.log.Debug("regclient initialized")
 
 	return &rc
-}
-
-// WithConfigDefault default config file
-func WithConfigDefault() Opt {
-	return func(rc *regClient) {
-		config, err := ConfigLoadDefault()
-		if err != nil {
-			rc.log.WithFields(logrus.Fields{
-				"err": err,
-			}).Warn("Failed to load default config")
-		} else {
-			if rc.config != nil {
-				rc.log.WithFields(logrus.Fields{
-					"oldConfig": rc.config,
-					"newConfig": config,
-				}).Warn("Overwriting existing config")
-			} else {
-				rc.log.WithFields(logrus.Fields{
-					"config": config,
-				}).Debug("Loaded default config")
-			}
-			rc.config = config
-		}
-	}
-}
-
-// WithConfigFile parses a differently named config file
-func WithConfigFile(filename string) Opt {
-	return func(rc *regClient) {
-		config, err := ConfigLoadFile(filename)
-		if err != nil {
-			rc.log.WithFields(logrus.Fields{
-				"err":  err,
-				"file": filename,
-			}).Warn("Failed to load config")
-		} else {
-			rc.config = config
-		}
-	}
 }
 
 // WithDockerCerts adds certificates trusted by docker in /etc/docker/certs.d
@@ -348,10 +267,6 @@ func (rc *regClient) loadDockerCreds() error {
 		}
 	}
 	return nil
-}
-
-func (rc *regClient) Config() Config {
-	return *rc.config
 }
 
 func (rc *regClient) getHost(hostname string) *ConfigHost {
