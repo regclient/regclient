@@ -24,6 +24,8 @@ import (
 )
 
 const (
+	// DefaultUserAgent sets the header on http requests
+	DefaultUserAgent = "regclient/regclient"
 	// DockerCertDir default location for docker certs
 	DockerCertDir = "/etc/docker/certs.d"
 	// DockerRegistry is the name resolved in docker images on Hub
@@ -32,9 +34,6 @@ const (
 	DockerRegistryAuth = "https://index.docker.io/v1/"
 	// DockerRegistryDNS is the host to connect to for Hub
 	DockerRegistryDNS = "registry-1.docker.io"
-)
-
-var (
 	// MediaTypeDocker2Manifest is the media type when pulling manifests from a v2 registry
 	MediaTypeDocker2Manifest = dockerSchema2.MediaTypeManifest
 	// MediaTypeDocker2ManifestList is the media type when pulling a manifest list from a v2 registry
@@ -47,8 +46,9 @@ var (
 	MediaTypeOCI1ManifestList = ociv1.MediaTypeImageIndex
 	// MediaTypeOCI1ImageConfig OCI v1 configuration json object media type
 	MediaTypeOCI1ImageConfig = ociv1.MediaTypeImageConfig
-	// UserAgent sets the header on http requests
-	UserAgent = "regclient/regclient"
+)
+
+var (
 	// VCSRef is injected from a build flag, used to version the UserAgent header
 	VCSRef = "unknown"
 )
@@ -89,7 +89,7 @@ func NewRegClient(opts ...Opt) RegClient {
 	rc.retryLimit = 5
 	rc.retryables = map[string]retryable.Retryable{}
 	rc.transports = map[string]*http.Transport{}
-	rc.useragent = UserAgent + " (" + VCSRef + ")"
+	rc.useragent = DefaultUserAgent + " (" + VCSRef + ")"
 
 	// logging is disabled by default
 	rc.log = &logrus.Logger{
@@ -218,6 +218,13 @@ func WithConfigHost(configHost ConfigHost) Opt {
 func WithLog(log *logrus.Logger) Opt {
 	return func(rc *regClient) {
 		rc.log = log
+	}
+}
+
+// WithUserAgent specifies the User-Agent http header
+func WithUserAgent(ua string) Opt {
+	return func(rc *regClient) {
+		rc.useragent = ua
 	}
 }
 

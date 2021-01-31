@@ -2,7 +2,7 @@
 
 set -x
 VCS_REF=$(git rev-list -1 HEAD)
-LD_FLAGS="-X github.com/regclient/regclient/regclient.VCSRef=${VCS_REF}"
+LD_FLAGS="-X github.com/regclient/regclient/regclient.VCSRef=${VCS_REF} -X main.VCSRef=${VCS_REF}"
 GO_BUILD_FLAGS=
 proj_dir="$(dirname "$0")/../"
 cd "$proj_dir"

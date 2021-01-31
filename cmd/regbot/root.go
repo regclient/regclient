@@ -15,8 +15,12 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-const usageDesc = `Utility for automating repository actions
+const (
+	usageDesc = `Utility for automating repository actions
 More details at https://github.com/regclient/regclient`
+	// UserAgent sets the header on http requests
+	UserAgent = "regclient/regbot"
+)
 
 var rootOpts struct {
 	confFile  string
@@ -25,10 +29,14 @@ var rootOpts struct {
 	logopts   []string
 }
 
-var config *Config
-var log *logrus.Logger
-var rc regclient.RegClient
-var sem *semaphore.Weighted
+var (
+	config *Config
+	log    *logrus.Logger
+	rc     regclient.RegClient
+	sem    *semaphore.Weighted
+	// VCSRef is injected from a build flag, used to version the UserAgent header
+	VCSRef = "unknown"
+)
 
 var rootCmd = &cobra.Command{
 	Use:           "regbot <cmd>",
@@ -106,8 +114,10 @@ func rootPreRun(cmd *cobra.Command, args []string) error {
 	}).Debug("Configuring parallel settings")
 	sem = semaphore.NewWeighted(int64(config.Defaults.Parallel))
 	// set the regclient, loading docker creds unless disabled, and inject logins from config file
-	regclient.UserAgent = "regclient/regbot"
-	rcOpts := []regclient.Opt{regclient.WithLog(log)}
+	rcOpts := []regclient.Opt{
+		regclient.WithLog(log),
+		regclient.WithUserAgent(UserAgent + " (" + VCSRef + ")"),
+	}
 	if !config.Defaults.SkipDockerConf {
 		rcOpts = append(rcOpts, regclient.WithDockerCreds(), regclient.WithDockerCerts())
 	}

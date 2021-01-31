@@ -8,10 +8,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const usageDesc = `Utility for accessing docker registries
+const (
+	usageDesc = `Utility for accessing docker registries
 More details at https://github.com/regclient/regclient`
+	// UserAgent sets the header on http requests
+	UserAgent = "regclient/regctl"
+)
 
-var log *logrus.Logger
+var (
+	// VCSRef is injected from a build flag, used to version the UserAgent header
+	VCSRef = "unknown"
+	log    *logrus.Logger
+)
 
 var rootCmd = &cobra.Command{
 	Use:           "regctl <cmd>",
@@ -65,7 +73,10 @@ func newRegClient() regclient.RegClient {
 		}).Debug("Loaded default config")
 	}
 
-	rcOpts := []regclient.Opt{regclient.WithLog(log)}
+	rcOpts := []regclient.Opt{
+		regclient.WithLog(log),
+		regclient.WithUserAgent(UserAgent + " (" + VCSRef + ")"),
+	}
 	if config.IncDockerCred == nil || *config.IncDockerCred {
 		rcOpts = append(rcOpts, regclient.WithDockerCreds())
 	}
