@@ -24,6 +24,8 @@ import (
 )
 
 const (
+	// DefaultRetryLimit sets how many retry attempts are made for non-fatal errors
+	DefaultRetryLimit = 5
 	// DefaultUserAgent sets the header on http requests
 	DefaultUserAgent = "regclient/regclient"
 	// DockerCertDir default location for docker certs
@@ -76,7 +78,7 @@ type regClient struct {
 	transports map[string]*http.Transport
 	retryables map[string]retryable.Retryable
 	mu         sync.Mutex
-	useragent  string
+	userAgent  string
 }
 
 // Opt functions are used to configure NewRegClient
@@ -84,17 +86,15 @@ type Opt func(*regClient)
 
 // NewRegClient returns a registry client
 func NewRegClient(opts ...Opt) RegClient {
-	var rc regClient
+	var rc = regClient{
+		retryLimit: DefaultRetryLimit,
+		userAgent:  DefaultUserAgent,
+		// logging is disabled by default
+		log: &logrus.Logger{Out: ioutil.Discard},
+	}
 
-	rc.retryLimit = 5
 	rc.retryables = map[string]retryable.Retryable{}
 	rc.transports = map[string]*http.Transport{}
-	rc.useragent = DefaultUserAgent + " (" + VCSRef + ")"
-
-	// logging is disabled by default
-	rc.log = &logrus.Logger{
-		Out: ioutil.Discard,
-	}
 
 	for _, opt := range opts {
 		opt(&rc)
@@ -224,7 +224,7 @@ func WithLog(log *logrus.Logger) Opt {
 // WithUserAgent specifies the User-Agent http header
 func WithUserAgent(ua string) Opt {
 	return func(rc *regClient) {
-		rc.useragent = ua
+		rc.userAgent = ua
 	}
 }
 
@@ -298,7 +298,7 @@ func (rc *regClient) getRetryable(host *ConfigHost) retryable.Retryable {
 			retryable.WithHTTPClient(c),
 			retryable.WithAuth(a),
 			retryable.WithMirrors(rc.mirrorFunc(host)),
-			retryable.WithUserAgent(rc.useragent),
+			retryable.WithUserAgent(rc.userAgent),
 		}
 		if certs := rc.getCerts(host); len(certs) > 0 {
 			rOpts = append(rOpts, retryable.WithCertFiles(certs))
