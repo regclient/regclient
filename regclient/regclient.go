@@ -73,11 +73,9 @@ type RateLimit struct {
 
 type regClient struct {
 	certPaths  []string
-	config     *Config
-	host       map[string]*regClientHost
+	hosts      map[string]*regClientHost
 	log        *logrus.Logger
 	retryLimit int
-	retryables map[string]retryable.Retryable
 	mu         sync.Mutex
 	userAgent  string
 }
@@ -94,40 +92,23 @@ type Opt func(*regClient)
 func NewRegClient(opts ...Opt) RegClient {
 	var rc = regClient{
 		certPaths:  []string{},
+		hosts:      map[string]*regClientHost{},
 		retryLimit: DefaultRetryLimit,
 		userAgent:  DefaultUserAgent,
 		// logging is disabled by default
 		log: &logrus.Logger{Out: ioutil.Discard},
 	}
 
-	rc.retryables = map[string]retryable.Retryable{}
+	// inject Docker Hub settings
+	rc.hostSet(ConfigHost{
+		Name:   DockerRegistry,
+		Scheme: "https",
+		TLS:    TLSEnabled,
+		DNS:    []string{DockerRegistryDNS},
+	})
 
 	for _, opt := range opts {
 		opt(&rc)
-	}
-
-	if rc.config == nil {
-		rc.config = ConfigNew()
-	}
-
-	// inject Docker Hub settings
-	if _, ok := rc.config.Hosts[DockerRegistry]; !ok {
-		rc.config.Hosts[DockerRegistry] = &ConfigHost{}
-	}
-	rc.config.Hosts[DockerRegistry].Name = DockerRegistry
-	rc.config.Hosts[DockerRegistry].Scheme = "https"
-	rc.config.Hosts[DockerRegistry].TLS = TLSEnabled
-	rc.config.Hosts[DockerRegistry].DNS = []string{DockerRegistryDNS}
-
-	// load docker creds/certs if configured
-	if rc.config.IncDockerCred != nil && *rc.config.IncDockerCred == true {
-		if err := rc.loadDockerCreds(); err != nil {
-			rc.log.WithFields(logrus.Fields{
-				"err": err,
-			}).Warn("Failed to load docker creds")
-		} else {
-			rc.log.Debug("Docker creds loaded")
-		}
 	}
 
 	rc.log.Debug("regclient initialized")
@@ -155,12 +136,13 @@ func WithDockerCerts() Opt {
 // This changes the default value from the config file, and should be added after the config file is loaded
 func WithDockerCreds() Opt {
 	return func(rc *regClient) {
-		if rc.config == nil {
-			rc.config = ConfigNew()
-		}
-		if rc.config.IncDockerCred == nil {
-			enabled := true
-			rc.config.IncDockerCred = &enabled
+		err := rc.loadDockerCreds()
+		if err != nil {
+			rc.log.WithFields(logrus.Fields{
+				"err": err,
+			}).Warn("Failed to load docker creds")
+		} else {
+			rc.log.Debug("Docker creds loaded")
 		}
 		return
 	}
@@ -172,46 +154,21 @@ func WithConfigHosts(configHosts []ConfigHost) Opt {
 		if configHosts == nil || len(configHosts) == 0 {
 			return
 		}
-		if rc.config == nil {
-			rc.config = ConfigNew()
-		}
-		for i := range configHosts {
-			configHost := configHosts[i]
+		for _, configHost := range configHosts {
 			if configHost.Name == "" {
 				continue
 			}
 			if configHost.Name == DockerRegistry || configHost.Name == DockerRegistryAuth {
 				configHost.Name = DockerRegistryDNS
 			}
-			// merge updated host with original values
-			if orig, ok := rc.config.Hosts[configHost.Name]; ok {
-				if configHost.User == "" || configHost.Pass == "" {
-					configHost.User = orig.User
-					configHost.Pass = orig.Pass
-				}
-				if configHost.RegCert == "" {
-					configHost.RegCert = orig.RegCert
-				}
-				if configHost.Scheme == "" {
-					configHost.Scheme = orig.Scheme
-				}
-				if configHost.TLS == TLSUndefined {
-					configHost.TLS = orig.TLS
-				}
-				if len(configHost.DNS) == 0 {
-					configHost.DNS = orig.DNS
-				}
+			err := rc.hostSet(configHost)
+			if err != nil {
+				rc.log.WithFields(logrus.Fields{
+					"host":  configHost.Name,
+					"user":  configHost.User,
+					"error": err,
+				}).Warn("Failed to update host config")
 			}
-			if configHost.Scheme == "" {
-				configHost.Scheme = "https"
-			}
-			if configHost.TLS == TLSUndefined {
-				configHost.TLS = TLSEnabled
-			}
-			if len(configHost.DNS) == 0 {
-				configHost.DNS = []string{configHost.Name}
-			}
-			rc.config.Hosts[configHost.Name] = &configHost
 		}
 		return
 	}
@@ -244,9 +201,6 @@ func WithUserAgent(ua string) Opt {
 }
 
 func (rc *regClient) loadDockerCreds() error {
-	if rc.config == nil {
-		rc.config = ConfigNew()
-	}
 	conffile := dockercfg.LoadDefaultConfigFile(os.Stderr)
 	creds, err := conffile.GetAllCredentials()
 	if err != nil {
@@ -264,48 +218,53 @@ func (rc *regClient) loadDockerCreds() error {
 		if cred.ServerAddress == DockerRegistryAuth {
 			cred.ServerAddress = DockerRegistryDNS
 		}
-		if _, ok := rc.config.Hosts[cred.ServerAddress]; !ok {
-			h := ConfigHost{
-				Name:   cred.ServerAddress,
-				DNS:    []string{cred.ServerAddress},
-				Scheme: "https",
-				TLS:    TLSEnabled,
-				User:   cred.Username,
-				Pass:   cred.Password,
-			}
-			rc.config.Hosts[cred.ServerAddress] = &h
-		} else if rc.config.Hosts[cred.ServerAddress].User != "" || rc.config.Hosts[cred.ServerAddress].Pass != "" {
-			if rc.config.Hosts[cred.ServerAddress].User != cred.Username || rc.config.Hosts[cred.ServerAddress].Pass != cred.Password {
-				rc.log.WithFields(logrus.Fields{
-					"registry":    cred.ServerAddress,
-					"docker-user": cred.Username,
-					"config-user": rc.config.Hosts[cred.ServerAddress].User,
-					"pass-same":   (cred.Password == rc.config.Hosts[cred.ServerAddress].Pass),
-				}).Warn("Docker credentials mismatch")
-			}
-		} else {
-			rc.config.Hosts[cred.ServerAddress].User = cred.Username
-			rc.config.Hosts[cred.ServerAddress].Pass = cred.Password
+		err = rc.hostSet(ConfigHost{
+			Name: cred.ServerAddress,
+			DNS:  []string{cred.ServerAddress},
+			User: cred.Username,
+			Pass: cred.Password,
+		})
+		if err != nil {
+			// treat each of these as non-fatal
+			rc.log.WithFields(logrus.Fields{
+				"registry": cred.ServerAddress,
+				"user":     cred.Username,
+				"error":    err,
+			}).Warn("Failed to use docker credential")
 		}
 	}
 	return nil
 }
 
-func (rc *regClient) getHost(hostname string) *ConfigHost {
+func (rc *regClient) hostGet(hostname string) *ConfigHost {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
-	host, ok := rc.config.Hosts[hostname]
-	if !ok {
-		host = &ConfigHost{Scheme: "https", TLS: TLSEnabled, DNS: []string{hostname}}
-		rc.config.Hosts[hostname] = host
+	if _, ok := rc.hosts[hostname]; !ok {
+		host := ConfigHostNewName(hostname)
+		rc.hosts[hostname] = &regClientHost{config: *host}
 	}
-	return host
+	return &rc.hosts[hostname].config
+}
+
+func (rc *regClient) hostSet(newHost ConfigHost) error {
+	name := newHost.Name
+	if _, ok := rc.hosts[name]; !ok {
+		// merge newHost with default host settings
+		newHost = rc.mergeConfigHost(*ConfigHostNewName(name), newHost, false)
+		rc.hosts[name] = &regClientHost{config: newHost}
+	} else {
+		rc.hosts[name].config = rc.mergeConfigHost(rc.hosts[name].config, newHost, true)
+	}
+	return nil
 }
 
 func (rc *regClient) getRetryable(host *ConfigHost) retryable.Retryable {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
-	if _, ok := rc.retryables[host.Name]; !ok {
+	if _, ok := rc.hosts[host.Name]; !ok {
+		rc.hosts[host.Name] = &regClientHost{config: *ConfigHostNewName(host.Name)}
+	}
+	if rc.hosts[host.Name].retryable == nil {
 		c := &http.Client{}
 		a := auth.NewAuth(auth.WithLog(rc.log), auth.WithHTTPClient(c), auth.WithCreds(rc.authCreds))
 		rOpts := []retryable.Opts{
@@ -322,13 +281,14 @@ func (rc *regClient) getRetryable(host *ConfigHost) retryable.Retryable {
 			rOpts = append(rOpts, retryable.WithCerts([][]byte{[]byte(host.RegCert)}))
 		}
 		r := retryable.NewRetryable(rOpts...)
-		rc.retryables[host.Name] = r
+		rc.hosts[host.Name].retryable = r
 	}
-	return rc.retryables[host.Name]
+	return rc.hosts[host.Name].retryable
 }
 
 func (rc *regClient) authCreds(host string) (string, string) {
-	if h, ok := rc.config.Hosts[host]; ok {
+	if _, ok := rc.hosts[host]; ok {
+		h := rc.hosts[host].config
 		rc.log.WithFields(logrus.Fields{
 			"host": host,
 			"user": h.User,
@@ -336,7 +296,8 @@ func (rc *regClient) authCreds(host string) (string, string) {
 		return h.User, h.Pass
 	}
 	// default credentials are stored under a blank hostname
-	if h, ok := rc.config.Hosts[""]; ok {
+	if _, ok := rc.hosts[""]; ok {
+		h := rc.hosts[""].config
 		return h.User, h.Pass
 	}
 	// anonymous request

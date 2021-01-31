@@ -82,7 +82,7 @@ func (rc *regClient) BlobCopy(ctx context.Context, refSrc Ref, refTgt Ref, d str
 }
 
 func (rc *regClient) BlobGet(ctx context.Context, ref Ref, d string, accepts []string) (io.ReadCloser, *http.Response, error) {
-	host := rc.getHost(ref.Registry)
+	host := rc.hostGet(ref.Registry)
 
 	blobURL := url.URL{
 		Scheme: host.Scheme,
@@ -128,7 +128,7 @@ func (rc *regClient) BlobGet(ctx context.Context, ref Ref, d string, accepts []s
 
 // BlobHead is used to verify if a blob exists and is accessible
 func (rc *regClient) BlobHead(ctx context.Context, ref Ref, d string) error {
-	host := rc.getHost(ref.Registry)
+	host := rc.hostGet(ref.Registry)
 
 	blobURL := url.URL{
 		Scheme: host.Scheme,
@@ -165,7 +165,7 @@ func (rc *regClient) BlobMount(ctx context.Context, refSrc Ref, refTgt Ref, d st
 		return fmt.Errorf("Registry must match for blob mount")
 	}
 
-	host := rc.getHost(refTgt.Registry)
+	host := rc.hostGet(refTgt.Registry)
 	mountURL := url.URL{
 		Scheme:   host.Scheme,
 		Host:     host.DNS[0],
@@ -207,7 +207,7 @@ func (rc *regClient) BlobPut(ctx context.Context, ref Ref, d string, rdr io.Read
 		cl = -1
 	}
 
-	host := rc.getHost(ref.Registry)
+	host := rc.hostGet(ref.Registry)
 
 	// request an upload location
 	uploadURL := url.URL{

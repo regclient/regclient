@@ -38,7 +38,7 @@ func (rc *regClient) RepoList(ctx context.Context, hostname string) (RepositoryL
 
 func (rc *regClient) RepoListWithOpts(ctx context.Context, hostname string, opts RepoOpts) (RepositoryList, error) {
 	rl := RepositoryList{}
-	host := rc.getHost(hostname)
+	host := rc.hostGet(hostname)
 	repoURL := url.URL{
 		Scheme: host.Scheme,
 		Host:   host.DNS[0],

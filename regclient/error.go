@@ -7,6 +7,8 @@ var (
 	ErrUnsupportedConfigVersion = errors.New("Unsupported config version")
 	// ErrMissingDigest returned when image reference does not include a digest
 	ErrMissingDigest = errors.New("Digest missing from image reference")
+	// ErrMissingName returned when name missing for host
+	ErrMissingName = errors.New("Name missing")
 	// ErrMissingTag returned when image reference does not include a tag
 	ErrMissingTag = errors.New("Tag missing from image reference")
 	// ErrMissingTagOrDigest returned when image reference does not include a tag or digest

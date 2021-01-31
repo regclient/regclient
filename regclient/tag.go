@@ -149,7 +149,7 @@ func (rc *regClient) TagList(ctx context.Context, ref Ref) (TagList, error) {
 
 func (rc *regClient) TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts) (TagList, error) {
 	tl := TagList{}
-	host := rc.getHost(ref.Registry)
+	host := rc.hostGet(ref.Registry)
 	repoURL := url.URL{
 		Scheme: host.Scheme,
 		Host:   host.DNS[0],

@@ -4,15 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-)
 
-var (
-	// ConfigFilename is the default filename to read/write configuration
-	ConfigFilename = "config.json"
-	// ConfigDir is the default directory within the user's home directory to read/write configuration
-	ConfigDir = ".regclient"
-	// ConfigEnv is the environment variable to override the config filename
-	ConfigEnv = "REGCLIENT_CONFIG"
+	"github.com/sirupsen/logrus"
 )
 
 // TLSConf specifies whether TLS is enabled for a host
@@ -80,15 +73,6 @@ func (t *TLSConf) UnmarshalText(b []byte) error {
 	return nil
 }
 
-// Config struct contains contents loaded from / saved to a config file
-type Config struct {
-	// Filename      string                 `json:"-"`                 // filename that was loaded
-	// Version       int                    `json:"version,omitempty"` // version the file in case the config file syntax changes in the future
-	Hosts         map[string]*ConfigHost `json:"hosts"`
-	IncDockerCred *bool                  `json:"incDockerCred,omitempty"`
-	// IncDockerCert *bool                  `json:"incDockerCert,omitempty"`
-}
-
 // ConfigHost struct contains host specific settings
 type ConfigHost struct {
 	Name       string   `json:"-"`
@@ -102,14 +86,6 @@ type ConfigHost struct {
 	Pass       string   `json:"pass,omitempty"`
 }
 
-// ConfigNew creates an empty configuration
-func ConfigNew() *Config {
-	c := Config{
-		Hosts: map[string]*ConfigHost{},
-	}
-	return &c
-}
-
 // ConfigHostNew creates a default ConfigHost entry
 func ConfigHostNew() *ConfigHost {
 	h := ConfigHost{
@@ -117,4 +93,120 @@ func ConfigHostNew() *ConfigHost {
 		TLS:    TLSEnabled,
 	}
 	return &h
+}
+
+// ConfigHostNewName creates a default ConfigHost with a hostname
+func ConfigHostNewName(host string) *ConfigHost {
+	h := ConfigHost{
+		Name:   host,
+		Scheme: "https",
+		TLS:    TLSEnabled,
+		DNS:    []string{host},
+	}
+	return &h
+}
+
+func (rc *regClient) mergeConfigHost(curHost, newHost ConfigHost, warn bool) ConfigHost {
+	name := newHost.Name
+
+	// merge the existing and new config host
+	if newHost.User != "" {
+		if warn && curHost.User != "" && curHost.User != newHost.User {
+			rc.log.WithFields(logrus.Fields{
+				"orig": curHost.User,
+				"new":  newHost.User,
+				"host": name,
+			}).Warn("Changing login user for registry")
+		}
+		curHost.User = newHost.User
+	}
+
+	if newHost.Pass != "" {
+		if warn && curHost.Pass != "" && curHost.Pass != newHost.Pass {
+			rc.log.WithFields(logrus.Fields{
+				"host": name,
+			}).Warn("Changing login password for registry")
+		}
+		curHost.Pass = newHost.Pass
+	}
+
+	if newHost.Scheme != "" {
+		if warn && curHost.Scheme != "" && curHost.Scheme != newHost.Scheme {
+			rc.log.WithFields(logrus.Fields{
+				"orig": curHost.Scheme,
+				"new":  newHost.Scheme,
+				"host": name,
+			}).Warn("Changing scheme for registry")
+		}
+		curHost.Scheme = newHost.Scheme
+	}
+
+	if newHost.TLS != TLSUndefined {
+		if warn && curHost.TLS != TLSUndefined && curHost.TLS != newHost.TLS {
+			tlsOrig, _ := curHost.TLS.MarshalText()
+			tlsNew, _ := newHost.TLS.MarshalText()
+			rc.log.WithFields(logrus.Fields{
+				"orig": string(tlsOrig),
+				"new":  string(tlsNew),
+				"host": name,
+			}).Warn("Changing TLS settings for registry")
+		}
+		curHost.TLS = newHost.TLS
+	}
+
+	if newHost.RegCert != "" {
+		if warn && curHost.RegCert != "" && curHost.RegCert != newHost.RegCert {
+			rc.log.WithFields(logrus.Fields{
+				"orig": curHost.RegCert,
+				"new":  newHost.RegCert,
+				"host": name,
+			}).Warn("Changing certificate settings for registry")
+		}
+		curHost.RegCert = newHost.RegCert
+	}
+
+	if newHost.ClientCert != "" {
+		if warn && curHost.ClientCert != "" && curHost.ClientCert != newHost.ClientCert {
+			rc.log.WithFields(logrus.Fields{
+				"orig": curHost.ClientCert,
+				"new":  newHost.ClientCert,
+				"host": name,
+			}).Warn("Changing client certificate settings for registry")
+		}
+		curHost.ClientCert = newHost.ClientCert
+	}
+
+	if newHost.ClientKey != "" {
+		if warn && curHost.ClientKey != "" && curHost.ClientKey != newHost.ClientKey {
+			rc.log.WithFields(logrus.Fields{
+				"host": name,
+			}).Warn("Changing client certificate key settings for registry")
+		}
+		curHost.ClientKey = newHost.ClientKey
+	}
+
+	if len(newHost.DNS) > 0 {
+		if warn && len(curHost.DNS) > 0 && !stringSliceEq(curHost.DNS, newHost.DNS) {
+			rc.log.WithFields(logrus.Fields{
+				"orig": curHost.DNS,
+				"new":  newHost.DNS,
+				"host": name,
+			}).Warn("Changing certificate settings for registry")
+		}
+		curHost.DNS = newHost.DNS
+	}
+
+	return curHost
+}
+
+func stringSliceEq(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, v := range a {
+		if v != b[i] {
+			return false
+		}
+	}
+	return true
 }

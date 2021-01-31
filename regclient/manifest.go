@@ -212,7 +212,7 @@ func (rc *regClient) ManifestDelete(ctx context.Context, ref Ref) error {
 	}
 
 	// build request
-	host := rc.getHost(ref.Registry)
+	host := rc.hostGet(ref.Registry)
 	manfURL := url.URL{
 		Scheme: host.Scheme,
 		Host:   host.DNS[0],
@@ -251,7 +251,7 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 	m := manifest{}
 
 	// build the request
-	host := rc.getHost(ref.Registry)
+	host := rc.hostGet(ref.Registry)
 	var tagOrDigest string
 	if ref.Digest != "" {
 		tagOrDigest = ref.Digest
@@ -358,7 +358,7 @@ func (rc *regClient) ManifestHead(ctx context.Context, ref Ref) (Manifest, error
 	m := manifest{}
 
 	// build the request
-	host := rc.getHost(ref.Registry)
+	host := rc.hostGet(ref.Registry)
 	var tagOrDigest string
 	if ref.Digest != "" {
 		tagOrDigest = ref.Digest
@@ -409,7 +409,7 @@ func (rc *regClient) ManifestHead(ctx context.Context, ref Ref) (Manifest, error
 }
 
 func (rc *regClient) ManifestPut(ctx context.Context, ref Ref, m Manifest) error {
-	host := rc.getHost(ref.Registry)
+	host := rc.hostGet(ref.Registry)
 	manfURL := url.URL{
 		Scheme: host.Scheme,
 		Host:   host.DNS[0],
