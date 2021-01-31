@@ -72,13 +72,19 @@ type RateLimit struct {
 }
 
 type regClient struct {
+	certPaths  []string
 	config     *Config
+	host       map[string]*regClientHost
 	log        *logrus.Logger
 	retryLimit int
-	transports map[string]*http.Transport
 	retryables map[string]retryable.Retryable
 	mu         sync.Mutex
 	userAgent  string
+}
+
+type regClientHost struct {
+	config    ConfigHost
+	retryable retryable.Retryable
 }
 
 // Opt functions are used to configure NewRegClient
@@ -87,6 +93,7 @@ type Opt func(*regClient)
 // NewRegClient returns a registry client
 func NewRegClient(opts ...Opt) RegClient {
 	var rc = regClient{
+		certPaths:  []string{},
 		retryLimit: DefaultRetryLimit,
 		userAgent:  DefaultUserAgent,
 		// logging is disabled by default
@@ -94,7 +101,6 @@ func NewRegClient(opts ...Opt) RegClient {
 	}
 
 	rc.retryables = map[string]retryable.Retryable{}
-	rc.transports = map[string]*http.Transport{}
 
 	for _, opt := range opts {
 		opt(&rc)
@@ -129,16 +135,18 @@ func NewRegClient(opts ...Opt) RegClient {
 	return &rc
 }
 
+// WithCertDir adds a path of certificates to trust similar to Docker's /etc/docker/certs.d
+func WithCertDir(path string) Opt {
+	return func(rc *regClient) {
+		rc.certPaths = append(rc.certPaths, path)
+		return
+	}
+}
+
 // WithDockerCerts adds certificates trusted by docker in /etc/docker/certs.d
 func WithDockerCerts() Opt {
 	return func(rc *regClient) {
-		if rc.config == nil {
-			rc.config = ConfigNew()
-		}
-		if rc.config.IncDockerCert == nil {
-			enabled := true
-			rc.config.IncDockerCert = &enabled
-		}
+		rc.certPaths = append(rc.certPaths, DockerCertDir)
 		return
 	}
 }
@@ -218,6 +226,13 @@ func WithConfigHost(configHost ConfigHost) Opt {
 func WithLog(log *logrus.Logger) Opt {
 	return func(rc *regClient) {
 		rc.log = log
+	}
+}
+
+// WithRetryLimit specifies the number of retries for non-fatal errors
+func WithRetryLimit(retryLimit int) Opt {
+	return func(rc *regClient) {
+		rc.retryLimit = retryLimit
 	}
 }
 
@@ -333,31 +348,30 @@ func (rc *regClient) authCreds(host string) (string, string) {
 
 func (rc *regClient) getCerts(host *ConfigHost) []string {
 	var certs []string
-	if rc.config.IncDockerCert == nil || *rc.config.IncDockerCert == false {
-		return certs
-	}
 	hosts := []string{host.Name}
 	if host.DNS != nil {
 		hosts = host.DNS
 	}
 	for _, h := range hosts {
-		dir := filepath.Join(DockerCertDir, h)
-		files, err := ioutil.ReadDir(dir)
-		if err != nil {
-			if !os.IsNotExist(err) {
-				rc.log.WithFields(logrus.Fields{
-					"err": err,
-					"dir": dir,
-				}).Warn("Failed to open docker cert dir")
-			}
-			continue
-		}
-		for _, f := range files {
-			if f.IsDir() {
+		for _, certPath := range rc.certPaths {
+			hostDir := filepath.Join(certPath, h)
+			files, err := ioutil.ReadDir(hostDir)
+			if err != nil {
+				if !os.IsNotExist(err) {
+					rc.log.WithFields(logrus.Fields{
+						"err": err,
+						"dir": hostDir,
+					}).Warn("Failed to open docker cert dir")
+				}
 				continue
 			}
-			if strings.HasSuffix(f.Name(), ".crt") {
-				certs = append(certs, filepath.Join(dir, f.Name()))
+			for _, f := range files {
+				if f.IsDir() {
+					continue
+				}
+				if strings.HasSuffix(f.Name(), ".crt") {
+					certs = append(certs, filepath.Join(hostDir, f.Name()))
+				}
 			}
 		}
 	}

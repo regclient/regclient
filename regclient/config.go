@@ -3,9 +3,6 @@ package regclient
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"os/user"
-	"path/filepath"
 	"strings"
 )
 
@@ -85,11 +82,11 @@ func (t *TLSConf) UnmarshalText(b []byte) error {
 
 // Config struct contains contents loaded from / saved to a config file
 type Config struct {
-	Filename      string                 `json:"-"`                 // filename that was loaded
-	Version       int                    `json:"version,omitempty"` // version the file in case the config file syntax changes in the future
+	// Filename      string                 `json:"-"`                 // filename that was loaded
+	// Version       int                    `json:"version,omitempty"` // version the file in case the config file syntax changes in the future
 	Hosts         map[string]*ConfigHost `json:"hosts"`
 	IncDockerCred *bool                  `json:"incDockerCred,omitempty"`
-	IncDockerCert *bool                  `json:"incDockerCert,omitempty"`
+	// IncDockerCert *bool                  `json:"incDockerCert,omitempty"`
 }
 
 // ConfigHost struct contains host specific settings
@@ -103,25 +100,6 @@ type ConfigHost struct {
 	DNS        []string `json:"dns,omitempty"`
 	User       string   `json:"user,omitempty"`
 	Pass       string   `json:"pass,omitempty"`
-}
-
-// getConfigFilename returns the filename based on environment variables and defaults
-func getConfigFilename() string {
-	cf := os.Getenv(ConfigEnv)
-	if cf == "" {
-		return filepath.Join(getHomeDir(), ConfigDir, ConfigFilename)
-	}
-	return cf
-}
-
-func getHomeDir() string {
-	h := os.Getenv("HOME")
-	if h == "" {
-		if u, err := user.Current(); err == nil {
-			return u.HomeDir
-		}
-	}
-	return h
 }
 
 // ConfigNew creates an empty configuration
