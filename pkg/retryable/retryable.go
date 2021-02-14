@@ -14,7 +14,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"os"
 	"time"
 
 	digest "github.com/opencontainers/go-digest"
@@ -24,7 +23,7 @@ import (
 
 // Retryable is used to create requests with built in retry capabilities
 type Retryable interface {
-	DoRequest(ctx context.Context, method string, u url.URL, opts ...OptsReq) (Response, error)
+	DoRequest(ctx context.Context, method string, u url.URL, opts ...OptsReq) (Response, error) // TODO: make u a slice
 }
 
 // Response is used to handle the result of a request
@@ -48,7 +47,7 @@ type OptsReq func(*request)
 
 type retryable struct {
 	httpClient *http.Client
-	mirrorFunc func(url.URL) ([]url.URL, error)
+	mirrorFunc func(url.URL) ([]url.URL, error) // TODO: remove mirrorFunc
 	auth       Auth
 	rootCAPool [][]byte
 	limit      int
@@ -63,16 +62,11 @@ func NewRetryable(opts ...Opts) Retryable {
 	r := &retryable{
 		httpClient: &http.Client{},
 		limit:      5,
+		log:        &logrus.Logger{Out: ioutil.Discard},
 		rootCAPool: [][]byte{},
 	}
 	r.delayInit, _ = time.ParseDuration("1s")
 	r.delayMax, _ = time.ParseDuration("30s")
-	r.log = &logrus.Logger{
-		Out:       os.Stderr,
-		Formatter: new(logrus.TextFormatter),
-		Hooks:     make(logrus.LevelHooks),
-		Level:     logrus.WarnLevel,
-	}
 
 	for _, opt := range opts {
 		opt(r)
@@ -230,7 +224,7 @@ type request struct {
 	log        *logrus.Logger
 }
 
-func (r *retryable) DoRequest(ctx context.Context, method string, u url.URL, opts ...OptsReq) (Response, error) {
+func (r *retryable) DoRequest(ctx context.Context, method string, u url.URL, opts ...OptsReq) (Response, error) { // TODO: make u a slice
 	req := &request{
 		r:          r,
 		context:    ctx,
@@ -446,6 +440,7 @@ func (req *request) checkResp() error {
 		prevResp := req.responses[len(req.responses)-2]
 		if prevResp.Request.URL == lastResp.Request.URL {
 			// repeated requests to same mirror indicates an auth failure
+			// TODO: should mirror be removed from list for failed auth, or retry auth to same mirror after backoffs?
 			if boerr := req.backoff(false); boerr == nil {
 				return ErrRetryNeeded
 			}
@@ -483,12 +478,8 @@ func (req *request) checkResp() error {
 		removeHost = true
 	}
 
-	if removeHost {
-		if boerr := req.backoff(true); boerr == nil {
-			return ErrRetryNeeded
-		}
-	} else if runBackoff {
-		if boerr := req.backoff(false); boerr == nil {
+	if removeHost || runBackoff {
+		if boerr := req.backoff(removeHost); boerr == nil {
 			return ErrRetryNeeded
 		}
 	}
@@ -502,15 +493,6 @@ func (req *request) backoff(removeMirror bool) error {
 		return fmt.Errorf("%w: backoffs %d, limit %d", ErrBackoffLimit, req.backoffs, req.r.limit)
 	}
 	failedURL := req.urls[req.curURL]
-	// next mirror based on whether remove flag is set
-	if removeMirror {
-		req.urls = append(req.urls[:req.curURL], req.urls[req.curURL+1:]...)
-	} else {
-		req.curURL = (req.curURL + 1) % len(req.urls)
-	}
-	if len(req.urls) == 0 {
-		return ErrAllMirrorsFailed
-	}
 	// sleep for backoff time
 	sleepTime := req.r.delayInit << req.backoffs
 	// limit to max delay
@@ -529,19 +511,34 @@ func (req *request) backoff(removeMirror bool) error {
 					"Retry-After": ra.Seconds(),
 					"Max":         req.r.delayMax.Seconds(),
 				}).Warn("Retry-After header exceeds max backoff time")
-				return ErrBackoffLimit
-			}
-			if ra > sleepTime {
+				removeMirror = true
+			} else if ra > sleepTime {
 				sleepTime = ra
 			}
 		}
 	}
+	// next mirror based on whether remove flag is set
+	if removeMirror {
+		req.urls = append(req.urls[:req.curURL], req.urls[req.curURL+1:]...)
+	} else {
+		req.curURL = (req.curURL + 1) % len(req.urls)
+	}
+	if len(req.urls) == 0 {
+		return ErrAllMirrorsFailed
+	}
+
+	// Run a sleep, checking if context was canceled during the sleep
 	req.log.WithFields(logrus.Fields{
 		"Host":    failedURL.Host,
 		"Removed": removeMirror,
 		"Seconds": sleepTime.Seconds(),
 	}).Warn("Sleeping for backoff")
-	time.Sleep(sleepTime)
+	select {
+	case <-req.context.Done():
+		return ErrCanceled
+	case <-time.After(sleepTime):
+	}
+
 	return nil
 }
 

@@ -7,6 +7,8 @@ var (
 	ErrAllMirrorsFailed = errors.New("All mirrors failed")
 	// ErrBackoffLimit maximum backoff attempts reached
 	ErrBackoffLimit = errors.New("Backoff limit reached")
+	// ErrCanceled if the context was canceled
+	ErrCanceled = errors.New("Context was canceled")
 	// ErrDigestMismatch if the expected digest wasn't received
 	ErrDigestMismatch = errors.New("Digest mismatch")
 	// ErrNotFound isn't there, search for your value elsewhere
