@@ -23,7 +23,7 @@ import (
 
 // Retryable is used to create requests with built in retry capabilities
 type Retryable interface {
-	DoRequest(ctx context.Context, method string, u url.URL, opts ...OptsReq) (Response, error) // TODO: make u a slice
+	DoRequest(ctx context.Context, method string, u []url.URL, opts ...OptsReq) (Response, error)
 }
 
 // Response is used to handle the result of a request
@@ -47,7 +47,6 @@ type OptsReq func(*request)
 
 type retryable struct {
 	httpClient *http.Client
-	mirrorFunc func(url.URL) ([]url.URL, error) // TODO: remove mirrorFunc
 	auth       Auth
 	rootCAPool [][]byte
 	limit      int
@@ -181,13 +180,6 @@ func WithLog(log *logrus.Logger) Opts {
 	}
 }
 
-// WithMirrors adds ability to contact mirrors in retryable methods
-func WithMirrors(mirrorFunc func(url.URL) ([]url.URL, error)) Opts {
-	return func(r *retryable) {
-		r.mirrorFunc = mirrorFunc
-	}
-}
-
 // WithTransport uses a specific http transport with retryable requests
 func WithTransport(t *http.Transport) Opts {
 	return func(r *retryable) {
@@ -224,12 +216,12 @@ type request struct {
 	log        *logrus.Logger
 }
 
-func (r *retryable) DoRequest(ctx context.Context, method string, u url.URL, opts ...OptsReq) (Response, error) { // TODO: make u a slice
+func (r *retryable) DoRequest(ctx context.Context, method string, u []url.URL, opts ...OptsReq) (Response, error) {
 	req := &request{
 		r:          r,
 		context:    ctx,
 		method:     method,
-		urls:       []url.URL{u},
+		urls:       u,
 		curURL:     0,
 		header:     http.Header{},
 		getBody:    nil,
@@ -245,12 +237,6 @@ func (r *retryable) DoRequest(ctx context.Context, method string, u url.URL, opt
 		responses:  []*http.Response{},
 		reader:     nil,
 		log:        r.log,
-	}
-	// replace url list with mirrors
-	if r.mirrorFunc != nil {
-		if urls, err := r.mirrorFunc(u); err == nil {
-			req.urls = urls
-		}
 	}
 	// apply opts
 	for _, opt := range opts {
@@ -392,8 +378,6 @@ func (req *request) retryLoop() error {
 			if boerr := req.backoff(true); boerr == nil {
 				continue
 			}
-		}
-		if err != nil {
 			return err
 		}
 		err = req.checkResp()

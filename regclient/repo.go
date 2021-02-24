@@ -6,11 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"strconv"
 
 	"github.com/regclient/regclient/pkg/retryable"
-	"github.com/regclient/regclient/pkg/wraperr"
 	"github.com/sirupsen/logrus"
 )
 
@@ -38,12 +38,7 @@ func (rc *regClient) RepoList(ctx context.Context, hostname string) (RepositoryL
 
 func (rc *regClient) RepoListWithOpts(ctx context.Context, hostname string, opts RepoOpts) (RepositoryList, error) {
 	rl := RepositoryList{}
-	host := rc.hostGet(hostname)
-	repoURL := url.URL{
-		Scheme: host.Scheme,
-		Host:   host.DNS[0],
-		Path:   "/v2/_catalog",
-	}
+
 	query := url.Values{}
 	if opts.Last != "" {
 		query.Set("last", opts.Last)
@@ -51,30 +46,30 @@ func (rc *regClient) RepoListWithOpts(ctx context.Context, hostname string, opts
 	if opts.Limit > 0 {
 		query.Set("n", strconv.Itoa(opts.Limit))
 	}
-	repoURL.RawQuery = query.Encode()
 
-	rty := rc.getRetryable(host)
-	resp, err := rty.DoRequest(ctx, "GET", repoURL)
+	headers := http.Header{
+		"Accept": []string{"application/json"},
+	}
+	req := httpReq{
+		host:      hostname,
+		noMirrors: true,
+		apis: map[string]httpReqAPI{
+			"": {
+				method:   "GET",
+				path:     "_catalog",
+				noPrefix: true,
+				query:    query,
+				headers:  headers,
+			},
+		},
+	}
+	resp, err := rc.httpDo(ctx, req)
 	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
-		rc.log.WithFields(logrus.Fields{
-			"err":  err,
-			"host": hostname,
-		}).Warn("Failed to request repo list")
-		return rl, fmt.Errorf("Failed to request repo list for %s: %w", hostname, err)
+		return rl, fmt.Errorf("Failed to list repositories for %s: %w", hostname, err)
 	}
 	defer resp.Close()
-	switch resp.HTTPResponse().StatusCode {
-	case 200: // success
-	case 401:
-		return rl, wraperr.New(fmt.Errorf("Unauthorized request for repo list %s", hostname), ErrUnauthorized)
-	case 403:
-		return rl, wraperr.New(fmt.Errorf("Forbidden request for repo list %s", hostname), ErrUnauthorized)
-	case 404:
-		return rl, wraperr.New(fmt.Errorf("Repo list not found: %s", hostname), ErrNotFound)
-	case 429:
-		return rl, wraperr.New(fmt.Errorf("Rate limit exceeded for repo list %s", hostname), ErrRateLimit)
-	default:
-		return rl, fmt.Errorf("Error getting repo list for %s: http response code %d != 200", hostname, resp.HTTPResponse().StatusCode)
+	if resp.HTTPResponse().StatusCode != 200 {
+		return rl, fmt.Errorf("Failed to list repositories for %s: %w", hostname, httpError(resp.HTTPResponse().StatusCode))
 	}
 
 	respBody, err := ioutil.ReadAll(resp)

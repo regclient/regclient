@@ -67,10 +67,6 @@ func newRegClient() regclient.RegClient {
 		log.WithFields(logrus.Fields{
 			"err": err,
 		}).Warn("Failed to load default config")
-	} else {
-		log.WithFields(logrus.Fields{
-			"config": config,
-		}).Debug("Loaded default config")
 	}
 
 	rcOpts := []regclient.Opt{
@@ -87,12 +83,16 @@ func newRegClient() regclient.RegClient {
 	rcHosts := []regclient.ConfigHost{}
 	for name, host := range config.Hosts {
 		rcHosts = append(rcHosts, regclient.ConfigHost{
-			Name:    name,
-			User:    host.User,
-			Pass:    host.Pass,
-			TLS:     host.TLS,
-			Scheme:  host.Scheme,
-			RegCert: host.RegCert,
+			Name:       name,
+			TLS:        host.TLS,
+			RegCert:    host.RegCert,
+			Hostname:   host.Hostname,
+			User:       host.User,
+			Pass:       host.Pass,
+			PathPrefix: host.PathPrefix,
+			Mirrors:    host.Mirrors,
+			Priority:   host.Priority,
+			API:        host.API,
 		})
 	}
 	if len(rcHosts) > 0 {

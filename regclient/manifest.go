@@ -8,7 +8,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 
@@ -211,37 +210,33 @@ func (rc *regClient) ManifestDelete(ctx context.Context, ref Ref) error {
 		return wraperr.New(fmt.Errorf("Digest required to delete manifest, reference %s", ref.CommonName()), ErrMissingDigest)
 	}
 
-	// build request
-	host := rc.hostGet(ref.Registry)
-	manfURL := url.URL{
-		Scheme: host.Scheme,
-		Host:   host.DNS[0],
-		Path:   "/v2/" + ref.Repository + "/manifests/" + ref.Digest,
+	// build/send request
+	headers := http.Header{
+		"Accept": []string{
+			MediaTypeDocker2Manifest,
+			MediaTypeDocker2ManifestList,
+			MediaTypeOCI1Manifest,
+			MediaTypeOCI1ManifestList,
+		},
 	}
-	opts := []retryable.OptsReq{}
-	opts = append(opts, retryable.WithHeader("Accept", []string{
-		MediaTypeDocker2Manifest,
-		MediaTypeDocker2ManifestList,
-		MediaTypeOCI1Manifest,
-		MediaTypeOCI1ManifestList,
-	}))
-
-	// send the request
-	rty := rc.getRetryable(host)
-	resp, err := rty.DoRequest(ctx, "DELETE", manfURL, opts...)
-	if err != nil {
-		return fmt.Errorf("Manifest delete failed for %s: %w", ref.CommonName(), err)
+	req := httpReq{
+		host:      ref.Registry,
+		noMirrors: true,
+		apis: map[string]httpReqAPI{
+			"": {
+				method:  "DELETE",
+				path:    ref.Repository + "/manifests/" + ref.Digest,
+				headers: headers,
+			},
+		},
 	}
-
-	// validate response
+	resp, err := rc.httpDo(ctx, req)
+	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
+		return fmt.Errorf("Failed to delete manifest %s: %w", ref.CommonName(), err)
+	}
+	defer resp.Close()
 	if resp.HTTPResponse().StatusCode != 202 {
-		body, _ := ioutil.ReadAll(resp)
-		rc.log.WithFields(logrus.Fields{
-			"ref":    ref.Reference,
-			"status": resp.HTTPResponse().StatusCode,
-			"body":   body,
-		}).Warn("Unexpected status code for manifest delete")
-		return fmt.Errorf("Unexpected status code on manifest delete %d\nResponse object: %v\nBody: %s", resp.HTTPResponse().StatusCode, resp, body)
+		return fmt.Errorf("Failed to delete manifest %s: %w", ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 	}
 
 	return nil
@@ -250,8 +245,6 @@ func (rc *regClient) ManifestDelete(ctx context.Context, ref Ref) error {
 func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error) {
 	m := manifest{}
 
-	// build the request
-	host := rc.hostGet(ref.Registry)
 	var tagOrDigest string
 	if ref.Digest != "" {
 		tagOrDigest = ref.Digest
@@ -261,38 +254,32 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 		return nil, wraperr.New(fmt.Errorf("Reference missing tag and digest: %s", ref.CommonName()), ErrMissingTagOrDigest)
 	}
 
-	manfURL := url.URL{
-		Scheme: host.Scheme,
-		Host:   host.DNS[0],
-		Path:   "/v2/" + ref.Repository + "/manifests/" + tagOrDigest,
+	// build/send request
+	headers := http.Header{
+		"Accept": []string{
+			MediaTypeDocker2Manifest,
+			MediaTypeDocker2ManifestList,
+			MediaTypeOCI1Manifest,
+			MediaTypeOCI1ManifestList,
+		},
 	}
-
-	opts := []retryable.OptsReq{}
-	opts = append(opts, retryable.WithHeader("Accept", []string{
-		MediaTypeDocker2Manifest,
-		MediaTypeDocker2ManifestList,
-		MediaTypeOCI1Manifest,
-		MediaTypeOCI1ManifestList,
-	}))
-
-	// send the request
-	rty := rc.getRetryable(host)
-	resp, err := rty.DoRequest(ctx, "GET", manfURL, opts...)
+	req := httpReq{
+		host: ref.Registry,
+		apis: map[string]httpReqAPI{
+			"": {
+				method:  "GET",
+				path:    ref.Repository + "/manifests/" + tagOrDigest,
+				headers: headers,
+			},
+		},
+	}
+	resp, err := rc.httpDo(ctx, req)
 	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
-		return nil, fmt.Errorf("Error getting manifest for %s: %w", ref.CommonName(), err)
+		return nil, fmt.Errorf("Failed to get manifest %s: %w", ref.CommonName(), err)
 	}
-	switch resp.HTTPResponse().StatusCode {
-	case 200: // success
-	case 401:
-		return nil, wraperr.New(fmt.Errorf("Unauthorized request for manifest %s", ref.CommonName()), ErrUnauthorized)
-	case 403:
-		return nil, wraperr.New(fmt.Errorf("Forbidden request for manifest %s", ref.CommonName()), ErrUnauthorized)
-	case 404:
-		return nil, wraperr.New(fmt.Errorf("Manifest not found: %s", ref.CommonName()), ErrNotFound)
-	case 429:
-		return nil, wraperr.New(fmt.Errorf("Rate limit exceeded pulling manifest %s", ref.CommonName()), ErrRateLimit)
-	default:
-		return nil, fmt.Errorf("Error getting manifest for %s: http response code %d != 200", ref.CommonName(), resp.HTTPResponse().StatusCode)
+	defer resp.Close()
+	if resp.HTTPResponse().StatusCode != 200 {
+		return nil, fmt.Errorf("Failed to get manifest %s: %w", ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 	}
 
 	rc.ratelimitHeader(&m, resp.HTTPResponse())
@@ -358,7 +345,6 @@ func (rc *regClient) ManifestHead(ctx context.Context, ref Ref) (Manifest, error
 	m := manifest{}
 
 	// build the request
-	host := rc.hostGet(ref.Registry)
 	var tagOrDigest string
 	if ref.Digest != "" {
 		tagOrDigest = ref.Digest
@@ -371,29 +357,32 @@ func (rc *regClient) ManifestHead(ctx context.Context, ref Ref) (Manifest, error
 		return nil, wraperr.New(fmt.Errorf("Reference missing tag and digest: %s", ref.CommonName()), ErrMissingTagOrDigest)
 	}
 
-	manfURL := url.URL{
-		Scheme: host.Scheme,
-		Host:   host.DNS[0],
-		Path:   "/v2/" + ref.Repository + "/manifests/" + tagOrDigest,
+	// build/send request
+	headers := http.Header{
+		"Accept": []string{
+			MediaTypeDocker2Manifest,
+			MediaTypeDocker2ManifestList,
+			MediaTypeOCI1Manifest,
+			MediaTypeOCI1ManifestList,
+		},
 	}
-
-	opts := []retryable.OptsReq{}
-	opts = append(opts, retryable.WithHeader("Accept", []string{
-		MediaTypeDocker2Manifest,
-		MediaTypeDocker2ManifestList,
-		MediaTypeOCI1Manifest,
-		MediaTypeOCI1ManifestList,
-	}))
-
-	// send the request
-	rty := rc.getRetryable(host)
-	resp, err := rty.DoRequest(ctx, "HEAD", manfURL, opts...)
-	if err != nil {
-		return nil, fmt.Errorf("Error getting manifest (head) for %s: %w", ref.CommonName(), err)
+	req := httpReq{
+		host: ref.Registry,
+		apis: map[string]httpReqAPI{
+			"": {
+				method:  "GET",
+				path:    ref.Repository + "/manifests/" + tagOrDigest,
+				headers: headers,
+			},
+		},
 	}
-
+	resp, err := rc.httpDo(ctx, req)
+	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
+		return nil, fmt.Errorf("Failed to request manifest head %s: %w", ref.CommonName(), err)
+	}
+	defer resp.Close()
 	if resp.HTTPResponse().StatusCode != 200 {
-		return nil, fmt.Errorf("Unexpected http response code %d", resp.HTTPResponse().StatusCode)
+		return nil, fmt.Errorf("Failed to request manifest head %s: %w", ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 	}
 
 	rc.ratelimitHeader(&m, resp.HTTPResponse())
@@ -409,16 +398,11 @@ func (rc *regClient) ManifestHead(ctx context.Context, ref Ref) (Manifest, error
 }
 
 func (rc *regClient) ManifestPut(ctx context.Context, ref Ref, m Manifest) error {
-	host := rc.hostGet(ref.Registry)
-	manfURL := url.URL{
-		Scheme: host.Scheme,
-		Host:   host.DNS[0],
-		Path:   "/v2/" + ref.Repository + "/manifests/",
-	}
-	if ref.Tag != "" {
-		manfURL.Path += ref.Tag
-	} else if ref.Digest != "" {
-		manfURL.Path += ref.Digest
+	var tagOrDigest string
+	if ref.Digest != "" {
+		tagOrDigest = ref.Digest
+	} else if ref.Tag != "" {
+		tagOrDigest = ref.Tag
 	} else {
 		rc.log.WithFields(logrus.Fields{
 			"ref": ref.Reference,
@@ -426,11 +410,7 @@ func (rc *regClient) ManifestPut(ctx context.Context, ref Ref, m Manifest) error
 		return ErrMissingTag
 	}
 
-	// add body to request
-	opts := []retryable.OptsReq{}
-	opts = append(opts, retryable.WithHeader("Content-Type", []string{m.GetMediaType()}))
-
-	// mj, err := json.MarshalIndent(m, "", "  ")
+	// create the request body
 	mj, err := m.MarshalJSON()
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
@@ -440,24 +420,30 @@ func (rc *regClient) ManifestPut(ctx context.Context, ref Ref, m Manifest) error
 		return fmt.Errorf("Error marshalling manifest for %s: %w", ref.CommonName(), err)
 	}
 
-	// TODO: if pushing by digest, recompute digest on mj?
-	opts = append(opts, retryable.WithBodyBytes(mj))
-	opts = append(opts, retryable.WithContentLen(int64(len(mj))))
-
-	rty := rc.getRetryable(host)
-	resp, err := rty.DoRequest(ctx, "PUT", manfURL, opts...)
-	if err != nil {
-		return fmt.Errorf("Error calling manifest put request: %w\nResponse object: %v", err, resp)
+	// build/send request
+	headers := http.Header{
+		"Content-Type": []string{m.GetMediaType()},
 	}
-
+	req := httpReq{
+		host:      ref.Registry,
+		noMirrors: true,
+		apis: map[string]httpReqAPI{
+			"": {
+				method:    "PUT",
+				path:      ref.Repository + "/manifests/" + tagOrDigest,
+				headers:   headers,
+				bodyLen:   int64(len(mj)),
+				bodyBytes: mj,
+			},
+		},
+	}
+	resp, err := rc.httpDo(ctx, req)
+	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
+		return fmt.Errorf("Failed to put manifest %s: %w", ref.CommonName(), err)
+	}
+	defer resp.Close()
 	if resp.HTTPResponse().StatusCode < 200 || resp.HTTPResponse().StatusCode > 299 {
-		body, _ := ioutil.ReadAll(resp)
-		rc.log.WithFields(logrus.Fields{
-			"ref":    ref.Reference,
-			"status": resp.HTTPResponse().StatusCode,
-			"body":   body,
-		}).Warn("Unexpected status code for manifest")
-		return fmt.Errorf("Unexpected status code on manifest put %d\nResponse object: %v\nBody: %s", resp.HTTPResponse().StatusCode, resp, body)
+		return fmt.Errorf("Failed to put manifest %s: %w", ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 	}
 
 	return nil

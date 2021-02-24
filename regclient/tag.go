@@ -7,16 +7,18 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"net/url"
 	"strconv"
 	"time"
 
 	dockerDistribution "github.com/docker/distribution"
+	dockerManifest "github.com/docker/distribution/manifest"
 	dockerSchema2 "github.com/docker/distribution/manifest/schema2"
 	"github.com/opencontainers/go-digest"
+	ociv1Specs "github.com/opencontainers/image-spec/specs-go"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/pkg/retryable"
-	"github.com/regclient/regclient/pkg/wraperr"
 	"github.com/sirupsen/logrus"
 )
 
@@ -51,9 +53,21 @@ func (rc *regClient) TagDelete(ctx context.Context, ref Ref) error {
 	if ref.Tag == "" {
 		return ErrMissingTag
 	}
-	// host := rc.getHost(ref.Registry)
+
+	// lookup the current manifest media type
+	curManifest, err := rc.ManifestHead(ctx, ref)
+	if err != nil {
+		if errors.As(err, &ErrNotFound) {
+			return err
+		}
+		// default to a docker schema2 manifest
+		curManifest = &manifest{
+			mt: MediaTypeDocker2Manifest,
+		}
+	}
 
 	// create empty image config with single label
+	// Note, this should be MediaType specific, but it appears that docker uses OCI for the config
 	now := time.Now()
 	conf := ociv1.Image{
 		Created: &now,
@@ -82,35 +96,55 @@ func (rc *regClient) TagDelete(ctx context.Context, ref Ref) error {
 	}
 	confDigest := digester.Digest()
 
-	// create manifest with config
-	manf := dockerSchema2.Manifest{
-		Config: dockerDistribution.Descriptor{
-			MediaType: MediaTypeDocker2ImageConfig,
-			Digest:    confDigest,
-			Size:      int64(len(confB)),
-		},
-		Layers: []dockerDistribution.Descriptor{},
+	// create manifest with config, matching the original tag manifest type
+	m := manifest{}
+	switch curManifest.GetMediaType() {
+	case MediaTypeOCI1Manifest, MediaTypeOCI1ManifestList:
+		m.mt = MediaTypeOCI1Manifest
+		m.ociM = ociv1.Manifest{
+			Versioned: ociv1Specs.Versioned{
+				SchemaVersion: 1,
+			},
+			Config: ociv1.Descriptor{
+				MediaType: MediaTypeOCI1ImageConfig,
+				Digest:    confDigest,
+				Size:      int64(len(confB)),
+			},
+			Layers: []ociv1.Descriptor{},
+		}
+		mBytes, err := json.Marshal(m.ociM)
+		if err != nil {
+			return err
+		}
+		m.origByte = mBytes
+	default: // default to the docker v2 schema
+		m.mt = MediaTypeDocker2Manifest
+		m.dockerM = dockerSchema2.Manifest{
+			Versioned: dockerManifest.Versioned{
+				SchemaVersion: 2,
+				MediaType:     MediaTypeDocker2Manifest,
+			},
+			Config: dockerDistribution.Descriptor{
+				MediaType: MediaTypeDocker2ImageConfig,
+				Digest:    confDigest,
+				Size:      int64(len(confB)),
+			},
+			Layers: []dockerDistribution.Descriptor{},
+		}
+		mBytes, err := json.Marshal(m.dockerM)
+		if err != nil {
+			return err
+		}
+		m.origByte = mBytes
 	}
-	manf.SchemaVersion = 2
-	manf.MediaType = MediaTypeDocker2Manifest
-	manfB, err := json.Marshal(manf)
-	if err != nil {
-		return err
-	}
+	m.manifSet = true
 	digester = digest.Canonical.Digester()
-	manfBuf := bytes.NewBuffer(manfB)
+	manfBuf := bytes.NewBuffer(m.origByte)
 	_, err = manfBuf.WriteTo(digester.Hash())
 	if err != nil {
 		return err
 	}
-	manfDigest := digester.Digest()
-	m := manifest{
-		digest:   manfDigest,
-		dockerM:  manf,
-		manifSet: true,
-		mt:       MediaTypeDocker2Manifest,
-		origByte: manfB,
-	}
+	m.digest = digester.Digest()
 
 	rc.log.WithFields(logrus.Fields{
 		"ref": ref.Reference,
@@ -128,7 +162,7 @@ func (rc *regClient) TagDelete(ctx context.Context, ref Ref) error {
 		return fmt.Errorf("Failed sending dummy manifest to delete %s: %w", ref.CommonName(), err)
 	}
 
-	ref.Digest = manfDigest.String()
+	ref.Digest = m.digest.String()
 
 	// delete manifest by digest
 	rc.log.WithFields(logrus.Fields{
@@ -149,12 +183,6 @@ func (rc *regClient) TagList(ctx context.Context, ref Ref) (TagList, error) {
 
 func (rc *regClient) TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts) (TagList, error) {
 	tl := TagList{}
-	host := rc.hostGet(ref.Registry)
-	repoURL := url.URL{
-		Scheme: host.Scheme,
-		Host:   host.DNS[0],
-		Path:   "/v2/" + ref.Repository + "/tags/list",
-	}
 	query := url.Values{}
 	if opts.Last != "" {
 		query.Set("last", opts.Last)
@@ -162,30 +190,27 @@ func (rc *regClient) TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts)
 	if opts.Limit > 0 {
 		query.Set("n", strconv.Itoa(opts.Limit))
 	}
-	repoURL.RawQuery = query.Encode()
-
-	rty := rc.getRetryable(host)
-	resp, err := rty.DoRequest(ctx, "GET", repoURL)
+	headers := http.Header{
+		"Accept": []string{"application/json"},
+	}
+	req := httpReq{
+		host: ref.Registry,
+		apis: map[string]httpReqAPI{
+			"": {
+				method:  "GET",
+				path:    ref.Repository + "/tags/list",
+				query:   query,
+				headers: headers,
+			},
+		},
+	}
+	resp, err := rc.httpDo(ctx, req)
 	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
-		rc.log.WithFields(logrus.Fields{
-			"err": err,
-			"ref": ref.CommonName(),
-		}).Warn("Failed to list tags")
 		return tl, fmt.Errorf("Failed to list tags for %s: %w", ref.CommonName(), err)
 	}
 	defer resp.Close()
-	switch resp.HTTPResponse().StatusCode {
-	case 200: // success
-	case 401:
-		return tl, wraperr.New(fmt.Errorf("Unauthorized request for tags %s", ref.CommonName()), ErrUnauthorized)
-	case 403:
-		return tl, wraperr.New(fmt.Errorf("Forbidden request for tags %s", ref.CommonName()), ErrUnauthorized)
-	case 404:
-		return tl, wraperr.New(fmt.Errorf("Repository not found: %s", ref.CommonName()), ErrNotFound)
-	case 429:
-		return tl, wraperr.New(fmt.Errorf("Rate limit exceeded pulling tags %s", ref.CommonName()), ErrRateLimit)
-	default:
-		return tl, fmt.Errorf("Error getting tags for %s: http response code %d != 200", ref.CommonName(), resp.HTTPResponse().StatusCode)
+	if resp.HTTPResponse().StatusCode != 200 {
+		return tl, fmt.Errorf("Failed to list tags for %s: %w", ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 	}
 	respBody, err := ioutil.ReadAll(resp)
 	if err != nil {

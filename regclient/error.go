@@ -3,8 +3,10 @@ package regclient
 import "errors"
 
 var (
-	// ErrUnsupportedConfigVersion happens when config file version is greater than this command supports
-	ErrUnsupportedConfigVersion = errors.New("Unsupported config version")
+	// ErrAPINotFound if an api is not available for the host
+	ErrAPINotFound = errors.New("API not found")
+	// ErrCanceled if the context was canceled
+	ErrCanceled = errors.New("Context was canceled")
 	// ErrMissingDigest returned when image reference does not include a digest
 	ErrMissingDigest = errors.New("Digest missing from image reference")
 	// ErrMissingName returned when name missing for host
@@ -25,6 +27,8 @@ var (
 	ErrUnavailable = errors.New("Unavailable")
 	// ErrUnauthorized when authentication fails
 	ErrUnauthorized = errors.New("Unauthorized")
+	// ErrUnsupportedConfigVersion happens when config file version is greater than this command supports
+	ErrUnsupportedConfigVersion = errors.New("Unsupported config version")
 	// ErrUnsupportedMediaType returned when media type is unknown or unsupported
 	ErrUnsupportedMediaType = errors.New("Unsupported media type")
 )

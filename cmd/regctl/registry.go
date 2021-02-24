@@ -49,19 +49,31 @@ the contents of the file, e.g. --cacert "$(cat reg-ca.crt)"`,
 	RunE: runRegistrySet,
 }
 var registryOpts struct {
-	user, pass          string // login opts
-	cacert, scheme, tls string // set opts
-	dns                 []string
+	user, pass           string // login opts
+	hostname, pathPrefix string
+	cacert, tls          string // set opts
+	mirrors              []string
+	priority             uint
+	scheme               string   // TODO: remove
+	dns                  []string // TODO: remove
 }
 
 func init() {
 	registryLoginCmd.Flags().StringVarP(&registryOpts.user, "user", "u", "", "Username")
 	registryLoginCmd.Flags().StringVarP(&registryOpts.pass, "pass", "p", "", "Password")
 
-	registrySetCmd.Flags().StringVarP(&registryOpts.scheme, "scheme", "", "", "Scheme (http, https)")
-	registrySetCmd.Flags().StringArrayVarP(&registryOpts.dns, "dns", "", nil, "DNS hostname or ip with port")
-	registrySetCmd.Flags().StringVarP(&registryOpts.tls, "tls", "", "", "TLS (enabled, insecure, disabled)")
 	registrySetCmd.Flags().StringVarP(&registryOpts.cacert, "cacert", "", "", "CA Certificate")
+	registrySetCmd.Flags().StringVarP(&registryOpts.tls, "tls", "", "", "TLS (enabled, insecure, disabled)")
+	registrySetCmd.Flags().StringVarP(&registryOpts.hostname, "hostname", "", "", "Hostname or ip with port")
+	registrySetCmd.Flags().StringVarP(&registryOpts.pathPrefix, "path-prefix", "", "", "Prefix to all repositories")
+	registrySetCmd.Flags().StringArrayVarP(&registryOpts.mirrors, "mirror", "", nil, "List of mirrors (registry names)")
+	registrySetCmd.Flags().UintVarP(&registryOpts.priority, "priority", "", 0, "Priority (for sorting mirrors)")
+
+	// TODO: eventually remove
+	registrySetCmd.Flags().StringVarP(&registryOpts.scheme, "scheme", "", "", "[Deprecated] Scheme (http, https)")
+	registrySetCmd.Flags().StringArrayVarP(&registryOpts.dns, "dns", "", nil, "[Deprecated] DNS hostname or ip with port")
+	registrySetCmd.Flags().MarkHidden("scheme")
+	registrySetCmd.Flags().MarkHidden("dns")
 
 	registryCmd.AddCommand(registryConfigCmd)
 	registryCmd.AddCommand(registryLoginCmd)
@@ -196,21 +208,30 @@ func runRegistrySet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(args) < 1 || args[0] == regclient.DockerRegistry || args[0] == regclient.DockerRegistryAuth {
-		args = []string{regclient.DockerRegistryDNS}
+	var name string
+	if len(args) < 1 || args[0] == regclient.DockerRegistryDNS || args[0] == regclient.DockerRegistryAuth {
+		name = regclient.DockerRegistry
+	} else {
+		name = args[0]
 	}
-	h, ok := c.Hosts[args[0]]
+	h, ok := c.Hosts[name]
 	if !ok {
 		h = ConfigHostNew()
-		h.DNS = []string{args[0]}
-		c.Hosts[args[0]] = h
+		h.Hostname = name
+		c.Hosts[name] = h
 	}
 
 	if registryOpts.scheme != "" {
-		h.Scheme = registryOpts.scheme
+		log.WithFields(logrus.Fields{
+			"name":   name,
+			"scheme": registryOpts.scheme,
+		}).Warn("Scheme flag is deprecated, for http set tls to disabled")
 	}
 	if registryOpts.dns != nil {
-		h.DNS = registryOpts.dns
+		log.WithFields(logrus.Fields{
+			"name": name,
+			"dns":  registryOpts.dns,
+		}).Warn("DNS flag is deprecated, use hostname and mirrors instead")
 	}
 	if registryOpts.tls != "" {
 		if err := h.TLS.UnmarshalText([]byte(registryOpts.tls)); err != nil {
@@ -220,6 +241,18 @@ func runRegistrySet(cmd *cobra.Command, args []string) error {
 	if registryOpts.cacert != "" {
 		h.RegCert = registryOpts.cacert
 	}
+	if registryOpts.hostname != "" {
+		h.Hostname = registryOpts.hostname
+	}
+	if registryOpts.pathPrefix != "" {
+		h.PathPrefix = registryOpts.pathPrefix
+	}
+	if len(registryOpts.mirrors) > 0 {
+		h.Mirrors = registryOpts.mirrors
+	}
+	if registryOpts.priority != 0 {
+		h.Priority = registryOpts.priority
+	}
 
 	err = c.ConfigSave()
 	if err != nil {
@@ -227,7 +260,7 @@ func runRegistrySet(cmd *cobra.Command, args []string) error {
 	}
 
 	log.WithFields(logrus.Fields{
-		"registry": args[0],
+		"name": name,
 	}).Info("Registry configuration updated/set")
 	return nil
 }

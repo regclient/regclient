@@ -33,21 +33,25 @@ type Config struct {
 // ConfigHost struct contains host specific settings
 type ConfigHost struct {
 	Name       string            `json:"-"`
-	Scheme     string            `json:"scheme,omitempty"`
+	Scheme     string            `json:"scheme,omitempty"` // TODO: remove
 	TLS        regclient.TLSConf `json:"tls,omitempty"`
 	RegCert    string            `json:"regcert,omitempty"`
 	ClientCert string            `json:"clientcert,omitempty"`
 	ClientKey  string            `json:"clientkey,omitempty"`
-	DNS        []string          `json:"dns,omitempty"`
+	DNS        []string          `json:"dns,omitempty"` // TODO: remove
+	Hostname   string            `json:"hostname,omitempty"`
 	User       string            `json:"user,omitempty"`
 	Pass       string            `json:"pass,omitempty"`
+	PathPrefix string            `json:"pathPrefix,omitempty"` // used for mirrors defined within a repository namespace
+	Mirrors    []string          `json:"mirrors,omitempty"`    // list of other ConfigHost Names to use as mirrors
+	Priority   uint              `json:"priority,omitempty"`   // priority when sorting mirrors, higher priority attempted first
+	API        string            `json:"api,omitempty"`        // registry API to use
 }
 
 // ConfigHostNew creates a default ConfigHost entry
 func ConfigHostNew() *ConfigHost {
 	h := ConfigHost{
-		Scheme: "https",
-		TLS:    regclient.TLSEnabled,
+		TLS: regclient.TLSEnabled,
 	}
 	return &h
 }
@@ -90,15 +94,33 @@ func ConfigLoadReader(r io.Reader) (*Config, error) {
 		return c, ErrUnsupportedConfigVersion
 	}
 	for h := range c.Hosts {
-		c.Hosts[h].Name = h
-		if c.Hosts[h].DNS == nil {
+		if c.Hosts[h].Name == "" {
+			c.Hosts[h].Name = h
+		}
+		if len(c.Hosts[h].DNS) == 0 {
 			c.Hosts[h].DNS = []string{h}
+		}
+		if c.Hosts[h].Hostname == "" {
+			c.Hosts[h].Hostname = h
 		}
 		if c.Hosts[h].Scheme == "" {
 			c.Hosts[h].Scheme = "https"
 		}
 		if c.Hosts[h].TLS == regclient.TLSUndefined {
 			c.Hosts[h].TLS = regclient.TLSEnabled
+		}
+		if h == regclient.DockerRegistryDNS || h == regclient.DockerRegistry {
+			c.Hosts[h].Name = regclient.DockerRegistry
+			if c.Hosts[h].DNS[0] == h {
+				c.Hosts[h].DNS[0] = regclient.DockerRegistryDNS
+			}
+			if c.Hosts[h].Hostname == h {
+				c.Hosts[h].Hostname = regclient.DockerRegistryDNS
+			}
+		}
+		if c.Hosts[h].Name != h {
+			c.Hosts[c.Hosts[h].Name] = c.Hosts[h]
+			delete(c.Hosts, h)
 		}
 	}
 	return c, nil

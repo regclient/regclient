@@ -76,20 +76,25 @@ func (t *TLSConf) UnmarshalText(b []byte) error {
 // ConfigHost struct contains host specific settings
 type ConfigHost struct {
 	Name       string   `json:"-"`
-	Scheme     string   `json:"scheme,omitempty"`
+	Scheme     string   `json:"scheme,omitempty"` // TODO: deprecate, delete
 	TLS        TLSConf  `json:"tls,omitempty"`
 	RegCert    string   `json:"regcert,omitempty"`
 	ClientCert string   `json:"clientcert,omitempty"`
 	ClientKey  string   `json:"clientkey,omitempty"`
-	DNS        []string `json:"dns,omitempty"`
+	DNS        []string `json:"dns,omitempty"`      // TODO: remove slice, single string, or remove entirely?
+	Hostname   string   `json:"hostname,omitempty"` // replaces DNS array with single string
 	User       string   `json:"user,omitempty"`
 	Pass       string   `json:"pass,omitempty"`
+	PathPrefix string   `json:"pathPrefix,omitempty"` // used for mirrors defined within a repository namespace
+	Mirrors    []string `json:"mirrors,omitempty"`    // list of other ConfigHost Names to use as mirrors
+	Priority   uint     `json:"priority,omitempty"`   // priority when sorting mirrors, higher priority attempted first
+	API        string   `json:"api,omitempty"`        // registry API to use
 }
 
 // ConfigHostNew creates a default ConfigHost entry
 func ConfigHostNew() *ConfigHost {
 	h := ConfigHost{
-		Scheme: "https",
+		Scheme: "https", // TODO: delete
 		TLS:    TLSEnabled,
 	}
 	return &h
@@ -98,10 +103,15 @@ func ConfigHostNew() *ConfigHost {
 // ConfigHostNewName creates a default ConfigHost with a hostname
 func ConfigHostNewName(host string) *ConfigHost {
 	h := ConfigHost{
-		Name:   host,
-		Scheme: "https",
-		TLS:    TLSEnabled,
-		DNS:    []string{host},
+		Name:     host,
+		Scheme:   "https", // TODO: delete
+		TLS:      TLSEnabled,
+		Hostname: host,
+		DNS:      []string{host}, // TODO: delete
+	}
+	if host == DockerRegistry || host == DockerRegistryDNS || host == DockerRegistryAuth {
+		h.Name = DockerRegistry
+		h.Hostname = DockerRegistryDNS
 	}
 	return &h
 }
@@ -130,7 +140,7 @@ func (rc *regClient) mergeConfigHost(curHost, newHost ConfigHost, warn bool) Con
 		curHost.Pass = newHost.Pass
 	}
 
-	if newHost.Scheme != "" {
+	if newHost.Scheme != "" { // TODO: delete
 		if warn && curHost.Scheme != "" && curHost.Scheme != newHost.Scheme {
 			rc.log.WithFields(logrus.Fields{
 				"orig": curHost.Scheme,
@@ -185,13 +195,69 @@ func (rc *regClient) mergeConfigHost(curHost, newHost ConfigHost, warn bool) Con
 		curHost.ClientKey = newHost.ClientKey
 	}
 
-	if len(newHost.DNS) > 0 {
+	if newHost.Hostname != "" {
+		if warn && curHost.Hostname != "" && curHost.Hostname != newHost.Hostname {
+			rc.log.WithFields(logrus.Fields{
+				"orig": curHost.Hostname,
+				"new":  newHost.Hostname,
+				"host": name,
+			}).Warn("Changing hostname settings for registry")
+		}
+		curHost.Hostname = newHost.Hostname
+	}
+
+	if newHost.PathPrefix != "" {
+		newHost.PathPrefix = strings.Trim(newHost.PathPrefix, "/") // leading and trailing / are not needed
+		if warn && curHost.PathPrefix != "" && curHost.PathPrefix != newHost.PathPrefix {
+			rc.log.WithFields(logrus.Fields{
+				"orig": curHost.PathPrefix,
+				"new":  newHost.PathPrefix,
+				"host": name,
+			}).Warn("Changing path prefix settings for registry")
+		}
+		curHost.PathPrefix = newHost.PathPrefix
+	}
+
+	if len(newHost.Mirrors) > 0 {
+		if warn && len(curHost.Mirrors) > 0 && !stringSliceEq(curHost.Mirrors, newHost.Mirrors) {
+			rc.log.WithFields(logrus.Fields{
+				"orig": curHost.Mirrors,
+				"new":  newHost.Mirrors,
+				"host": name,
+			}).Warn("Changing mirror settings for registry")
+		}
+		curHost.Mirrors = newHost.Mirrors
+	}
+
+	if newHost.Priority != 0 {
+		if warn && curHost.Priority != 0 && curHost.Priority != newHost.Priority {
+			rc.log.WithFields(logrus.Fields{
+				"orig": curHost.Priority,
+				"new":  newHost.Priority,
+				"host": name,
+			}).Warn("Changing priority settings for registry")
+		}
+		curHost.Priority = newHost.Priority
+	}
+
+	if newHost.API != "" {
+		if warn && curHost.API != "" && curHost.API != newHost.API {
+			rc.log.WithFields(logrus.Fields{
+				"orig": curHost.API,
+				"new":  newHost.API,
+				"host": name,
+			}).Warn("Changing API settings for registry")
+		}
+		curHost.API = newHost.API
+	}
+
+	if len(newHost.DNS) > 0 { // TODO: deprecate
 		if warn && len(curHost.DNS) > 0 && !stringSliceEq(curHost.DNS, newHost.DNS) {
 			rc.log.WithFields(logrus.Fields{
 				"orig": curHost.DNS,
 				"new":  newHost.DNS,
 				"host": name,
-			}).Warn("Changing certificate settings for registry")
+			}).Warn("Changing DNS settings for registry")
 		}
 		curHost.DNS = newHost.DNS
 	}
