@@ -18,7 +18,6 @@ type charLU byte
 
 var charLUs [256]charLU
 
-// TODO: allow clientID to be modified
 var defaultClientID = "regclient"
 
 // minTokenLife tokens are required to last at least 60 seconds to support older docker clients
@@ -63,13 +62,14 @@ type Handler interface {
 }
 
 // HandlerBuild is used to make a new handler for a specific authType and URL
-type HandlerBuild func(client *http.Client, host, user, pass string) Handler
+type HandlerBuild func(client *http.Client, clientID, host, user, pass string) Handler
 
 // Opts configures options for NewAuth
 type Opts func(*auth)
 
 type auth struct {
 	httpClient *http.Client
+	clientID   string
 	credsFn    CredsFn
 	hbs        map[string]HandlerBuild       // handler builders based on authType
 	hs         map[string]map[string]Handler // handlers based on url and authType
@@ -82,6 +82,7 @@ type auth struct {
 func NewAuth(opts ...Opts) Auth {
 	a := &auth{
 		httpClient: &http.Client{},
+		clientID:   defaultClientID,
 		credsFn:    DefaultCredsFn,
 		hbs:        map[string]HandlerBuild{},
 		hs:         map[string]map[string]Handler{},
@@ -120,6 +121,13 @@ func WithHTTPClient(h *http.Client) Opts {
 		if h != nil {
 			a.httpClient = h
 		}
+	}
+}
+
+// WithClientID uses a client ID with request headers
+func WithClientID(clientID string) Opts {
+	return func(a *auth) {
+		a.clientID = clientID
 	}
 }
 
@@ -187,7 +195,7 @@ func (a *auth) HandleResponse(resp *http.Response) error {
 		}
 		if _, ok := a.hs[host][c.authType]; !ok {
 			user, pass := a.credsFn(host)
-			h := a.hbs[c.authType](a.httpClient, host, user, pass)
+			h := a.hbs[c.authType](a.httpClient, a.clientID, host, user, pass)
 			a.hs[host][c.authType] = h
 		}
 		err := a.hs[host][c.authType].ProcessChallenge(c)
@@ -401,7 +409,7 @@ type BasicHandler struct {
 }
 
 // NewBasicHandler creates a new BasicHandler
-func NewBasicHandler(client *http.Client, host, user, pass string) Handler {
+func NewBasicHandler(client *http.Client, clientID, host, user, pass string) Handler {
 	return &BasicHandler{
 		realm: "",
 		user:  user,
@@ -433,6 +441,7 @@ func (b *BasicHandler) GenerateAuth() (string, error) {
 // BearerHandler supports Bearer auth type requests
 type BearerHandler struct {
 	client                     *http.Client
+	clientID                   string
 	realm, service, user, pass string
 	scopes                     []string
 	token                      BearerToken
@@ -449,14 +458,15 @@ type BearerToken struct {
 }
 
 // NewBearerHandler creates a new BearerHandler
-func NewBearerHandler(client *http.Client, host, user, pass string) Handler {
+func NewBearerHandler(client *http.Client, clientID, host, user, pass string) Handler {
 	return &BearerHandler{
-		client:  client,
-		user:    user,
-		pass:    pass,
-		realm:   "",
-		service: "",
-		scopes:  []string{},
+		client:   client,
+		clientID: clientID,
+		user:     user,
+		pass:     pass,
+		realm:    "",
+		service:  "",
+		scopes:   []string{},
 	}
 }
 
@@ -538,7 +548,7 @@ func (b *BearerHandler) tryGet() error {
 	}
 
 	reqParams := req.URL.Query()
-	reqParams.Add("client_id", defaultClientID)
+	reqParams.Add("client_id", b.clientID)
 	reqParams.Add("offline_token", "true")
 	if b.service != "" {
 		reqParams.Add("service", b.service)
@@ -572,7 +582,7 @@ func (b *BearerHandler) tryPost() error {
 	if b.service != "" {
 		form.Set("service", b.service)
 	}
-	form.Set("client_id", defaultClientID)
+	form.Set("client_id", b.clientID)
 	if b.token.RefreshToken != "" {
 		form.Set("grant_type", "refresh_token")
 		form.Set("refresh_token", b.token.RefreshToken)
@@ -636,23 +646,3 @@ func (b *BearerHandler) validateResponse(resp *http.Response) error {
 
 	return nil
 }
-
-/*
-- (auth) getCreds(url) (string, string, error) returns user/pass for a url, empty if anonymous or unavailable
-- Basic HandleResponse
-  - Verify scheme is basic
-  - Compare encoded cred against last cred, if they match, "unchanged" error
-- Basic UpdateRequest:
-  - base64 encode user/pass and return
-- Bearer HandleResponse:
-  - Verify scheme is bearer
-  - Compare realm and service
-  - Compare scope, add scope if needed
-  - Check current token expiration time
-  - If nothing changed, error
-- Bearer UpdateRequest:
-  - Request refresh token if unset
-  - Refresh token if needed
-  - Parse returned token
-  - return token
-*/
