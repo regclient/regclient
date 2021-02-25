@@ -141,13 +141,22 @@ func rootPreRun(cmd *cobra.Command, args []string) error {
 	}
 	rcHosts := []regclient.ConfigHost{}
 	for _, host := range config.Creds {
+		if host.Scheme != "" {
+			log.WithFields(logrus.Fields{
+				"name": host.Registry,
+			}).Warn("Scheme is deprecated, for http set TLS to disabled")
+		}
 		rcHosts = append(rcHosts, regclient.ConfigHost{
-			Name:    host.Registry,
-			User:    host.User,
-			Pass:    host.Pass,
-			TLS:     host.TLS,
-			Scheme:  host.Scheme,
-			RegCert: host.RegCert,
+			Name:       host.Registry,
+			Hostname:   host.Hostname,
+			User:       host.User,
+			Pass:       host.Pass,
+			TLS:        host.TLS,
+			RegCert:    host.RegCert,
+			PathPrefix: host.PathPrefix,
+			Mirrors:    host.Mirrors,
+			Priority:   host.Priority,
+			API:        host.API,
 		})
 	}
 	if len(rcHosts) > 0 {

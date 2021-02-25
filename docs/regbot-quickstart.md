@@ -22,10 +22,9 @@ version: 1
 creds:
   - registry: registry:5000
     tls: disabled
-    scheme: http
   - registry: docker.io
     user: "{{env \"HUB_USER\"}}"
-    pass: "{{file \"/var/run/secrets/hub_token\"}}"
+    pass: "{{file \"/home/appuser/.docker/hub_token\"}}"
 defaults:
   parallel: 2
   interval: 60m
@@ -223,7 +222,7 @@ docker container run -it --rm --net host \\
   regclient/regctl:latest "\$@"
 EOF
 chmod 755 regctl
-./regctl registry set --scheme http --tls disabled localhost:5000
+./regctl registry set --tls disabled localhost:5000
 ```
 
 ## Load example images
@@ -263,15 +262,17 @@ variables in the "delete old builds" script.
 ## Perform a Dry-Run
 
 Run regbot in the "once" mode with the "dry-run" option to test the scripts.
-Make sure to replace `your_username` with your Hub username and create the
-hub_token file with your hub password or personal access token.
+Make sure to replace `your_username` with your Hub username and create a
+`${HOME}/.docker/hub_token` file with your hub password or personal access
+token.
 
 ```shell
 export HUB_USER=your_hub_username
-echo "your_hub_password" >hub_token
+mkdir -p ${HOME}/.docker
+echo "your_hub_password" >${HOME}/.docker/hub_token
 docker container run -it --rm --net registry \
   -e "HUB_USER" \
-  -v "$(pwd)/hub_token:/var/run/secrets/hub_token:ro" \
+  -v "${HOME}/.docker/hub_token:/var/run/secrets/hub_token:ro" \
   -v "$(pwd)/regbot.yml:/home/appuser/regbot.yml" \
   regclient/regbot:latest -c /home/appuser/regbot.yml once --dry-run
 ```
@@ -286,7 +287,7 @@ remaining on your account.
 ```shell
 docker container run -it --rm --net registry \
   -e "HUB_USER" \
-  -v "$(pwd)/hub_token:/var/run/secrets/hub_token:ro" \
+  -v "${HOME}/.docker/hub_token:/var/run/secrets/hub_token:ro" \
   -v "$(pwd)/regbot.yml:/home/appuser/regbot.yml" \
   regclient/regbot:latest -c /home/appuser/regbot.yml once
 ```
@@ -299,7 +300,7 @@ constantly maintain the local registry using the defined scripts.
 ```shell
 docker container run -d --restart=unless-stopped --name regbot --net registry \
   -e "HUB_USER" \
-  -v "$(pwd)/hub_token:/var/run/secrets/hub_token:ro" \
+  -v "${HOME}/.docker/hub_token:/var/run/secrets/hub_token:ro" \
   -v "$(pwd)/regbot.yml:/home/appuser/regbot.yml" \
   regclient/regbot:latest -c /home/appuser/regbot.yml server -v debug
 ```
@@ -313,9 +314,10 @@ docker container run -d --restart=unless-stopped --name regbot --net registry \
 The repositories we've created should be visible.
 
 ```shell
-./regctl tag ls localhost:5000/library/alpine | sort && \
-./regctl tag ls localhost:5000/library/debian | sort && \
-./regctl tag ls localhost:5000/regclient/example | sort
+tag_format='{{$name := .Name}}{{range .Tags}}{{printf "%s:%s\n" $name .}}{{end}}'
+./regctl tag ls localhost:5000/library/alpine --format "${tag_format}" | sort && \
+./regctl tag ls localhost:5000/library/debian --format "${tag_format}" | sort && \
+./regctl tag ls localhost:5000/regclient/example --format "${tag_format}" | sort
 ```
 
 That should show the tags in each of the repositories, without the old example

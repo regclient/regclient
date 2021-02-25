@@ -370,7 +370,7 @@ func (rc *regClient) ManifestHead(ctx context.Context, ref Ref) (Manifest, error
 		host: ref.Registry,
 		apis: map[string]httpReqAPI{
 			"": {
-				method:  "GET",
+				method:  "HEAD",
 				path:    ref.Repository + "/manifests/" + tagOrDigest,
 				headers: headers,
 			},

@@ -21,12 +21,17 @@ type Config struct {
 
 // ConfigCreds allows the registry login to be passed in the config rather than from Docker
 type ConfigCreds struct {
-	Registry string            `json:"registry"`
-	User     string            `json:"user"`
-	Pass     string            `json:"pass"`
-	TLS      regclient.TLSConf `json:"tls"`
-	Scheme   string            `json:"scheme"`
-	RegCert  string            `json:"regcert"`
+	Registry   string            `json:"registry"`
+	Hostname   string            `json:"hostname"`
+	User       string            `json:"user"`
+	Pass       string            `json:"pass"`
+	TLS        regclient.TLSConf `json:"tls"`
+	Scheme     string            `json:"scheme"` // TODO: delete
+	RegCert    string            `json:"regcert"`
+	PathPrefix string            `json:"pathPrefix"`
+	Mirrors    []string          `json:"mirrors"`
+	Priority   uint              `json:"priority"`
+	API        string            `json:"api"`
 }
 
 // ConfigDefaults is uses for general options and defaults for ConfigScript entries
@@ -34,7 +39,7 @@ type ConfigDefaults struct {
 	Interval       time.Duration `json:"interval"`
 	Schedule       string        `json:"schedule"`
 	Parallel       int           `json:"parallel"`
-	SkipDockerConf bool          `json:"skipDockerConfig`
+	SkipDockerConf bool          `json:"skipDockerConfig"`
 	Timeout        time.Duration `json:"timeout"`
 }
 

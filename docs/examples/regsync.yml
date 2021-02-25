@@ -2,7 +2,6 @@ version: 1
 creds:
   - registry: registry:5000
     tls: disabled
-    scheme: http
   - registry: docker.io
     user: "{{env \"HUB_USER\"}}"
     pass: "{{file \"/home/appuser/.docker/hub_token\"}}"
