@@ -3,8 +3,9 @@ BINARIES=$(addprefix bin/,$(COMMANDS))
 IMAGE_TAGS=regctl regsync regbot
 IMAGES=$(addprefix docker-,$(IMAGE_TAGS))
 VCS_REF=$(shell git rev-list -1 HEAD)
+VCS_TAG=$(shell git describe --tags --abbrev=0 2>/dev/null || echo "none")
 LD_FLAGS=-X \"github.com/regclient/regclient/regclient.VCSRef=$(VCS_REF)\" \
-         -X \"main.VCSRef=$(VCS_REF)\"
+         -X \"main.VCSRef=$(VCS_REF)\" -X \"main.VCSTag=$(VCS_TAG)\"
 GO_BUILD_FLAGS=-ldflags "$(LD_FLAGS)"
 DOCKER_ARGS=--build-arg "VCS_REF=$(VCS_REF)" --build-arg "LD_FLAGS=$(LD_FLAGS)"
 

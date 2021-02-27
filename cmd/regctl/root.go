@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 
+	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/regclient"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -18,6 +19,8 @@ More details at https://github.com/regclient/regclient`
 var (
 	// VCSRef is injected from a build flag, used to version the UserAgent header
 	VCSRef = "unknown"
+	// VCSTag is injected from a build flag
+	VCSTag = "unknown"
 	log    *logrus.Logger
 )
 
@@ -27,6 +30,14 @@ var rootCmd = &cobra.Command{
 	Long:          usageDesc,
 	SilenceUsage:  true,
 	SilenceErrors: true,
+}
+
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Show the version",
+	Long:  `Show the version`,
+	Args:  cobra.RangeArgs(0, 0),
+	RunE:  runVersion,
 }
 
 var rootOpts struct {
@@ -45,6 +56,9 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.WarnLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
 	rootCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
 	rootCmd.PersistentPreRunE = rootPreRun
+
+	versionCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{jsonPretty .}}", "Format output with go template syntax")
+	rootCmd.AddCommand(versionCmd)
 }
 
 func rootPreRun(cmd *cobra.Command, args []string) error {
@@ -59,6 +73,17 @@ func rootPreRun(cmd *cobra.Command, args []string) error {
 		}
 	}
 	return nil
+}
+
+func runVersion(cmd *cobra.Command, args []string) error {
+	ver := struct {
+		VCSRef string
+		VCSTag string
+	}{
+		VCSRef: VCSRef,
+		VCSTag: VCSTag,
+	}
+	return template.Writer(os.Stdout, rootOpts.format, ver)
 }
 
 func newRegClient() regclient.RegClient {
