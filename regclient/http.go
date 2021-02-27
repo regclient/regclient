@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"time"
 
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/pkg/retryable"
@@ -49,7 +50,7 @@ func (rc *regClient) httpDo(ctx context.Context, req httpReq) (httpResp, error) 
 	hosts = append(hosts, upstreamHost)
 
 	// sort the hosts by highest priority, and with upstream last
-	sort.Slice(hosts, sortHostsCmp(hosts, upstreamHost.Name))
+	sort.Slice(hosts, sortHostsCmp(rc, hosts, upstreamHost.Name))
 
 	// run a separate retryable per host, allows separate auth, separate API, etc
 	err := ErrNotFound
@@ -115,6 +116,10 @@ func (rc *regClient) httpDo(ctx context.Context, req httpReq) (httpResp, error) 
 		if err == nil {
 			return resp, nil
 		}
+		// on failures, close the response
+		if resp != nil {
+			resp.Close()
+		}
 		rc.log.WithFields(logrus.Fields{
 			"error": err,
 			"host":  h.Name,
@@ -140,12 +145,21 @@ func httpError(statusCode int) error {
 	}
 }
 
-// sortHostCmp to sort host list of mirrors by priority decending, and then by upstream last
-func sortHostsCmp(hosts []*ConfigHost, upstream string) func(i, j int) bool {
+// sortHostCmp to sort host list of mirrors
+func sortHostsCmp(rc *regClient, hosts []*ConfigHost, upstream string) func(i, j int) bool {
+	// build map of host name to retryable DownUntil times
+	backoffUntil := map[string]time.Time{}
+	for _, h := range hosts {
+		backoffUntil[h.Name] = rc.getRetryable(h).BackoffUntil()
+	}
+	// sort by DownUntil first, then priority decending, then upstream name last
 	return func(i, j int) bool {
-		if hosts[i].Priority == hosts[j].Priority {
-			return hosts[i].Name != upstream
+		if time.Now().Before(backoffUntil[hosts[i].Name]) || time.Now().Before(backoffUntil[hosts[j].Name]) {
+			return backoffUntil[hosts[i].Name].Before(backoffUntil[hosts[j].Name])
 		}
-		return hosts[i].Priority > hosts[j].Priority
+		if hosts[i].Priority != hosts[j].Priority {
+			return hosts[i].Priority > hosts[j].Priority
+		}
+		return hosts[i].Name != upstream
 	}
 }

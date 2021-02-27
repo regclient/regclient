@@ -258,7 +258,7 @@ func (rc *regClient) hostGet(hostname string) *ConfigHost {
 	if _, ok := rc.hosts[hostname]; !ok {
 		rc.hosts[hostname] = &regClientHost{}
 	}
-	if rc.hosts[hostname].config.Name == "" {
+	if rc.hosts[hostname].config == nil {
 		rc.hosts[hostname].config = ConfigHostNewName(hostname)
 	}
 	return rc.hosts[hostname].config
