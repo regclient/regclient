@@ -51,9 +51,20 @@ var tmplFuncs = gotemplate.FuncMap{
 	"upper": strings.ToUpper,
 }
 
+// Opt allows options to be passed to templating functions
+type Opt func(*gotemplate.Template) (*gotemplate.Template, error)
+
 // Writer outputs a template to an io.Writer
-func Writer(out io.Writer, tmpl string, data interface{}) error {
-	t, err := gotemplate.New("out").Funcs(tmplFuncs).Parse(tmpl)
+func Writer(out io.Writer, tmpl string, data interface{}, opts ...Opt) error {
+	var err error
+	t := gotemplate.New("out").Funcs(tmplFuncs)
+	for _, opt := range opts {
+		t, err = opt(t)
+		if err != nil {
+			return err
+		}
+	}
+	t, err = t.Parse(tmpl)
 	if err != nil {
 		return err
 	}
@@ -61,11 +72,18 @@ func Writer(out io.Writer, tmpl string, data interface{}) error {
 }
 
 // String converts a template to a string
-func String(tmpl string, data interface{}) (string, error) {
+func String(tmpl string, data interface{}, opts ...Opt) (string, error) {
 	var sb strings.Builder
 	err := Writer(&sb, tmpl, data)
 	if err != nil {
 		return "", err
 	}
 	return sb.String(), nil
+}
+
+// WithFuncs includes additional template functions
+func WithFuncs(funcs gotemplate.FuncMap) Opt {
+	return func(t *gotemplate.Template) (*gotemplate.Template, error) {
+		return t.Funcs(funcs), nil
+	}
 }

@@ -1,6 +1,7 @@
 package regclient
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/containerd/containerd/platforms"
 	dockerDistribution "github.com/docker/distribution"
@@ -31,6 +33,7 @@ type ManifestClient interface {
 }
 
 type manifest struct {
+	ref       Ref
 	digest    digest.Digest
 	dockerM   dockerSchema2.Manifest
 	dockerML  dockerManifestList.ManifestList
@@ -205,6 +208,106 @@ func (m *manifest) MarshalJSON() ([]byte, error) {
 	return []byte{}, wraperr.New(fmt.Errorf("Json marshalling not available for media type %s", m.mt), ErrUnsupportedMediaType)
 }
 
+// MarshalPretty is used for printPretty template formatting
+func (m *manifest) MarshalPretty() ([]byte, error) {
+	buf := &bytes.Buffer{}
+	if m.manifSet {
+		switch m.mt {
+		case MediaTypeDocker2ManifestList:
+			tw := tabwriter.NewWriter(buf, 0, 0, 1, ' ', 0)
+			if m.ref.Reference != "" {
+				fmt.Fprintf(tw, "Name:\t%s\n", m.ref.Reference)
+			}
+			fmt.Fprintf(tw, "MediaType:\t%s\n", m.mt)
+			fmt.Fprintf(tw, "Digest:\t%s\n", m.digest.String())
+			fmt.Fprintf(tw, "\t\n")
+			fmt.Fprintf(tw, "Manifests:\t\n")
+			for _, d := range m.dockerML.Manifests {
+				fmt.Fprintf(tw, "\t\n")
+				dRef := m.ref
+				if dRef.Reference != "" {
+					dRef.Digest = d.Digest.String()
+					fmt.Fprintf(tw, "  Name:\t%s\n", dRef.CommonName())
+				} else {
+					fmt.Fprintf(tw, "  Digest:\t%s\n", string(d.Digest))
+				}
+				fmt.Fprintf(tw, "  MediaType:\t%s\n", d.MediaType)
+				if p := d.Platform; p.OS != "" {
+					fmt.Fprintf(tw, "  Platform:\t%s\n", platforms.Format(*dlp2Platform(p)))
+					if p.OSVersion != "" {
+						fmt.Fprintf(tw, "  OSVersion:\t%s\n", p.OSVersion)
+					}
+					if len(p.OSFeatures) > 0 {
+						fmt.Fprintf(tw, "  OSFeatures:\t%s\n", strings.Join(p.OSFeatures, ", "))
+					}
+				}
+				if len(d.URLs) > 0 {
+					fmt.Fprintf(tw, "  URLs:\t%s\n", strings.Join(d.URLs, ", "))
+				}
+				if len(d.Annotations) > 0 {
+					fmt.Fprintf(tw, "  Annotations:\t\n")
+					for k, v := range d.Annotations {
+						fmt.Fprintf(tw, "    %s:\t%s\n", k, v)
+					}
+				}
+			}
+			tw.Flush()
+
+		case MediaTypeOCI1ManifestList:
+			tw := tabwriter.NewWriter(buf, 0, 0, 1, ' ', 0)
+			if m.ref.Reference != "" {
+				fmt.Fprintf(tw, "Name:\t%s\n", m.ref.Reference)
+			}
+			fmt.Fprintf(tw, "MediaType:\t%s\n", m.mt)
+			fmt.Fprintf(tw, "Digest:\t%s\n", m.digest.String())
+			fmt.Fprintf(tw, "\t\n")
+			fmt.Fprintf(tw, "Manifests:\t\n")
+			for _, d := range m.ociML.Manifests {
+				fmt.Fprintf(tw, "\t\n")
+				dRef := m.ref
+				if dRef.Reference != "" {
+					dRef.Digest = d.Digest.String()
+					fmt.Fprintf(tw, "  Name:\t%s\n", dRef.CommonName())
+				} else {
+					fmt.Fprintf(tw, "  Digest:\t%s\n", string(d.Digest))
+				}
+				fmt.Fprintf(tw, "  MediaType:\t%s\n", d.MediaType)
+				if p := d.Platform; p != nil {
+					fmt.Fprintf(tw, "  Platform:\t%s\n", platforms.Format(*p))
+					if p.OSVersion != "" {
+						fmt.Fprintf(tw, "  OSVersion:\t%s\n", p.OSVersion)
+					}
+					if len(p.OSFeatures) > 0 {
+						fmt.Fprintf(tw, "  OSFeatures:\t%s\n", strings.Join(p.OSFeatures, ", "))
+					}
+				}
+				if len(d.URLs) > 0 {
+					fmt.Fprintf(tw, "  URLs:\t%s\n", strings.Join(d.URLs, ", "))
+				}
+				if len(d.Annotations) > 0 {
+					fmt.Fprintf(tw, "  Annotations:\t\n")
+					for k, v := range d.Annotations {
+						fmt.Fprintf(tw, "    %s:\t%s\n", k, v)
+					}
+				}
+			}
+
+		default:
+			enc := json.NewEncoder(buf)
+			enc.SetEscapeHTML(false)
+			enc.SetIndent("", "  ")
+			enc.Encode(m.GetOrigManifest())
+		}
+	} else {
+		if m.ref.Reference != "" {
+			fmt.Fprintf(buf, "Name:\t%s\n", m.ref.Reference)
+		}
+		fmt.Fprintf(buf, "MediaType:\t%s\n", m.mt)
+		fmt.Fprintf(buf, "Digest:\t%s\n", m.digest.String())
+	}
+	return buf.Bytes(), nil
+}
+
 func (rc *regClient) ManifestDelete(ctx context.Context, ref Ref) error {
 	if ref.Digest == "" {
 		return wraperr.New(fmt.Errorf("Digest required to delete manifest, reference %s", ref.CommonName()), ErrMissingDigest)
@@ -243,7 +346,7 @@ func (rc *regClient) ManifestDelete(ctx context.Context, ref Ref) error {
 }
 
 func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error) {
-	m := manifest{}
+	m := manifest{ref: ref}
 
 	var tagOrDigest string
 	if ref.Digest != "" {
@@ -342,7 +445,7 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 }
 
 func (rc *regClient) ManifestHead(ctx context.Context, ref Ref) (Manifest, error) {
-	m := manifest{}
+	m := manifest{ref: ref}
 
 	// build the request
 	var tagOrDigest string

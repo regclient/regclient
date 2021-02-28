@@ -9,7 +9,9 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	dockerDistribution "github.com/docker/distribution"
@@ -231,4 +233,19 @@ func (rc *regClient) TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts)
 	}
 
 	return tl, nil
+}
+
+// MarshalPretty is used for printPretty template formatting
+func (tl TagList) MarshalPretty() ([]byte, error) {
+	sort.Slice(tl.Tags, func(i, j int) bool {
+		if strings.Compare(tl.Tags[i], tl.Tags[j]) < 0 {
+			return true
+		}
+		return false
+	})
+	buf := &bytes.Buffer{}
+	for _, tag := range tl.Tags {
+		fmt.Fprintf(buf, "%s\n", tag)
+	}
+	return buf.Bytes(), nil
 }

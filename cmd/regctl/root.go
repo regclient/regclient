@@ -83,7 +83,7 @@ func runVersion(cmd *cobra.Command, args []string) error {
 		VCSRef: VCSRef,
 		VCSTag: VCSTag,
 	}
-	return template.Writer(os.Stdout, rootOpts.format, ver)
+	return template.Writer(os.Stdout, rootOpts.format, ver, template.WithFuncs(regclient.TemplateFuncs))
 }
 
 func newRegClient() regclient.RegClient {

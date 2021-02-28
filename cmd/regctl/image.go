@@ -86,6 +86,7 @@ var imageOpts struct {
 	list        bool
 	platform    string
 	requireList bool
+	format      string
 }
 
 func init() {
@@ -94,14 +95,14 @@ func init() {
 	imageDigestCmd.Flags().BoolVarP(&imageOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
 
 	imageInspectCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
-	imageInspectCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{jsonPretty .}}", "Format output with go template syntax")
+	imageInspectCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 
 	imageManifestCmd.Flags().BoolVarP(&imageOpts.list, "list", "", false, "Output manifest list if available")
 	imageManifestCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
 	imageManifestCmd.Flags().BoolVarP(&imageOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
-	imageManifestCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{jsonPretty .}}", "Format output with go template syntax")
+	imageManifestCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 
-	imageRateLimitCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{jsonPretty .}}", "Format output with go template syntax")
+	imageRateLimitCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 
 	imageCmd.AddCommand(imageCopyCmd)
 	imageCmd.AddCommand(imageDeleteCmd)
@@ -303,7 +304,7 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return template.Writer(os.Stdout, rootOpts.format, img)
+	return template.Writer(os.Stdout, imageOpts.format, img, template.WithFuncs(regclient.TemplateFuncs))
 }
 
 func runImageManifest(cmd *cobra.Command, args []string) error {
@@ -318,7 +319,7 @@ func runImageManifest(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	return template.Writer(os.Stdout, rootOpts.format, m.GetOrigManifest())
+	return template.Writer(os.Stdout, imageOpts.format, m, template.WithFuncs(regclient.TemplateFuncs))
 }
 
 func runImageRateLimit(cmd *cobra.Command, args []string) error {
@@ -340,5 +341,5 @@ func runImageRateLimit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	return template.Writer(os.Stdout, rootOpts.format, m.GetRateLimit())
+	return template.Writer(os.Stdout, imageOpts.format, m.GetRateLimit(), template.WithFuncs(regclient.TemplateFuncs))
 }
