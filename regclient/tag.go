@@ -52,21 +52,13 @@ type TagOpts struct {
 // 2. Push that manifest to the tag.
 // 3. Delete the digest for that new manifest that is only used by that tag.
 func (rc *regClient) TagDelete(ctx context.Context, ref Ref) error {
+	var tempManifest Manifest
 	if ref.Tag == "" {
 		return ErrMissingTag
 	}
 
 	// lookup the current manifest media type
-	curManifest, err := rc.ManifestHead(ctx, ref)
-	if err != nil {
-		if errors.As(err, &ErrNotFound) {
-			return err
-		}
-		// default to a docker schema2 manifest
-		curManifest = &manifest{
-			mt: MediaTypeDocker2Manifest,
-		}
-	}
+	curManifest, _ := rc.ManifestHead(ctx, ref)
 
 	// create empty image config with single label
 	// Note, this should be MediaType specific, but it appears that docker uses OCI for the config
@@ -99,11 +91,9 @@ func (rc *regClient) TagDelete(ctx context.Context, ref Ref) error {
 	confDigest := digester.Digest()
 
 	// create manifest with config, matching the original tag manifest type
-	m := manifest{}
-	switch curManifest.GetMediaType() {
-	case MediaTypeOCI1Manifest, MediaTypeOCI1ManifestList:
-		m.mt = MediaTypeOCI1Manifest
-		m.ociM = ociv1.Manifest{
+	switch curManifest.(type) {
+	case *manifestOCIM, *manifestOCIML:
+		om := ociv1.Manifest{
 			Versioned: ociv1Specs.Versioned{
 				SchemaVersion: 1,
 			},
@@ -114,14 +104,29 @@ func (rc *regClient) TagDelete(ctx context.Context, ref Ref) error {
 			},
 			Layers: []ociv1.Descriptor{},
 		}
-		mBytes, err := json.Marshal(m.ociM)
+		omBytes, err := json.Marshal(om)
 		if err != nil {
 			return err
 		}
-		m.origByte = mBytes
+		digester = digest.Canonical.Digester()
+		manfBuf := bytes.NewBuffer(omBytes)
+		_, err = manfBuf.WriteTo(digester.Hash())
+		if err != nil {
+			return err
+		}
+		tempManifest = &manifestOCIM{
+			manifestCommon: manifestCommon{
+				mt:       MediaTypeOCI1Manifest,
+				ref:      ref,
+				orig:     om,
+				rawBody:  omBytes,
+				digest:   digester.Digest(),
+				manifSet: true,
+			},
+			Manifest: om,
+		}
 	default: // default to the docker v2 schema
-		m.mt = MediaTypeDocker2Manifest
-		m.dockerM = dockerSchema2.Manifest{
+		dm := dockerSchema2.Manifest{
 			Versioned: dockerManifest.Versioned{
 				SchemaVersion: 2,
 				MediaType:     MediaTypeDocker2Manifest,
@@ -133,20 +138,28 @@ func (rc *regClient) TagDelete(ctx context.Context, ref Ref) error {
 			},
 			Layers: []dockerDistribution.Descriptor{},
 		}
-		mBytes, err := json.Marshal(m.dockerM)
+		dmBytes, err := json.Marshal(dm)
 		if err != nil {
 			return err
 		}
-		m.origByte = mBytes
+		digester = digest.Canonical.Digester()
+		manfBuf := bytes.NewBuffer(dmBytes)
+		_, err = manfBuf.WriteTo(digester.Hash())
+		if err != nil {
+			return err
+		}
+		tempManifest = &manifestDockerM{
+			manifestCommon: manifestCommon{
+				mt:       MediaTypeOCI1Manifest,
+				ref:      ref,
+				orig:     dm,
+				rawBody:  dmBytes,
+				digest:   digester.Digest(),
+				manifSet: true,
+			},
+			Manifest: dm,
+		}
 	}
-	m.manifSet = true
-	digester = digest.Canonical.Digester()
-	manfBuf := bytes.NewBuffer(m.origByte)
-	_, err = manfBuf.WriteTo(digester.Hash())
-	if err != nil {
-		return err
-	}
-	m.digest = digester.Digest()
 
 	rc.log.WithFields(logrus.Fields{
 		"ref": ref.Reference,
@@ -159,12 +172,12 @@ func (rc *regClient) TagDelete(ctx context.Context, ref Ref) error {
 	}
 
 	// push manifest to tag
-	err = rc.ManifestPut(ctx, ref, &m)
+	err = rc.ManifestPut(ctx, ref, tempManifest)
 	if err != nil {
 		return fmt.Errorf("Failed sending dummy manifest to delete %s: %w", ref.CommonName(), err)
 	}
 
-	ref.Digest = m.digest.String()
+	ref.Digest = tempManifest.GetDigest().String()
 
 	// delete manifest by digest
 	rc.log.WithFields(logrus.Fields{

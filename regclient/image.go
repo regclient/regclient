@@ -48,23 +48,12 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) erro
 	}
 
 	switch m.GetMediaType() {
-	case MediaTypeDocker2ManifestList:
-		dml := m.GetDockerManifestList()
-		for _, entry := range dml.Manifests {
-			entrySrc := refSrc
-			entryTgt := refTgt
-			entrySrc.Tag = ""
-			entryTgt.Tag = ""
-			entrySrc.Digest = entry.Digest.String()
-			entryTgt.Digest = entry.Digest.String()
-			if err := rc.ImageCopy(ctx, entrySrc, entryTgt); err != nil {
-				return err
-			}
+	case MediaTypeDocker2ManifestList, MediaTypeOCI1ManifestList:
+		pd, err := m.GetDescriptorList()
+		if err != nil {
+			return err
 		}
-
-	case MediaTypeOCI1ManifestList:
-		oml := m.GetOCIManifestList()
-		for _, entry := range oml.Manifests {
+		for _, entry := range pd {
 			entrySrc := refSrc
 			entryTgt := refTgt
 			entrySrc.Tag = ""
