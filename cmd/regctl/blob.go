@@ -10,27 +10,28 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var layerCmd = &cobra.Command{
-	Use:   "layer <cmd>",
-	Short: "manage image layers/blobs",
+var blobCmd = &cobra.Command{
+	Use:     "blob <cmd>",
+	Aliases: []string{"layer"},
+	Short:   "manage image blobs/layers",
 }
-var layerPullCmd = &cobra.Command{
-	Use:     "pull <repository> <digest>",
-	Aliases: []string{"get"},
-	Short:   "download a layer/blob",
+var blobGetCmd = &cobra.Command{
+	Use:     "get <repository> <digest>",
+	Aliases: []string{"pull"},
+	Short:   "download a blob/layer",
 	Long: `Download a blob from the registry. The output is the blob itself which may
 be a compressed tar file, a json config, or any other blob supported by the
-registry. The layer or blob digest can be found in the image manifest.`,
+registry. The blob or layer digest can be found in the image manifest.`,
 	Args: cobra.RangeArgs(2, 2),
-	RunE: runLayerPull,
+	RunE: runBlobGet,
 }
 
 func init() {
-	layerCmd.AddCommand(layerPullCmd)
-	rootCmd.AddCommand(layerCmd)
+	blobCmd.AddCommand(blobGetCmd)
+	rootCmd.AddCommand(blobCmd)
 }
 
-func runLayerPull(cmd *cobra.Command, args []string) error {
+func runBlobGet(cmd *cobra.Command, args []string) error {
 	ref, err := regclient.NewRef(args[0])
 	if err != nil {
 		return err
@@ -41,7 +42,7 @@ func runLayerPull(cmd *cobra.Command, args []string) error {
 		"host":       ref.Registry,
 		"repository": ref.Repository,
 		"digest":     args[1],
-	}).Debug("Pulling layer")
+	}).Debug("Pulling blob")
 	blobIO, resp, err := rc.BlobGet(context.Background(), ref, args[1], []string{})
 	if err != nil {
 		return err
