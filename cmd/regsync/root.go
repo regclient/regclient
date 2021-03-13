@@ -336,7 +336,15 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 			}).Error("Failed getting source tags")
 			return err
 		}
-		sTagList, err := s.filterTags(sTags.Tags)
+		sTagsList, err := sTags.GetTags()
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"source": sRepoRef.CommonName(),
+				"error":  err,
+			}).Error("Failed getting source tags")
+			return err
+		}
+		sTagList, err := s.filterTags(sTagsList)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"source": sRepoRef.CommonName(),
@@ -351,7 +359,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 				"source":    sRepoRef.CommonName(),
 				"allow":     s.Tags.Allow,
 				"deny":      s.Tags.Deny,
-				"available": sTags.Tags,
+				"available": sTagsList,
 			}).Warn("No matching tags found")
 			return nil
 		}

@@ -31,10 +31,38 @@ type TagClient interface {
 	TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts) (TagList, error)
 }
 
-// TagList comes from github.com/opencontainers/distribution-spec
-// TODO: switch to their implementation when it becomes stable
-// TODO: rename to avoid confusion with (*regClient).TagList
-type TagList struct {
+// TODO: consider a tag interface for future uses
+// type Tag interface {
+// 	GetOrig() interface{}
+// 	MarshalJSON() ([]byte, error)
+// 	RawBody() ([]byte, error)
+// 	RawHeaders() (http.Header, error)
+// }
+
+// TagList interface is used for listing tags
+type TagList interface {
+	GetOrig() interface{}
+	MarshalJSON() ([]byte, error)
+	RawBody() ([]byte, error)
+	RawHeaders() (http.Header, error)
+	GetTags() ([]string, error)
+}
+
+type tagCommon struct {
+	ref       Ref
+	mt        string
+	orig      interface{}
+	rawHeader http.Header
+	rawBody   []byte
+}
+
+type tagDockerList struct {
+	tagCommon
+	TagDockerList
+}
+
+// TagDockerList is returned from registry/2.0 API's
+type TagDockerList struct {
 	Name string   `json:"name"`
 	Tags []string `json:"tags"`
 }
@@ -197,7 +225,10 @@ func (rc *regClient) TagList(ctx context.Context, ref Ref) (TagList, error) {
 }
 
 func (rc *regClient) TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts) (TagList, error) {
-	tl := TagList{}
+	var tl TagList
+	tc := tagCommon{
+		ref: ref,
+	}
 	query := url.Values{}
 	if opts.Last != "" {
 		query.Set("last", opts.Last)
@@ -227,6 +258,7 @@ func (rc *regClient) TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts)
 	if resp.HTTPResponse().StatusCode != 200 {
 		return tl, fmt.Errorf("Failed to list tags for %s: %w", ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 	}
+	tc.rawHeader = resp.HTTPResponse().Header
 	respBody, err := ioutil.ReadAll(resp)
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
@@ -235,7 +267,20 @@ func (rc *regClient) TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts)
 		}).Warn("Failed to read tag list")
 		return tl, fmt.Errorf("Failed to read tags for %s: %w", ref.CommonName(), err)
 	}
-	err = json.Unmarshal(respBody, &tl)
+	tc.rawBody = respBody
+	tc.mt = resp.HTTPResponse().Header.Get("Content-Type")
+	switch tc.mt {
+	case "application/json":
+		var tdl TagDockerList
+		err = json.Unmarshal(respBody, &tdl)
+		tc.orig = tdl
+		tl = tagDockerList{
+			tagCommon:     tc,
+			TagDockerList: tdl,
+		}
+	default:
+		return tl, fmt.Errorf("%w: media type: %s, reference: %s", ErrUnsupportedMediaType, tc.mt, ref.CommonName())
+	}
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"err":  err,
@@ -248,8 +293,36 @@ func (rc *regClient) TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts)
 	return tl, nil
 }
 
+func (t tagCommon) GetOrig() interface{} {
+	return t.orig
+}
+
+func (t tagCommon) MarshalJSON() ([]byte, error) {
+	if len(t.rawBody) > 0 {
+		return t.rawBody, nil
+	}
+
+	if t.orig != nil {
+		return json.Marshal((t.orig))
+	}
+	return []byte{}, fmt.Errorf("Json marshalling failed: %w", ErrNotFound)
+}
+
+func (t tagCommon) RawBody() ([]byte, error) {
+	return t.rawBody, nil
+}
+
+func (t tagCommon) RawHeaders() (http.Header, error) {
+	return t.rawHeader, nil
+}
+
+// GetTags returns the tags from a list
+func (tl TagDockerList) GetTags() ([]string, error) {
+	return tl.Tags, nil
+}
+
 // MarshalPretty is used for printPretty template formatting
-func (tl TagList) MarshalPretty() ([]byte, error) {
+func (tl TagDockerList) MarshalPretty() ([]byte, error) {
 	sort.Slice(tl.Tags, func(i, j int) bool {
 		if strings.Compare(tl.Tags[i], tl.Tags[j]) < 0 {
 			return true
