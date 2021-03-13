@@ -27,19 +27,13 @@ Note: Docker Hub does not support this API request.`,
 
 var repoOpts struct {
 	regclient.RepoOpts
-	format    string
-	raw       bool
-	rawBody   bool
-	rawHeader bool
+	format string
 }
 
 func init() {
 	repoLsCmd.Flags().StringVarP(&repoOpts.Last, "last", "", "", "Specify the last repo from a previous request for pagination")
 	repoLsCmd.Flags().IntVarP(&repoOpts.Limit, "limit", "", 0, "Specify the number of repos to retrieve")
 	repoLsCmd.Flags().StringVarP(&repoOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
-	repoLsCmd.Flags().BoolVarP(&repoOpts.raw, "raw", "", false, "Show raw response (overrides format)")
-	repoLsCmd.Flags().BoolVarP(&repoOpts.rawBody, "raw-body", "", false, "Show raw body (overrides format)")
-	repoLsCmd.Flags().BoolVarP(&repoOpts.rawHeader, "raw-header", "", false, "Show raw headers (overrides format)")
 
 	repoCmd.AddCommand(repoLsCmd)
 	rootCmd.AddCommand(repoCmd)
@@ -65,11 +59,12 @@ func runRepoLs(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if repoOpts.raw {
+	switch repoOpts.format {
+	case "raw":
 		repoOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .RawBody}}"
-	} else if repoOpts.rawBody {
+	case "rawBody", "raw-body", "body":
 		repoOpts.format = "{{printf \"%s\" .RawBody}}"
-	} else if repoOpts.rawHeader {
+	case "rawHeaders", "raw-headers", "headers":
 		repoOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
 	return template.Writer(os.Stdout, repoOpts.format, rl, template.WithFuncs(regclient.TemplateFuncs))

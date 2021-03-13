@@ -34,21 +34,15 @@ Note: most registries ignore the pagination options.`,
 }
 
 var tagOpts struct {
-	Limit     int
-	Last      string
-	format    string
-	raw       bool
-	rawBody   bool
-	rawHeader bool
+	Limit  int
+	Last   string
+	format string
 }
 
 func init() {
 	tagLsCmd.Flags().StringVarP(&tagOpts.Last, "last", "", "", "Specify the last tag from a previous request for pagination")
 	tagLsCmd.Flags().IntVarP(&tagOpts.Limit, "limit", "", 0, "Specify the number of tags to retrieve")
 	tagLsCmd.Flags().StringVarP(&tagOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
-	tagLsCmd.Flags().BoolVarP(&tagOpts.raw, "raw", "", false, "Show raw response (overrides format)")
-	tagLsCmd.Flags().BoolVarP(&tagOpts.rawBody, "raw-body", "", false, "Show raw body (overrides format)")
-	tagLsCmd.Flags().BoolVarP(&tagOpts.rawHeader, "raw-header", "", false, "Show raw headers (overrides format)")
 
 	tagCmd.AddCommand(tagDeleteCmd)
 	tagCmd.AddCommand(tagLsCmd)
@@ -87,11 +81,12 @@ func runTagLs(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if tagOpts.raw {
+	switch tagOpts.format {
+	case "raw":
 		tagOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .RawBody}}"
-	} else if tagOpts.rawBody {
+	case "rawBody", "raw-body", "body":
 		tagOpts.format = "{{printf \"%s\" .RawBody}}"
-	} else if tagOpts.rawHeader {
+	case "rawHeaders", "raw-headers", "headers":
 		tagOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
 	return template.Writer(os.Stdout, tagOpts.format, tl, template.WithFuncs(regclient.TemplateFuncs))

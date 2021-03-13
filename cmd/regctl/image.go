@@ -87,9 +87,6 @@ var imageOpts struct {
 	platform    string
 	requireList bool
 	format      string
-	raw         bool
-	rawBody     bool
-	rawHeader   bool
 }
 
 func init() {
@@ -104,9 +101,6 @@ func init() {
 	imageManifestCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
 	imageManifestCmd.Flags().BoolVarP(&imageOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
 	imageManifestCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
-	imageManifestCmd.Flags().BoolVarP(&imageOpts.raw, "raw", "", false, "Show raw response (overrides format)")
-	imageManifestCmd.Flags().BoolVarP(&imageOpts.rawBody, "raw-body", "", false, "Show raw body (overrides format)")
-	imageManifestCmd.Flags().BoolVarP(&imageOpts.rawHeader, "raw-header", "", false, "Show raw headers (overrides format)")
 
 	imageRateLimitCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 
@@ -325,11 +319,12 @@ func runImageManifest(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if imageOpts.raw {
+	switch imageOpts.format {
+	case "raw":
 		imageOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .RawBody}}"
-	} else if imageOpts.rawBody {
+	case "rawBody", "raw-body", "body":
 		imageOpts.format = "{{printf \"%s\" .RawBody}}"
-	} else if imageOpts.rawHeader {
+	case "rawHeaders", "raw-headers", "headers":
 		imageOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
 	return template.Writer(os.Stdout, imageOpts.format, m, template.WithFuncs(regclient.TemplateFuncs))
