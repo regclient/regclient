@@ -290,7 +290,8 @@ func (s *Sandbox) imageRateLimitWait(ls *lua.LState) int {
 	} else {
 		timeout, _ = time.ParseDuration("6h")
 	}
-	ctx, _ := context.WithTimeout(s.ctx, timeout)
+	ctx, cancel := context.WithTimeout(s.ctx, timeout)
+	defer cancel()
 	for {
 		// check the current manifest head
 		mh, err := s.rc.ManifestHead(ctx, ref.ref)
@@ -319,8 +320,6 @@ func (s *Sandbox) imageRateLimitWait(ls *lua.LState) int {
 		case <-time.After(freq):
 		}
 	}
-	ls.Push(lua.LBool(false))
-	return 1
 }
 
 func (s *Sandbox) manifestDelete(ls *lua.LState) int {
