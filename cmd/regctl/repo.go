@@ -2,9 +2,10 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"os"
 	"strings"
 
+	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/regclient"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -24,11 +25,21 @@ Note: Docker Hub does not support this API request.`,
 	RunE: runRepoLs,
 }
 
-var repoOpts regclient.RepoOpts
+var repoOpts struct {
+	regclient.RepoOpts
+	format    string
+	raw       bool
+	rawBody   bool
+	rawHeader bool
+}
 
 func init() {
 	repoLsCmd.Flags().StringVarP(&repoOpts.Last, "last", "", "", "Specify the last repo from a previous request for pagination")
 	repoLsCmd.Flags().IntVarP(&repoOpts.Limit, "limit", "", 0, "Specify the number of repos to retrieve")
+	repoLsCmd.Flags().StringVarP(&repoOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+	repoLsCmd.Flags().BoolVarP(&repoOpts.raw, "raw", "", false, "Show raw response (overrides format)")
+	repoLsCmd.Flags().BoolVarP(&repoOpts.rawBody, "raw-body", "", false, "Show raw body (overrides format)")
+	repoLsCmd.Flags().BoolVarP(&repoOpts.rawHeader, "raw-header", "", false, "Show raw headers (overrides format)")
 
 	repoCmd.AddCommand(repoLsCmd)
 	rootCmd.AddCommand(repoCmd)
@@ -50,12 +61,16 @@ func runRepoLs(cmd *cobra.Command, args []string) error {
 		"last":  repoOpts.Last,
 		"limit": repoOpts.Limit,
 	}).Debug("Listing repositories")
-	rl, err := rc.RepoListWithOpts(context.Background(), host, repoOpts)
+	rl, err := rc.RepoListWithOpts(context.Background(), host, repoOpts.RepoOpts)
 	if err != nil {
 		return err
 	}
-	for _, r := range rl.Repositories {
-		fmt.Printf("%s\n", r)
+	if repoOpts.raw {
+		repoOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .RawBody}}"
+	} else if repoOpts.rawBody {
+		repoOpts.format = "{{printf \"%s\" .RawBody}}"
+	} else if repoOpts.rawHeader {
+		repoOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
-	return nil
+	return template.Writer(os.Stdout, repoOpts.format, rl, template.WithFuncs(regclient.TemplateFuncs))
 }

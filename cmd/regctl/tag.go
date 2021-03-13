@@ -46,7 +46,6 @@ func init() {
 	tagLsCmd.Flags().StringVarP(&tagOpts.Last, "last", "", "", "Specify the last tag from a previous request for pagination")
 	tagLsCmd.Flags().IntVarP(&tagOpts.Limit, "limit", "", 0, "Specify the number of tags to retrieve")
 	tagLsCmd.Flags().StringVarP(&tagOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
-
 	tagLsCmd.Flags().BoolVarP(&tagOpts.raw, "raw", "", false, "Show raw response (overrides format)")
 	tagLsCmd.Flags().BoolVarP(&tagOpts.rawBody, "raw-body", "", false, "Show raw body (overrides format)")
 	tagLsCmd.Flags().BoolVarP(&tagOpts.rawHeader, "raw-header", "", false, "Show raw headers (overrides format)")
