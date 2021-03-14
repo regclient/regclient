@@ -21,7 +21,6 @@ import (
 type ImageClient interface {
 	ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) error
 	ImageExport(ctx context.Context, ref Ref, outStream io.Writer) error
-	ImageGetConfig(ctx context.Context, ref Ref, d string) (ociv1.Image, error)
 }
 
 func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) error {
@@ -383,34 +382,4 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 	}
 
 	return nil
-}
-
-func (rc *regClient) ImageGetConfig(ctx context.Context, ref Ref, d string) (ociv1.Image, error) {
-	img := ociv1.Image{}
-
-	confBlob, err := rc.BlobGet(ctx, ref, d, []string{MediaTypeDocker2ImageConfig, ociv1.MediaTypeImageConfig})
-	if err != nil {
-		return img, err
-	}
-
-	imgBody, err := ioutil.ReadAll(confBlob)
-	if err != nil {
-		rc.log.WithFields(logrus.Fields{
-			"ref":    ref.CommonName(),
-			"digest": d,
-			"err":    err,
-		}).Warn("Error reading config blog")
-		return img, fmt.Errorf("Error reading image config for %s: %w", ref.CommonName(), err)
-	}
-
-	err = json.Unmarshal(imgBody, &img)
-	if err != nil {
-		rc.log.WithFields(logrus.Fields{
-			"ref":  ref.CommonName(),
-			"body": imgBody,
-			"err":  err,
-		}).Warn("Error unmarshaling conf json")
-		return img, fmt.Errorf("Error parsing image config for %s: %w", ref.CommonName(), err)
-	}
-	return img, nil
 }

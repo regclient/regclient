@@ -70,10 +70,8 @@ func runBlobGet(cmd *cobra.Command, args []string) error {
 	case "rawHeaders", "raw-headers", "headers":
 		blobOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	case "{{printPretty .}}":
-		if _, ok := blob.(interface{ MarshalPretty() ([]byte, error) }); !ok {
-			_, err = io.Copy(os.Stdout, blob)
-			return err
-		}
+		_, err = io.Copy(os.Stdout, blob)
+		return err
 	}
 
 	return template.Writer(os.Stdout, blobOpts.format, blob, template.WithFuncs(regclient.TemplateFuncs))

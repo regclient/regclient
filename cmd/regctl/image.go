@@ -58,8 +58,9 @@ var imageImportCmd = &cobra.Command{
 	RunE:  runImageImport,
 }
 var imageInspectCmd = &cobra.Command{
-	Use:   "inspect <image_ref>",
-	Short: "inspect image",
+	Use:     "inspect <image_ref>",
+	Aliases: []string{"config"},
+	Short:   "inspect image",
 	Long: `Shows the config json for an image and is equivalent to pulling the image
 in docker, and inspecting it, but without pulling any of the image layers.`,
 	Args: cobra.RangeArgs(1, 1),
@@ -300,9 +301,17 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	img, err := rc.ImageGetConfig(context.Background(), ref, cd.String())
+	img, err := rc.BlobGetOCIConfig(context.Background(), ref, cd.String())
 	if err != nil {
 		return err
+	}
+	switch imageOpts.format {
+	case "raw":
+		imageOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .RawBody}}"
+	case "rawBody", "raw-body", "body":
+		imageOpts.format = "{{printf \"%s\" .RawBody}}"
+	case "rawHeaders", "raw-headers", "headers":
+		imageOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
 	return template.Writer(os.Stdout, imageOpts.format, img, template.WithFuncs(regclient.TemplateFuncs))
 }
