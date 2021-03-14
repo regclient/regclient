@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/regclient"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -26,7 +27,15 @@ registry. The blob or layer digest can be found in the image manifest.`,
 	RunE: runBlobGet,
 }
 
+var blobOpts struct {
+	format string
+	mt     string
+}
+
 func init() {
+	blobGetCmd.Flags().StringVarP(&blobOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+	blobGetCmd.Flags().StringVarP(&blobOpts.mt, "media-type", "", "", "Set the requested mediaType")
+
 	blobCmd.AddCommand(blobGetCmd)
 	rootCmd.AddCommand(blobCmd)
 }
@@ -37,22 +46,35 @@ func runBlobGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	rc := newRegClient()
+	accepts := []string{}
+	if blobOpts.mt != "" {
+		accepts = []string{blobOpts.mt}
+	}
 
 	log.WithFields(logrus.Fields{
 		"host":       ref.Registry,
 		"repository": ref.Repository,
 		"digest":     args[1],
 	}).Debug("Pulling blob")
-	blobIO, resp, err := rc.BlobGet(context.Background(), ref, args[1], []string{})
+	blob, err := rc.BlobGet(context.Background(), ref, args[1], accepts)
 	if err != nil {
 		return err
 	}
 
-	_ = resp
-	_, err = io.Copy(os.Stdout, blobIO)
-	if err != nil {
+	switch blobOpts.format {
+	case "raw":
+		blobOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .RawBody}}"
+	case "rawBody", "raw-body", "body":
+		_, err = io.Copy(os.Stdout, blob)
 		return err
+	case "rawHeaders", "raw-headers", "headers":
+		blobOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
+	case "{{printPretty .}}":
+		if _, ok := blob.(interface{ MarshalPretty() ([]byte, error) }); !ok {
+			_, err = io.Copy(os.Stdout, blob)
+			return err
+		}
 	}
 
-	return nil
+	return template.Writer(os.Stdout, blobOpts.format, blob, template.WithFuncs(regclient.TemplateFuncs))
 }

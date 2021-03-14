@@ -18,10 +18,32 @@ import (
 // BlobClient provides registry client requests to Blobs
 type BlobClient interface {
 	BlobCopy(ctx context.Context, refSrc Ref, refTgt Ref, d string) error
-	BlobGet(ctx context.Context, ref Ref, d string, accepts []string) (io.ReadCloser, *http.Response, error)
+	BlobGet(ctx context.Context, ref Ref, d string, accepts []string) (Blob, error)
 	BlobMount(ctx context.Context, refSrc Ref, refTgt Ref, d string) error
 	BlobPut(ctx context.Context, ref Ref, d string, rdr io.ReadCloser, ct string, cl int64) error
 }
+
+// Blob interface is used for returning blobs
+type Blob interface {
+	GetOrig() interface{}
+	MediaType() string
+	Response() *http.Response
+	RawHeaders() (http.Header, error)
+	RawBody() ([]byte, error)
+	io.ReadCloser
+}
+
+type blobCommon struct {
+	ref       Ref
+	digest    string
+	mt        string
+	orig      interface{}
+	rawHeader http.Header
+	resp      *http.Response
+	io.ReadCloser
+}
+
+// TODO: other blob types may be added to allow special processing of each type, e.g. config json parsing
 
 func (rc *regClient) BlobCopy(ctx context.Context, refSrc Ref, refTgt Ref, d string) error {
 	// for the same repository, there's nothing to copy
@@ -59,7 +81,7 @@ func (rc *regClient) BlobCopy(ctx context.Context, refSrc Ref, refTgt Ref, d str
 		}).Warn("Failed to mount blob")
 	}
 	// fast options failed, download layer from source and push to target
-	blobIO, layerResp, err := rc.BlobGet(ctx, refSrc, d, []string{})
+	blobIO, err := rc.BlobGet(ctx, refSrc, d, []string{})
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"err":    err,
@@ -69,7 +91,7 @@ func (rc *regClient) BlobCopy(ctx context.Context, refSrc Ref, refTgt Ref, d str
 		return err
 	}
 	defer blobIO.Close()
-	if err := rc.BlobPut(ctx, refTgt, d, blobIO, layerResp.Header.Get("Content-Type"), layerResp.ContentLength); err != nil {
+	if err := rc.BlobPut(ctx, refTgt, d, blobIO, blobIO.MediaType(), blobIO.Response().ContentLength); err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"err": err,
 			"src": refSrc.Reference,
@@ -80,19 +102,25 @@ func (rc *regClient) BlobCopy(ctx context.Context, refSrc Ref, refTgt Ref, d str
 	return nil
 }
 
-func (rc *regClient) BlobGet(ctx context.Context, ref Ref, d string, accepts []string) (io.ReadCloser, *http.Response, error) {
+func (rc *regClient) BlobGet(ctx context.Context, ref Ref, d string, accepts []string) (Blob, error) {
+	var b Blob
+	bc := blobCommon{
+		ref:    ref,
+		digest: d,
+	}
 	dp, err := digest.Parse(d)
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"err":    err,
 			"digest": d,
 		}).Warn("Failed to parse digest")
-		return nil, nil, fmt.Errorf("Failed to parse blob digest %s, ref %s: %w", d, ref.CommonName(), err)
+		return b, fmt.Errorf("Failed to parse blob digest %s, ref %s: %w", d, ref.CommonName(), err)
 	}
 
 	// build/send request
-	headers := http.Header{
-		"Accept": accepts,
+	headers := http.Header{}
+	if len(accepts) > 0 {
+		headers["Accept"] = accepts
 	}
 	req := httpReq{
 		host: ref.Registry,
@@ -107,13 +135,21 @@ func (rc *regClient) BlobGet(ctx context.Context, ref Ref, d string, accepts []s
 	}
 	resp, err := rc.httpDo(ctx, req)
 	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
-		return nil, nil, fmt.Errorf("Failed to get blob, digest %s, ref %s: %w", d, ref.CommonName(), err)
+		return b, fmt.Errorf("Failed to get blob, digest %s, ref %s: %w", d, ref.CommonName(), err)
 	}
 	if resp.HTTPResponse().StatusCode != 200 {
-		return nil, nil, fmt.Errorf("Failed to get blob, digest %s, ref %s: %w", d, ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
+		return b, fmt.Errorf("Failed to get blob, digest %s, ref %s: %w", d, ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 	}
 
-	return resp, resp.HTTPResponse(), nil
+	bc.ReadCloser = resp
+	bc.resp = resp.HTTPResponse()
+	bc.rawHeader = resp.HTTPResponse().Header
+	bc.mt = resp.HTTPResponse().Header.Get("Content-Type")
+	switch bc.mt {
+	default:
+		b = bc
+	}
+	return b, nil
 }
 
 // BlobHead is used to verify if a blob exists and is accessible
@@ -255,4 +291,24 @@ func (rc *regClient) BlobPut(ctx context.Context, ref Ref, d string, rdr io.Read
 	}
 
 	return nil
+}
+
+func (b blobCommon) GetOrig() interface{} {
+	return b.orig
+}
+
+func (b blobCommon) MediaType() string {
+	return b.mt
+}
+
+func (b blobCommon) RawHeaders() (http.Header, error) {
+	return b.rawHeader, nil
+}
+
+func (b blobCommon) RawBody() ([]byte, error) {
+	return ioutil.ReadAll(b)
+}
+
+func (b blobCommon) Response() *http.Response {
+	return b.resp
 }

@@ -183,7 +183,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 		}).Warn("Failed to get config digest from manifest")
 		return err
 	}
-	confio, _, err := rc.BlobGet(ctx, ref, cd.String(), []string{MediaTypeDocker2ImageConfig, ociv1.MediaTypeImageConfig})
+	confBlob, err := rc.BlobGet(ctx, ref, cd.String(), []string{MediaTypeDocker2ImageConfig, ociv1.MediaTypeImageConfig})
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"ref":    ref.Reference,
@@ -192,7 +192,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 		}).Warn("Failed to get config")
 		return err
 	}
-	confstr, err := ioutil.ReadAll(confio)
+	confStr, err := ioutil.ReadAll(confBlob)
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"ref":    ref.CommonName(),
@@ -201,7 +201,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 		}).Warn("Failed to download config")
 		return err
 	}
-	confDigest := digest.FromBytes(confstr)
+	confDigest := digest.FromBytes(confStr)
 	if cd != confDigest {
 		rc.log.WithFields(logrus.Fields{
 			"ref":        ref.CommonName(),
@@ -212,7 +212,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 		fmt.Fprintf(os.Stderr, "Warning: digest for image config does not match, pulled %s, calculated %s\n", cd.String(), confDigest.String())
 	}
 	conf := ociv1.Image{}
-	err = json.Unmarshal(confstr, &conf)
+	err = json.Unmarshal(confStr, &conf)
 	if err != nil {
 		return err
 	}
@@ -237,7 +237,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 		// no need to defer remove of layerDir, it is inside of tempDir
 
 		// request layer
-		layerRComp, _, err := rc.BlobGet(ctx, ref, layerDesc.Digest.String(), []string{})
+		layerBlob, err := rc.BlobGet(ctx, ref, layerDesc.Digest.String(), []string{})
 		if err != nil {
 			rc.log.WithFields(logrus.Fields{
 				"ref":   ref.CommonName(),
@@ -246,9 +246,9 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 			}).Warn("Failed to download layer")
 			return err
 		}
-		defer layerRComp.Close()
+		defer layerBlob.Close()
 		// decompress layer
-		layerTarStream, err := archive.Decompress(layerRComp)
+		layerTarStream, err := archive.Decompress(layerBlob)
 		if err != nil {
 			rc.log.WithFields(logrus.Fields{
 				"err":    err,
@@ -319,7 +319,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 	// TODO: if using goroutines, wait for all layers to finish
 
 	// calc config digest and write to file
-	confstr, err = json.Marshal(conf)
+	confStr, err = json.Marshal(conf)
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"ref": ref.CommonName(),
@@ -327,10 +327,10 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 		}).Warn("Error marshaling conf json")
 		return err
 	}
-	confDigest = digest.Canonical.FromBytes(confstr)
+	confDigest = digest.Canonical.FromBytes(confStr)
 	confFile := confDigest.Encoded() + ".json"
 	confFileFull := filepath.Join(tempDir, confFile)
-	if err := ioutil.WriteFile(confFileFull, confstr, 0644); err != nil {
+	if err := ioutil.WriteFile(confFileFull, confStr, 0644); err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"ref": ref.CommonName(),
 			"err": err,
@@ -388,12 +388,12 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 func (rc *regClient) ImageGetConfig(ctx context.Context, ref Ref, d string) (ociv1.Image, error) {
 	img := ociv1.Image{}
 
-	imgIO, _, err := rc.BlobGet(ctx, ref, d, []string{MediaTypeDocker2ImageConfig, ociv1.MediaTypeImageConfig})
+	confBlob, err := rc.BlobGet(ctx, ref, d, []string{MediaTypeDocker2ImageConfig, ociv1.MediaTypeImageConfig})
 	if err != nil {
 		return img, err
 	}
 
-	imgBody, err := ioutil.ReadAll(imgIO)
+	imgBody, err := ioutil.ReadAll(confBlob)
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"ref":    ref.CommonName(),
