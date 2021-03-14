@@ -3,15 +3,26 @@ package main
 import (
 	"os"
 
+	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/regclient"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
-const usageDesc = `Utility for accessing docker registries
+const (
+	usageDesc = `Utility for accessing docker registries
 More details at https://github.com/regclient/regclient`
+	// UserAgent sets the header on http requests
+	UserAgent = "regclient/regctl"
+)
 
-var log *logrus.Logger
+var (
+	// VCSRef is injected from a build flag, used to version the UserAgent header
+	VCSRef = "unknown"
+	// VCSTag is injected from a build flag
+	VCSTag = "unknown"
+	log    *logrus.Logger
+)
 
 var rootCmd = &cobra.Command{
 	Use:           "regctl <cmd>",
@@ -19,6 +30,14 @@ var rootCmd = &cobra.Command{
 	Long:          usageDesc,
 	SilenceUsage:  true,
 	SilenceErrors: true,
+}
+
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Show the version",
+	Long:  `Show the version`,
+	Args:  cobra.RangeArgs(0, 0),
+	RunE:  runVersion,
 }
 
 var rootOpts struct {
@@ -37,6 +56,9 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.WarnLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
 	rootCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
 	rootCmd.PersistentPreRunE = rootPreRun
+
+	versionCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{jsonPretty .}}", "Format output with go template syntax")
+	rootCmd.AddCommand(versionCmd)
 }
 
 func rootPreRun(cmd *cobra.Command, args []string) error {
@@ -53,6 +75,54 @@ func rootPreRun(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func runVersion(cmd *cobra.Command, args []string) error {
+	ver := struct {
+		VCSRef string
+		VCSTag string
+	}{
+		VCSRef: VCSRef,
+		VCSTag: VCSTag,
+	}
+	return template.Writer(os.Stdout, rootOpts.format, ver, template.WithFuncs(regclient.TemplateFuncs))
+}
+
 func newRegClient() regclient.RegClient {
-	return regclient.NewRegClient(regclient.WithLog(log), regclient.WithConfigDefault(), regclient.WithDockerCreds(), regclient.WithDockerCerts())
+	config, err := ConfigLoadDefault()
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"err": err,
+		}).Warn("Failed to load default config")
+	}
+
+	rcOpts := []regclient.Opt{
+		regclient.WithLog(log),
+		regclient.WithUserAgent(UserAgent + " (" + VCSRef + ")"),
+	}
+	if config.IncDockerCred == nil || *config.IncDockerCred {
+		rcOpts = append(rcOpts, regclient.WithDockerCreds())
+	}
+	if config.IncDockerCert == nil || *config.IncDockerCert {
+		rcOpts = append(rcOpts, regclient.WithDockerCerts())
+	}
+
+	rcHosts := []regclient.ConfigHost{}
+	for name, host := range config.Hosts {
+		rcHosts = append(rcHosts, regclient.ConfigHost{
+			Name:       name,
+			TLS:        host.TLS,
+			RegCert:    host.RegCert,
+			Hostname:   host.Hostname,
+			User:       host.User,
+			Pass:       host.Pass,
+			PathPrefix: host.PathPrefix,
+			Mirrors:    host.Mirrors,
+			Priority:   host.Priority,
+			API:        host.API,
+		})
+	}
+	if len(rcHosts) > 0 {
+		rcOpts = append(rcOpts, regclient.WithConfigHosts(rcHosts))
+	}
+
+	return regclient.NewRegClient(rcOpts...)
 }

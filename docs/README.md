@@ -274,7 +274,6 @@ version: 1
 creds:
   - registry: localhost:5000
     tls: disabled
-    scheme: http
   - registry: docker.io
     user: "{{env \"HUB_USER\"}}"
     pass: "{{file \"/var/run/secrets/hub_token\"}}"
@@ -319,7 +318,6 @@ sync:
   - `user`: Username
   - `pass`: Password
   - `tls`: Whether TLS is enabled/verified. Values include "enabled" (default), "insecure", or "disabled".
-  - `scheme`: http or https (default)
   - `regcert`: Registry CA certificate for self signed certificates. This may be a string with `\n` for line breaks, or the yaml multi-line syntax may be used like:
 
     ```yaml
@@ -440,7 +438,6 @@ version: 1
 creds:
   - registry: localhost:5000
     tls: disabled
-    scheme: http
   - registry: docker.io
     user: "{{env \"HUB_USER\"}}"
     pass: "{{file \"/var/run/secrets/hub_token\"}}"
@@ -477,7 +474,6 @@ scripts:
   - `user`: Username
   - `pass`: Password
   - `tls`: Whether TLS is enabled/verified. Values include "enabled" (default), "insecure", or "disabled".
-  - `scheme`: http or https (default)
   - `regcert`: Registry CA certificate for self signed certificates. This may be a string with `\n` for line breaks, or the yaml multi-line syntax may be used like:
 
     ```yaml

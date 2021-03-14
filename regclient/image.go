@@ -17,6 +17,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// ImageClient provides registry client requests to images
+type ImageClient interface {
+	ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) error
+	ImageExport(ctx context.Context, ref Ref, outStream io.Writer) error
+}
+
 func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) error {
 	// check if source and destination already match
 	msh, errS := rc.ManifestHead(ctx, refSrc)
@@ -41,23 +47,12 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) erro
 	}
 
 	switch m.GetMediaType() {
-	case MediaTypeDocker2ManifestList:
-		dml := m.GetDockerManifestList()
-		for _, entry := range dml.Manifests {
-			entrySrc := refSrc
-			entryTgt := refTgt
-			entrySrc.Tag = ""
-			entryTgt.Tag = ""
-			entrySrc.Digest = entry.Digest.String()
-			entryTgt.Digest = entry.Digest.String()
-			if err := rc.ImageCopy(ctx, entrySrc, entryTgt); err != nil {
-				return err
-			}
+	case MediaTypeDocker2ManifestList, MediaTypeOCI1ManifestList:
+		pd, err := m.GetDescriptorList()
+		if err != nil {
+			return err
 		}
-
-	case MediaTypeOCI1ManifestList:
-		oml := m.GetOCIManifestList()
-		for _, entry := range oml.Manifests {
+		for _, entry := range pd {
 			entrySrc := refSrc
 			entryTgt := refTgt
 			entrySrc.Tag = ""
@@ -142,6 +137,13 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) erro
 	return nil
 }
 
+// used by import/export to match docker tar expected format
+type dockerTarManifest struct {
+	Config   string
+	RepoTags []string
+	Layers   []string
+}
+
 func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writer) error {
 	expManifest := dockerTarManifest{}
 	expManifest.RepoTags = append(expManifest.RepoTags, ref.CommonName())
@@ -180,7 +182,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 		}).Warn("Failed to get config digest from manifest")
 		return err
 	}
-	confio, _, err := rc.BlobGet(ctx, ref, cd.String(), []string{MediaTypeDocker2ImageConfig, ociv1.MediaTypeImageConfig})
+	confBlob, err := rc.BlobGet(ctx, ref, cd.String(), []string{MediaTypeDocker2ImageConfig, ociv1.MediaTypeImageConfig})
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"ref":    ref.Reference,
@@ -189,7 +191,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 		}).Warn("Failed to get config")
 		return err
 	}
-	confstr, err := ioutil.ReadAll(confio)
+	confStr, err := ioutil.ReadAll(confBlob)
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"ref":    ref.CommonName(),
@@ -198,7 +200,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 		}).Warn("Failed to download config")
 		return err
 	}
-	confDigest := digest.FromBytes(confstr)
+	confDigest := digest.FromBytes(confStr)
 	if cd != confDigest {
 		rc.log.WithFields(logrus.Fields{
 			"ref":        ref.CommonName(),
@@ -209,7 +211,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 		fmt.Fprintf(os.Stderr, "Warning: digest for image config does not match, pulled %s, calculated %s\n", cd.String(), confDigest.String())
 	}
 	conf := ociv1.Image{}
-	err = json.Unmarshal(confstr, &conf)
+	err = json.Unmarshal(confStr, &conf)
 	if err != nil {
 		return err
 	}
@@ -234,7 +236,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 		// no need to defer remove of layerDir, it is inside of tempDir
 
 		// request layer
-		layerRComp, _, err := rc.BlobGet(ctx, ref, layerDesc.Digest.String(), []string{})
+		layerBlob, err := rc.BlobGet(ctx, ref, layerDesc.Digest.String(), []string{})
 		if err != nil {
 			rc.log.WithFields(logrus.Fields{
 				"ref":   ref.CommonName(),
@@ -243,9 +245,9 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 			}).Warn("Failed to download layer")
 			return err
 		}
-		defer layerRComp.Close()
+		defer layerBlob.Close()
 		// decompress layer
-		layerTarStream, err := archive.Decompress(layerRComp)
+		layerTarStream, err := archive.Decompress(layerBlob)
 		if err != nil {
 			rc.log.WithFields(logrus.Fields{
 				"err":    err,
@@ -316,7 +318,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 	// TODO: if using goroutines, wait for all layers to finish
 
 	// calc config digest and write to file
-	confstr, err = json.Marshal(conf)
+	confStr, err = json.Marshal(conf)
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"ref": ref.CommonName(),
@@ -324,10 +326,10 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 		}).Warn("Error marshaling conf json")
 		return err
 	}
-	confDigest = digest.Canonical.FromBytes(confstr)
+	confDigest = digest.Canonical.FromBytes(confStr)
 	confFile := confDigest.Encoded() + ".json"
 	confFileFull := filepath.Join(tempDir, confFile)
-	if err := ioutil.WriteFile(confFileFull, confstr, 0644); err != nil {
+	if err := ioutil.WriteFile(confFileFull, confStr, 0644); err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"ref": ref.CommonName(),
 			"err": err,
@@ -380,34 +382,4 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 	}
 
 	return nil
-}
-
-func (rc *regClient) ImageGetConfig(ctx context.Context, ref Ref, d string) (ociv1.Image, error) {
-	img := ociv1.Image{}
-
-	imgIO, _, err := rc.BlobGet(ctx, ref, d, []string{MediaTypeDocker2ImageConfig, ociv1.MediaTypeImageConfig})
-	if err != nil {
-		return img, err
-	}
-
-	imgBody, err := ioutil.ReadAll(imgIO)
-	if err != nil {
-		rc.log.WithFields(logrus.Fields{
-			"ref":    ref.CommonName(),
-			"digest": d,
-			"err":    err,
-		}).Warn("Error reading config blog")
-		return img, fmt.Errorf("Error reading image config for %s: %w", ref.CommonName(), err)
-	}
-
-	err = json.Unmarshal(imgBody, &img)
-	if err != nil {
-		rc.log.WithFields(logrus.Fields{
-			"ref":  ref.CommonName(),
-			"body": imgBody,
-			"err":  err,
-		}).Warn("Error unmarshaling conf json")
-		return img, fmt.Errorf("Error parsing image config for %s: %w", ref.CommonName(), err)
-	}
-	return img, nil
 }

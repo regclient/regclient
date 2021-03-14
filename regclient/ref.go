@@ -50,11 +50,10 @@ func (r Ref) CommonName() string {
 		return ""
 	}
 	cn = cn + r.Repository
-	if r.Tag != "" {
-		cn = cn + ":" + r.Tag
-	}
 	if r.Digest != "" {
 		cn = cn + "@" + r.Digest
+	} else if r.Tag != "" {
+		cn = cn + ":" + r.Tag
 	}
 	return cn
 }

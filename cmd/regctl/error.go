@@ -9,9 +9,11 @@ var (
 	ErrInvalidInput = errors.New("Invalid input")
 	// ErrMissingInput indicates a required field is missing
 	ErrMissingInput = errors.New("Required input missing")
+	// ErrNotFound isn't there, search for your value elsewhere
+	ErrNotFound = errors.New("Not found")
 	// ErrNotImplemented returned when method has not been implemented yet
 	// TODO: Delete when all methods are implemented
 	ErrNotImplemented = errors.New("Not implemented")
-	// ErrNotFound when anything else isn't found
-	ErrNotFound = errors.New("Not found")
+	// ErrUnsupportedConfigVersion happens when config file version is greater than this command supports
+	ErrUnsupportedConfigVersion = errors.New("Unsupported config version")
 )

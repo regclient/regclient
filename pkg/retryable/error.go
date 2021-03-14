@@ -3,10 +3,12 @@ package retryable
 import "errors"
 
 var (
-	// ErrAllMirrorsFailed when there are no mirrors left to try
-	ErrAllMirrorsFailed = errors.New("All mirrors failed")
+	// ErrAllRequestsFailed when there are no mirrors left to try
+	ErrAllRequestsFailed = errors.New("All requests failed")
 	// ErrBackoffLimit maximum backoff attempts reached
 	ErrBackoffLimit = errors.New("Backoff limit reached")
+	// ErrCanceled if the context was canceled
+	ErrCanceled = errors.New("Context was canceled")
 	// ErrDigestMismatch if the expected digest wasn't received
 	ErrDigestMismatch = errors.New("Digest mismatch")
 	// ErrNotFound isn't there, search for your value elsewhere

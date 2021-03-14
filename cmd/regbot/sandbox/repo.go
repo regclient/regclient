@@ -28,12 +28,16 @@ func (s *Sandbox) repoLs(ls *lua.LState) int {
 		"script": s.name,
 		"host":   host,
 	}).Debug("Listing repositories")
-	repos, err := s.rc.RepoList(s.ctx, host)
+	repoList, err := s.rc.RepoList(s.ctx, host)
 	if err != nil {
 		ls.RaiseError("Failed retrieving repo list: %v", err)
 	}
 	lRepos := ls.NewTable()
-	for _, repo := range repos.Repositories {
+	repos, err := repoList.GetRepos()
+	if err != nil {
+		ls.RaiseError("Failed retrieving repo list: %v", err)
+	}
+	for _, repo := range repos {
 		lRepos.Append(lua.LString(repo))
 	}
 	ls.Push(lRepos)

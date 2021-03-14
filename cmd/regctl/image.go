@@ -58,8 +58,9 @@ var imageImportCmd = &cobra.Command{
 	RunE:  runImageImport,
 }
 var imageInspectCmd = &cobra.Command{
-	Use:   "inspect <image_ref>",
-	Short: "inspect image",
+	Use:     "inspect <image_ref>",
+	Aliases: []string{"config"},
+	Short:   "inspect image",
 	Long: `Shows the config json for an image and is equivalent to pulling the image
 in docker, and inspecting it, but without pulling any of the image layers.`,
 	Args: cobra.RangeArgs(1, 1),
@@ -86,6 +87,7 @@ var imageOpts struct {
 	list        bool
 	platform    string
 	requireList bool
+	format      string
 }
 
 func init() {
@@ -94,14 +96,14 @@ func init() {
 	imageDigestCmd.Flags().BoolVarP(&imageOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
 
 	imageInspectCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
-	imageInspectCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{jsonPretty .}}", "Format output with go template syntax")
+	imageInspectCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 
 	imageManifestCmd.Flags().BoolVarP(&imageOpts.list, "list", "", false, "Output manifest list if available")
 	imageManifestCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
 	imageManifestCmd.Flags().BoolVarP(&imageOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
-	imageManifestCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{jsonPretty .}}", "Format output with go template syntax")
+	imageManifestCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 
-	imageRateLimitCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{jsonPretty .}}", "Format output with go template syntax")
+	imageRateLimitCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 
 	imageCmd.AddCommand(imageCopyCmd)
 	imageCmd.AddCommand(imageDeleteCmd)
@@ -299,11 +301,19 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	img, err := rc.ImageGetConfig(context.Background(), ref, cd.String())
+	img, err := rc.BlobGetOCIConfig(context.Background(), ref, cd.String())
 	if err != nil {
 		return err
 	}
-	return template.Writer(os.Stdout, rootOpts.format, img)
+	switch imageOpts.format {
+	case "raw":
+		imageOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .RawBody}}"
+	case "rawBody", "raw-body", "body":
+		imageOpts.format = "{{printf \"%s\" .RawBody}}"
+	case "rawHeaders", "raw-headers", "headers":
+		imageOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
+	}
+	return template.Writer(os.Stdout, imageOpts.format, img, template.WithFuncs(regclient.TemplateFuncs))
 }
 
 func runImageManifest(cmd *cobra.Command, args []string) error {
@@ -318,7 +328,15 @@ func runImageManifest(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	return template.Writer(os.Stdout, rootOpts.format, m.GetOrigManifest())
+	switch imageOpts.format {
+	case "raw":
+		imageOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .RawBody}}"
+	case "rawBody", "raw-body", "body":
+		imageOpts.format = "{{printf \"%s\" .RawBody}}"
+	case "rawHeaders", "raw-headers", "headers":
+		imageOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
+	}
+	return template.Writer(os.Stdout, imageOpts.format, m, template.WithFuncs(regclient.TemplateFuncs))
 }
 
 func runImageRateLimit(cmd *cobra.Command, args []string) error {
@@ -340,5 +358,5 @@ func runImageRateLimit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	return template.Writer(os.Stdout, rootOpts.format, m.GetRateLimit())
+	return template.Writer(os.Stdout, imageOpts.format, m.GetRateLimit(), template.WithFuncs(regclient.TemplateFuncs))
 }

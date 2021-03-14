@@ -3,6 +3,11 @@ package retryable
 import (
 	"bytes"
 	"context"
+	"sync"
+
+	// crypto libraries included for go-digest
+	_ "crypto/sha256"
+	_ "crypto/sha512"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -10,17 +15,16 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"os"
 	"time"
 
 	digest "github.com/opencontainers/go-digest"
-	"github.com/regclient/regclient/pkg/wraperr"
 	"github.com/sirupsen/logrus"
 )
 
 // Retryable is used to create requests with built in retry capabilities
 type Retryable interface {
-	DoRequest(ctx context.Context, method string, u url.URL, opts ...OptsReq) (Response, error)
+	DoRequest(ctx context.Context, method string, u []url.URL, opts ...OptsReq) (Response, error)
+	BackoffUntil() time.Time
 }
 
 // Response is used to handle the result of a request
@@ -43,15 +47,18 @@ type Opts func(*retryable)
 type OptsReq func(*request)
 
 type retryable struct {
-	httpClient *http.Client
-	mirrorFunc func(url.URL) ([]url.URL, error)
-	auth       Auth
-	rootCAPool [][]byte
-	limit      int
-	delayInit  time.Duration
-	delayMax   time.Duration
-	log        *logrus.Logger
-	useragent  string
+	httpClient    *http.Client
+	auth          Auth
+	rootCAPool    [][]byte
+	limit         int
+	delayInit     time.Duration
+	delayMax      time.Duration
+	backoffNeeded bool
+	backoffCur    int
+	backoffUntil  time.Time
+	log           *logrus.Logger
+	useragent     string
+	mu            sync.Mutex
 }
 
 // NewRetryable returns a retryable interface
@@ -59,16 +66,11 @@ func NewRetryable(opts ...Opts) Retryable {
 	r := &retryable{
 		httpClient: &http.Client{},
 		limit:      5,
+		log:        &logrus.Logger{Out: ioutil.Discard},
 		rootCAPool: [][]byte{},
 	}
 	r.delayInit, _ = time.ParseDuration("1s")
 	r.delayMax, _ = time.ParseDuration("30s")
-	r.log = &logrus.Logger{
-		Out:       os.Stderr,
-		Formatter: new(logrus.TextFormatter),
-		Hooks:     make(logrus.LevelHooks),
-		Level:     logrus.WarnLevel,
-	}
 
 	for _, opt := range opts {
 		opt(r)
@@ -183,13 +185,6 @@ func WithLog(log *logrus.Logger) Opts {
 	}
 }
 
-// WithMirrors adds ability to contact mirrors in retryable methods
-func WithMirrors(mirrorFunc func(url.URL) ([]url.URL, error)) Opts {
-	return func(r *retryable) {
-		r.mirrorFunc = mirrorFunc
-	}
-}
-
 // WithTransport uses a specific http transport with retryable requests
 func WithTransport(t *http.Transport) Opts {
 	return func(r *retryable) {
@@ -204,6 +199,53 @@ func WithUserAgent(ua string) Opts {
 	}
 }
 
+func (r *retryable) backoffClear() {
+	if r.backoffCur > 0 {
+		r.backoffCur--
+		if r.backoffCur == 0 {
+			r.backoffUntil = time.Time{}
+		}
+	}
+	r.backoffNeeded = false
+}
+
+func (r *retryable) backoffSet(lastResp *http.Response) error {
+	r.backoffCur++
+	if r.backoffCur >= r.limit {
+		r.backoffCur = r.limit
+	}
+	// sleep for backoff time
+	sleepTime := r.delayInit << r.backoffCur
+	// limit to max delay
+	if sleepTime > r.delayMax {
+		sleepTime = r.delayMax
+	}
+	// check rate limit header
+	if lastResp != nil && lastResp.Header.Get("Retry-After") != "" {
+		ras := lastResp.Header.Get("Retry-After")
+		ra, _ := time.ParseDuration(ras + "s")
+		if ra > r.delayMax {
+			sleepTime = r.delayMax
+		} else if ra > sleepTime {
+			sleepTime = ra
+		}
+	}
+
+	r.backoffUntil = time.Now().Add(sleepTime)
+	r.backoffNeeded = true
+
+	if r.backoffCur == r.limit {
+		return fmt.Errorf("%w: backoffs %d", ErrBackoffLimit, r.backoffCur)
+	}
+
+	return nil
+}
+
+// BackoffUntil returns the time until the next backoff would complete
+func (r *retryable) BackoffUntil() time.Time {
+	return r.backoffUntil
+}
+
 type request struct {
 	r          *retryable
 	context    context.Context
@@ -216,7 +258,6 @@ type request struct {
 	chunking   bool
 	offset     int64
 	curRead    int64
-	backoffs   int
 	done       bool
 	digest     digest.Digest
 	digester   digest.Digester
@@ -226,12 +267,12 @@ type request struct {
 	log        *logrus.Logger
 }
 
-func (r *retryable) DoRequest(ctx context.Context, method string, u url.URL, opts ...OptsReq) (Response, error) {
+func (r *retryable) DoRequest(ctx context.Context, method string, u []url.URL, opts ...OptsReq) (Response, error) {
 	req := &request{
 		r:          r,
 		context:    ctx,
 		method:     method,
-		urls:       []url.URL{u},
+		urls:       u,
 		curURL:     0,
 		header:     http.Header{},
 		getBody:    nil,
@@ -239,7 +280,6 @@ func (r *retryable) DoRequest(ctx context.Context, method string, u url.URL, opt
 		chunking:   false,
 		offset:     0,
 		curRead:    0,
-		backoffs:   0,
 		done:       false,
 		digest:     "",
 		digester:   nil,
@@ -247,12 +287,6 @@ func (r *retryable) DoRequest(ctx context.Context, method string, u url.URL, opt
 		responses:  []*http.Response{},
 		reader:     nil,
 		log:        r.log,
-	}
-	// replace url list with mirrors
-	if r.mirrorFunc != nil {
-		if urls, err := r.mirrorFunc(u); err == nil {
-			req.urls = urls
-		}
 	}
 	// apply opts
 	for _, opt := range opts {
@@ -333,6 +367,129 @@ func WithProgressCB(cb func(int64, error)) OptsReq {
 	}
 }
 
+func (req *request) retryLoop() error {
+	req.r.mu.Lock()
+	defer req.r.mu.Unlock()
+
+	var httpErr error
+	for {
+		// handle backoffs and errors
+		if len(req.urls) == 0 {
+			if httpErr != nil {
+				return httpErr
+			}
+			return ErrAllRequestsFailed
+		}
+
+		if !req.r.backoffUntil.IsZero() && req.r.backoffUntil.After(time.Now()) {
+			sleepTime := time.Until(req.r.backoffUntil)
+			req.log.WithFields(logrus.Fields{
+				"Host":    req.urls[req.curURL].Host,
+				"Seconds": sleepTime.Seconds(),
+			}).Warn("Sleeping for backoff")
+			select {
+			case <-req.context.Done():
+				return ErrCanceled
+			case <-time.After(sleepTime):
+			}
+		}
+
+		// close any previous responses before making a new request
+		if len(req.responses) > 0 {
+			req.responses[len(req.responses)-1].Body.Close()
+		}
+		// send the new request
+		httpErr = req.httpDo()
+		if httpErr != nil {
+			req.r.backoffSet(nil)
+			req.nextURL(true)
+			continue
+		}
+
+		// check the response
+		lastURL := req.urls[req.curURL]
+		lastResp := req.responses[len(req.responses)-1]
+		statusCode := lastResp.StatusCode
+		removeURL := false
+		runBackoff := false
+
+		switch {
+		case 200 <= statusCode && statusCode < 300:
+			// all 200 status codes are successful
+			req.r.backoffClear()
+			return nil
+		case statusCode == http.StatusUnauthorized:
+			err := req.handleAuth()
+			if err != nil {
+				req.log.WithFields(logrus.Fields{
+					"URL": lastURL.String(),
+					"Err": err,
+				}).Warn("Failed to handle auth request")
+				runBackoff = true
+				removeURL = true
+			}
+		case statusCode == http.StatusForbidden:
+			req.log.WithFields(logrus.Fields{
+				"URL":    lastURL.String(),
+				"Status": lastResp.Status,
+			}).Debug("Forbidden")
+			runBackoff = true
+			removeURL = true
+		case statusCode == http.StatusNotFound:
+			req.log.WithFields(logrus.Fields{
+				"URL":    lastURL.String(),
+				"Status": lastResp.Status,
+			}).Debug("Not found")
+			removeURL = true
+		case statusCode == http.StatusRequestTimeout:
+			req.log.WithFields(logrus.Fields{
+				"URL":    lastURL.String(),
+				"Status": lastResp.Status,
+			}).Debug("Timeout")
+			runBackoff = true
+		case statusCode == http.StatusTooManyRequests:
+			req.log.WithFields(logrus.Fields{
+				"URL":    lastURL.String(),
+				"Status": lastResp.Status,
+			}).Debug("Rate limit exceeded")
+			runBackoff = true
+		default:
+			req.log.WithFields(logrus.Fields{
+				"URL":    lastURL.String(),
+				"Status": lastResp.Status,
+			}).Debug("Unexpected status")
+			runBackoff = true
+			removeURL = true
+		}
+
+		// remove url and trigger backoff if needed
+		if removeURL {
+			req.nextURL(removeURL)
+		}
+		if runBackoff {
+			req.r.backoffSet(lastResp)
+		}
+	}
+}
+
+func (req *request) handleAuth() error {
+	curURL := req.urls[req.curURL]
+	lastResp := req.responses[len(req.responses)-1]
+	// for unauthorized requests, try to setup auth and retry without backoff
+	if req.r.auth == nil {
+		return ErrUnauthorized
+	}
+	err := req.r.auth.HandleResponse(lastResp)
+	if err != nil {
+		req.log.WithFields(logrus.Fields{
+			"URL": curURL.String(),
+			"Err": err,
+		}).Warn("Failed to handle auth request")
+		return err
+	}
+	return nil
+}
+
 func (req *request) httpDo() error {
 	// build the http reqest for the current mirror url
 	httpReq, err := http.NewRequestWithContext(req.context, req.method, req.urls[req.curURL].String(), nil)
@@ -387,158 +544,13 @@ func (req *request) httpDo() error {
 	return nil
 }
 
-func (req *request) retryLoop() error {
-	for {
-		err := req.httpDo()
-		if err != nil {
-			if boerr := req.backoff(true); boerr == nil {
-				continue
-			}
-		}
-		if err != nil {
-			return err
-		}
-		err = req.checkResp()
-		if err == nil {
-			break
-		} else if err != ErrRetryNeeded {
-			return err
-		}
-	}
-	return nil
-}
-
-func (req *request) checkResp() error {
-	if len(req.responses) == 0 {
-		return ErrNotFound
-	}
-	curURL := req.urls[req.curURL]
-	lastResp := req.responses[len(req.responses)-1]
-	statusCode := lastResp.StatusCode
-	removeHost := false
-	runBackoff := false
-
-	switch {
-	case 200 <= statusCode && statusCode < 300:
-		// all 200 status codes are successful
-		return nil
-	case statusCode == http.StatusUnauthorized:
-		// for unauthorized requests, try to setup auth and retry without backoff
-		if req.r.auth == nil {
-			return ErrUnauthorized
-		}
-		err := req.r.auth.HandleResponse(lastResp)
-		if err != nil {
-			req.log.WithFields(logrus.Fields{
-				"URL": curURL.String(),
-				"Err": err,
-			}).Warn("Failed to handle auth request")
-			_ = req.backoff(true)
-			return err
-		}
-		if len(req.responses) <= 1 {
-			return ErrRetryNeeded
-		}
-		prevResp := req.responses[len(req.responses)-2]
-		if prevResp.Request.URL == lastResp.Request.URL {
-			// repeated requests to same mirror indicates an auth failure
-			if boerr := req.backoff(false); boerr == nil {
-				return ErrRetryNeeded
-			}
-			return ErrUnauthorized
-		}
-	case statusCode == http.StatusForbidden:
-		req.log.WithFields(logrus.Fields{
-			"URL":    curURL.String(),
-			"Status": lastResp.Status,
-		}).Debug("Forbidden")
-		removeHost = true
-	case statusCode == http.StatusNotFound:
-		req.log.WithFields(logrus.Fields{
-			"URL":    curURL.String(),
-			"Status": lastResp.Status,
-		}).Debug("Not found")
-		removeHost = true
-	case statusCode == http.StatusRequestTimeout:
-		req.log.WithFields(logrus.Fields{
-			"URL":    curURL.String(),
-			"Status": lastResp.Status,
-		}).Debug("Timeout")
-		runBackoff = true
-	case statusCode == http.StatusTooManyRequests:
-		req.log.WithFields(logrus.Fields{
-			"URL":    curURL.String(),
-			"Status": lastResp.Status,
-		}).Debug("Rate limit exceeded")
-		runBackoff = true
-	default:
-		req.log.WithFields(logrus.Fields{
-			"URL":    curURL.String(),
-			"Status": lastResp.Status,
-		}).Debug("Unexpected status, removing mirror")
-		removeHost = true
-	}
-
-	if removeHost {
-		if boerr := req.backoff(true); boerr == nil {
-			return ErrRetryNeeded
-		}
-	} else if runBackoff {
-		if boerr := req.backoff(false); boerr == nil {
-			return ErrRetryNeeded
-		}
-	}
-	// unexpected error and backoff was unsuccessful (limit reached, no more mirrors)
-	return wraperr.New(fmt.Errorf("Request failed, http status code %d", statusCode), ErrStatusCode)
-}
-
-func (req *request) backoff(removeMirror bool) error {
-	req.backoffs++
-	if req.backoffs >= req.r.limit {
-		return fmt.Errorf("%w: backoffs %d, limit %d", ErrBackoffLimit, req.backoffs, req.r.limit)
-	}
-	failedURL := req.urls[req.curURL]
+func (req *request) nextURL(removeLast bool) {
 	// next mirror based on whether remove flag is set
-	if removeMirror {
+	if removeLast {
 		req.urls = append(req.urls[:req.curURL], req.urls[req.curURL+1:]...)
 	} else {
 		req.curURL = (req.curURL + 1) % len(req.urls)
 	}
-	if len(req.urls) == 0 {
-		return ErrAllMirrorsFailed
-	}
-	// sleep for backoff time
-	sleepTime := req.r.delayInit << req.backoffs
-	// limit to max delay
-	if sleepTime > req.r.delayMax {
-		sleepTime = req.r.delayMax
-	}
-	// process rate limit header
-	if !removeMirror && len(req.urls) == 1 && len(req.responses) > 0 {
-		lastResp := req.responses[len(req.responses)-1]
-		if lastResp.Header.Get("Retry-After") != "" {
-			ras := lastResp.Header.Get("Retry-After")
-			ra, _ := time.ParseDuration(ras + "s")
-			if ra > req.r.delayMax {
-				req.log.WithFields(logrus.Fields{
-					"Host":        failedURL.Host,
-					"Retry-After": ra.Seconds(),
-					"Max":         req.r.delayMax.Seconds(),
-				}).Warn("Retry-After header exceeds max backoff time")
-				return ErrBackoffLimit
-			}
-			if ra > sleepTime {
-				sleepTime = ra
-			}
-		}
-	}
-	req.log.WithFields(logrus.Fields{
-		"Host":    failedURL.Host,
-		"Removed": removeMirror,
-		"Seconds": sleepTime.Seconds(),
-	}).Warn("Sleeping for backoff")
-	time.Sleep(sleepTime)
-	return nil
 }
 
 func (req *request) Read(b []byte) (int, error) {
@@ -586,7 +598,7 @@ func (req *request) Read(b []byte) (int, error) {
 
 func (req *request) Close() error {
 	// if no responses, error
-	if req.reader == nil {
+	if req.reader == nil || len(req.responses) == 0 {
 		return ErrNotFound
 	}
 	// pass through close to last request, mark as done
