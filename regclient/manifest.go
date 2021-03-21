@@ -254,6 +254,9 @@ func (m *manifestOCIM) MarshalPretty() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 func (m *manifestDockerML) MarshalPretty() ([]byte, error) {
+	if m == nil {
+		return []byte{}, nil
+	}
 	buf := &bytes.Buffer{}
 	tw := tabwriter.NewWriter(buf, 0, 0, 1, ' ', 0)
 	if m.ref.Reference != "" {
@@ -285,7 +288,7 @@ func (m *manifestDockerML) MarshalPretty() ([]byte, error) {
 		if len(d.URLs) > 0 {
 			fmt.Fprintf(tw, "  URLs:\t%s\n", strings.Join(d.URLs, ", "))
 		}
-		if len(d.Annotations) > 0 {
+		if d.Annotations != nil {
 			fmt.Fprintf(tw, "  Annotations:\t\n")
 			for k, v := range d.Annotations {
 				fmt.Fprintf(tw, "    %s:\t%s\n", k, v)
@@ -296,6 +299,9 @@ func (m *manifestDockerML) MarshalPretty() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 func (m *manifestOCIML) MarshalPretty() ([]byte, error) {
+	if m == nil {
+		return []byte{}, nil
+	}
 	buf := &bytes.Buffer{}
 	tw := tabwriter.NewWriter(buf, 0, 0, 1, ' ', 0)
 	if m.ref.Reference != "" {
@@ -315,19 +321,21 @@ func (m *manifestOCIML) MarshalPretty() ([]byte, error) {
 			fmt.Fprintf(tw, "  Digest:\t%s\n", string(d.Digest))
 		}
 		fmt.Fprintf(tw, "  MediaType:\t%s\n", d.MediaType)
-		if p := d.Platform; p.OS != "" {
-			fmt.Fprintf(tw, "  Platform:\t%s\n", platforms.Format(*p))
-			if p.OSVersion != "" {
-				fmt.Fprintf(tw, "  OSVersion:\t%s\n", p.OSVersion)
-			}
-			if len(p.OSFeatures) > 0 {
-				fmt.Fprintf(tw, "  OSFeatures:\t%s\n", strings.Join(p.OSFeatures, ", "))
+		if d.Platform != nil {
+			if p := d.Platform; p.OS != "" {
+				fmt.Fprintf(tw, "  Platform:\t%s\n", platforms.Format(*p))
+				if p.OSVersion != "" {
+					fmt.Fprintf(tw, "  OSVersion:\t%s\n", p.OSVersion)
+				}
+				if len(p.OSFeatures) > 0 {
+					fmt.Fprintf(tw, "  OSFeatures:\t%s\n", strings.Join(p.OSFeatures, ", "))
+				}
 			}
 		}
 		if len(d.URLs) > 0 {
 			fmt.Fprintf(tw, "  URLs:\t%s\n", strings.Join(d.URLs, ", "))
 		}
-		if len(d.Annotations) > 0 {
+		if d.Annotations != nil {
 			fmt.Fprintf(tw, "  Annotations:\t\n")
 			for k, v := range d.Annotations {
 				fmt.Fprintf(tw, "    %s:\t%s\n", k, v)
