@@ -301,7 +301,7 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	img, err := rc.BlobGetOCIConfig(context.Background(), ref, cd.String())
+	blobConfig, err := rc.BlobGetOCIConfig(context.Background(), ref, cd.String())
 	if err != nil {
 		return err
 	}
@@ -313,7 +313,7 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 	case "rawHeaders", "raw-headers", "headers":
 		imageOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
-	return template.Writer(os.Stdout, imageOpts.format, img, template.WithFuncs(regclient.TemplateFuncs))
+	return template.Writer(os.Stdout, imageOpts.format, blobConfig, template.WithFuncs(regclient.TemplateFuncs))
 }
 
 func runImageManifest(cmd *cobra.Command, args []string) error {
