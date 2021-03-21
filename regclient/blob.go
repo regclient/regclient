@@ -35,6 +35,18 @@ type Blob interface {
 	RawBody() ([]byte, error)
 }
 
+// BlobReader is an unprocessed Blob with an available ReadCloser for reading the Blob
+type BlobReader interface {
+	Blob
+	io.ReadCloser
+}
+
+// BlobOCIConfig wraps an OCI Config struct extracted from a Blob
+type BlobOCIConfig interface {
+	Blob
+	GetConfig() ociv1.Image
+}
+
 type blobCommon struct {
 	ref       Ref
 	digest    string
@@ -45,13 +57,14 @@ type blobCommon struct {
 }
 
 // BlobReader is an unprocessed Blob with an available ReadCloser for reading the Blob
-type BlobReader struct {
+type blobReader struct {
 	blobCommon
 	io.ReadCloser
 }
 
-// BlobOCIConfig is a Config struct extracted from a Blob
-type BlobOCIConfig struct {
+// blobOCIConfig includes an OCI Config struct extracted from a Blob
+// Image is included as an anonymous field to facilitate json and templating calls transparently
+type blobOCIConfig struct {
 	blobCommon
 	rawBody []byte
 	ociv1.Image
@@ -115,7 +128,11 @@ func (rc *regClient) BlobCopy(ctx context.Context, refSrc Ref, refTgt Ref, d str
 }
 
 func (rc *regClient) BlobGet(ctx context.Context, ref Ref, d string, accepts []string) (BlobReader, error) {
-	var b BlobReader
+	return rc.blobGet(ctx, ref, d, accepts)
+}
+
+func (rc *regClient) blobGet(ctx context.Context, ref Ref, d string, accepts []string) (blobReader, error) {
+	var b blobReader
 	bc := blobCommon{
 		ref:    ref,
 		digest: d,
@@ -156,7 +173,7 @@ func (rc *regClient) BlobGet(ctx context.Context, ref Ref, d string, accepts []s
 	bc.resp = resp.HTTPResponse()
 	bc.rawHeader = resp.HTTPResponse().Header
 	bc.mt = resp.HTTPResponse().Header.Get("Content-Type")
-	b = BlobReader{
+	b = blobReader{
 		blobCommon: bc,
 		ReadCloser: resp,
 	}
@@ -164,9 +181,9 @@ func (rc *regClient) BlobGet(ctx context.Context, ref Ref, d string, accepts []s
 }
 
 func (rc *regClient) BlobGetOCIConfig(ctx context.Context, ref Ref, d string) (BlobOCIConfig, error) {
-	b, err := rc.BlobGet(ctx, ref, d, []string{MediaTypeDocker2ImageConfig, ociv1.MediaTypeImageConfig})
+	b, err := rc.blobGet(ctx, ref, d, []string{MediaTypeDocker2ImageConfig, ociv1.MediaTypeImageConfig})
 	if err != nil {
-		return BlobOCIConfig{}, err
+		return blobOCIConfig{}, err
 	}
 	return b.toOCIConfig()
 }
@@ -330,24 +347,30 @@ func (b blobCommon) Response() *http.Response {
 }
 
 // RawBody returns the original body from the request
-func (b BlobReader) RawBody() ([]byte, error) {
+func (b blobReader) RawBody() ([]byte, error) {
 	return ioutil.ReadAll(b)
 }
 
-func (b BlobReader) toOCIConfig() (BlobOCIConfig, error) {
+func (b blobReader) toOCIConfig() (BlobOCIConfig, error) {
 	blobBody, err := ioutil.ReadAll(b)
 	if err != nil {
-		return BlobOCIConfig{}, fmt.Errorf("Error reading image config for %s: %w", b.ref.CommonName(), err)
+		return blobOCIConfig{}, fmt.Errorf("Error reading image config for %s: %w", b.ref.CommonName(), err)
 	}
 	var ociImage ociv1.Image
 	err = json.Unmarshal(blobBody, &ociImage)
 	if err != nil {
-		return BlobOCIConfig{}, fmt.Errorf("Error parsing image config for %s: %w", b.ref.CommonName(), err)
+		return blobOCIConfig{}, fmt.Errorf("Error parsing image config for %s: %w", b.ref.CommonName(), err)
 	}
-	return BlobOCIConfig{blobCommon: b.blobCommon, rawBody: blobBody, Image: ociImage}, nil
+	b.orig = ociImage
+	return blobOCIConfig{blobCommon: b.blobCommon, rawBody: blobBody, Image: ociImage}, nil
+}
+
+// GetConfig returns the original body from the request
+func (b blobOCIConfig) GetConfig() ociv1.Image {
+	return b.Image
 }
 
 // RawBody returns the original body from the request
-func (b BlobOCIConfig) RawBody() ([]byte, error) {
+func (b blobOCIConfig) RawBody() ([]byte, error) {
 	return b.rawBody, nil
 }
