@@ -269,7 +269,8 @@ func (rc *regClient) TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts)
 	}
 	tc.rawBody = respBody
 	tc.mt = resp.HTTPResponse().Header.Get("Content-Type")
-	switch tc.mt {
+	mt := strings.Split(tc.mt, ";")[0] // "application/json; charset=utf-8" -> "application/json"
+	switch mt {
 	case "application/json":
 		var tdl TagDockerList
 		err = json.Unmarshal(respBody, &tdl)
@@ -279,7 +280,7 @@ func (rc *regClient) TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts)
 			TagDockerList: tdl,
 		}
 	default:
-		return tl, fmt.Errorf("%w: media type: %s, reference: %s", ErrUnsupportedMediaType, tc.mt, ref.CommonName())
+		return tl, fmt.Errorf("%w: media type: %s, reference: %s", ErrUnsupportedMediaType, mt, ref.CommonName())
 	}
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
