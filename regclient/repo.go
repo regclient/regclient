@@ -110,7 +110,8 @@ func (rc *regClient) RepoListWithOpts(ctx context.Context, hostname string, opts
 	}
 	rlc.rawBody = respBody
 	rlc.mt = resp.HTTPResponse().Header.Get("Content-Type")
-	switch rlc.mt {
+	mt := strings.Split(rlc.mt, ";")[0] // "application/json; charset=utf-8" -> "application/json"
+	switch mt {
 	case "application/json":
 		var rdl RepoDockerList
 		err = json.Unmarshal(respBody, &rdl)
@@ -120,7 +121,7 @@ func (rc *regClient) RepoListWithOpts(ctx context.Context, hostname string, opts
 			RepoDockerList: rdl,
 		}
 	default:
-		return rl, fmt.Errorf("%w: media type: %s, hostname: %s", ErrUnsupportedMediaType, rlc.mt, hostname)
+		return rl, fmt.Errorf("%w: media type: %s, hostname: %s", ErrUnsupportedMediaType, mt, hostname)
 	}
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
