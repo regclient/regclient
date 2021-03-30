@@ -433,6 +433,24 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, acti
 	}
 	tgtExists := (err == nil)
 
+	// skip when source manifest is an unsupported type
+	smt := mSrc.GetMediaType()
+	found := false
+	for _, mt := range s.MediaTypes {
+		if mt == smt {
+			found = true
+			break
+		}
+	}
+	if !found {
+		log.WithFields(logrus.Fields{
+			"ref":       src.CommonName(),
+			"mediaType": mSrc.GetMediaType(),
+			"allowed":   s.MediaTypes,
+		}).Info("Skipping unsupported media type")
+		return nil
+	}
+
 	// if platform is defined and source is a list, resolve the source platform
 	if mSrc.IsList() && s.Platform != "" {
 		platDigest, err := getPlatformDigest(ctx, src, s.Platform, mSrc)
