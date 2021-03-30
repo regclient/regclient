@@ -13,43 +13,43 @@ import (
 
 // Config is parsed configuration file for regsync
 type Config struct {
-	Version  int            `json:"version"`
-	Creds    []ConfigCreds  `json:"creds"`
-	Defaults ConfigDefaults `json:"defaults"`
-	Scripts  []ConfigScript `json:"scripts"`
+	Version  int            `yaml:"version" json:"version"`
+	Creds    []ConfigCreds  `yaml:"creds" json:"creds"`
+	Defaults ConfigDefaults `yaml:"defaults" json:"defaults"`
+	Scripts  []ConfigScript `yaml:"scripts" json:"scripts"`
 }
 
 // ConfigCreds allows the registry login to be passed in the config rather than from Docker
 type ConfigCreds struct {
-	Registry   string            `json:"registry"`
-	Hostname   string            `json:"hostname"`
-	User       string            `json:"user"`
-	Pass       string            `json:"pass"`
-	TLS        regclient.TLSConf `json:"tls"`
-	Scheme     string            `json:"scheme"` // TODO: delete
-	RegCert    string            `json:"regcert"`
-	PathPrefix string            `json:"pathPrefix"`
-	Mirrors    []string          `json:"mirrors"`
-	Priority   uint              `json:"priority"`
-	API        string            `json:"api"`
+	Registry   string            `yaml:"registry" json:"registry"`
+	Hostname   string            `yaml:"hostname" json:"hostname"`
+	User       string            `yaml:"user" json:"user"`
+	Pass       string            `yaml:"pass" json:"pass"`
+	TLS        regclient.TLSConf `yaml:"tls" json:"tls"`
+	Scheme     string            `yaml:"scheme" json:"scheme"` // TODO: delete
+	RegCert    string            `yaml:"regcert" json:"regcert"`
+	PathPrefix string            `yaml:"pathPrefix" json:"pathPrefix"`
+	Mirrors    []string          `yaml:"mirrors" json:"mirrors"`
+	Priority   uint              `yaml:"priority" json:"priority"`
+	API        string            `yaml:"api" json:"api"`
 }
 
 // ConfigDefaults is uses for general options and defaults for ConfigScript entries
 type ConfigDefaults struct {
-	Interval       time.Duration `json:"interval"`
-	Schedule       string        `json:"schedule"`
-	Parallel       int           `json:"parallel"`
-	SkipDockerConf bool          `json:"skipDockerConfig"`
-	Timeout        time.Duration `json:"timeout"`
+	Interval       time.Duration `yaml:"interval" json:"interval"`
+	Schedule       string        `yaml:"schedule" json:"schedule"`
+	Parallel       int           `yaml:"parallel" json:"parallel"`
+	SkipDockerConf bool          `yaml:"skipDockerConfig" json:"skipDockerConfig"`
+	Timeout        time.Duration `yaml:"timeout" json:"timeout"`
 }
 
 // ConfigScript defines a source/target repository to sync
 type ConfigScript struct {
-	Name     string        `json:"name"`
-	Script   string        `json:"script"`
-	Interval time.Duration `json:"interval"`
-	Schedule string        `json:"schedule"`
-	Timeout  time.Duration `json:"timeout"`
+	Name     string        `yaml:"name" json:"name"`
+	Script   string        `yaml:"script" json:"script"`
+	Interval time.Duration `yaml:"interval" json:"interval"`
+	Schedule string        `yaml:"schedule" json:"schedule"`
+	Timeout  time.Duration `yaml:"timeout" json:"timeout"`
 }
 
 // ConfigNew creates an empty configuration
