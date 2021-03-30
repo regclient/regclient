@@ -16,6 +16,7 @@ import (
 	"github.com/containerd/containerd/platforms"
 	dockerDistribution "github.com/docker/distribution"
 	dockerManifestList "github.com/docker/distribution/manifest/manifestlist"
+	dockerSchema1 "github.com/docker/distribution/manifest/schema1"
 	dockerSchema2 "github.com/docker/distribution/manifest/schema2"
 	digest "github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -41,6 +42,14 @@ type manifestCommon struct {
 	ratelimit RateLimit
 	rawHeader http.Header
 	rawBody   []byte
+}
+type manifestDocker1M struct {
+	manifestCommon
+	dockerSchema1.Manifest
+}
+type manifestDocker1MS struct {
+	manifestCommon
+	dockerSchema1.SignedManifest
 }
 type manifestDockerM struct {
 	manifestCommon
@@ -129,6 +138,12 @@ func (m *manifestCommon) RawHeaders() (http.Header, error) {
 	return m.rawHeader, nil
 }
 
+func (m *manifestDocker1M) GetConfigDigest() (digest.Digest, error) {
+	return "", wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.mt), ErrUnsupportedMediaType)
+}
+func (m *manifestDocker1MS) GetConfigDigest() (digest.Digest, error) {
+	return "", wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.mt), ErrUnsupportedMediaType)
+}
 func (m *manifestDockerM) GetConfigDigest() (digest.Digest, error) {
 	return m.Config.Digest, nil
 }
@@ -142,6 +157,12 @@ func (m *manifestOCIML) GetConfigDigest() (digest.Digest, error) {
 	return "", wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.mt), ErrUnsupportedMediaType)
 }
 
+func (m *manifestDocker1M) GetDescriptorList() ([]ociv1.Descriptor, error) {
+	return []ociv1.Descriptor{}, wraperr.New(fmt.Errorf("Platform descriptor list not available for media type %s", m.mt), ErrUnsupportedMediaType)
+}
+func (m *manifestDocker1MS) GetDescriptorList() ([]ociv1.Descriptor, error) {
+	return []ociv1.Descriptor{}, wraperr.New(fmt.Errorf("Platform descriptor list not available for media type %s", m.mt), ErrUnsupportedMediaType)
+}
 func (m *manifestDockerM) GetDescriptorList() ([]ociv1.Descriptor, error) {
 	return []ociv1.Descriptor{}, wraperr.New(fmt.Errorf("Platform descriptor list not available for media type %s", m.mt), ErrUnsupportedMediaType)
 }
@@ -159,6 +180,24 @@ func (m *manifestOCIML) GetDescriptorList() ([]ociv1.Descriptor, error) {
 	return m.Manifests, nil
 }
 
+func (m *manifestDocker1M) GetLayers() ([]ociv1.Descriptor, error) {
+	var dl []ociv1.Descriptor
+	for _, sd := range m.FSLayers {
+		dl = append(dl, ociv1.Descriptor{
+			Digest: sd.BlobSum,
+		})
+	}
+	return dl, nil
+}
+func (m *manifestDocker1MS) GetLayers() ([]ociv1.Descriptor, error) {
+	var dl []ociv1.Descriptor
+	for _, sd := range m.FSLayers {
+		dl = append(dl, ociv1.Descriptor{
+			Digest: sd.BlobSum,
+		})
+	}
+	return dl, nil
+}
 func (m *manifestDockerM) GetLayers() ([]ociv1.Descriptor, error) {
 	var dl []ociv1.Descriptor
 	for _, sd := range m.Layers {
@@ -177,6 +216,12 @@ func (m *manifestOCIML) GetLayers() ([]ociv1.Descriptor, error) {
 }
 
 // GetPlatformDesc returns the descriptor for the platform from the manifest list or OCI index
+func (m *manifestDocker1M) GetPlatformDesc(p *ociv1.Platform) (*ociv1.Descriptor, error) {
+	return nil, wraperr.New(fmt.Errorf("Platform lookup not available for media type %s", m.mt), ErrUnsupportedMediaType)
+}
+func (m *manifestDocker1MS) GetPlatformDesc(p *ociv1.Platform) (*ociv1.Descriptor, error) {
+	return nil, wraperr.New(fmt.Errorf("Platform lookup not available for media type %s", m.mt), ErrUnsupportedMediaType)
+}
 func (m *manifestDockerM) GetPlatformDesc(p *ociv1.Platform) (*ociv1.Descriptor, error) {
 	return nil, wraperr.New(fmt.Errorf("Platform lookup not available for media type %s", m.mt), ErrUnsupportedMediaType)
 }
@@ -208,6 +253,12 @@ func getPlatformDesc(p *ociv1.Platform, dl []ociv1.Descriptor) (*ociv1.Descripto
 }
 
 // GetPlatformList returns the list of platforms in a manifest list
+func (m *manifestDocker1M) GetPlatformList() ([]*ociv1.Platform, error) {
+	return nil, wraperr.New(fmt.Errorf("Platform list not available for media type %s", m.mt), ErrUnsupportedMediaType)
+}
+func (m *manifestDocker1MS) GetPlatformList() ([]*ociv1.Platform, error) {
+	return nil, wraperr.New(fmt.Errorf("Platform list not available for media type %s", m.mt), ErrUnsupportedMediaType)
+}
 func (m *manifestDockerM) GetPlatformList() ([]*ociv1.Platform, error) {
 	return nil, wraperr.New(fmt.Errorf("Platform list not available for media type %s", m.mt), ErrUnsupportedMediaType)
 }
@@ -236,7 +287,27 @@ func getPlatformList(dl []ociv1.Descriptor) ([]*ociv1.Platform, error) {
 	return l, nil
 }
 
+func (m *manifestDocker1MS) MarshalJSON() ([]byte, error) {
+	return m.SignedManifest.MarshalJSON()
+}
+
 // MarshalPretty is used for printPretty template formatting
+func (m *manifestDocker1M) MarshalPretty() ([]byte, error) {
+	buf := &bytes.Buffer{}
+	enc := json.NewEncoder(buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	enc.Encode(m.orig)
+	return buf.Bytes(), nil
+}
+func (m *manifestDocker1MS) MarshalPretty() ([]byte, error) {
+	buf := &bytes.Buffer{}
+	enc := json.NewEncoder(buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	enc.Encode(m.orig)
+	return buf.Bytes(), nil
+}
 func (m *manifestDockerM) MarshalPretty() ([]byte, error) {
 	buf := &bytes.Buffer{}
 	enc := json.NewEncoder(buf)
@@ -354,6 +425,8 @@ func (rc *regClient) ManifestDelete(ctx context.Context, ref Ref) error {
 	// build/send request
 	headers := http.Header{
 		"Accept": []string{
+			MediaTypeDocker1Manifest,
+			MediaTypeDocker1ManifestSigned,
 			MediaTypeDocker2Manifest,
 			MediaTypeDocker2ManifestList,
 			MediaTypeOCI1Manifest,
@@ -402,6 +475,8 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 	// build/send request
 	headers := http.Header{
 		"Accept": []string{
+			MediaTypeDocker1Manifest,
+			MediaTypeDocker1ManifestSigned,
 			MediaTypeDocker2Manifest,
 			MediaTypeDocker2ManifestList,
 			MediaTypeOCI1Manifest,
@@ -443,20 +518,31 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 	}
 	mc.digest = digester.Digest()
 
+	// parse body into variable according to media type
+	mc.mt = resp.HTTPResponse().Header.Get("Content-Type")
+
 	headDigest := resp.HTTPResponse().Header.Get("OCI-Content-Digest")
 	if headDigest == "" {
 		headDigest = resp.HTTPResponse().Header.Get("Docker-Content-Digest")
 	}
-	if headDigest != "" && headDigest != mc.digest.String() {
+	if headDigest != "" && headDigest != mc.digest.String() && mc.mt != MediaTypeDocker1Manifest && mc.mt != MediaTypeDocker1ManifestSigned {
 		rc.log.WithFields(logrus.Fields{
 			"computed": mc.digest.String(),
 			"returned": headDigest,
 		}).Warn("Computed digest does not match header from registry")
 	}
 
-	// parse body into variable according to media type
-	mc.mt = resp.HTTPResponse().Header.Get("Content-Type")
 	switch mc.mt {
+	case MediaTypeDocker1Manifest:
+		dm := dockerSchema1.Manifest{}
+		err = json.Unmarshal(mc.rawBody, &dm)
+		mc.orig = dm
+		m = &manifestDocker1M{manifestCommon: mc, Manifest: dm}
+	case MediaTypeDocker1ManifestSigned:
+		dm := dockerSchema1.SignedManifest{}
+		err = json.Unmarshal(mc.rawBody, &dm)
+		mc.orig = dm
+		m = &manifestDocker1MS{manifestCommon: mc, SignedManifest: dm}
 	case MediaTypeDocker2Manifest:
 		dm := dockerSchema2.Manifest{}
 		err = json.Unmarshal(mc.rawBody, &dm)
@@ -519,6 +605,8 @@ func (rc *regClient) ManifestHead(ctx context.Context, ref Ref) (Manifest, error
 	// build/send request
 	headers := http.Header{
 		"Accept": []string{
+			MediaTypeDocker1Manifest,
+			MediaTypeDocker1ManifestSigned,
 			MediaTypeDocker2Manifest,
 			MediaTypeDocker2ManifestList,
 			MediaTypeOCI1Manifest,
@@ -546,14 +634,21 @@ func (rc *regClient) ManifestHead(ctx context.Context, ref Ref) (Manifest, error
 
 	rc.ratelimitHeader(&mc, resp.HTTPResponse())
 
-	// extract media type and digest from header
+	// extract header data
+	mc.rawHeader = resp.HTTPResponse().Header
 	mc.mt = resp.HTTPResponse().Header.Get("Content-Type")
 	mc.digest, err = digest.Parse(resp.HTTPResponse().Header.Get("Docker-Content-Digest"))
 	if err != nil {
-		return nil, fmt.Errorf("Error getting digest for %s: %w", ref.CommonName(), err)
+		rc.log.WithFields(logrus.Fields{
+			"ref": ref.Reference,
+		}).Warn("No header found for Docker-Content-Digest")
 	}
 
 	switch mc.mt {
+	case MediaTypeDocker1Manifest:
+		m = &manifestDocker1M{manifestCommon: mc}
+	case MediaTypeDocker1ManifestSigned:
+		m = &manifestDocker1MS{manifestCommon: mc}
 	case MediaTypeDocker2Manifest:
 		m = &manifestDockerM{manifestCommon: mc}
 	case MediaTypeDocker2ManifestList:
@@ -646,7 +741,6 @@ func (rc *regClient) ratelimitHeader(m *manifestCommon, r *http.Response) {
 		}
 	}
 	if rlRemain != "" {
-		m.ratelimit.Set = true
 		rSplit := strings.Split(rlRemain, ";")
 		rlRemainI, err := strconv.Atoi(rSplit[0])
 		if err != nil {

@@ -112,7 +112,7 @@ func (rc *regClient) RepoListWithOpts(ctx context.Context, hostname string, opts
 	rlc.mt = resp.HTTPResponse().Header.Get("Content-Type")
 	mt := strings.Split(rlc.mt, ";")[0] // "application/json; charset=utf-8" -> "application/json"
 	switch mt {
-	case "application/json":
+	case "application/json", "text/plain":
 		var rdl RepoDockerList
 		err = json.Unmarshal(respBody, &rdl)
 		rlc.orig = rdl

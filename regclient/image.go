@@ -3,6 +3,7 @@ package regclient
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -46,8 +47,7 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) erro
 		return err
 	}
 
-	switch m.GetMediaType() {
-	case MediaTypeDocker2ManifestList, MediaTypeOCI1ManifestList:
+	if m.IsList() {
 		pd, err := m.GetDescriptorList()
 		if err != nil {
 			return err
@@ -63,33 +63,36 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) erro
 				return err
 			}
 		}
-
-	case MediaTypeDocker2Manifest, MediaTypeOCI1Manifest:
+	} else {
 		// transfer the config
 		cd, err := m.GetConfigDigest()
 		if err != nil {
-			rc.log.WithFields(logrus.Fields{
-				"ref": refSrc.Reference,
-				"err": err,
-			}).Warn("Failed to get config digest from manifest")
-			return fmt.Errorf("Failed to get config digest for %s: %w", refSrc.CommonName(), err)
-		}
-		rc.log.WithFields(logrus.Fields{
-			"source": refSrc.Reference,
-			"target": refTgt.Reference,
-			"digest": cd.String(),
-		}).Info("Copy config")
-		if err := rc.BlobCopy(ctx, refSrc, refTgt, cd.String()); err != nil {
+			// docker schema v1 does not have a config object, ignore if it's missing
+			if !errors.Is(err, ErrUnsupportedMediaType) {
+				rc.log.WithFields(logrus.Fields{
+					"ref": refSrc.Reference,
+					"err": err,
+				}).Warn("Failed to get config digest from manifest")
+				return fmt.Errorf("Failed to get config digest for %s: %w", refSrc.CommonName(), err)
+			}
+		} else {
 			rc.log.WithFields(logrus.Fields{
 				"source": refSrc.Reference,
 				"target": refTgt.Reference,
 				"digest": cd.String(),
-				"err":    err,
-			}).Warn("Failed to copy config")
-			return err
+			}).Info("Copy config")
+			if err := rc.BlobCopy(ctx, refSrc, refTgt, cd.String()); err != nil {
+				rc.log.WithFields(logrus.Fields{
+					"source": refSrc.Reference,
+					"target": refTgt.Reference,
+					"digest": cd.String(),
+					"err":    err,
+				}).Warn("Failed to copy config")
+				return err
+			}
 		}
 
-		// for each layer from the source
+		// copy filesystem layers
 		l, err := m.GetLayers()
 		if err != nil {
 			return err
@@ -120,9 +123,6 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) erro
 				return err
 			}
 		}
-
-	default:
-		return ErrUnsupportedMediaType
 	}
 
 	// push manifest to target
