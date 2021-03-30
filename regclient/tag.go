@@ -178,7 +178,7 @@ func (rc *regClient) TagDelete(ctx context.Context, ref Ref) error {
 		}
 		tempManifest = &manifestDockerM{
 			manifestCommon: manifestCommon{
-				mt:       MediaTypeOCI1Manifest,
+				mt:       MediaTypeDocker2Manifest,
 				ref:      ref,
 				orig:     dm,
 				rawBody:  dmBytes,
@@ -271,7 +271,7 @@ func (rc *regClient) TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts)
 	tc.mt = resp.HTTPResponse().Header.Get("Content-Type")
 	mt := strings.Split(tc.mt, ";")[0] // "application/json; charset=utf-8" -> "application/json"
 	switch mt {
-	case "application/json":
+	case "application/json", "text/plain":
 		var tdl TagDockerList
 		err = json.Unmarshal(respBody, &tdl)
 		tc.orig = tdl

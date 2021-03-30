@@ -35,6 +35,10 @@ const (
 	DockerRegistryAuth = "https://index.docker.io/v1/"
 	// DockerRegistryDNS is the host to connect to for Hub
 	DockerRegistryDNS = "registry-1.docker.io"
+	// MediaTypeDocker1Manifest deprecated media type for docker schema1 manifests
+	MediaTypeDocker1Manifest = "application/vnd.docker.distribution.manifest.v1+json"
+	// MediaTypeDocker1ManifestSigned is a deprecated schema1 manifest with jws signing
+	MediaTypeDocker1ManifestSigned = "application/vnd.docker.distribution.manifest.v1+prettyjws"
 	// MediaTypeDocker2Manifest is the media type when pulling manifests from a v2 registry
 	MediaTypeDocker2Manifest = dockerSchema2.MediaTypeManifest
 	// MediaTypeDocker2ManifestList is the media type when pulling a manifest list from a v2 registry
