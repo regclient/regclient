@@ -252,14 +252,11 @@ Flags:
   -v, --verbosity string     Log level (debug, info, warn, error, fatal, panic) (default "info")
 ```
 
-The `check` command is useful for reporting any stale images that need to be
-updated.
+The `check` command is useful for reporting any stale images that need to be updated.
 
-The `once` command can be placed in a cron or CI job to perform the
-synchronization immediately rather than following the schedule.
+The `once` command can be placed in a cron or CI job to perform the synchronization immediately rather than following the schedule.
 
-The `server` command is useful to run a background process that continuously
-updates the target repositories as the source changes.
+The `server` command is useful to run a background process that continuously updates the target repositories as the source changes.
 
 `--logopt` currently accepts `json` to format all logs as json instead of text.
 This is useful for parsing in external tools like Elastic/Splunk.
@@ -303,22 +300,29 @@ sync:
     backup: "{{$t := time.Now}}{{printf \"%s/backups/%s:%s-%d%d%d\" .Ref.Registry .Ref.Repository .Ref.Tag $t.Year $t.Month $t.Day}}"
 ```
 
-- `version`: This should be left at version 1 or not included at all. This may
-  be incremented if future `regsync` releases change the configuration file
-  structure.
+- `version`:
+  This should be left at version 1 or not included at all.
+  This may be incremented if future `regsync` releases change the configuration file structure.
 
-- `creds`: Array of registry credentials and settings for connecting. To avoid
-  saving credentials in the same file with the other settings, consider using
-  the `${HOME}/.docker/config.json` or a template in the `user` and `pass`
-  fields to expand a variable or file contents. When using the
-  `regclient/regsync` image, the docker config is read from
-  `/home/appuser/.docker/config.json`. Each `creds` entry supports the following
-  options:
-  - `registry`: Hostname and port of the registry server used in later lines. Use `docker.io` for Docker Hub.
-  - `user`: Username
-  - `pass`: Password
-  - `tls`: Whether TLS is enabled/verified. Values include "enabled" (default), "insecure", or "disabled".
-  - `regcert`: Registry CA certificate for self signed certificates. This may be a string with `\n` for line breaks, or the yaml multi-line syntax may be used like:
+- `creds`:
+  Array of registry credentials and settings for connecting.
+  To avoid saving credentials in the same file with the other settings, consider using the `${HOME}/.docker/config.json` or a template in the `user` and `pass`
+  fields to expand a variable or file contents.
+  When using the `regclient/regsync` image, the docker config is read from `/home/appuser/.docker/config.json`.
+  Each `creds` entry supports the following options:
+  - `registry`:
+    Hostname and port of the registry server used in later lines.
+    Use `docker.io` for Docker Hub.
+  - `user`:
+    Username
+  - `pass`:
+    Password
+  - `tls`:
+    Whether TLS is enabled/verified.
+    Values include "enabled" (default), "insecure", or "disabled".
+  - `regcert`:
+    Registry CA certificate for self signed certificates.
+    This may be a string with `\n` for line breaks, or the yaml multi-line syntax may be used like:
 
     ```yaml
     regcert: |
@@ -327,67 +331,80 @@ sync:
       -----END CERTIFICATE-----
     ```
 
-- `defaults`: Global settings and default values applied to each sync entry:
-  - `backup`: Tag or image reference for backing up target image before
-    overwriting. This may include a Go template syntax. This backup is only run
-    when the source changes and the target exists that is about to be
-    overwritten. If the backup tag already exists, it will be overwritten.
-  - `interval`: How often to run each sync step in `server` mode.
-  - `schedule`: Cron like schedule to run each step, overrides `interval`.
-  - `ratelimit`: Settings to throttle based on source rate limits.
-    - `min`: Minimum number of pulls remaining to start the step. Actions while
-      running the step can result in going below this limit. Note that parallel
-      steps and multi-platform images may each result in more than one pull
-      happening beyond this threshold.
-    - `retry`: How long to wait before checking if the rate limit has increased.
-  - `parallel`: Number of concurrent image copies to run. All sync steps may be
-    started concurrently to check if a mirror is needed, but will wait on this
-    limit when a copy is needed. Defaults to 1.
-  - `skipDockerConfig`: Do not read the user credentials in
-    `${HOME}/.docker/config.json`.
+- `defaults`:
+  Global settings and default values applied to each sync entry:
+  - `backup`:
+    Tag or image reference for backing up target image before overwriting.
+    This may include a Go template syntax.
+    This backup is only run when the source changes and the target exists that is about to be overwritten.
+    If the backup tag already exists, it will be overwritten.
+  - `interval`:
+    How often to run each sync step in `server` mode.
+  - `schedule`:
+    Cron like schedule to run each step, overrides `interval`.
+  - `ratelimit`:
+    Settings to throttle based on source rate limits.
+    - `min`:
+      Minimum number of pulls remaining to start the step.
+      Actions while running the step can result in going below this limit.
+      Note that parallel steps and multi-platform images may each result in more than one pull happening beyond this threshold.
+    - `retry`:
+      How long to wait before checking if the rate limit has increased.
+  - `parallel`:
+    Number of concurrent image copies to run.
+    All sync steps may be started concurrently to check if a mirror is needed, but will wait on this limit when a copy is needed.
+    Defaults to 1.
+  - `mediaTypes`:
+    Array of media types to include.
+    These must also be supported by regclient.
+    Defaults to: `["application/vnd.docker.distribution.manifest.v2+json", "application/vnd.docker.distribution.manifest.list.v2+json", "application/vnd.oci.image.manifest.v1+json", "application/vnd.oci.image.index.v1+json"]`
+  - `skipDockerConfig`:
+    Do not read the user credentials in `${HOME}/.docker/config.json`.
 
-- `sync`: Array of steps to run for copying images from the source to target
-  repository.
-  - `source`: Source image or repository.
-  - `target`: Target image or repository.
-  - `type`: "repository" or "image". Repository will copy all tags from the
-    source repository.
-  - `tags`: implements filters on tags for "repository" types, regex values are automatically bound to the beginning and ending of each string (`^` and `$`).
-    - `allow`: array of regex strings to allow specific tags.
-    - `deny`: array of regex strings to deny specific tags.
-  - `platform`: single platform to pull from a multi-platform image, e.g.
-    `linux/amd64`. By default all platforms are copied along with the original
-    upstream manifest list. Note that looking up the platform from a
-    multi-platform image counts against the Docker Hub rate limit, and that rate
-    limits are not checked prior to resolving the platform. When run with
-    "server", the platform is only resolved once for each multi-platform digest
-    seen.
-  - `backup`, `interval`, `schedule`, and `ratelimit`: See description under `defaults`.
+- `sync`:
+  Array of steps to run for copying images from the source to target repository.
+  - `source`:
+    Source image or repository.
+  - `target`:
+    Target image or repository.
+  - `type`:
+    "repository" or "image".
+    Repository will copy all tags from the source repository.
+  - `tags`:
+    Implements filters on tags for "repository" types, regex values are automatically bound to the beginning and ending of each string (`^` and `$`).
+    - `allow`:
+      Array of regex strings to allow specific tags.
+    - `deny`:
+      Array of regex strings to deny specific tags.
+  - `platform`:
+    Single platform to pull from a multi-platform image, e.g. `linux/amd64`.
+    By default all platforms are copied along with the original upstream manifest list.
+    Note that looking up the platform from a multi-platform image counts against the Docker Hub rate limit, and that rate limits are not checked prior to resolving the platform.
+    When run with "server", the platform is only resolved once for each multi-platform digest seen.
+  - `backup`, `interval`, `schedule`, `ratelimit`, and `mediaTypes`:
+    See description under `defaults`.
 
-- `x-*`: Any field beginning with `x-` is considered a user extension and will
-  not be parsed in current for future versions of the project. These are useful
-  for integrating your own tooling, or setting values for yaml anchors and
-  aliases.
+- `x-*`:
+  Any field beginning with `x-` is considered a user extension and will not be parsed in current or future versions of the project.
+  These are useful for integrating your own tooling, or setting values for yaml anchors and aliases.
 
-[Go templates](https://golang.org/pkg/text/template/) are used to expand values
-in `user`, `pass`, `regcert`, `source`, `target`, and `backup`. The `backup`
-template supports the following objects:
+[Go templates](https://golang.org/pkg/text/template/) are used to expand values in `user`, `pass`, `regcert`, `source`, `target`, and `backup`.
+The `backup` template supports the following objects:
 
-- `.Ref`: reference object about to be overwritten
-  - `.Ref.Reference`: full reference
-  - `.Ref.Registry`: registry name
-  - `.Ref.Repository`: repository
-  - `.Ref.Tag`: tag
-- `.Step`: values from the current step
-  - `.Step.Source`: source
-  - `.Step.Target`: target
-  - `.Step.Type`: type
-  - `.Step.Backup`: backup
-  - `.Step.Interval`: interval
-  - `.Step.Schedule`: schedule
+- `.Ref`: Reference object about to be overwritten
+  - `.Ref.Reference`: Full reference
+  - `.Ref.Registry`: Registry name
+  - `.Ref.Repository`: Repository
+  - `.Ref.Tag`: Tag
+- `.Step`: Values from the current step
+  - `.Step.Source`: Source
+  - `.Step.Target`: Target
+  - `.Step.Type`: Type
+  - `.Step.Backup`: Backup
+  - `.Step.Interval`: Interval
+  - `.Step.Schedule`: Schedule
 
-See [Template Functions](#Template-Functions) for more details on the custom
-functions available in templates.
+See [Template Functions](#Template-Functions) for more details on the custom functions available in templates.
 
 ## regbot
 
