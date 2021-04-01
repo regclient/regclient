@@ -94,8 +94,7 @@ type ConfigHost struct {
 // ConfigHostNew creates a default ConfigHost entry
 func ConfigHostNew() *ConfigHost {
 	h := ConfigHost{
-		Scheme: "https", // TODO: delete
-		TLS:    TLSEnabled,
+		TLS: TLSEnabled,
 	}
 	return &h
 }
@@ -104,10 +103,8 @@ func ConfigHostNew() *ConfigHost {
 func ConfigHostNewName(host string) *ConfigHost {
 	h := ConfigHost{
 		Name:     host,
-		Scheme:   "https", // TODO: delete
 		TLS:      TLSEnabled,
 		Hostname: host,
-		DNS:      []string{host}, // TODO: delete
 	}
 	if host == DockerRegistry || host == DockerRegistryDNS || host == DockerRegistryAuth {
 		h.Name = DockerRegistry
@@ -138,17 +135,6 @@ func (rc *regClient) mergeConfigHost(curHost, newHost ConfigHost, warn bool) Con
 			}).Warn("Changing login password for registry")
 		}
 		curHost.Pass = newHost.Pass
-	}
-
-	if newHost.Scheme != "" { // TODO: delete
-		if warn && curHost.Scheme != "" && curHost.Scheme != newHost.Scheme {
-			rc.log.WithFields(logrus.Fields{
-				"orig": curHost.Scheme,
-				"new":  newHost.Scheme,
-				"host": name,
-			}).Warn("Changing scheme for registry")
-		}
-		curHost.Scheme = newHost.Scheme
 	}
 
 	if newHost.TLS != TLSUndefined {
@@ -249,17 +235,6 @@ func (rc *regClient) mergeConfigHost(curHost, newHost ConfigHost, warn bool) Con
 			}).Warn("Changing API settings for registry")
 		}
 		curHost.API = newHost.API
-	}
-
-	if len(newHost.DNS) > 0 { // TODO: deprecate
-		if warn && len(curHost.DNS) > 0 && !stringSliceEq(curHost.DNS, newHost.DNS) {
-			rc.log.WithFields(logrus.Fields{
-				"orig": curHost.DNS,
-				"new":  newHost.DNS,
-				"host": name,
-			}).Warn("Changing DNS settings for registry")
-		}
-		curHost.DNS = newHost.DNS
 	}
 
 	return curHost

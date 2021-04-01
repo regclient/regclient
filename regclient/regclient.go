@@ -106,7 +106,6 @@ func NewRegClient(opts ...Opt) RegClient {
 	rc.hostSet(ConfigHost{
 		Name:     DockerRegistry,
 		TLS:      TLSEnabled,
-		DNS:      []string{DockerRegistryDNS}, // TODO: delete
 		Hostname: DockerRegistryDNS,
 	})
 
@@ -163,9 +162,6 @@ func WithConfigHosts(configHosts []ConfigHost) Opt {
 				configHost.Name = DockerRegistry
 				if configHost.Hostname == "" || configHost.Hostname == DockerRegistry || configHost.Hostname == DockerRegistryAuth {
 					configHost.Hostname = DockerRegistryDNS
-				}
-				if len(configHost.DNS) == 0 { // TODO: remove
-					configHost.DNS = []string{DockerRegistryDNS}
 				}
 			}
 			rc.log.WithFields(logrus.Fields{
@@ -239,7 +235,6 @@ func (rc *regClient) loadDockerCreds() error {
 		}).Debug("Loading docker cred")
 		err = rc.hostSet(ConfigHost{
 			Name:     cred.ServerAddress,
-			DNS:      []string{hostname},
 			Hostname: hostname,
 			User:     cred.Username,
 			Pass:     cred.Password,
@@ -319,53 +314,27 @@ func (host *ConfigHost) authCreds() func(h string) (string, string) {
 	}
 }
 
-func (rc *regClient) authCreds(host string) (string, string) {
-	if _, ok := rc.hosts[host]; ok {
-		h := rc.hosts[host].config
-		rc.log.WithFields(logrus.Fields{
-			"host": host,
-			"user": h.User,
-		}).Debug("Retrieved cred")
-		return h.User, h.Pass
-	}
-	// default credentials are stored under a blank hostname
-	if _, ok := rc.hosts[""]; ok {
-		h := rc.hosts[""].config
-		return h.User, h.Pass
-	}
-	// anonymous request
-	rc.log.WithFields(logrus.Fields{
-		"host": host,
-	}).Debug("No credentials found, defaulting to anonymous")
-	return "", ""
-}
-
 func (rc *regClient) getCerts(host *ConfigHost) []string {
 	var certs []string
-	hosts := []string{host.Name}
-	if host.DNS != nil {
-		hosts = host.DNS
-	}
-	for _, h := range hosts {
-		for _, certPath := range rc.certPaths {
-			hostDir := filepath.Join(certPath, h)
-			files, err := ioutil.ReadDir(hostDir)
-			if err != nil {
-				if !os.IsNotExist(err) {
-					rc.log.WithFields(logrus.Fields{
-						"err": err,
-						"dir": hostDir,
-					}).Warn("Failed to open docker cert dir")
-				}
+
+	for _, certPath := range rc.certPaths {
+		hostDir := filepath.Join(certPath, host.Hostname)
+		files, err := ioutil.ReadDir(hostDir)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				rc.log.WithFields(logrus.Fields{
+					"err": err,
+					"dir": hostDir,
+				}).Warn("Failed to open docker cert dir")
+			}
+			continue
+		}
+		for _, f := range files {
+			if f.IsDir() {
 				continue
 			}
-			for _, f := range files {
-				if f.IsDir() {
-					continue
-				}
-				if strings.HasSuffix(f.Name(), ".crt") {
-					certs = append(certs, filepath.Join(hostDir, f.Name()))
-				}
+			if strings.HasSuffix(f.Name(), ".crt") {
+				certs = append(certs, filepath.Join(hostDir, f.Name()))
 			}
 		}
 	}

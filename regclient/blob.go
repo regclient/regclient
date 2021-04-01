@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -279,21 +278,13 @@ func (rc *regClient) BlobPut(ctx context.Context, ref Ref, d string, rdr io.Read
 	// Extract the location into a new putURL based on whether it's relative, fqdn with a scheme, or without a scheme.
 	// This doesn't use the httpDo method since location could point to any url, negating the API expansion, mirror handling, and similar features.
 	host := rc.hostGet(ref.Registry)
-	scheme := "https"
-	if host.TLS == TLSDisabled {
-		scheme = "http"
-	}
 	location := resp.HTTPResponse().Header.Get("Location")
 	rc.log.WithFields(logrus.Fields{
 		"location": location,
 	}).Debug("Upload location received")
-	var putURL *url.URL
-	if strings.HasPrefix(location, "/") {
-		location = scheme + "://" + host.DNS[0] + location
-	} else if !strings.Contains(location, "://") {
-		location = scheme + "://" + location
-	}
-	putURL, err = url.Parse(location)
+	// put url may be relative to the above post URL, so parse in that context
+	postURL := resp.HTTPResponse().Request.URL
+	putURL, err := postURL.Parse(location)
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"location": location,
