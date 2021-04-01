@@ -14,15 +14,16 @@ Utility for accessing docker registries
 More details at https://github.com/regclient/regclient
 
 Usage:
-  regctl <cmd> [flags]
   regctl [command]
 
 Available Commands:
+  blob        manage image blobs/layers
   help        Help about any command
   image       manage images
-  layer       manage image layers/blobs
   registry    manage registries
-  repo        manage a repository
+  repo        manage repositories
+  tag         manage tags
+  version     Show the version
 
 Flags:
   -h, --help                 help for regctl
@@ -34,6 +35,8 @@ Use "regctl [command] --help" for more information about a command.
 
 `--logopt` currently accepts `json` to format all logs as json instead of text.
 This is useful for parsing in external tools like Elastic/Splunk.
+
+The `version` command will show details about the git commit and tag if available.
 
 ### Registry commands
 
@@ -50,21 +53,21 @@ Available Commands:
   set         set options on a registry
 ```
 
-With docker installed and logged into the registry, these commands are typically
-not needed with the exception of configuring an insecure registry. The `regctl`
-will import credentials from the docker logins stored in
-`$HOME/.docker/config.json` and trust certificates loaded in
-`/etc/docker/certs.d/$registry/*.crt`. These commands are useful for running in
-an environment without docker to configure the `$HOME/.regctl/config.json` file.
-One use case for that is to run `regctl` within an unpriviliged container in a
-CI pipeline. With the `regclient/regctl` image, the docker configuration is
-pulled from `/home/appuser/.docker/config.json` by default.
+With docker installed and logged into the registry, these commands are typically not needed with the exception of configuring an insecure registry.
+The `regctl` will import credentials from the docker logins stored in `$HOME/.docker/config.json` and trust certificates loaded in `/etc/docker/certs.d/$registry/*.crt`.
+These commands are useful for running in an environment without docker to configure the `$HOME/.regctl/config.json` file.
+One use case for that is to run `regctl` within an unpriviliged container in a CI pipeline.
+With the `regclient/regctl` image, the docker configuration is pulled from `/home/appuser/.docker/config.json` by default.
 
-Note that it is possible to configure multiple registry servers under a single
-name as a mirror with automatic failover. This is useful for pulling content,
-but may have unexpected results when pushing changes to the registry since each
-http request will be sent to the first server in the list that is currently
-available.
+Note that it is possible to configure multiple registry servers under a single name as a mirror with automatic failover.
+This is useful for pulling content, but pushes will still be sent to the upstream registry server.
+For example, to configure `mirror-build:5000` and `mirror-cluster:5000` as the first and second mirrors (respectively) for Docker Hub:
+
+```text
+regctl registry set --priority 10 mirror-build:5000
+regctl registry set --priority  5 mirror-cluster:5000
+regctl registry set --mirror mirror-build:5000 --mirror mirror-cluster:5000 docker.io
+```
 
 ### Repo commands
 
@@ -76,9 +79,9 @@ Available Commands:
   ls          list repositories in a registry
 ```
 
-The `ls` command lists repositories within a registry server. This may not be
-implemented by every registry server. Notably missing from the supported list is
-Docker Hub.
+The `ls` command lists repositories within a registry server.
+This may not be implemented by every registry server.
+Notably missing from the supported list is Docker Hub.
 
 ### Tag commands
 
@@ -93,9 +96,7 @@ Available Commands:
 
 The `ls` command lists all tags within a repo.
 
-The `delete` command will delete a single tag without impacting other tags or
-the underlying manifest which is useful if you are unsure if your image is used
-elsewhere and want to rely on the registry to cleanup untagged manifests.
+The `delete` command will delete a single tag without impacting other tags or the underlying manifest which is useful if you are unsure if your image is used elsewhere and want to rely on the registry to cleanup untagged manifests.
 
 ### Image Commands
 
@@ -116,52 +117,39 @@ Available Commands:
   ratelimit   show the current rate limit
 ```
 
-The `copy` command allows images to be copied between registries, between
-repositories on the same registry, or retag an image within the same repository,
-and only pulls the layers when needed (typically not needed with the same
-registry server).
+The `copy` command allows images to be copied between registries, between repositories on the same registry, or retag an image within the same repository, and only pulls the layers when needed (typically not needed with the same registry server).
 
-The `delete` command removes the image manifest from the server. This will
-impact all tags pointing to the same manifest and requires a digest to be
-included in the image reference to be deleted (e.g. `myimage@sha256:abcd...`).
+The `delete` command removes the image manifest from the server.
+This will impact all tags pointing to the same manifest and requires a digest to be included in the image reference to be deleted (e.g. `myimage@sha256:abcd...`).
 
-The `digest` command is useful to pin the image used within your deployment to an
-immutable sha256 checksum.
+The `digest` command is useful to pin the image used within your deployment to an immutable sha256 checksum.
 
-The `export`/import commands allow you to copy images between registry servers
-that may be disconnected, or to export an image directly from a registry without
-a docker engine and loading it into a potentially disconnected docker host.
+The `export`/import commands allow you to copy images between registry servers that may be disconnected, or to export an image directly from a registry without a docker engine and loading it into a potentially disconnected docker host. (Note that import is not yet implemented.)
 
-The `inspect` command pulls the image config json blob. This is the same json
-shown with a `docker image inspect` command, and includes labels, the
-entrypoint/cmd, and layer history. This can be useful with image pruning
-scripts, or other tools that need the image labels without the need to pull all
-of the layers.
+The `inspect` command pulls the image config json blob. This is the same json shown with a `docker image inspect` command, and includes labels, the entrypoint/cmd, and layer history.
+This can be useful with image pruning scripts, or other tools that need the image labels without the need to pull all of the layers.
 
-The `manifest` command shows the low level layers and digests that can be pulled
-from the registry to retrieve individual components of an image. This is also
-useful for analyzing multi-platform manifest lists to see what platforms are
-available for a particular image.
+The `manifest` command shows the low level layers and digests that can be pulled from the registry to retrieve individual components of an image.
+This is also useful for analyzing multi-platform manifest lists to see what platforms are available for a particular image.
 
-The `ratelimit` command shows the current rate limit on the manifest API using a
-http HEAD request that does not count against the Docker Hub limits.
+The `ratelimit` command shows the current rate limit on the manifest API using a http HEAD request that does not count against the Docker Hub limits.
 
-### Layer Commands
+### Blob Commands
 
-The layer command acts on blobs within the registry. These blobs include the tar
-layers and the json image configs.
+The layer command acts on blobs within the registry.
+These blobs include the tar layers and the json image configs.
 
 ```text
 Usage:
-  regctl layer [command]
+  regctl blob [command]
 
 Available Commands:
-  pull        download a layer/blob
+  get         download a blob/layer
 ```
 
-The `pull` command will pull a specific sha256 blob from the registry and
-returns it to stdout. If you are requesting a tar layer, be sure to direct this
-to a file. For json blobs, it's useful to redirect this to a command like `jq`.
+The `get` command will pull a specific sha256 blob from the registry and returns it to stdout.
+If you are requesting a tar layer, be sure to direct this to a file or command that parses the content.
+For json blobs, it's useful to redirect this to a command like `jq`.
 
 Example usage:
 
@@ -184,7 +172,7 @@ $ regctl image manifest busybox
   ]
 }
 
-$ regctl layer pull busybox sha256:6858809bf669cc5da7cb6af83d0fae838284d12e1be0182f92f6bd96559873e3 | jq .
+$ regctl blob get busybox sha256:6858809bf669cc5da7cb6af83d0fae838284d12e1be0182f92f6bd96559873e3 | jq .
 {
   "architecture": "amd64",
   "config": {
@@ -202,8 +190,8 @@ $ regctl layer pull busybox sha256:6858809bf669cc5da7cb6af83d0fae838284d12e1be01
 
 ### Format Flag
 
-The `--format` flag allows you to apply a Go template to the output of some
-commands. For more details of Go templates, see:
+The `--format` flag allows you to apply a Go template to the output of some commands.
+For more details of Go templates, see:
 
 - Go templates: <https://golang.org/pkg/text/template/>
 
@@ -220,7 +208,7 @@ Examples:
 ```shell
 regctl image manifest --format '{{range .Layers}}{{println .Digest}}{{end}}' openjdk:latest # show each layer digest
 
-regctl image inspect --format '{{jsonPretty .}}' alpine:latest # this is the default format
+regctl image inspect --format '{{jsonPretty .}}' alpine:latest
 
 regctl image inspect --format '{{range $k, $v := .Config.Labels}}{{$k}} = {{$v}}{{println}}{{end}}' ... # loop through labels
 
@@ -244,6 +232,8 @@ Available Commands:
   help        Help about any command
   once        processes each sync command once, ignoring cron schedule
   server      run the regsync server
+  version     Show the version
+
 
 Flags:
   -c, --config string        Config file
@@ -260,6 +250,8 @@ The `server` command is useful to run a background process that continuously upd
 
 `--logopt` currently accepts `json` to format all logs as json instead of text.
 This is useful for parsing in external tools like Elastic/Splunk.
+
+The `version` command will show details about the git commit and tag if available.
 
 ### regsync Configuration File
 
@@ -311,8 +303,13 @@ sync:
   When using the `regclient/regsync` image, the docker config is read from `/home/appuser/.docker/config.json`.
   Each `creds` entry supports the following options:
   - `registry`:
-    Hostname and port of the registry server used in later lines.
+    Hostname and port of the registry server used in image references.
     Use `docker.io` for Docker Hub.
+    Note for parsing image names, a registry name must have a `.` or `:` to distinguish it from a path on Docker Hub.
+  - `hostname`:
+    Optional DNS name and port for the registry server, the default is the registry name.
+    This allows multiple registry names to point to the same server with different configurations.
+    This may be useful for different user logins, or different mirror configurations.
   - `user`:
     Username
   - `pass`:
@@ -330,6 +327,18 @@ sync:
       MIIJDDCCBPSgAwIB....
       -----END CERTIFICATE-----
     ```
+
+  - `pathPrefix`:
+    Path added before all images pulled from this registry.
+    This is useful for some mirror configurations that place images under a specific path.
+  - `mirrors`:
+    Array of registry names to use as a mirror for this registry.
+    Mirrors are sorted by priority, highest first.
+    This registry is sorted after any listed mirrors with the same priority.
+    Mirrors are not used for commands that change the registry, only for read commands.
+  - `priority`:
+    Non-negative integer priority used for sorting mirrors.
+    This defaults to 0.
 
 - `defaults`:
   Global settings and default values applied to each sync entry:
@@ -422,6 +431,7 @@ Available Commands:
   help        Help about any command
   once        runs each script once
   server      run the regbot server
+  version     Show the version
 
 Flags:
   -c, --config string        Config file
@@ -433,17 +443,16 @@ Flags:
 Use "regbot [command] --help" for more information about a command.
 ```
 
-The `once` command can be placed in a cron or CI job to perform the
-synchronization immediately rather than following the schedule.
+The `once` command can be placed in a cron or CI job to perform the synchronization immediately rather than following the schedule.
 
-The `server` command is useful to run a background process that continuously
-updates the target repositories as the source changes.
+The `server` command is useful to run a background process that continuously updates the target repositories as the source changes.
 
-The `--dry-run` option is useful for testing scripts without actually copying or
-deleting images.
+The `--dry-run` option is useful for testing scripts without actually copying or deleting images.
 
 `--logopt` currently accepts `json` to format all logs as json instead of text.
 This is useful for parsing in external tools like Elastic/Splunk.
+
+The `version` command will show details about the git commit and tag if available.
 
 ### regbot Configuration File
 
@@ -476,22 +485,34 @@ scripts:
       end
 ```
 
-- `version`: This should be left at version 1 or not included at all. This may
-  be incremented if future `regbot` releases change the configuration file
-  structure.
+- `version`:
+  This should be left at version 1 or not included at all.
+  This may be incremented if future `regbot` releases change the configuration file structure.
 
-- `creds`: Array of registry credentials and settings for connecting. To avoid
-  saving credentials in the same file with the other settings, consider using
-  the `${HOME}/.docker/config.json` or a template in the `user` and `pass`
-  fields to expand a variable or file contents. When using the
-  `regclient/regsync` image, the docker config is read from
-  `/home/appuser/.docker/config.json`. Each `creds` entry supports the following
-  options:
-  - `registry`: Hostname and port of the registry server used in later lines. Use `docker.io` for Docker Hub.
-  - `user`: Username
-  - `pass`: Password
-  - `tls`: Whether TLS is enabled/verified. Values include "enabled" (default), "insecure", or "disabled".
-  - `regcert`: Registry CA certificate for self signed certificates. This may be a string with `\n` for line breaks, or the yaml multi-line syntax may be used like:
+- `creds`:
+  Array of registry credentials and settings for connecting.
+  To avoid saving credentials in the same file with the other settings, consider using the `${HOME}/.docker/config.json` or a template in the `user` and `pass`
+  fields to expand a variable or file contents.
+  When using the `regclient/regbot` image, the docker config is read from `/home/appuser/.docker/config.json`.
+  Each `creds` entry supports the following options:
+  - `registry`:
+    Hostname and port of the registry server used in image references.
+    Use `docker.io` for Docker Hub.
+    Note for parsing image names, a registry name must have a `.` or `:` to distinguish it from a path on Docker Hub.
+  - `hostname`:
+    Optional DNS name and port for the registry server, the default is the registry name.
+    This allows multiple registry names to point to the same server with different configurations.
+    This may be useful for different user logins, or different mirror configurations.
+  - `user`:
+    Username
+  - `pass`:
+    Password
+  - `tls`:
+    Whether TLS is enabled/verified.
+    Values include "enabled" (default), "insecure", or "disabled".
+  - `regcert`:
+    Registry CA certificate for self signed certificates.
+    This may be a string with `\n` for line breaks, or the yaml multi-line syntax may be used like:
 
     ```yaml
     regcert: |
@@ -500,99 +521,136 @@ scripts:
       -----END CERTIFICATE-----
     ```
 
-- `defaults`: Global settings and default values applied to each sync entry:
-  - `interval`: How often to run each sync step in `server` mode.
-  - `schedule`: Cron like schedule to run each step, overrides `interval`.
-  - `parallel`: Number of concurrent actions to run. All scripts may be started
-    concurrently, but will wait on this limit when specific actions are
-    performed like an image copy. Defaults to 1.
-  - `timeout`: Time until the script is aborted. This timeout is enforced when
-    calling various actions like an image copy.
-  - `skipDockerConfig`: Do not read the user credentials in
-    `${HOME}/.docker/config.json`.
+  - `pathPrefix`:
+    Path added before all images pulled from this registry.
+    This is useful for some mirror configurations that place images under a specific path.
+  - `mirrors`:
+    Array of registry names to use as a mirror for this registry.
+    Mirrors are sorted by priority, highest first.
+    This registry is sorted after any listed mirrors with the same priority.
+    Mirrors are not used for commands that change the registry, only for read commands.
+  - `priority`:
+    Non-negative integer priority used for sorting mirrors.
+    This defaults to 0.
 
-- `scripts`: Array of Lua scripts to run.
-  - `script`: Text of the Lua script.
-  - `interval`, `schedule`, and `timeout`: See description under `defaults`.
+- `defaults`:
+  Global settings and default values applied to each sync entry:
+  - `interval`:
+    How often to run each sync step in `server` mode.
+  - `schedule`:
+    Cron like schedule to run each step, overrides `interval`.
+  - `parallel`:
+    Number of concurrent actions to run.
+    All scripts may be started concurrently, but will wait on this limit when specific actions are performed like an image copy.
+    Defaults to 1.
+  - `timeout`:
+    Time until the script is aborted.
+    This timeout is enforced when calling various actions like an image copy.
+  - `skipDockerConfig`:
+    Do not read the user credentials in `${HOME}/.docker/config.json`.
 
-- `x-*`: Any field beginning with `x-` is considered a user extension and will
-  not be parsed in current for future versions of the project. These are useful
-  for integrating your own tooling, or setting values for yaml anchors and
-  aliases.
+- `scripts`:
+  Array of Lua scripts to run.
+  - `script`:
+    Text of the Lua script.
+  - `interval`, `schedule`, and `timeout`:
+    See description under `defaults`.
 
-[Go templates](https://golang.org/pkg/text/template/) are used to expand values
-in `user`, `pass`, and `regcert`. See [Template Functions](#Template-Functions)
-for more details on the custom functions available in templates.
+- `x-*`:
+  Any field beginning with `x-` is considered a user extension and will not be parsed in current for future versions of the project.
+  These are useful for integrating your own tooling, or setting values for yaml anchors and aliases.
 
-The Lua script interface is based on Lua 5.1. The [Lua manual is available
-online](https://www.lua.org/manual/5.1/index.html). The following additional
-functions are available:
+[Go templates](https://golang.org/pkg/text/template/) are used to expand values in `user`, `pass`, and `regcert`.
+See [Template Functions](#Template-Functions) for more details on the custom functions available in templates.
 
-- `log <msg>`: log a message (preferred over Lua's print).
-- `reference.new <ref>`: accepts an image reference, returning a reference
-  object. Other functions that accept an image name or repository will accept a
-  reference object.
-- `<ref>:tag`: get or set the tag on a reference. This is useful when iterating
-  over tags within a repository.
-- `repo.ls <host:port>`: list the repositories on a registry server. This
-  depends on the registry supporting the API call.
-- `tag.ls <repo>`: returns an array of tags found within a repository.
-- `tag.delete <ref>`: deletes a tag from a registry. This uses the regclient tag
-  delete method that first pushes a dummy manifest to the tag, which avoids
-  deleting other tags that point to the same manifest.
-- `manifest.get`: returns the image manifest. The current platform will
-  be resolved, or it may be specified as a second arg.
-- `manifest.getList`: retrieves a manifest list without resolving the
-  current platform. If the manifest is not a multi-platform manifest list, the
-  single manifest will be returned instead.
-- `manifest.head`: retrieves the manifest using a head request. This
-  pulls the digest and current rate limit and can be used with the manifest
-  delete and ratelimit functions.
-- `<manifest>:config`: see `image.config`
-- `<manifest>:delete`: deletes a manifest. Note that a manifest list or manifest
-  head request to retrieve the manifest is recommended, otherwise the registry
-  may delete a single platform's manifest without deleting the entire
-  multi-platform image, leading to errors when attempting to access the
-  remaining manifest. If multiple tags can point to the same manifest, then
-  using `tag.delete` is recommended.
-- `<manifest>:get`: see `image.manifest`. This is useful for pulling a manifest
-  when you've only run a head request.
-- `<manifest>:ratelimit`: return the ratelimit seen when the manifest was last
-  retrieved. The ratelimit object includes `Set` (boolean indicating if a rate
-  limit was returned with the manifest), `Remain` (requests remaining), `Limit`
+The Lua script interface is based on Lua 5.1.
+The [Lua manual is available online](https://www.lua.org/manual/5.1/index.html).
+The following additional functions are available:
+
+- `log <msg>`:
+  Log a message (preferred over Lua's print).
+- `reference.new <ref>`:
+  Accepts an image reference, returning a reference object.
+  Other functions that accept an image name or repository will accept a reference object.
+- `<ref>:digest`:
+  Get or set the digest on a reference.
+- `<ref>:tag`:
+  Get or set the tag on a reference.
+  This is useful when iterating over tags within a repository.
+- `repo.ls <host:port>`:
+  List the repositories on a registry server.
+  This depends on the registry supporting the API call.
+- `tag.ls <repo>`:
+  Returns an array of tags found within a repository.
+- `tag.delete <ref>`:
+  Deletes a tag from a registry.
+  This uses the regclient tag delete method that first pushes a dummy manifest to the tag, which avoids deleting other tags that point to the same manifest.
+- `manifest.get`:
+  Returns the image manifest.
+  The current platform will be resolved, or it may be specified as a second arg.
+- `manifest.getList`:
+  Retrieves a manifest list without resolving the current platform.
+  If the manifest is not a multi-platform manifest list, the single manifest will be returned instead.
+- `manifest.head`:
+  Retrieves the manifest using a head request.
+  This pulls the digest and current rate limit and can be used with the manifest delete and ratelimit functions.
+- `<manifest>:config`:
+  See `image.config`
+- `<manifest>:delete`:
+  Deletes a manifest.
+  Note that a manifest list or manifest head request to retrieve the manifest is recommended, otherwise the registry may delete a single platform's manifest without deleting the entire multi-platform image, leading to errors when attempting to access the remaining manifest.
+  If multiple tags can point to the same manifest, then using `tag.delete` is recommended.
+- `<manifest>:get`:
+  See `image.manifest`.
+  This is useful for pulling a manifest when you've only run a head request.
+- `<manifest>:ratelimit`:
+  Return the ratelimit seen when the manifest was last retrieved.
+  The ratelimit object includes `Set` (boolean indicating if a rate limit was returned with the manifest), `Remain` (requests remaining), `Limit`
   (maximum limit possible).
-- `<manifest>:ratelimitWait <limit> <poll> <timeout>`: see `image.ratelimitWait`
-- `image.config <ref>`: returns the image configuration, see `docker image
-  inspect`.
-- `image.copy <src-ref> <tgt-ref>`: copies an image. This may be retagging
-  within the same repository, copying between repositories, or copying between
-  registries.
-- `image.ratelimitWait <ref> <limit> <poll> <timeout>`: polls a registry for the
-  rate limit remaining to increase at or above the specified limit. By default
-  the polling interval is `5m` and timeout is `6h`.
+- `<manifest>:ratelimitWait <limit> <poll> <timeout>`:
+  See `image.ratelimitWait`
+- `image.config <ref>`:
+  Returns the image configuration, see `docker image inspect`.
+- `image.copy <src-ref> <tgt-ref>`:
+  Copies an image.
+  This may be retagging within the same repository, copying between repositories, or copying between registries.
+- `image.ratelimitWait <ref> <limit> <poll> <timeout>`:
+  Polls a registry for the rate limit remaining to increase at or above the specified limit.
+  By default the polling interval is `5m` and timeout is `6h`.
 
 ## Template Functions
 
-The following functions have been added in addition to the defaults
-available with Go:
+The following functions have been added in addition to the defaults available with Go:
 
-- `default`: provide a default value when input is empty, e.g. `{{ env "VAR" |
-  default "undefined" }}`
-- `env`: expands provided environment variable, e.g. `{{ env "USER" }}`
-- `file`: outputs contents of the file, leading and trailing whitespace is
-  removed
-- `join`: append array entries into a string with a separator
-- `json`: output the variable with json formatting
-- `jsonPretty`: same as json with linefeeds and indentation
-- `lower`: converts a string to lowercase
-- `split`: split a string based on a separator
-- `time`: see Go time package for more details on implemented functions
-  - `time.Now`: returns current time object, e.g. `{{ $t := time.Now }}{{printf
-    "%d%d%d" $t.Year $t.Month $t.Day}}`
-  - `time.Parse`: parses string using layout into time object, e.g. `{{ $t :=
-    time.Parse "1970-12-31" "2020-06-07"}}`
-- `title`: makes the first letter of each word uppercase
-- `upper`: converts a string to uppercase
+- `default`:
+  Provide a default value when input is empty, e.g. `{{ env "VAR" | default "undefined" }}`.
+- `env`:
+  Expands provided environment variable, e.g. `{{ env "USER" }}`.
+- `file`:
+  Outputs contents of the file, leading and trailing whitespace is removed.
+- `join`:
+  Append array entries into a string with a separator.
+- `json`:
+  Output the variable with json formatting.
+- `jsonPretty`:
+  Same as json with linefeeds and indentation.
+- `lower`:
+  Converts a string to lowercase.
+- `printPretty`:
+  Outputs a user readable view of the object when available, otherwise falling back to `jsonPretty` output.
+  This is useful for manifest lists and tag lists.
+- `split`:
+  Split a string based on a separator.
+- `time`:
+  See Go time package for more details on implemented functions:
+  - `time.Now`:
+    Returns current time object, e.g. `{{ $t := time.Now }}{{printf "%d%d%d" $t.Year $t.Month $t.Day}}`.
+  - `time.Parse`:
+    Parses string using layout into time object, e.g. `{{ $t := time.Parse "1970-12-31" "2020-06-07"}}`.
+- `title`:
+  Makes the first letter of each word uppercase.
+- `upper`:
+  Converts a string to uppercase.
 
 ## FAQ
 
