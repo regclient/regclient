@@ -33,12 +33,10 @@ type Config struct {
 // ConfigHost struct contains host specific settings
 type ConfigHost struct {
 	Name       string            `json:"-"`
-	Scheme     string            `json:"scheme,omitempty"` // TODO: remove
 	TLS        regclient.TLSConf `json:"tls,omitempty"`
 	RegCert    string            `json:"regcert,omitempty"`
 	ClientCert string            `json:"clientcert,omitempty"`
 	ClientKey  string            `json:"clientkey,omitempty"`
-	DNS        []string          `json:"dns,omitempty"` // TODO: remove
 	Hostname   string            `json:"hostname,omitempty"`
 	User       string            `json:"user,omitempty"`
 	Pass       string            `json:"pass,omitempty"`
@@ -97,23 +95,14 @@ func ConfigLoadReader(r io.Reader) (*Config, error) {
 		if c.Hosts[h].Name == "" {
 			c.Hosts[h].Name = h
 		}
-		if len(c.Hosts[h].DNS) == 0 {
-			c.Hosts[h].DNS = []string{h}
-		}
 		if c.Hosts[h].Hostname == "" {
 			c.Hosts[h].Hostname = h
-		}
-		if c.Hosts[h].Scheme == "" {
-			c.Hosts[h].Scheme = "https"
 		}
 		if c.Hosts[h].TLS == regclient.TLSUndefined {
 			c.Hosts[h].TLS = regclient.TLSEnabled
 		}
 		if h == regclient.DockerRegistryDNS || h == regclient.DockerRegistry {
 			c.Hosts[h].Name = regclient.DockerRegistry
-			if c.Hosts[h].DNS[0] == h {
-				c.Hosts[h].DNS[0] = regclient.DockerRegistryDNS
-			}
 			if c.Hosts[h].Hostname == h {
 				c.Hosts[h].Hostname = regclient.DockerRegistryDNS
 			}
