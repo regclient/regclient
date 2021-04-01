@@ -24,6 +24,19 @@ sync:
       - "latest"
       - "3"
       - "3.\\d+"
+  - source: debian
+    target: registry:5000/library/debian
+    type: repository
+    tags:
+      allow:
+      - "\\d+"
+    mediaTypes:
+      - "application/vnd.docker.distribution.manifest.v1+json"
+      - "application/vnd.docker.distribution.manifest.v1+prettyjws"
+      - "application/vnd.docker.distribution.manifest.v2+json"
+      - "application/vnd.docker.distribution.manifest.list.v2+json"
+      - "application/vnd.oci.image.manifest.v1+json"
+      - "application/vnd.oci.image.index.v1+json"
   - source: regclient/regctl:latest
     target: registry:5000/regclient/regctl:latest
     type: image
