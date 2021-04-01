@@ -14,7 +14,8 @@ func setupReference(s *Sandbox) {
 		},
 		map[string]map[string]lua.LGFunction{
 			"__index": {
-				"tag": s.referenceGetSetTag,
+				"digest": s.referenceGetSetDigest,
+				"tag":    s.referenceGetSetTag,
 			},
 		},
 	)
@@ -29,7 +30,7 @@ type reference struct {
 func (s *Sandbox) newReference(ls *lua.LState) int {
 	ref := s.checkReference(ls, 1)
 	ud := ls.NewUserData()
-	ud.Value = ref
+	ud.Value = &reference{ref: ref.ref}
 	ls.SetMetatable(ud, ls.GetTypeMetatable(luaReferenceName))
 	ls.Push(ud)
 	return 1
@@ -79,6 +80,16 @@ func isReference(ls *lua.LState, i int) bool {
 func (s *Sandbox) referenceString(ls *lua.LState) int {
 	r := s.checkReference(ls, 1)
 	ls.Push(lua.LString(r.ref.CommonName()))
+	return 1
+}
+
+func (s *Sandbox) referenceGetSetDigest(ls *lua.LState) int {
+	r := s.checkReference(ls, 1)
+	if ls.GetTop() == 2 {
+		r.ref.Digest = ls.CheckString(2)
+		return 0
+	}
+	ls.Push(lua.LString(r.ref.Digest))
 	return 1
 }
 
