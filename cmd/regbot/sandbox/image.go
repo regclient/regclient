@@ -16,7 +16,7 @@ import (
 type config struct {
 	m    regclient.Manifest
 	ref  regclient.Ref
-	conf *ociv1.Image
+	conf regclient.BlobOCIConfig
 }
 
 type manifest struct {
@@ -159,8 +159,7 @@ func (s *Sandbox) configGet(ls *lua.LState) int {
 	if err != nil {
 		ls.RaiseError("Failed retrieving \"%s\" config: %v", m.ref.CommonName(), err)
 	}
-	conf := confBlob.GetConfig()
-	ud, err := wrapUserData(ls, &config{conf: &conf, m: m.m, ref: m.ref}, confBlob, luaImageConfigName)
+	ud, err := wrapUserData(ls, &config{conf: confBlob, m: m.m, ref: m.ref}, confBlob.GetConfig(), luaImageConfigName)
 	if err != nil {
 		ls.RaiseError("Failed packaging \"%s\" config: %v", m.ref.CommonName(), err)
 	}
