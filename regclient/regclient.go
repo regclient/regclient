@@ -1,7 +1,6 @@
 package regclient
 
 import (
-	"context"
 	"io/ioutil"
 	"path/filepath"
 	"strings"
@@ -11,15 +10,12 @@ import (
 	_ "crypto/sha256"
 	_ "crypto/sha512"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
 	"os"
 
 	dockercfg "github.com/docker/cli/cli/config"
 	dockerManifestList "github.com/docker/distribution/manifest/manifestlist"
 	dockerSchema2 "github.com/docker/distribution/manifest/schema2"
-	"github.com/docker/distribution/reference"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/pkg/auth"
 	"github.com/regclient/regclient/pkg/retryable"
@@ -27,6 +23,10 @@ import (
 )
 
 const (
+	// DefaultRetryLimit sets how many retry attempts are made for non-fatal errors
+	DefaultRetryLimit = 5
+	// DefaultUserAgent sets the header on http requests
+	DefaultUserAgent = "regclient/regclient"
 	// DockerCertDir default location for docker certs
 	DockerCertDir = "/etc/docker/certs.d"
 	// DockerRegistry is the name resolved in docker images on Hub
@@ -35,9 +35,10 @@ const (
 	DockerRegistryAuth = "https://index.docker.io/v1/"
 	// DockerRegistryDNS is the host to connect to for Hub
 	DockerRegistryDNS = "registry-1.docker.io"
-)
-
-var (
+	// MediaTypeDocker1Manifest deprecated media type for docker schema1 manifests
+	MediaTypeDocker1Manifest = "application/vnd.docker.distribution.manifest.v1+json"
+	// MediaTypeDocker1ManifestSigned is a deprecated schema1 manifest with jws signing
+	MediaTypeDocker1ManifestSigned = "application/vnd.docker.distribution.manifest.v1+prettyjws"
 	// MediaTypeDocker2Manifest is the media type when pulling manifests from a v2 registry
 	MediaTypeDocker2Manifest = dockerSchema2.MediaTypeManifest
 	// MediaTypeDocker2ManifestList is the media type when pulling a manifest list from a v2 registry
@@ -50,43 +51,20 @@ var (
 	MediaTypeOCI1ManifestList = ociv1.MediaTypeImageIndex
 	// MediaTypeOCI1ImageConfig OCI v1 configuration json object media type
 	MediaTypeOCI1ImageConfig = ociv1.MediaTypeImageConfig
-	// UserAgent sets the header on http requests
-	UserAgent = "regclient/regclient"
+)
+
+var (
 	// VCSRef is injected from a build flag, used to version the UserAgent header
 	VCSRef = "unknown"
 )
 
 // RegClient provides an interfaces to working with registries
-// TODO: split up interface into multiple interfaces that are merged in RegClient
 type RegClient interface {
-	Config() Config
-	BlobGet(ctx context.Context, ref Ref, d string, accepts []string) (io.ReadCloser, *http.Response, error)
-	ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) error
-	ImageExport(ctx context.Context, ref Ref, outStream io.Writer) error
-	ImageGetConfig(ctx context.Context, ref Ref, d string) (ociv1.Image, error)
-	ManifestDelete(ctx context.Context, ref Ref) error
-	ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
-	ManifestHead(ctx context.Context, ref Ref) (Manifest, error)
-	ManifestPut(ctx context.Context, ref Ref, m Manifest) error
-	RepoList(ctx context.Context, hostname string) (RepositoryList, error)
-	RepoListWithOpts(ctx context.Context, hostname string, opts RepoOpts) (RepositoryList, error)
-	TagDelete(ctx context.Context, ref Ref) error
-	TagList(ctx context.Context, ref Ref) (TagList, error)
-	TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts) (TagList, error)
-}
-
-// TagList comes from github.com/opencontainers/distribution-spec
-// TODO: switch to their implementation when it becomes stable
-// TODO: rename to avoid confusion with (*regClient).TagList
-type TagList struct {
-	Name string   `json:"name"`
-	Tags []string `json:"tags"`
-}
-
-// RepositoryList comes from github.com/opencontainers/distribution-spec,
-// switch to their implementation when it becomes stable
-type RepositoryList struct {
-	Repositories []string `json:"repositories"`
+	RepoClient
+	TagClient
+	ManifestClient
+	ImageClient
+	BlobClient
 }
 
 // RateLimit is returned from some http requests
@@ -96,39 +74,18 @@ type RateLimit struct {
 	Policies             []string
 }
 
-// Ref reference to a registry/repository
-// If the tag or digest is available, it's also included in the reference.
-// Reference itself is the unparsed string.
-// While this is currently a struct, that may change in the future and access
-// to contents should not be assumed/used.
-type Ref struct {
-	Reference, Registry, Repository, Tag, Digest string
-}
-
 type regClient struct {
-	// hosts      map[string]*regHost
-	// auth       AuthClient
-	config     *Config
+	certPaths  []string
+	hosts      map[string]*regClientHost
 	log        *logrus.Logger
 	retryLimit int
-	transports map[string]*http.Transport
-	retryables map[string]retryable.Retryable
 	mu         sync.Mutex
-	useragent  string
+	userAgent  string
 }
 
-type regHost struct {
-	scheme    string
-	tls       TLSConf
-	dnsNames  []string
-	transport *http.Transport
-}
-
-// used by image import/export to match docker tar expected format
-type dockerTarManifest struct {
-	Config   string
-	RepoTags []string
-	Layers   []string
+type regClientHost struct {
+	config    *ConfigHost
+	retryable retryable.Retryable
 }
 
 // Opt functions are used to configure NewRegClient
@@ -136,47 +93,24 @@ type Opt func(*regClient)
 
 // NewRegClient returns a registry client
 func NewRegClient(opts ...Opt) RegClient {
-	var rc regClient
-
-	rc.retryLimit = 5
-	rc.retryables = map[string]retryable.Retryable{}
-	rc.transports = map[string]*http.Transport{}
-	rc.useragent = UserAgent + " (" + VCSRef + ")"
-
-	// configure default logging
-	rc.log = &logrus.Logger{
-		Out:       os.Stderr,
-		Formatter: new(logrus.TextFormatter),
-		Hooks:     make(logrus.LevelHooks),
-		Level:     logrus.WarnLevel,
-	}
-
-	for _, opt := range opts {
-		opt(&rc)
-	}
-
-	if rc.config == nil {
-		rc.config = ConfigNew()
+	var rc = regClient{
+		certPaths:  []string{},
+		hosts:      map[string]*regClientHost{},
+		retryLimit: DefaultRetryLimit,
+		userAgent:  DefaultUserAgent,
+		// logging is disabled by default
+		log: &logrus.Logger{Out: ioutil.Discard},
 	}
 
 	// inject Docker Hub settings
-	if _, ok := rc.config.Hosts[DockerRegistry]; !ok {
-		rc.config.Hosts[DockerRegistry] = &ConfigHost{}
-	}
-	rc.config.Hosts[DockerRegistry].Name = DockerRegistry
-	rc.config.Hosts[DockerRegistry].Scheme = "https"
-	rc.config.Hosts[DockerRegistry].TLS = TLSEnabled
-	rc.config.Hosts[DockerRegistry].DNS = []string{DockerRegistryDNS}
+	rc.hostSet(ConfigHost{
+		Name:     DockerRegistry,
+		TLS:      TLSEnabled,
+		Hostname: DockerRegistryDNS,
+	})
 
-	// load docker creds/certs if configured
-	if rc.config.IncDockerCred != nil && *rc.config.IncDockerCred == true {
-		if err := rc.loadDockerCreds(); err != nil {
-			rc.log.WithFields(logrus.Fields{
-				"err": err,
-			}).Warn("Failed to load docker creds")
-		} else {
-			rc.log.Debug("Docker creds loaded")
-		}
+	for _, opt := range opts {
+		opt(&rc)
 	}
 
 	rc.log.Debug("regclient initialized")
@@ -184,55 +118,18 @@ func NewRegClient(opts ...Opt) RegClient {
 	return &rc
 }
 
-// WithConfigDefault default config file
-func WithConfigDefault() Opt {
+// WithCertDir adds a path of certificates to trust similar to Docker's /etc/docker/certs.d
+func WithCertDir(path string) Opt {
 	return func(rc *regClient) {
-		config, err := ConfigLoadDefault()
-		if err != nil {
-			rc.log.WithFields(logrus.Fields{
-				"err": err,
-			}).Warn("Failed to load default config")
-		} else {
-			if rc.config != nil {
-				rc.log.WithFields(logrus.Fields{
-					"oldConfig": rc.config,
-					"newConfig": config,
-				}).Warn("Overwriting existing config")
-			} else {
-				rc.log.WithFields(logrus.Fields{
-					"config": config,
-				}).Debug("Loaded default config")
-			}
-			rc.config = config
-		}
-	}
-}
-
-// WithConfigFile parses a differently named config file
-func WithConfigFile(filename string) Opt {
-	return func(rc *regClient) {
-		config, err := ConfigLoadFile(filename)
-		if err != nil {
-			rc.log.WithFields(logrus.Fields{
-				"err":  err,
-				"file": filename,
-			}).Warn("Failed to load config")
-		} else {
-			rc.config = config
-		}
+		rc.certPaths = append(rc.certPaths, path)
+		return
 	}
 }
 
 // WithDockerCerts adds certificates trusted by docker in /etc/docker/certs.d
 func WithDockerCerts() Opt {
 	return func(rc *regClient) {
-		if rc.config == nil {
-			rc.config = ConfigNew()
-		}
-		if rc.config.IncDockerCert == nil {
-			enabled := true
-			rc.config.IncDockerCert = &enabled
-		}
+		rc.certPaths = append(rc.certPaths, DockerCertDir)
 		return
 	}
 }
@@ -241,12 +138,11 @@ func WithDockerCerts() Opt {
 // This changes the default value from the config file, and should be added after the config file is loaded
 func WithDockerCreds() Opt {
 	return func(rc *regClient) {
-		if rc.config == nil {
-			rc.config = ConfigNew()
-		}
-		if rc.config.IncDockerCred == nil {
-			enabled := true
-			rc.config.IncDockerCred = &enabled
+		err := rc.loadDockerCreds()
+		if err != nil {
+			rc.log.WithFields(logrus.Fields{
+				"err": err,
+			}).Warn("Failed to load docker creds")
 		}
 		return
 	}
@@ -258,46 +154,33 @@ func WithConfigHosts(configHosts []ConfigHost) Opt {
 		if configHosts == nil || len(configHosts) == 0 {
 			return
 		}
-		if rc.config == nil {
-			rc.config = ConfigNew()
-		}
-		for i := range configHosts {
-			configHost := configHosts[i]
+		for _, configHost := range configHosts {
 			if configHost.Name == "" {
 				continue
 			}
-			if configHost.Name == DockerRegistry || configHost.Name == DockerRegistryAuth {
-				configHost.Name = DockerRegistryDNS
-			}
-			// merge updated host with original values
-			if orig, ok := rc.config.Hosts[configHost.Name]; ok {
-				if configHost.User == "" || configHost.Pass == "" {
-					configHost.User = orig.User
-					configHost.Pass = orig.Pass
-				}
-				if configHost.RegCert == "" {
-					configHost.RegCert = orig.RegCert
-				}
-				if configHost.Scheme == "" {
-					configHost.Scheme = orig.Scheme
-				}
-				if configHost.TLS == TLSUndefined {
-					configHost.TLS = orig.TLS
-				}
-				if len(configHost.DNS) == 0 {
-					configHost.DNS = orig.DNS
+			if configHost.Name == DockerRegistry || configHost.Name == DockerRegistryDNS || configHost.Name == DockerRegistryAuth {
+				configHost.Name = DockerRegistry
+				if configHost.Hostname == "" || configHost.Hostname == DockerRegistry || configHost.Hostname == DockerRegistryAuth {
+					configHost.Hostname = DockerRegistryDNS
 				}
 			}
-			if configHost.Scheme == "" {
-				configHost.Scheme = "https"
+			rc.log.WithFields(logrus.Fields{
+				"name":       configHost.Name,
+				"user":       configHost.User,
+				"hostname":   configHost.Hostname,
+				"tls":        configHost.TLS,
+				"pathPrefix": configHost.PathPrefix,
+				"mirrors":    configHost.Mirrors,
+				"api":        configHost.API,
+			}).Debug("Loading host config")
+			err := rc.hostSet(configHost)
+			if err != nil {
+				rc.log.WithFields(logrus.Fields{
+					"host":  configHost.Name,
+					"user":  configHost.User,
+					"error": err,
+				}).Warn("Failed to update host config")
 			}
-			if configHost.TLS == TLSUndefined {
-				configHost.TLS = TLSEnabled
-			}
-			if len(configHost.DNS) == 0 {
-				configHost.DNS = []string{configHost.Name}
-			}
-			rc.config.Hosts[configHost.Name] = &configHost
 		}
 		return
 	}
@@ -315,129 +198,103 @@ func WithLog(log *logrus.Logger) Opt {
 	}
 }
 
-func (rc *regClient) loadDockerCreds() error {
-	if rc.config == nil {
-		rc.config = ConfigNew()
+// WithRetryLimit specifies the number of retries for non-fatal errors
+func WithRetryLimit(retryLimit int) Opt {
+	return func(rc *regClient) {
+		rc.retryLimit = retryLimit
 	}
+}
+
+// WithUserAgent specifies the User-Agent http header
+func WithUserAgent(ua string) Opt {
+	return func(rc *regClient) {
+		rc.userAgent = ua
+	}
+}
+
+func (rc *regClient) loadDockerCreds() error {
 	conffile := dockercfg.LoadDefaultConfigFile(os.Stderr)
 	creds, err := conffile.GetAllCredentials()
 	if err != nil {
 		return fmt.Errorf("Failed to load docker creds %s", err)
 	}
 	for _, cred := range creds {
-		rc.log.WithFields(logrus.Fields{
-			"host": cred.ServerAddress,
-			"user": cred.Username,
-		}).Debug("Loading docker cred")
 		if cred.ServerAddress == "" || cred.Username == "" || cred.Password == "" {
 			continue
 		}
 		// Docker Hub is a special case
+		hostname := cred.ServerAddress
 		if cred.ServerAddress == DockerRegistryAuth {
-			cred.ServerAddress = DockerRegistryDNS
+			cred.ServerAddress = DockerRegistry
+			hostname = DockerRegistryDNS
 		}
-		if _, ok := rc.config.Hosts[cred.ServerAddress]; !ok {
-			h := ConfigHost{
-				Name:   cred.ServerAddress,
-				DNS:    []string{cred.ServerAddress},
-				Scheme: "https",
-				TLS:    TLSEnabled,
-				User:   cred.Username,
-				Pass:   cred.Password,
-			}
-			rc.config.Hosts[cred.ServerAddress] = &h
-		} else if rc.config.Hosts[cred.ServerAddress].User != "" || rc.config.Hosts[cred.ServerAddress].Pass != "" {
-			if rc.config.Hosts[cred.ServerAddress].User != cred.Username || rc.config.Hosts[cred.ServerAddress].Pass != cred.Password {
-				rc.log.WithFields(logrus.Fields{
-					"registry":    cred.ServerAddress,
-					"docker-user": cred.Username,
-					"config-user": rc.config.Hosts[cred.ServerAddress].User,
-					"pass-same":   (cred.Password == rc.config.Hosts[cred.ServerAddress].Pass),
-				}).Warn("Docker credentials mismatch")
-			}
-		} else {
-			rc.config.Hosts[cred.ServerAddress].User = cred.Username
-			rc.config.Hosts[cred.ServerAddress].Pass = cred.Password
+		rc.log.WithFields(logrus.Fields{
+			"name": cred.ServerAddress,
+			"host": hostname,
+			"user": cred.Username,
+		}).Debug("Loading docker cred")
+		err = rc.hostSet(ConfigHost{
+			Name:     cred.ServerAddress,
+			Hostname: hostname,
+			User:     cred.Username,
+			Pass:     cred.Password,
+		})
+		if err != nil {
+			// treat each of these as non-fatal
+			rc.log.WithFields(logrus.Fields{
+				"registry": cred.ServerAddress,
+				"user":     cred.Username,
+				"error":    err,
+			}).Warn("Failed to use docker credential")
 		}
 	}
 	return nil
 }
 
-// NewRef returns a repository reference including a registry, repository (path), digest, and tag
-func NewRef(ref string) (Ref, error) {
-	parsed, err := reference.ParseNormalizedNamed(ref)
-
-	var ret Ref
-	ret.Reference = ref
-
-	if err != nil {
-		return ret, err
-	}
-
-	ret.Registry = reference.Domain(parsed)
-	ret.Repository = reference.Path(parsed)
-
-	if canonical, ok := parsed.(reference.Canonical); ok {
-		ret.Digest = canonical.Digest().String()
-	}
-
-	if tagged, ok := parsed.(reference.Tagged); ok {
-		ret.Tag = tagged.Tag()
-	}
-
-	if ret.Tag == "" && ret.Digest == "" {
-		ret.Tag = "latest"
-	}
-
-	return ret, nil
-}
-
-// CommonName outputs a parsable name from a reference
-func (r Ref) CommonName() string {
-	cn := ""
-	if r.Registry != "" {
-		cn = r.Registry + "/"
-	}
-	if r.Repository == "" {
-		return ""
-	}
-	cn = cn + r.Repository
-	if r.Tag != "" {
-		cn = cn + ":" + r.Tag
-	}
-	if r.Digest != "" {
-		cn = cn + "@" + r.Digest
-	}
-	return cn
-}
-
-func (rc *regClient) Config() Config {
-	return *rc.config
-}
-
-func (rc *regClient) getHost(hostname string) *ConfigHost {
+func (rc *regClient) hostGet(hostname string) *ConfigHost {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
-	host, ok := rc.config.Hosts[hostname]
-	if !ok {
-		host = &ConfigHost{Scheme: "https", TLS: TLSEnabled, DNS: []string{hostname}}
-		rc.config.Hosts[hostname] = host
+	if _, ok := rc.hosts[hostname]; !ok {
+		rc.hosts[hostname] = &regClientHost{}
 	}
-	return host
+	if rc.hosts[hostname].config == nil {
+		rc.hosts[hostname].config = ConfigHostNewName(hostname)
+	}
+	return rc.hosts[hostname].config
+}
+
+func (rc *regClient) hostSet(newHost ConfigHost) error {
+	name := newHost.Name
+	if _, ok := rc.hosts[name]; !ok {
+		// merge newHost with default host settings
+		mergedHost := rc.mergeConfigHost(*ConfigHostNewName(name), newHost, false)
+		rc.hosts[name] = &regClientHost{config: &mergedHost}
+	} else {
+		mergedHost := rc.mergeConfigHost(*rc.hosts[name].config, newHost, true)
+		rc.hosts[name].config = &mergedHost
+	}
+	return nil
 }
 
 func (rc *regClient) getRetryable(host *ConfigHost) retryable.Retryable {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
-	if _, ok := rc.retryables[host.Name]; !ok {
+	if _, ok := rc.hosts[host.Name]; !ok {
+		rc.hosts[host.Name] = &regClientHost{config: ConfigHostNewName(host.Name)}
+	}
+	if rc.hosts[host.Name].retryable == nil {
 		c := &http.Client{}
-		a := auth.NewAuth(auth.WithLog(rc.log), auth.WithHTTPClient(c), auth.WithCreds(rc.authCreds))
+		a := auth.NewAuth(
+			auth.WithLog(rc.log),
+			auth.WithHTTPClient(c),
+			auth.WithCreds(host.authCreds()),
+			auth.WithClientID(rc.userAgent),
+		)
 		rOpts := []retryable.Opts{
 			retryable.WithLog(rc.log),
 			retryable.WithHTTPClient(c),
 			retryable.WithAuth(a),
-			retryable.WithMirrors(rc.mirrorFunc(host)),
-			retryable.WithUserAgent(rc.useragent),
+			retryable.WithUserAgent(rc.userAgent),
 		}
 		if certs := rc.getCerts(host); len(certs) > 0 {
 			rOpts = append(rOpts, retryable.WithCertFiles(certs))
@@ -446,47 +303,28 @@ func (rc *regClient) getRetryable(host *ConfigHost) retryable.Retryable {
 			rOpts = append(rOpts, retryable.WithCerts([][]byte{[]byte(host.RegCert)}))
 		}
 		r := retryable.NewRetryable(rOpts...)
-		rc.retryables[host.Name] = r
+		rc.hosts[host.Name].retryable = r
 	}
-	return rc.retryables[host.Name]
+	return rc.hosts[host.Name].retryable
 }
 
-func (rc *regClient) authCreds(host string) (string, string) {
-	if h, ok := rc.config.Hosts[host]; ok {
-		rc.log.WithFields(logrus.Fields{
-			"host": host,
-			"user": h.User,
-		}).Debug("Retrieved cred")
-		return h.User, h.Pass
+func (host *ConfigHost) authCreds() func(h string) (string, string) {
+	return func(h string) (string, string) {
+		return host.User, host.Pass
 	}
-	// default credentials are stored under a blank hostname
-	if h, ok := rc.config.Hosts[""]; ok {
-		return h.User, h.Pass
-	}
-	// anonymous request
-	rc.log.WithFields(logrus.Fields{
-		"host": host,
-	}).Debug("No credentials found, defaulting to anonymous")
-	return "", ""
 }
 
 func (rc *regClient) getCerts(host *ConfigHost) []string {
 	var certs []string
-	if rc.config.IncDockerCert == nil || *rc.config.IncDockerCert == false {
-		return certs
-	}
-	hosts := []string{host.Name}
-	if host.DNS != nil {
-		hosts = host.DNS
-	}
-	for _, h := range hosts {
-		dir := filepath.Join(DockerCertDir, h)
-		files, err := ioutil.ReadDir(dir)
+
+	for _, certPath := range rc.certPaths {
+		hostDir := filepath.Join(certPath, host.Hostname)
+		files, err := ioutil.ReadDir(hostDir)
 		if err != nil {
 			if !os.IsNotExist(err) {
 				rc.log.WithFields(logrus.Fields{
 					"err": err,
-					"dir": dir,
+					"dir": hostDir,
 				}).Warn("Failed to open docker cert dir")
 			}
 			continue
@@ -496,21 +334,9 @@ func (rc *regClient) getCerts(host *ConfigHost) []string {
 				continue
 			}
 			if strings.HasSuffix(f.Name(), ".crt") {
-				certs = append(certs, filepath.Join(dir, f.Name()))
+				certs = append(certs, filepath.Join(hostDir, f.Name()))
 			}
 		}
 	}
 	return certs
-}
-
-func (rc *regClient) mirrorFunc(host *ConfigHost) func(url.URL) ([]url.URL, error) {
-	return func(u url.URL) ([]url.URL, error) {
-		var ul []url.URL
-		for _, m := range host.DNS {
-			mu := u
-			mu.Host = m
-			ul = append(ul, mu)
-		}
-		return ul, nil
-	}
 }

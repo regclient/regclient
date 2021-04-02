@@ -91,7 +91,7 @@ jobs:
         cache-from: type=local,src=/tmp/.buildx-regctl-cache
         cache-to: type=local,dest=/tmp/.buildx-regctl-cache
         build-args: |
-          LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }}
+          LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |
           org.opencontainers.image.created=${{ steps.prep.outputs.created }}
           org.opencontainers.image.source=${{ github.repositoryUrl }}
@@ -110,7 +110,7 @@ jobs:
         cache-from: type=local,src=/tmp/.buildx-regctl-cache
         cache-to: type=local,dest=/tmp/.buildx-regctl-cache
         build-args: |
-          LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }}
+          LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |
           org.opencontainers.image.created=${{ steps.prep.outputs.created }}
           org.opencontainers.image.source=${{ github.repositoryUrl }}
@@ -129,7 +129,7 @@ jobs:
         cache-from: type=local,src=/tmp/.buildx-regsync-cache
         cache-to: type=local,dest=/tmp/.buildx-regsync-cache
         build-args: |
-          LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }}
+          LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |
           org.opencontainers.image.created=${{ steps.prep.outputs.created }}
           org.opencontainers.image.source=${{ github.repositoryUrl }}
@@ -148,7 +148,7 @@ jobs:
         cache-from: type=local,src=/tmp/.buildx-regsync-cache
         cache-to: type=local,dest=/tmp/.buildx-regsync-cache
         build-args: |
-          LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }}
+          LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |
           org.opencontainers.image.created=${{ steps.prep.outputs.created }}
           org.opencontainers.image.source=${{ github.repositoryUrl }}
@@ -167,7 +167,7 @@ jobs:
         cache-from: type=local,src=/tmp/.buildx-regbot-cache
         cache-to: type=local,dest=/tmp/.buildx-regbot-cache
         build-args: |
-          LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }}
+          LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |
           org.opencontainers.image.created=${{ steps.prep.outputs.created }}
           org.opencontainers.image.source=${{ github.repositoryUrl }}
@@ -186,7 +186,7 @@ jobs:
         cache-from: type=local,src=/tmp/.buildx-regbot-cache
         cache-to: type=local,dest=/tmp/.buildx-regbot-cache
         build-args: |
-          LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }}
+          LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |
           org.opencontainers.image.created=${{ steps.prep.outputs.created }}
           org.opencontainers.image.source=${{ github.repositoryUrl }}

@@ -2,23 +2,10 @@ package regclient
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"io/ioutil"
-	"os"
-	"os/user"
-	"path/filepath"
 	"strings"
-)
 
-var (
-	// ConfigFilename is the default filename to read/write configuration
-	ConfigFilename = "config.json"
-	// ConfigDir is the default directory within the user's home directory to read/write configuration
-	ConfigDir = ".regclient"
-	// ConfigEnv is the environment variable to override the config filename
-	ConfigEnv = "REGCLIENT_CONFIG"
+	"github.com/sirupsen/logrus"
 )
 
 // TLSConf specifies whether TLS is enabled for a host
@@ -86,189 +73,181 @@ func (t *TLSConf) UnmarshalText(b []byte) error {
 	return nil
 }
 
-// Config struct contains contents loaded from / saved to a config file
-type Config struct {
-	Filename      string                 `json:"-"`                 // filename that was loaded
-	Version       int                    `json:"version,omitempty"` // version the file in case the config file syntax changes in the future
-	Hosts         map[string]*ConfigHost `json:"hosts"`
-	IncDockerCred *bool                  `json:"incDockerCred,omitempty"`
-	IncDockerCert *bool                  `json:"incDockerCert,omitempty"`
-}
-
 // ConfigHost struct contains host specific settings
 type ConfigHost struct {
 	Name       string   `json:"-"`
-	Scheme     string   `json:"scheme,omitempty"`
+	Scheme     string   `json:"scheme,omitempty"` // TODO: deprecate, delete
 	TLS        TLSConf  `json:"tls,omitempty"`
 	RegCert    string   `json:"regcert,omitempty"`
 	ClientCert string   `json:"clientcert,omitempty"`
 	ClientKey  string   `json:"clientkey,omitempty"`
-	DNS        []string `json:"dns,omitempty"`
+	DNS        []string `json:"dns,omitempty"`      // TODO: remove slice, single string, or remove entirely?
+	Hostname   string   `json:"hostname,omitempty"` // replaces DNS array with single string
 	User       string   `json:"user,omitempty"`
 	Pass       string   `json:"pass,omitempty"`
-}
-
-// getConfigFilename returns the filename based on environment variables and defaults
-func getConfigFilename() string {
-	cf := os.Getenv(ConfigEnv)
-	if cf == "" {
-		return filepath.Join(getHomeDir(), ConfigDir, ConfigFilename)
-	}
-	return cf
-}
-
-func getHomeDir() string {
-	h := os.Getenv("HOME")
-	if h == "" {
-		if u, err := user.Current(); err == nil {
-			return u.HomeDir
-		}
-	}
-	return h
-}
-
-// ConfigNew creates an empty configuration
-func ConfigNew() *Config {
-	c := Config{
-		Hosts: map[string]*ConfigHost{},
-	}
-	return &c
+	PathPrefix string   `json:"pathPrefix,omitempty"` // used for mirrors defined within a repository namespace
+	Mirrors    []string `json:"mirrors,omitempty"`    // list of other ConfigHost Names to use as mirrors
+	Priority   uint     `json:"priority,omitempty"`   // priority when sorting mirrors, higher priority attempted first
+	API        string   `json:"api,omitempty"`        // registry API to use
 }
 
 // ConfigHostNew creates a default ConfigHost entry
 func ConfigHostNew() *ConfigHost {
 	h := ConfigHost{
-		Scheme: "https",
-		TLS:    TLSEnabled,
+		TLS: TLSEnabled,
 	}
 	return &h
 }
 
-// ConfigLoadReader loads the config from an io reader
-func ConfigLoadReader(r io.Reader) (*Config, error) {
-	c := ConfigNew()
-	if err := json.NewDecoder(r).Decode(c); err != nil && !errors.Is(err, io.EOF) {
-		return nil, err
+// ConfigHostNewName creates a default ConfigHost with a hostname
+func ConfigHostNewName(host string) *ConfigHost {
+	h := ConfigHost{
+		Name:     host,
+		TLS:      TLSEnabled,
+		Hostname: host,
 	}
-	// verify loaded version is not higher than supported version
-	if c.Version > 1 {
-		return c, ErrUnsupportedConfigVersion
+	if host == DockerRegistry || host == DockerRegistryDNS || host == DockerRegistryAuth {
+		h.Name = DockerRegistry
+		h.Hostname = DockerRegistryDNS
 	}
-	for h := range c.Hosts {
-		c.Hosts[h].Name = h
-		if c.Hosts[h].DNS == nil {
-			c.Hosts[h].DNS = []string{h}
-		}
-		if c.Hosts[h].Scheme == "" {
-			c.Hosts[h].Scheme = "https"
-		}
-		if c.Hosts[h].TLS == TLSUndefined {
-			c.Hosts[h].TLS = TLSEnabled
-		}
-	}
-	return c, nil
+	return &h
 }
 
-// ConfigLoadFile loads the config from a specified filename
-func ConfigLoadFile(filename string) (*Config, error) {
-	_, err := os.Stat(filename)
-	if err == nil {
-		file, err := os.Open(filename)
-		if err != nil {
-			return nil, err
+func (rc *regClient) mergeConfigHost(curHost, newHost ConfigHost, warn bool) ConfigHost {
+	name := newHost.Name
+
+	// merge the existing and new config host
+	if newHost.User != "" {
+		if warn && curHost.User != "" && curHost.User != newHost.User {
+			rc.log.WithFields(logrus.Fields{
+				"orig": curHost.User,
+				"new":  newHost.User,
+				"host": name,
+			}).Warn("Changing login user for registry")
 		}
-		defer file.Close()
-		c, err := ConfigLoadReader(file)
-		if err != nil {
-			return nil, err
-		}
-		c.Filename = filename
-		return c, nil
+		curHost.User = newHost.User
 	}
-	return nil, err
+
+	if newHost.Pass != "" {
+		if warn && curHost.Pass != "" && curHost.Pass != newHost.Pass {
+			rc.log.WithFields(logrus.Fields{
+				"host": name,
+			}).Warn("Changing login password for registry")
+		}
+		curHost.Pass = newHost.Pass
+	}
+
+	if newHost.TLS != TLSUndefined {
+		if warn && curHost.TLS != TLSUndefined && curHost.TLS != newHost.TLS {
+			tlsOrig, _ := curHost.TLS.MarshalText()
+			tlsNew, _ := newHost.TLS.MarshalText()
+			rc.log.WithFields(logrus.Fields{
+				"orig": string(tlsOrig),
+				"new":  string(tlsNew),
+				"host": name,
+			}).Warn("Changing TLS settings for registry")
+		}
+		curHost.TLS = newHost.TLS
+	}
+
+	if newHost.RegCert != "" {
+		if warn && curHost.RegCert != "" && curHost.RegCert != newHost.RegCert {
+			rc.log.WithFields(logrus.Fields{
+				"orig": curHost.RegCert,
+				"new":  newHost.RegCert,
+				"host": name,
+			}).Warn("Changing certificate settings for registry")
+		}
+		curHost.RegCert = newHost.RegCert
+	}
+
+	if newHost.ClientCert != "" {
+		if warn && curHost.ClientCert != "" && curHost.ClientCert != newHost.ClientCert {
+			rc.log.WithFields(logrus.Fields{
+				"orig": curHost.ClientCert,
+				"new":  newHost.ClientCert,
+				"host": name,
+			}).Warn("Changing client certificate settings for registry")
+		}
+		curHost.ClientCert = newHost.ClientCert
+	}
+
+	if newHost.ClientKey != "" {
+		if warn && curHost.ClientKey != "" && curHost.ClientKey != newHost.ClientKey {
+			rc.log.WithFields(logrus.Fields{
+				"host": name,
+			}).Warn("Changing client certificate key settings for registry")
+		}
+		curHost.ClientKey = newHost.ClientKey
+	}
+
+	if newHost.Hostname != "" {
+		if warn && curHost.Hostname != "" && curHost.Hostname != newHost.Hostname {
+			rc.log.WithFields(logrus.Fields{
+				"orig": curHost.Hostname,
+				"new":  newHost.Hostname,
+				"host": name,
+			}).Warn("Changing hostname settings for registry")
+		}
+		curHost.Hostname = newHost.Hostname
+	}
+
+	if newHost.PathPrefix != "" {
+		newHost.PathPrefix = strings.Trim(newHost.PathPrefix, "/") // leading and trailing / are not needed
+		if warn && curHost.PathPrefix != "" && curHost.PathPrefix != newHost.PathPrefix {
+			rc.log.WithFields(logrus.Fields{
+				"orig": curHost.PathPrefix,
+				"new":  newHost.PathPrefix,
+				"host": name,
+			}).Warn("Changing path prefix settings for registry")
+		}
+		curHost.PathPrefix = newHost.PathPrefix
+	}
+
+	if len(newHost.Mirrors) > 0 {
+		if warn && len(curHost.Mirrors) > 0 && !stringSliceEq(curHost.Mirrors, newHost.Mirrors) {
+			rc.log.WithFields(logrus.Fields{
+				"orig": curHost.Mirrors,
+				"new":  newHost.Mirrors,
+				"host": name,
+			}).Warn("Changing mirror settings for registry")
+		}
+		curHost.Mirrors = newHost.Mirrors
+	}
+
+	if newHost.Priority != 0 {
+		if warn && curHost.Priority != 0 && curHost.Priority != newHost.Priority {
+			rc.log.WithFields(logrus.Fields{
+				"orig": curHost.Priority,
+				"new":  newHost.Priority,
+				"host": name,
+			}).Warn("Changing priority settings for registry")
+		}
+		curHost.Priority = newHost.Priority
+	}
+
+	if newHost.API != "" {
+		if warn && curHost.API != "" && curHost.API != newHost.API {
+			rc.log.WithFields(logrus.Fields{
+				"orig": curHost.API,
+				"new":  newHost.API,
+				"host": name,
+			}).Warn("Changing API settings for registry")
+		}
+		curHost.API = newHost.API
+	}
+
+	return curHost
 }
 
-// ConfigLoadDefault loads the config from the (default) filename
-func ConfigLoadDefault() (*Config, error) {
-	filename := getConfigFilename()
-	c, err := ConfigLoadFile(filename)
-	if err != nil && os.IsNotExist(err) {
-		// do not error on file not found
-		c = ConfigNew()
-		c.Filename = filename
-		return c, nil
+func stringSliceEq(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
 	}
-	return c, err
-}
-
-// ConfigSaveWriter writes formatted json to the writer
-func (c *Config) ConfigSaveWriter(w io.Writer) error {
-	out, err := json.MarshalIndent(c, "", "  ")
-	if err != nil {
-		return err
-	}
-	_, err = w.Write(out)
-	return err
-}
-
-// ConfigSave saves to previously loaded filename
-func (c *Config) ConfigSave() error {
-	if c.Filename == "" {
-		return ErrNotFound
-	}
-
-	// create directory if missing
-	dir := filepath.Dir(c.Filename)
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return err
-	}
-
-	// use a temp file
-	tmp, err := ioutil.TempFile(dir, filepath.Base(c.Filename))
-	if err != nil {
-		return err
-	}
-	defer func() {
-		tmp.Close()
-		os.Remove(tmp.Name())
-	}()
-
-	// write as user formatted json
-	if err := c.ConfigSaveWriter(tmp); err != nil {
-		return err
-	}
-	tmp.Close()
-
-	// follow symlink if it exists
-	filename := c.Filename
-	if link, err := os.Readlink(filename); err == nil {
-		filename = link
-	}
-
-	// default file perms are 0600 owned by current user
-	mode := os.FileMode(0600)
-	uid := os.Getuid()
-	gid := os.Getgid()
-	// adjust defaults based on existing file if available
-	stat, err := os.Stat(filename)
-	if err == nil {
-		// adjust mode to existing file
-		if stat.Mode().IsRegular() {
-			mode = stat.Mode()
+	for i, v := range a {
+		if v != b[i] {
+			return false
 		}
-		uid, gid, _ = getFileOwner(stat)
-	} else if !os.IsNotExist(err) {
-		return err
 	}
-
-	// update mode and owner of temp file
-	if err := os.Chmod(tmp.Name(), mode); err != nil {
-		return err
-	}
-	if uid > 0 && gid > 0 {
-		_ = os.Chown(tmp.Name(), uid, gid)
-	}
-
-	// move temp file to target filename
-	return os.Rename(tmp.Name(), filename)
+	return true
 }

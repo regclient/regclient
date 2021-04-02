@@ -13,6 +13,12 @@ import (
 
 // delay checking for at least 5 minutes when rate limit is exceeded
 var rateLimitRetryMin time.Duration
+var defaultMediaTypes = []string{
+	regclient.MediaTypeDocker2Manifest,
+	regclient.MediaTypeDocker2ManifestList,
+	regclient.MediaTypeOCI1Manifest,
+	regclient.MediaTypeOCI1ManifestList,
+}
 
 func init() {
 	rateLimitRetryMin, _ = time.ParseDuration("5m")
@@ -20,70 +26,77 @@ func init() {
 
 // Config is parsed configuration file for regsync
 type Config struct {
-	Version  int            `json:"version"`
-	Creds    []ConfigCreds  `json:"creds"`
-	Defaults ConfigDefaults `json:"defaults"`
-	Sync     []ConfigSync   `json:"sync"`
+	Version  int            `yaml:"version" json:"version"`
+	Creds    []ConfigCreds  `yaml:"creds" json:"creds"`
+	Defaults ConfigDefaults `yaml:"defaults" json:"defaults"`
+	Sync     []ConfigSync   `yaml:"sync" json:"sync"`
 }
 
 // ConfigCreds allows the registry login to be passed in the config rather than from Docker
 type ConfigCreds struct {
-	Registry string            `json:"registry"`
-	User     string            `json:"user"`
-	Pass     string            `json:"pass"`
-	TLS      regclient.TLSConf `json:"tls"`
-	Scheme   string            `json:"scheme"`
-	RegCert  string            `json:"regcert"`
+	Registry   string            `yaml:"registry" json:"registry"`
+	Hostname   string            `yaml:"hostname" json:"hostname"`
+	User       string            `yaml:"user" json:"user"`
+	Pass       string            `yaml:"pass" json:"pass"`
+	TLS        regclient.TLSConf `yaml:"tls" json:"tls"`
+	Scheme     string            `yaml:"scheme" json:"scheme"` // TODO: eventually delete
+	RegCert    string            `yaml:"regcert" json:"regcert"`
+	PathPrefix string            `yaml:"pathPrefix" json:"pathPrefix"`
+	Mirrors    []string          `yaml:"mirrors" json:"mirrors"`
+	Priority   uint              `yaml:"priority" json:"priority"`
+	API        string            `yaml:"api" json:"api"`
 }
 
 // ConfigDefaults is uses for general options and defaults for ConfigSync entries
 type ConfigDefaults struct {
-	Backup         string          `json:"backup"`
-	Interval       time.Duration   `json:"interval"`
-	Schedule       string          `json:"schedule"`
-	RateLimit      ConfigRateLimit `json:"ratelimit"`
-	Parallel       int             `json:"parallel"`
-	SkipDockerConf bool            `json:"skipDockerConfig`
-	Hooks          ConfigHooks     `json:"hooks"`
+	Backup         string          `yaml:"backup" json:"backup"`
+	Interval       time.Duration   `yaml:"interval" json:"interval"`
+	Schedule       string          `yaml:"schedule" json:"schedule"`
+	RateLimit      ConfigRateLimit `yaml:"ratelimit" json:"ratelimit"`
+	Parallel       int             `yaml:"parallel" json:"parallel"`
+	MediaTypes     []string        `yaml:"mediaTypes" json:"mediaTypes"`
+	SkipDockerConf bool            `yaml:"skipDockerConfig" json:"skipDockerConfig"`
+	Hooks          ConfigHooks     `yaml:"hooks" json:"hooks"`
 }
 
 // ConfigRateLimit is for rate limit settings
 type ConfigRateLimit struct {
-	Min   int           `json:"min"`
-	Retry time.Duration `json:"retry"`
+	Min   int           `yaml:"min" json:"min"`
+	Retry time.Duration `yaml:"retry" json:"retry"`
 }
 
 // ConfigSync defines a source/target repository to sync
 type ConfigSync struct {
-	Source    string          `json:"source"`
-	Target    string          `json:"target"`
-	Type      string          `json:"type"`
-	Tags      ConfigTags      `json:"tags"`
-	Platform  string          `json:"platform"`
-	Backup    string          `json:"backup"`
-	Interval  time.Duration   `json:"interval"`
-	Schedule  string          `json:"schedule"`
-	RateLimit ConfigRateLimit `json:"ratelimit"`
-	Hooks     ConfigHooks     `json:"hooks"`
+	Source     string          `yaml:"source" json:"source"`
+	Target     string          `yaml:"target" json:"target"`
+	Type       string          `yaml:"type" json:"type"`
+	Tags       ConfigTags      `yaml:"tags" json:"tags"`
+	Platform   string          `yaml:"platform" json:"platform"`
+	Backup     string          `yaml:"backup" json:"backup"`
+	Interval   time.Duration   `yaml:"interval" json:"interval"`
+	Schedule   string          `yaml:"schedule" json:"schedule"`
+	RateLimit  ConfigRateLimit `yaml:"ratelimit" json:"ratelimit"`
+	MediaTypes []string        `yaml:"mediaTypes" json:"mediaTypes"`
+	Hooks      ConfigHooks     `yaml:"hooks" json:"hooks"`
 }
 
 // ConfigTags is an allow and deny list of tag regex strings
 type ConfigTags struct {
-	Allow []string `json:"allow"`
-	Deny  []string `json:"deny"`
+	Allow []string `yaml:"allow" json:"allow"`
+	Deny  []string `yaml:"deny" json:"deny"`
 }
 
 // ConfigHooks for commands that run during the sync
 type ConfigHooks struct {
-	Pre       *ConfigHook `json:"pre"`
-	Post      *ConfigHook `json:"post"`
-	Unchanged *ConfigHook `json:"unchanged"`
+	Pre       *ConfigHook `yaml:"pre" json:"pre"`
+	Post      *ConfigHook `yaml:"post" json:"post"`
+	Unchanged *ConfigHook `yaml:"unchanged" json:"unchanged"`
 }
 
 // ConfigHook identifies the hook type and params
 type ConfigHook struct {
-	Type   string   `json:"type"`
-	Params []string `json:"params"`
+	Type   string   `yaml:"type" json:"type"`
+	Params []string `yaml:"params" json:"params"`
 }
 
 // ConfigNew creates an empty configuration
@@ -193,6 +206,13 @@ func syncSetDefaults(s *ConfigSync, d ConfigDefaults) {
 		s.RateLimit.Retry = d.RateLimit.Retry
 	} else if s.RateLimit.Retry < rateLimitRetryMin {
 		s.RateLimit.Retry = rateLimitRetryMin
+	}
+	if len(s.MediaTypes) == 0 {
+		if len(d.MediaTypes) > 0 {
+			s.MediaTypes = d.MediaTypes
+		} else {
+			s.MediaTypes = defaultMediaTypes
+		}
 	}
 	if s.Hooks.Pre == nil && d.Hooks.Pre != nil {
 		s.Hooks.Pre = d.Hooks.Pre

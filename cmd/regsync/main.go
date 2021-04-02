@@ -6,11 +6,8 @@ import (
 )
 
 func main() {
-	// regclient.ConfigDir = ".regsync"
-	// regclient.ConfigEnv = "REGSYNC_CONFIG"
-
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 	os.Exit(0)

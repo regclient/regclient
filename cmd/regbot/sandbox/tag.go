@@ -48,7 +48,11 @@ func (s *Sandbox) tagLs(ls *lua.LState) int {
 		ls.RaiseError("Failed retrieving tag list: %v", err)
 	}
 	lTags := ls.NewTable()
-	for _, tag := range tl.Tags {
+	lTagsList, err := tl.GetTags()
+	if err != nil {
+		ls.RaiseError("Failed retrieving tag list: %v", err)
+	}
+	for _, tag := range lTagsList {
 		lTags.Append(lua.LString(tag))
 	}
 	ls.Push(lTags)

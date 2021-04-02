@@ -1,6 +1,6 @@
 // +build windows
 
-package regclient
+package main
 
 import "os"
 

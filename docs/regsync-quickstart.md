@@ -22,10 +22,9 @@ version: 1
 creds:
   - registry: registry:5000
     tls: disabled
-    scheme: http
   - registry: docker.io
     user: "{{env \"HUB_USER\"}}"
-    pass: "{{file \"/var/run/secrets/hub_token\"}}"
+    pass: "{{file \"/home/appuser/.docker/hub_token\"}}"
 defaults:
   ratelimit:
     min: 100
@@ -50,8 +49,8 @@ sync:
     type: image
 ```
 
-You'll also need to create a `hub_token` file that includes either your hub
-password or a personal access token.
+You'll also need to create a `${HOME}/.docker/hub_token` file that includes
+either your hub password or a personal access token.
 
 ## Test regsync
 
@@ -61,23 +60,25 @@ this command will pull a number of images from Hub, but will automatically rate
 limit itself if you have less than 100 pulls remaining on your account.
 
 ```shell
+export HUB_USER=your_username
+mkdir -p ${HOME}/.docker
+echo "your_hub_password" >${HOME}/.docker/hub_token
 docker container run -it --rm --net registry \
   -v "$(pwd)/regsync.yml:/home/appuser/regsync.yml:ro" \
-  -v "$(pwd)/hub_token:/var/run/secrets/hub_token:ro" \
-  -e "HUB_USER=your_username" \
+  -v "${HOME}/.docker/hub_token:/home/appuser/.docker/hub_token:ro" \
+  -e "HUB_USER" \
   regclient/regsync:latest -c /home/appuser/regsync.yml once
 ```
 
 ## Run regsync
 
-Once the one time sync looks good, deploy a regsync service in the background,
-again replacing `your_username`:
+Once the one time sync looks good, deploy a regsync service in the background:
 
 ```shell
 docker container run -d --restart=unless-stopped --name regsync --net registry \
   -v "$(pwd)/regsync.yml:/home/appuser/regsync.yml:ro" \
   -v "$(pwd)/hub_token:/var/run/secrets/hub_token:ro" \
-  -e "HUB_USER=your_username" \
+  -e "HUB_USER" \
   regclient/regsync:latest -c /home/appuser/regsync.yml server
 ```
 
@@ -129,7 +130,7 @@ docker container run -it --rm --net host \\
   regclient/regctl:latest "\$@"
 EOF
 chmod 755 regctl
-./regctl registry set --scheme http --tls disabled localhost:5000
+./regctl registry set --tls disabled localhost:5000
 ./regctl repo ls localhost:5000
 ```
 

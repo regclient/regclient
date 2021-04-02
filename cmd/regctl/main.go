@@ -1,11 +1,14 @@
 package main
 
 import (
-	"github.com/regclient/regclient/regclient"
+	"fmt"
+	"os"
 )
 
 func main() {
-	regclient.ConfigDir = ".regctl"
-	regclient.ConfigEnv = "REGCLI_CONFIG"
-	Execute()
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+	os.Exit(0)
 }

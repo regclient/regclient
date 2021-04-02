@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"os"
 
+	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/regclient"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -32,11 +33,16 @@ Note: most registries ignore the pagination options.`,
 	RunE: runTagLs,
 }
 
-var tagOpts regclient.TagOpts
+var tagOpts struct {
+	Limit  int
+	Last   string
+	format string
+}
 
 func init() {
 	tagLsCmd.Flags().StringVarP(&tagOpts.Last, "last", "", "", "Specify the last tag from a previous request for pagination")
 	tagLsCmd.Flags().IntVarP(&tagOpts.Limit, "limit", "", 0, "Specify the number of tags to retrieve")
+	tagLsCmd.Flags().StringVarP(&tagOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 
 	tagCmd.AddCommand(tagDeleteCmd)
 	tagCmd.AddCommand(tagLsCmd)
@@ -71,12 +77,17 @@ func runTagLs(cmd *cobra.Command, args []string) error {
 		"host":       ref.Registry,
 		"repository": ref.Repository,
 	}).Debug("Listing tags")
-	tl, err := rc.TagListWithOpts(context.Background(), ref, tagOpts)
+	tl, err := rc.TagListWithOpts(context.Background(), ref, regclient.TagOpts{Limit: tagOpts.Limit, Last: tagOpts.Last})
 	if err != nil {
 		return err
 	}
-	for _, tag := range tl.Tags {
-		fmt.Printf("%s:%s\n", tl.Name, tag)
+	switch tagOpts.format {
+	case "raw":
+		tagOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .RawBody}}"
+	case "rawBody", "raw-body", "body":
+		tagOpts.format = "{{printf \"%s\" .RawBody}}"
+	case "rawHeaders", "raw-headers", "headers":
+		tagOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
-	return nil
+	return template.Writer(os.Stdout, tagOpts.format, tl, template.WithFuncs(regclient.TemplateFuncs))
 }

@@ -20,28 +20,37 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-const usageDesc = `Utility for mirroring docker repositories
+const (
+	usageDesc = `Utility for mirroring docker repositories
 More details at https://github.com/regclient/regclient`
+	// UserAgent sets the header on http requests
+	UserAgent = "regclient/regsync"
+)
 
 var rootOpts struct {
 	confFile  string
 	verbosity string
 	logopts   []string
+	format    string // for Go template formatting of various commands
 }
 
-var config *Config
-var log *logrus.Logger
-var rc regclient.RegClient
-var sem *semaphore.Weighted
+var (
+	config *Config
+	log    *logrus.Logger
+	rc     regclient.RegClient
+	sem    *semaphore.Weighted
+	// VCSRef is injected from a build flag, used to version the UserAgent header
+	VCSRef = "unknown"
+	// VCSTag is injected from a build flag
+	VCSTag = "unknown"
+)
 
 var rootCmd = &cobra.Command{
-	Use:   "regsync <cmd>",
-	Short: "Utility for mirroring docker repositories",
-	Long:  usageDesc,
-	// Run: func(cmd *cobra.Command, args []string) {
-	// 	// Do Stuff Here
-	// },
-	// RunE: runServer,
+	Use:           "regsync <cmd>",
+	Short:         "Utility for mirroring docker repositories",
+	Long:          usageDesc,
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 var serverCmd = &cobra.Command{
 	Use: "server",
@@ -73,6 +82,14 @@ sync step is finished.`,
 	RunE: runOnce,
 }
 
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Show the version",
+	Long:  `Show the version`,
+	Args:  cobra.RangeArgs(0, 0),
+	RunE:  runVersion,
+}
+
 func init() {
 	log = &logrus.Logger{
 		Out:       os.Stderr,
@@ -83,12 +100,18 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.confFile, "config", "c", "", "Config file")
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.InfoLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
 	rootCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
+	versionCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{jsonPretty .}}", "Format output with go template syntax")
+
 	rootCmd.MarkPersistentFlagFilename("config")
-	rootCmd.MarkPersistentFlagRequired("config")
+	serverCmd.MarkPersistentFlagRequired("config")
+	checkCmd.MarkPersistentFlagRequired("config")
+	onceCmd.MarkPersistentFlagRequired("config")
 
 	rootCmd.AddCommand(serverCmd)
 	rootCmd.AddCommand(checkCmd)
 	rootCmd.AddCommand(onceCmd)
+	rootCmd.AddCommand(versionCmd)
+
 	rootCmd.PersistentPreRunE = rootPreRun
 }
 
@@ -104,52 +127,26 @@ func rootPreRun(cmd *cobra.Command, args []string) error {
 			log.Formatter = new(logrus.JSONFormatter)
 		}
 	}
-	if rootOpts.confFile == "-" {
-		config, err = ConfigLoadReader(os.Stdin)
-		if err != nil {
-			return err
-		}
-	} else {
-		r, err := os.Open(rootOpts.confFile)
-		if err != nil {
-			return err
-		}
-		defer r.Close()
-		config, err = ConfigLoadReader(r)
-		if err != nil {
-			return err
-		}
-	}
-	// use a semaphore to control parallelism
-	log.WithFields(logrus.Fields{
-		"parallel": config.Defaults.Parallel,
-	}).Debug("Configuring parallel settings")
-	sem = semaphore.NewWeighted(int64(config.Defaults.Parallel))
-	// set the regclient, loading docker creds unless disabled, and inject logins from config file
-	rcOpts := []regclient.Opt{regclient.WithLog(log)}
-	if !config.Defaults.SkipDockerConf {
-		rcOpts = append(rcOpts, regclient.WithDockerCreds(), regclient.WithDockerCerts())
-	}
-	rcHosts := []regclient.ConfigHost{}
-	for _, host := range config.Creds {
-		rcHosts = append(rcHosts, regclient.ConfigHost{
-			Name:    host.Registry,
-			User:    host.User,
-			Pass:    host.Pass,
-			TLS:     host.TLS,
-			Scheme:  host.Scheme,
-			RegCert: host.RegCert,
-		})
-	}
-	if len(rcHosts) > 0 {
-		rcOpts = append(rcOpts, regclient.WithConfigHosts(rcHosts))
-	}
-	rc = regclient.NewRegClient(rcOpts...)
 	return nil
+}
+
+func runVersion(cmd *cobra.Command, args []string) error {
+	ver := struct {
+		VCSRef string
+		VCSTag string
+	}{
+		VCSRef: VCSRef,
+		VCSTag: VCSTag,
+	}
+	return template.Writer(os.Stdout, rootOpts.format, ver)
 }
 
 // runOnce processes the file in one pass, ignoring cron
 func runOnce(cmd *cobra.Command, args []string) error {
+	err := loadConf()
+	if err != nil {
+		return err
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 	var mainErr error
@@ -182,6 +179,10 @@ func runOnce(cmd *cobra.Command, args []string) error {
 
 // runServer stays running with cron scheduled tasks
 func runServer(cmd *cobra.Command, args []string) error {
+	err := loadConf()
+	if err != nil {
+		return err
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 	var mainErr error
@@ -238,6 +239,10 @@ func runServer(cmd *cobra.Command, args []string) error {
 
 // run check is used for a dry-run
 func runCheck(cmd *cobra.Command, args []string) error {
+	err := loadConf()
+	if err != nil {
+		return err
+	}
 	var mainErr error
 	ctx := context.Background()
 	for _, s := range config.Sync {
@@ -249,6 +254,66 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		}
 	}
 	return mainErr
+}
+
+func loadConf() error {
+	var err error
+	if rootOpts.confFile == "-" {
+		config, err = ConfigLoadReader(os.Stdin)
+		if err != nil {
+			return err
+		}
+	} else if rootOpts.confFile != "" {
+		r, err := os.Open(rootOpts.confFile)
+		if err != nil {
+			return err
+		}
+		defer r.Close()
+		config, err = ConfigLoadReader(r)
+		if err != nil {
+			return err
+		}
+	} else {
+		return ErrMissingInput
+	}
+	// use a semaphore to control parallelism
+	log.WithFields(logrus.Fields{
+		"parallel": config.Defaults.Parallel,
+	}).Debug("Configuring parallel settings")
+	sem = semaphore.NewWeighted(int64(config.Defaults.Parallel))
+	// set the regclient, loading docker creds unless disabled, and inject logins from config file
+	rcOpts := []regclient.Opt{
+		regclient.WithLog(log),
+		regclient.WithUserAgent(UserAgent + " (" + VCSRef + ")"),
+	}
+	if !config.Defaults.SkipDockerConf {
+		rcOpts = append(rcOpts, regclient.WithDockerCreds(), regclient.WithDockerCerts())
+	}
+	rcHosts := []regclient.ConfigHost{}
+	for _, host := range config.Creds {
+		if host.Scheme != "" {
+			log.WithFields(logrus.Fields{
+				"name": host.Registry,
+			}).Warn("Scheme is deprecated, for http set TLS to disabled")
+		}
+		rcHosts = append(rcHosts, regclient.ConfigHost{
+			Name:       host.Registry,
+			Hostname:   host.Hostname,
+			User:       host.User,
+			Pass:       host.Pass,
+			TLS:        host.TLS,
+			RegCert:    host.RegCert,
+			PathPrefix: host.PathPrefix,
+			Mirrors:    host.Mirrors,
+			Priority:   host.Priority,
+			API:        host.API,
+		})
+	}
+	if len(rcHosts) > 0 {
+		rcOpts = append(rcOpts, regclient.WithConfigHosts(rcHosts))
+	}
+	rc = regclient.NewRegClient(rcOpts...)
+	return nil
 }
 
 // process a sync step
@@ -271,7 +336,15 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 			}).Error("Failed getting source tags")
 			return err
 		}
-		sTagList, err := s.filterTags(sTags.Tags)
+		sTagsList, err := sTags.GetTags()
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"source": sRepoRef.CommonName(),
+				"error":  err,
+			}).Error("Failed getting source tags")
+			return err
+		}
+		sTagList, err := s.filterTags(sTagsList)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"source": sRepoRef.CommonName(),
@@ -286,7 +359,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 				"source":    sRepoRef.CommonName(),
 				"allow":     s.Tags.Allow,
 				"deny":      s.Tags.Deny,
-				"available": sTags.Tags,
+				"available": sTagsList,
 			}).Warn("No matching tags found")
 			return nil
 		}
@@ -359,6 +432,24 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, acti
 		return nil
 	}
 	tgtExists := (err == nil)
+
+	// skip when source manifest is an unsupported type
+	smt := mSrc.GetMediaType()
+	found := false
+	for _, mt := range s.MediaTypes {
+		if mt == smt {
+			found = true
+			break
+		}
+	}
+	if !found {
+		log.WithFields(logrus.Fields{
+			"ref":       src.CommonName(),
+			"mediaType": mSrc.GetMediaType(),
+			"allowed":   s.MediaTypes,
+		}).Info("Skipping unsupported media type")
+		return nil
+	}
 
 	// if platform is defined and source is a list, resolve the source platform
 	if mSrc.IsList() && s.Platform != "" {
