@@ -133,49 +133,61 @@ func getManifest(rc regclient.RegClient, ref regclient.Ref) (regclient.Manifest,
 
 	// retrieve the specified platform from the manifest list
 	if m.IsList() && !imageOpts.list && !imageOpts.requireList {
-		var plat ociv1.Platform
-		if imageOpts.platform != "" {
-			plat, err = platforms.Parse(imageOpts.platform)
-			if err != nil {
-				log.WithFields(logrus.Fields{
-					"platform": imageOpts.platform,
-					"err":      err,
-				}).Warn("Could not parse platform")
-			}
-		}
-		if plat.OS == "" {
-			plat = platforms.DefaultSpec()
-		}
-		desc, err := m.GetPlatformDesc(&plat)
-		if err != nil {
-			pl, _ := m.GetPlatformList()
-			var ps []string
-			for _, p := range pl {
-				ps = append(ps, platforms.Format(*p))
-			}
-			log.WithFields(logrus.Fields{
-				"platform":  platforms.Format(plat),
-				"err":       err,
-				"platforms": strings.Join(ps, ", "),
-			}).Warn("Platform could not be found in manifest list")
-			return m, ErrNotFound
-		}
-		log.WithFields(logrus.Fields{
-			"platform": platforms.Format(plat),
-			"digest":   desc.Digest.String(),
-		}).Debug("Found platform specific digest in manifest list")
+		desc, err := getPlatformDesc(rc, m)
 		ref.Digest = desc.Digest.String()
 		m, err = rc.ManifestGet(context.Background(), ref)
 		if err != nil {
-			log.WithFields(logrus.Fields{
-				"err":      err,
-				"digest":   ref.Digest,
-				"platform": platforms.Format(plat),
-			}).Warn("Could not get platform specific manifest")
-			return m, err
+			return m, fmt.Errorf("Failed to pull platform specific digest: %w", err)
 		}
 	}
 	return m, nil
+}
+
+func getPlatformDesc(rc regclient.RegClient, m regclient.Manifest) (*ociv1.Descriptor, error) {
+	var desc *ociv1.Descriptor
+	var err error
+	if !m.IsList() {
+		return desc, fmt.Errorf("%w: manifest is not a list", ErrInvalidInput)
+	}
+	if !m.IsSet() {
+		m, err = rc.ManifestGet(context.Background(), m.GetRef())
+		if err != nil {
+			return desc, err
+		}
+	}
+
+	var plat ociv1.Platform
+	if imageOpts.platform != "" {
+		plat, err = platforms.Parse(imageOpts.platform)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"platform": imageOpts.platform,
+				"err":      err,
+			}).Warn("Could not parse platform")
+		}
+	}
+	if plat.OS == "" {
+		plat = platforms.DefaultSpec()
+	}
+	desc, err = m.GetPlatformDesc(&plat)
+	if err != nil {
+		pl, _ := m.GetPlatformList()
+		var ps []string
+		for _, p := range pl {
+			ps = append(ps, platforms.Format(*p))
+		}
+		log.WithFields(logrus.Fields{
+			"platform":  platforms.Format(plat),
+			"err":       err,
+			"platforms": strings.Join(ps, ", "),
+		}).Warn("Platform could not be found in manifest list")
+		return desc, ErrNotFound
+	}
+	log.WithFields(logrus.Fields{
+		"platform": platforms.Format(plat),
+		"digest":   desc.Digest.String(),
+	}).Debug("Found platform specific digest in manifest list")
+	return desc, nil
 }
 
 func runImageCopy(cmd *cobra.Command, args []string) error {
@@ -247,12 +259,13 @@ func runImageDigest(cmd *cobra.Command, args []string) error {
 		log.Info("Manifest list unavailable, ignoring platform flag")
 	}
 
-	// if a manifest list was received and we need the platform specific
-	// manifest, run the http GET calls
-	if m.IsList() && !imageOpts.list && !imageOpts.requireList {
-		m, err = getManifest(rc, ref)
+	// retrieve the specified platform from the manifest list
+	for m.IsList() && !imageOpts.list && !imageOpts.requireList {
+		desc, err := getPlatformDesc(rc, m)
+		ref.Digest = desc.Digest.String()
+		m, err = rc.ManifestHead(context.Background(), ref)
 		if err != nil {
-			return err
+			return fmt.Errorf("Failed retrieving platform specific digest: %w", err)
 		}
 	}
 

@@ -79,8 +79,10 @@ type Manifest interface {
 	GetPlatformList() ([]*ociv1.Platform, error)
 	GetOrigManifest() interface{}
 	GetRateLimit() RateLimit
+	GetRef() Ref
 	HasRateLimit() bool
 	IsList() bool
+	IsSet() bool
 	MarshalJSON() ([]byte, error)
 	RawBody() ([]byte, error)
 	RawHeaders() (http.Header, error)
@@ -102,6 +104,10 @@ func (m *manifestCommon) GetRateLimit() RateLimit {
 	return m.ratelimit
 }
 
+func (m *manifestCommon) GetRef() Ref {
+	return m.ref
+}
+
 func (m *manifestCommon) HasRateLimit() bool {
 	return m.ratelimit.Set
 }
@@ -113,6 +119,10 @@ func (m *manifestCommon) IsList() bool {
 	default:
 		return false
 	}
+}
+
+func (m *manifestCommon) IsSet() bool {
+	return m.manifSet
 }
 
 func (m *manifestCommon) MarshalJSON() ([]byte, error) {
