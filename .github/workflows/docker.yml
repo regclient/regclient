@@ -8,7 +8,7 @@ on:
     tags:
       - 'v*.*.*'
   schedule:
-    - cron: '0 20 * * *'
+    - cron: '0 06 * * *'
 
 jobs:
 
