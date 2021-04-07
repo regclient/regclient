@@ -157,7 +157,12 @@ func ConfigLoadFile(filename string) (*Config, error) {
 // expand templates in various parts of the config
 func configExpandTemplates(c *Config) error {
 	for i := range c.Creds {
-		val, err := template.String(c.Creds[i].User, nil)
+		val, err := template.String(c.Creds[i].Registry, nil)
+		if err != nil {
+			return err
+		}
+		c.Creds[i].Registry = val
+		val, err = template.String(c.Creds[i].User, nil)
 		if err != nil {
 			return err
 		}

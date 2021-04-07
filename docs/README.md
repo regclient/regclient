@@ -397,7 +397,7 @@ sync:
   Any field beginning with `x-` is considered a user extension and will not be parsed in current or future versions of the project.
   These are useful for integrating your own tooling, or setting values for yaml anchors and aliases.
 
-[Go templates](https://golang.org/pkg/text/template/) are used to expand values in `user`, `pass`, `regcert`, `source`, `target`, and `backup`.
+[Go templates](https://golang.org/pkg/text/template/) are used to expand values in `registry`, `user`, `pass`, `regcert`, `source`, `target`, and `backup`.
 The `backup` template supports the following objects:
 
 - `.Ref`: Reference object about to be overwritten
