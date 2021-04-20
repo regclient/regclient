@@ -155,7 +155,7 @@ func (s *Sandbox) configGet(ls *lua.LState) int {
 		ls.RaiseError("Failed looking up \"%s\" config digest: %v", m.ref.CommonName(), err)
 	}
 
-	confBlob, err := s.rc.BlobGetOCIConfig(s.ctx, m.ref, confDigest.String())
+	confBlob, err := s.rc.BlobGetOCIConfig(s.ctx, m.ref, confDigest)
 	if err != nil {
 		ls.RaiseError("Failed retrieving \"%s\" config: %v", m.ref.CommonName(), err)
 	}

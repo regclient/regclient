@@ -88,6 +88,114 @@ type Manifest interface {
 	RawHeaders() (http.Header, error)
 }
 
+func NewManifestDocker1M(m dockerSchema1.Manifest, raw []byte) Manifest {
+	if len(raw) == 0 {
+		raw, _ = json.Marshal(m)
+	}
+	mc := manifestCommon{
+		mt:       MediaTypeDocker1Manifest,
+		digest:   digest.FromBytes(raw),
+		manifSet: true,
+		rawBody:  raw,
+	}
+	mStruct := manifestDocker1M{
+		manifestCommon: mc,
+		Manifest:       m,
+	}
+	mStruct.orig = &mStruct.Manifest
+	return &mStruct
+}
+
+func NewManifestDocker1MS(m dockerSchema1.SignedManifest, raw []byte) Manifest {
+	if len(raw) == 0 {
+		raw, _ = json.Marshal(m)
+	}
+	mc := manifestCommon{
+		mt:       MediaTypeDocker1ManifestSigned,
+		digest:   digest.FromBytes(raw),
+		manifSet: true,
+		rawBody:  raw,
+	}
+	mStruct := manifestDocker1MS{
+		manifestCommon: mc,
+		SignedManifest: m,
+	}
+	mStruct.orig = &mStruct.Manifest
+	return &mStruct
+}
+
+func NewManifestDockerM(m dockerSchema2.Manifest, raw []byte) Manifest {
+	if len(raw) == 0 {
+		raw, _ = json.Marshal(m)
+	}
+	mc := manifestCommon{
+		mt:       MediaTypeDocker2Manifest,
+		digest:   digest.FromBytes(raw),
+		manifSet: true,
+		rawBody:  raw,
+	}
+	mStruct := manifestDockerM{
+		manifestCommon: mc,
+		Manifest:       m,
+	}
+	mStruct.orig = &mStruct.Manifest
+	return &mStruct
+}
+
+func NewManifestDockerML(m dockerManifestList.ManifestList, raw []byte) Manifest {
+	if len(raw) == 0 {
+		raw, _ = json.Marshal(m)
+	}
+	mc := manifestCommon{
+		mt:       MediaTypeDocker2ManifestList,
+		digest:   digest.FromBytes(raw),
+		manifSet: true,
+		rawBody:  raw,
+	}
+	mStruct := manifestDockerML{
+		manifestCommon: mc,
+		ManifestList:   m,
+	}
+	mStruct.orig = &mStruct.ManifestList
+	return &mStruct
+}
+
+func NewManifestOCIM(m ociv1.Manifest, raw []byte) Manifest {
+	if len(raw) == 0 {
+		raw, _ = json.Marshal(m)
+	}
+	mc := manifestCommon{
+		mt:       MediaTypeOCI1Manifest,
+		digest:   digest.FromBytes(raw),
+		manifSet: true,
+		rawBody:  raw,
+	}
+	mStruct := manifestOCIM{
+		manifestCommon: mc,
+		Manifest:       m,
+	}
+	mStruct.orig = &mStruct.Manifest
+	return &mStruct
+}
+
+func NewManifestOCIML(m ociv1.Index, raw []byte) Manifest {
+	if len(raw) == 0 {
+		raw, _ = json.Marshal(m)
+	}
+	mc := manifestCommon{
+		mt:       MediaTypeOCI1ManifestList,
+		digest:   digest.FromBytes(raw),
+		manifSet: true,
+		rawBody:  raw,
+	}
+	mStruct := manifestOCIML{
+		manifestCommon: mc,
+		Index:          m,
+	}
+	mStruct.orig = &mStruct.Index
+	return &mStruct
+}
+
 func (m *manifestCommon) GetDigest() digest.Digest {
 	return m.digest
 }
@@ -546,33 +654,39 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref Ref) (Manifest, error)
 	case MediaTypeDocker1Manifest:
 		dm := dockerSchema1.Manifest{}
 		err = json.Unmarshal(mc.rawBody, &dm)
-		mc.orig = dm
-		m = &manifestDocker1M{manifestCommon: mc, Manifest: dm}
+		mStruct := manifestDocker1M{manifestCommon: mc, Manifest: dm}
+		mStruct.orig = &mStruct.Manifest
+		m = &mStruct
 	case MediaTypeDocker1ManifestSigned:
 		dm := dockerSchema1.SignedManifest{}
 		err = json.Unmarshal(mc.rawBody, &dm)
-		mc.orig = dm
-		m = &manifestDocker1MS{manifestCommon: mc, SignedManifest: dm}
+		mStruct := manifestDocker1MS{manifestCommon: mc, SignedManifest: dm}
+		mStruct.orig = &mStruct.SignedManifest
+		m = &mStruct
 	case MediaTypeDocker2Manifest:
 		dm := dockerSchema2.Manifest{}
 		err = json.Unmarshal(mc.rawBody, &dm)
-		mc.orig = dm
-		m = &manifestDockerM{manifestCommon: mc, Manifest: dm}
+		mStruct := manifestDockerM{manifestCommon: mc, Manifest: dm}
+		mStruct.orig = &mStruct.Manifest
+		m = &mStruct
 	case MediaTypeDocker2ManifestList:
 		dml := dockerManifestList.ManifestList{}
 		err = json.Unmarshal(mc.rawBody, &dml)
-		mc.orig = dml
-		m = &manifestDockerML{manifestCommon: mc, ManifestList: dml}
+		mStruct := manifestDockerML{manifestCommon: mc, ManifestList: dml}
+		mStruct.orig = &mStruct.ManifestList
+		m = &mStruct
 	case MediaTypeOCI1Manifest:
 		om := ociv1.Manifest{}
 		err = json.Unmarshal(mc.rawBody, &om)
-		mc.orig = om
-		m = &manifestOCIM{manifestCommon: mc, Manifest: om}
+		mStruct := manifestOCIM{manifestCommon: mc, Manifest: om}
+		mStruct.orig = &mStruct.Manifest
+		m = &mStruct
 	case MediaTypeOCI1ManifestList:
 		oi := ociv1.Index{}
 		err = json.Unmarshal(mc.rawBody, &oi)
-		mc.orig = oi
-		m = &manifestOCIML{manifestCommon: mc, Index: oi}
+		mStruct := manifestOCIML{manifestCommon: mc, Index: oi}
+		mStruct.orig = &mStruct.Index
+		m = &mStruct
 	default:
 		rc.log.WithFields(logrus.Fields{
 			"mediatype": mc.mt,

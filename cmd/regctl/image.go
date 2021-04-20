@@ -2,12 +2,8 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"strings"
 
-	"github.com/containerd/containerd/platforms"
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/regclient"
 	"github.com/sirupsen/logrus"
@@ -32,15 +28,15 @@ sends the manifest with the new tag.`,
 var imageDeleteCmd = &cobra.Command{
 	Use:     "delete <image_ref>",
 	Aliases: []string{"del", "rm", "remove"},
-	Short:   "delete image",
+	Short:   "delete image, same as \"manifest delete\"",
 	Args:    cobra.RangeArgs(1, 1),
-	RunE:    runImageDelete,
+	RunE:    runManifestDelete,
 }
 var imageDigestCmd = &cobra.Command{
 	Use:   "digest <image_ref>",
-	Short: "show digest for pinning",
+	Short: "show digest for pinning, same as \"manifest digest\"",
 	Args:  cobra.RangeArgs(1, 1),
-	RunE:  runImageDigest,
+	RunE:  runManifestDigest,
 }
 var imageExportCmd = &cobra.Command{
 	Use:   "export <image_ref>",
@@ -68,10 +64,10 @@ in docker, and inspecting it, but without pulling any of the image layers.`,
 }
 var imageManifestCmd = &cobra.Command{
 	Use:   "manifest <image_ref>",
-	Short: "show manifest or manifest list",
+	Short: "show manifest or manifest list, same as \"manifest get\"",
 	Long:  `Shows the manifest or manifest list of the specified image.`,
 	Args:  cobra.RangeArgs(1, 1),
-	RunE:  runImageManifest,
+	RunE:  runManifestGet,
 }
 var imageRateLimitCmd = &cobra.Command{
 	Use:   "ratelimit <image_ref>",
@@ -116,80 +112,6 @@ func init() {
 	rootCmd.AddCommand(imageCmd)
 }
 
-func getManifest(rc regclient.RegClient, ref regclient.Ref) (regclient.Manifest, error) {
-	m, err := rc.ManifestGet(context.Background(), ref)
-	if err != nil {
-		return m, err
-	}
-
-	// add warning if not list and list required or platform requested
-	if !m.IsList() && imageOpts.requireList {
-		log.Warn("Manifest list unavailable")
-		return m, ErrNotFound
-	}
-	if !m.IsList() && imageOpts.platform != "" {
-		log.Info("Manifest list unavailable, ignoring platform flag")
-	}
-
-	// retrieve the specified platform from the manifest list
-	if m.IsList() && !imageOpts.list && !imageOpts.requireList {
-		desc, err := getPlatformDesc(rc, m)
-		ref.Digest = desc.Digest.String()
-		m, err = rc.ManifestGet(context.Background(), ref)
-		if err != nil {
-			return m, fmt.Errorf("Failed to pull platform specific digest: %w", err)
-		}
-	}
-	return m, nil
-}
-
-func getPlatformDesc(rc regclient.RegClient, m regclient.Manifest) (*ociv1.Descriptor, error) {
-	var desc *ociv1.Descriptor
-	var err error
-	if !m.IsList() {
-		return desc, fmt.Errorf("%w: manifest is not a list", ErrInvalidInput)
-	}
-	if !m.IsSet() {
-		m, err = rc.ManifestGet(context.Background(), m.GetRef())
-		if err != nil {
-			return desc, err
-		}
-	}
-
-	var plat ociv1.Platform
-	if imageOpts.platform != "" {
-		plat, err = platforms.Parse(imageOpts.platform)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"platform": imageOpts.platform,
-				"err":      err,
-			}).Warn("Could not parse platform")
-		}
-	}
-	if plat.OS == "" {
-		plat = platforms.DefaultSpec()
-	}
-	desc, err = m.GetPlatformDesc(&plat)
-	if err != nil {
-		pl, _ := m.GetPlatformList()
-		var ps []string
-		for _, p := range pl {
-			ps = append(ps, platforms.Format(*p))
-		}
-		log.WithFields(logrus.Fields{
-			"platform":  platforms.Format(plat),
-			"err":       err,
-			"platforms": strings.Join(ps, ", "),
-		}).Warn("Platform could not be found in manifest list")
-		return desc, ErrNotFound
-	}
-	log.WithFields(logrus.Fields{
-		"platform": platforms.Format(plat),
-		"digest":   desc.Digest.String(),
-	}).Debug("Found platform specific digest in manifest list")
-	return desc, nil
-}
-
 func runImageCopy(cmd *cobra.Command, args []string) error {
 	refSrc, err := regclient.NewRef(args[0])
 	if err != nil {
@@ -209,68 +131,6 @@ func runImageCopy(cmd *cobra.Command, args []string) error {
 		"target tag":  refTgt.Tag,
 	}).Debug("Image copy")
 	return rc.ImageCopy(context.Background(), refSrc, refTgt)
-}
-
-func runImageDelete(cmd *cobra.Command, args []string) error {
-	ref, err := regclient.NewRef(args[0])
-	if err != nil {
-		return err
-	}
-	rc := newRegClient()
-
-	log.WithFields(logrus.Fields{
-		"host": ref.Registry,
-		"repo": ref.Repository,
-		"tag":  ref.Tag,
-	}).Debug("Image digest")
-
-	err = rc.ManifestDelete(context.Background(), ref)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func runImageDigest(cmd *cobra.Command, args []string) error {
-	ref, err := regclient.NewRef(args[0])
-	if err != nil {
-		return err
-	}
-	rc := newRegClient()
-
-	log.WithFields(logrus.Fields{
-		"host": ref.Registry,
-		"repo": ref.Repository,
-		"tag":  ref.Tag,
-	}).Debug("Image digest")
-
-	// attempt to request only the headers, avoids Docker Hub rate limits
-	m, err := rc.ManifestHead(context.Background(), ref)
-	if err != nil {
-		return err
-	}
-
-	// add warning if not list and list required or platform requested
-	if !m.IsList() && imageOpts.requireList {
-		log.Warn("Manifest list unavailable")
-		return ErrNotFound
-	}
-	if !m.IsList() && imageOpts.platform != "" {
-		log.Info("Manifest list unavailable, ignoring platform flag")
-	}
-
-	// retrieve the specified platform from the manifest list
-	for m.IsList() && !imageOpts.list && !imageOpts.requireList {
-		desc, err := getPlatformDesc(rc, m)
-		ref.Digest = desc.Digest.String()
-		m, err = rc.ManifestHead(context.Background(), ref)
-		if err != nil {
-			return fmt.Errorf("Failed retrieving platform specific digest: %w", err)
-		}
-	}
-
-	fmt.Println(m.GetDigest().String())
-	return nil
 }
 
 func runImageExport(cmd *cobra.Command, args []string) error {
@@ -314,7 +174,7 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	blobConfig, err := rc.BlobGetOCIConfig(context.Background(), ref, cd.String())
+	blobConfig, err := rc.BlobGetOCIConfig(context.Background(), ref, cd)
 	if err != nil {
 		return err
 	}
@@ -327,29 +187,6 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 		imageOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
 	return template.Writer(os.Stdout, imageOpts.format, blobConfig, template.WithFuncs(regclient.TemplateFuncs))
-}
-
-func runImageManifest(cmd *cobra.Command, args []string) error {
-	ref, err := regclient.NewRef(args[0])
-	if err != nil {
-		return err
-	}
-	rc := newRegClient()
-
-	m, err := getManifest(rc, ref)
-	if err != nil {
-		return err
-	}
-
-	switch imageOpts.format {
-	case "raw":
-		imageOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .RawBody}}"
-	case "rawBody", "raw-body", "body":
-		imageOpts.format = "{{printf \"%s\" .RawBody}}"
-	case "rawHeaders", "raw-headers", "headers":
-		imageOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
-	}
-	return template.Writer(os.Stdout, imageOpts.format, m, template.WithFuncs(regclient.TemplateFuncs))
 }
 
 func runImageRateLimit(cmd *cobra.Command, args []string) error {

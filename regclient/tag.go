@@ -194,7 +194,7 @@ func (rc *regClient) TagDelete(ctx context.Context, ref Ref) error {
 	}).Debug("Sending dummy manifest to replace tag")
 
 	// push config
-	err = rc.BlobPut(ctx, ref, confDigest.String(), ioutil.NopCloser(bytes.NewReader(confB)), MediaTypeDocker2ImageConfig, int64(len(confB)))
+	_, err = rc.BlobPut(ctx, ref, confDigest, ioutil.NopCloser(bytes.NewReader(confB)), MediaTypeDocker2ImageConfig, int64(len(confB)))
 	if err != nil {
 		return fmt.Errorf("Failed sending dummy config to delete %s: %w", ref.CommonName(), err)
 	}
@@ -274,11 +274,12 @@ func (rc *regClient) TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts)
 	case "application/json", "text/plain":
 		var tdl TagDockerList
 		err = json.Unmarshal(respBody, &tdl)
-		tc.orig = tdl
-		tl = tagDockerList{
+		tStruct := tagDockerList{
 			tagCommon:     tc,
 			TagDockerList: tdl,
 		}
+		tStruct.orig = &tStruct.TagDockerList
+		tl = tStruct
 	default:
 		return tl, fmt.Errorf("%w: media type: %s, reference: %s", ErrUnsupportedMediaType, mt, ref.CommonName())
 	}

@@ -81,7 +81,7 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) erro
 				"target": refTgt.Reference,
 				"digest": cd.String(),
 			}).Info("Copy config")
-			if err := rc.BlobCopy(ctx, refSrc, refTgt, cd.String()); err != nil {
+			if err := rc.BlobCopy(ctx, refSrc, refTgt, cd); err != nil {
 				rc.log.WithFields(logrus.Fields{
 					"source": refSrc.Reference,
 					"target": refTgt.Reference,
@@ -113,7 +113,7 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) erro
 				"target": refTgt.Reference,
 				"layer":  layerSrc.Digest.String(),
 			}).Info("Copy layer")
-			if err := rc.BlobCopy(ctx, refSrc, refTgt, layerSrc.Digest.String()); err != nil {
+			if err := rc.BlobCopy(ctx, refSrc, refTgt, layerSrc.Digest); err != nil {
 				rc.log.WithFields(logrus.Fields{
 					"source": refSrc.Reference,
 					"target": refTgt.Reference,
@@ -182,7 +182,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 		}).Warn("Failed to get config digest from manifest")
 		return err
 	}
-	confBlob, err := rc.BlobGet(ctx, ref, cd.String(), []string{MediaTypeDocker2ImageConfig, ociv1.MediaTypeImageConfig})
+	confBlob, err := rc.BlobGet(ctx, ref, cd, []string{MediaTypeDocker2ImageConfig, ociv1.MediaTypeImageConfig})
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"ref":    ref.Reference,
@@ -236,7 +236,7 @@ func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writ
 		// no need to defer remove of layerDir, it is inside of tempDir
 
 		// request layer
-		layerBlob, err := rc.BlobGet(ctx, ref, layerDesc.Digest.String(), []string{})
+		layerBlob, err := rc.BlobGet(ctx, ref, layerDesc.Digest, []string{})
 		if err != nil {
 			rc.log.WithFields(logrus.Fields{
 				"ref":   ref.CommonName(),
