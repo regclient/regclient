@@ -1,4 +1,4 @@
-package regclient
+package types
 
 import "github.com/docker/distribution/reference"
 

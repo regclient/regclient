@@ -5,8 +5,10 @@ import (
 	"io"
 	"os"
 
+	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/regclient"
+	"github.com/regclient/regclient/regclient/types"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -26,22 +28,36 @@ registry. The blob or layer digest can be found in the image manifest.`,
 	Args: cobra.RangeArgs(2, 2),
 	RunE: runBlobGet,
 }
+var blobPutCmd = &cobra.Command{
+	Use:     "put <repository>",
+	Aliases: []string{"pull"},
+	Short:   "upload a blob/layer",
+	Long: `Upload a blob to a repository. Stdin must be the blob contents. The output
+is the digest of the blob.`,
+	Args: cobra.RangeArgs(1, 1),
+	RunE: runBlobPut,
+}
 
 var blobOpts struct {
 	format string
 	mt     string
+	digest string
 }
 
 func init() {
 	blobGetCmd.Flags().StringVarP(&blobOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	blobGetCmd.Flags().StringVarP(&blobOpts.mt, "media-type", "", "", "Set the requested mediaType")
 
+	blobPutCmd.Flags().StringVarP(&blobOpts.mt, "content-type", "", "", "Set the requested content type")
+	blobPutCmd.Flags().StringVarP(&blobOpts.digest, "digest", "", "", "Set the expected digest")
+
 	blobCmd.AddCommand(blobGetCmd)
+	blobCmd.AddCommand(blobPutCmd)
 	rootCmd.AddCommand(blobCmd)
 }
 
 func runBlobGet(cmd *cobra.Command, args []string) error {
-	ref, err := regclient.NewRef(args[0])
+	ref, err := types.NewRef(args[0])
 	if err != nil {
 		return err
 	}
@@ -56,7 +72,11 @@ func runBlobGet(cmd *cobra.Command, args []string) error {
 		"repository": ref.Repository,
 		"digest":     args[1],
 	}).Debug("Pulling blob")
-	blob, err := rc.BlobGet(context.Background(), ref, args[1], accepts)
+	d, err := digest.Parse(args[1])
+	if err != nil {
+		return err
+	}
+	blob, err := rc.BlobGet(context.Background(), ref, d, accepts)
 	if err != nil {
 		return err
 	}
@@ -75,4 +95,31 @@ func runBlobGet(cmd *cobra.Command, args []string) error {
 	}
 
 	return template.Writer(os.Stdout, blobOpts.format, blob, template.WithFuncs(regclient.TemplateFuncs))
+}
+
+func runBlobPut(cmd *cobra.Command, args []string) error {
+	ref, err := types.NewRef(args[0])
+	if err != nil {
+		return err
+	}
+	rc := newRegClient()
+
+	log.WithFields(logrus.Fields{
+		"host":         ref.Registry,
+		"repository":   ref.Repository,
+		"digest":       blobOpts.digest,
+		"content-type": blobOpts.mt,
+	}).Debug("Pushing blob")
+	dOut, err := rc.BlobPut(context.Background(), ref, digest.Digest(blobOpts.digest), os.Stdin, blobOpts.mt, 0)
+	if err != nil {
+		return err
+	}
+
+	result := struct {
+		Digest digest.Digest
+	}{
+		Digest: dOut,
+	}
+
+	return template.Writer(os.Stdout, blobOpts.format, result, template.WithFuncs(regclient.TemplateFuncs))
 }

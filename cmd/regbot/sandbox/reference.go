@@ -1,7 +1,7 @@
 package sandbox
 
 import (
-	"github.com/regclient/regclient/regclient"
+	"github.com/regclient/regclient/regclient/types"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -23,7 +23,7 @@ func setupReference(s *Sandbox) {
 
 // reference refers to a repository or image name
 type reference struct {
-	ref regclient.Ref
+	ref types.Ref
 }
 
 // newReference creates a reference
@@ -40,7 +40,7 @@ func (s *Sandbox) checkReference(ls *lua.LState, i int) *reference {
 	var ref *reference
 	switch ls.Get(i).Type() {
 	case lua.LTString:
-		nr, err := regclient.NewRef(ls.CheckString(i))
+		nr, err := types.NewRef(ls.CheckString(i))
 		if err != nil {
 			ls.ArgError(i, "reference parsing failed: "+err.Error())
 		}
@@ -50,8 +50,8 @@ func (s *Sandbox) checkReference(ls *lua.LState, i int) *reference {
 		switch ud.Value.(type) {
 		case *reference:
 			ref = ud.Value.(*reference)
-		case *manifest:
-			m := ud.Value.(*manifest)
+		case *sbManifest:
+			m := ud.Value.(*sbManifest)
 			ref = &reference{ref: m.ref}
 		case *config:
 			c := ud.Value.(*config)
