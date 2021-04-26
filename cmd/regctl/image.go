@@ -6,6 +6,7 @@ import (
 
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/regclient"
+	"github.com/regclient/regclient/regclient/types"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -87,17 +88,17 @@ var imageOpts struct {
 }
 
 func init() {
-	imageDigestCmd.Flags().BoolVarP(&imageOpts.list, "list", "", false, "Do not resolve platform from manifest list (recommended)")
-	imageDigestCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
-	imageDigestCmd.Flags().BoolVarP(&imageOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
+	imageDigestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", false, "Do not resolve platform from manifest list (recommended)")
+	imageDigestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
+	imageDigestCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
 
 	imageInspectCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
 	imageInspectCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 
-	imageManifestCmd.Flags().BoolVarP(&imageOpts.list, "list", "", false, "Output manifest list if available")
-	imageManifestCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
-	imageManifestCmd.Flags().BoolVarP(&imageOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
-	imageManifestCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+	imageManifestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", false, "Output manifest list if available")
+	imageManifestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
+	imageManifestCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
+	imageManifestCmd.Flags().StringVarP(&manifestOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 
 	imageRateLimitCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 
@@ -113,11 +114,11 @@ func init() {
 }
 
 func runImageCopy(cmd *cobra.Command, args []string) error {
-	refSrc, err := regclient.NewRef(args[0])
+	refSrc, err := types.NewRef(args[0])
 	if err != nil {
 		return err
 	}
-	refTgt, err := regclient.NewRef(args[1])
+	refTgt, err := types.NewRef(args[1])
 	if err != nil {
 		return err
 	}
@@ -134,7 +135,7 @@ func runImageCopy(cmd *cobra.Command, args []string) error {
 }
 
 func runImageExport(cmd *cobra.Command, args []string) error {
-	ref, err := regclient.NewRef(args[0])
+	ref, err := types.NewRef(args[0])
 	if err != nil {
 		return err
 	}
@@ -152,7 +153,7 @@ func runImageImport(cmd *cobra.Command, args []string) error {
 }
 
 func runImageInspect(cmd *cobra.Command, args []string) error {
-	ref, err := regclient.NewRef(args[0])
+	ref, err := types.NewRef(args[0])
 	if err != nil {
 		return err
 	}
@@ -190,7 +191,7 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 }
 
 func runImageRateLimit(cmd *cobra.Command, args []string) error {
-	ref, err := regclient.NewRef(args[0])
+	ref, err := types.NewRef(args[0])
 	if err != nil {
 		return err
 	}

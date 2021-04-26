@@ -14,16 +14,17 @@ import (
 	"github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/pkg/retryable"
+	"github.com/regclient/regclient/regclient/types"
 	"github.com/sirupsen/logrus"
 )
 
 // BlobClient provides registry client requests to Blobs
 type BlobClient interface {
-	BlobCopy(ctx context.Context, refSrc Ref, refTgt Ref, d digest.Digest) error
-	BlobGet(ctx context.Context, ref Ref, d digest.Digest, accepts []string) (BlobReader, error)
-	BlobGetOCIConfig(ctx context.Context, ref Ref, d digest.Digest) (BlobOCIConfig, error)
-	BlobMount(ctx context.Context, refSrc Ref, refTgt Ref, d digest.Digest) error
-	BlobPut(ctx context.Context, ref Ref, d digest.Digest, rdr io.Reader, ct string, cl int64) (digest.Digest, error)
+	BlobCopy(ctx context.Context, refSrc types.Ref, refTgt types.Ref, d digest.Digest) error
+	BlobGet(ctx context.Context, ref types.Ref, d digest.Digest, accepts []string) (BlobReader, error)
+	BlobGetOCIConfig(ctx context.Context, ref types.Ref, d digest.Digest) (BlobOCIConfig, error)
+	BlobMount(ctx context.Context, refSrc types.Ref, refTgt types.Ref, d digest.Digest) error
+	BlobPut(ctx context.Context, ref types.Ref, d digest.Digest, rdr io.Reader, ct string, cl int64) (digest.Digest, error)
 }
 
 // Blob interface is used for returning blobs
@@ -48,7 +49,7 @@ type BlobOCIConfig interface {
 }
 
 type blobCommon struct {
-	ref       Ref
+	ref       types.Ref
 	digest    string
 	mt        string
 	orig      interface{}
@@ -70,7 +71,7 @@ type blobOCIConfig struct {
 	ociv1.Image
 }
 
-func (rc *regClient) BlobCopy(ctx context.Context, refSrc Ref, refTgt Ref, d digest.Digest) error {
+func (rc *regClient) BlobCopy(ctx context.Context, refSrc types.Ref, refTgt types.Ref, d digest.Digest) error {
 	// for the same repository, there's nothing to copy
 	if refSrc.Registry == refTgt.Registry && refSrc.Repository == refTgt.Repository {
 		rc.log.WithFields(logrus.Fields{
@@ -127,11 +128,11 @@ func (rc *regClient) BlobCopy(ctx context.Context, refSrc Ref, refTgt Ref, d dig
 	return nil
 }
 
-func (rc *regClient) BlobGet(ctx context.Context, ref Ref, d digest.Digest, accepts []string) (BlobReader, error) {
+func (rc *regClient) BlobGet(ctx context.Context, ref types.Ref, d digest.Digest, accepts []string) (BlobReader, error) {
 	return rc.blobGet(ctx, ref, d, accepts)
 }
 
-func (rc *regClient) blobGet(ctx context.Context, ref Ref, d digest.Digest, accepts []string) (blobReader, error) {
+func (rc *regClient) blobGet(ctx context.Context, ref types.Ref, d digest.Digest, accepts []string) (blobReader, error) {
 	var b blobReader
 	bc := blobCommon{
 		ref:    ref,
@@ -172,7 +173,7 @@ func (rc *regClient) blobGet(ctx context.Context, ref Ref, d digest.Digest, acce
 	return b, nil
 }
 
-func (rc *regClient) BlobGetOCIConfig(ctx context.Context, ref Ref, d digest.Digest) (BlobOCIConfig, error) {
+func (rc *regClient) BlobGetOCIConfig(ctx context.Context, ref types.Ref, d digest.Digest) (BlobOCIConfig, error) {
 	b, err := rc.blobGet(ctx, ref, d, []string{MediaTypeDocker2ImageConfig, ociv1.MediaTypeImageConfig})
 	if err != nil {
 		return blobOCIConfig{}, err
@@ -182,7 +183,7 @@ func (rc *regClient) BlobGetOCIConfig(ctx context.Context, ref Ref, d digest.Dig
 
 // BlobHead is used to verify if a blob exists and is accessible
 // TODO: on success, return a Blob with non-content data configured
-func (rc *regClient) BlobHead(ctx context.Context, ref Ref, d digest.Digest) error {
+func (rc *regClient) BlobHead(ctx context.Context, ref types.Ref, d digest.Digest) error {
 	// build/send request
 	req := httpReq{
 		host: ref.Registry,
@@ -205,7 +206,7 @@ func (rc *regClient) BlobHead(ctx context.Context, ref Ref, d digest.Digest) err
 	return nil
 }
 
-func (rc *regClient) BlobMount(ctx context.Context, refSrc Ref, refTgt Ref, d digest.Digest) error {
+func (rc *regClient) BlobMount(ctx context.Context, refSrc types.Ref, refTgt types.Ref, d digest.Digest) error {
 	if refSrc.Registry != refTgt.Registry {
 		return fmt.Errorf("Registry must match for blob mount")
 	}
@@ -238,7 +239,7 @@ func (rc *regClient) BlobMount(ctx context.Context, refSrc Ref, refTgt Ref, d di
 	return nil
 }
 
-func (rc *regClient) BlobPut(ctx context.Context, ref Ref, d digest.Digest, rdr io.Reader, ct string, cl int64) (digest.Digest, error) {
+func (rc *regClient) BlobPut(ctx context.Context, ref types.Ref, d digest.Digest, rdr io.Reader, ct string, cl int64) (digest.Digest, error) {
 	// defaults for content-type and length
 	if ct == "" {
 		ct = "application/octet-stream"
@@ -265,7 +266,7 @@ func (rc *regClient) BlobPut(ctx context.Context, ref Ref, d digest.Digest, rdr 
 	return rc.blobPutUploadChunked(ctx, ref, putURL, rdr, ct)
 }
 
-func (rc *regClient) blobGetUploadURL(ctx context.Context, ref Ref) (*url.URL, error) {
+func (rc *regClient) blobGetUploadURL(ctx context.Context, ref types.Ref) (*url.URL, error) {
 	// request an upload location
 	req := httpReq{
 		host:      ref.Registry,
@@ -305,7 +306,7 @@ func (rc *regClient) blobGetUploadURL(ctx context.Context, ref Ref) (*url.URL, e
 	return putURL, nil
 }
 
-func (rc *regClient) blobPutUploadFull(ctx context.Context, ref Ref, d digest.Digest, putURL *url.URL, rdr io.Reader, ct string, cl int64) error {
+func (rc *regClient) blobPutUploadFull(ctx context.Context, ref types.Ref, d digest.Digest, putURL *url.URL, rdr io.Reader, ct string, cl int64) error {
 	host := rc.hostGet(ref.Registry)
 
 	// append digest to request to use the monolithic upload option
@@ -335,7 +336,7 @@ func (rc *regClient) blobPutUploadFull(ctx context.Context, ref Ref, d digest.Di
 	return nil
 }
 
-func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref Ref, putURL *url.URL, rdr io.Reader, ct string) (digest.Digest, error) {
+func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, putURL *url.URL, rdr io.Reader, ct string) (digest.Digest, error) {
 	host := rc.hostGet(ref.Registry)
 	bufSize := int64(512 * 1024) // 512k
 

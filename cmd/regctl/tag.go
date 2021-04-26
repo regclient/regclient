@@ -6,6 +6,7 @@ import (
 
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/regclient"
+	"github.com/regclient/regclient/regclient/types"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -50,7 +51,7 @@ func init() {
 }
 
 func runTagDelete(cmd *cobra.Command, args []string) error {
-	ref, err := regclient.NewRef(args[0])
+	ref, err := types.NewRef(args[0])
 	if err != nil {
 		return err
 	}
@@ -68,7 +69,7 @@ func runTagDelete(cmd *cobra.Command, args []string) error {
 }
 
 func runTagLs(cmd *cobra.Command, args []string) error {
-	ref, err := regclient.NewRef(args[0])
+	ref, err := types.NewRef(args[0])
 	if err != nil {
 		return err
 	}

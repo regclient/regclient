@@ -8,6 +8,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/regclient"
+	"github.com/regclient/regclient/regclient/types"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -56,7 +57,7 @@ func init() {
 }
 
 func runBlobGet(cmd *cobra.Command, args []string) error {
-	ref, err := regclient.NewRef(args[0])
+	ref, err := types.NewRef(args[0])
 	if err != nil {
 		return err
 	}
@@ -97,7 +98,7 @@ func runBlobGet(cmd *cobra.Command, args []string) error {
 }
 
 func runBlobPut(cmd *cobra.Command, args []string) error {
-	ref, err := regclient.NewRef(args[0])
+	ref, err := types.NewRef(args[0])
 	if err != nil {
 		return err
 	}

@@ -7,24 +7,24 @@ This includes `regctl` for a command line interface to manage registries.
 
 ## regctl Features
 
-- Ability to inspect repo tags, manifests, and image configs without downloading
-  the full image.
-- Ability to copy or retag an image without pulling it into docker. Layers are
-  only pulled if you are copying between different registries and the target
-  registry does not have the layers already.
+- Ability to inspect repo tags, manifests, and image configs without downloading the full image.
+- Ability to copy or retag an image without pulling it into docker.
+  Layers are only pulled if you are copying between different registries and the target registry does not have the layers already.
+- Ability to copy all platforms of a multi-platform image.
 - Ability to export an image from a registry without a docker engine.
 - Ability to delete an image manifest.
 - Ability to delete a tag without removing the entire manifest.
-- Uses docker registry logins and /etc/docker/certs.d by default to support
-  private repositories and self signed registries.
+- Uses docker registry logins and `/etc/docker/certs.d` by default to support private repositories and self signed registries.
 - Shows current usage of Docker Hub's rate limit.
 
 ## regsync features
 
+- Ability to copy or retag an image without pulling it into docker.
+  Layers are only pulled if you are copying between different registries and the target registry does not have the layers already.
+- Ability to copy all platforms of a multi-platform image.
 - Mirrors repositories or images based on a yaml configuration.
 - Can use user's docker configuration for registry credentials.
-- Ability to run on a cron schedule, one time synchronization, or only check
-  for stale images.
+- Ability to run on a cron schedule, one time synchronization, or only check for stale images.
 - Ability to backup previous target image before overwriting.
 - Ability to postpone mirror step when rate limit is below a threshold.
 - Ability to mirror multiple images concurrently.
@@ -52,7 +52,6 @@ Unfinished or not yet started work includes:
 
 - Ability to import images from a tar to a registry.
 - Ability to export a multi-platform image.
-- Ability to concurrently download layers.
 - Ability to retry from a partial layer download.
 - Documentation.
 - Testing.
@@ -168,22 +167,20 @@ See the [project documentation](docs/README.md).
 
 Registry client API:
 
-- containerd: containerd'd registry APIs focus more on pulling images than on a
-  general purpose registry client API. This means various registry API calls are
-  not provided.
-- docker/distribution: Docker's client libraries would have needed a fair bit of
-  modification to support OCI images, and behave similar to the docker command
-  line with registry logins.
+- containerd:
+  containerd'd registry APIs focus more on pulling images than on a general purpose registry client API.
+  This means various registry API calls are not provided.
+- distribution/distribution:
+  The distribution project is focused on the server side of the registry API.
+  There are a few client API's, but they appear to be intended for internal use.
 
 There are also a variety of registry command line tools available:
 
-- genuinetools/img: img works on top of buildkit for image creation and
-  management. Using this for a registry client means including lots of
-  dependencies that many will not need.
-- genuinetools/reg: reg is probably the closest match to this project. Some
-  features included in regctl that aren't included in reg are the ability to
-  inject self signed certs, store login credentials separate from docker, copy
-  or retag images, and export images into a tar file.
-- containers/skopeo: Because of RedHat's push to remove any docker solutions
-  from their stack, their skopeo project wasn't considered when searching for a
-  complement to the docker command line.
+- genuinetools/img:
+  img works on top of buildkit for image creation and management.
+  Using this for a registry client means including lots of dependencies that many will not need.
+- genuinetools/reg:
+  reg is probably the closest match to this project.
+  Some features included in regctl that aren't included in reg are the ability to inject self signed certs, store login credentials separate from docker, copy or retag images, and export images into a tar file.
+- containers/skopeo:
+  Because of RedHat's push to remove any docker solutions from their stack, their skopeo project wasn't considered when searching for a complement to docker's tooling.

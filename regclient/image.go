@@ -15,16 +15,17 @@ import (
 	digest "github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/pkg/archive"
+	"github.com/regclient/regclient/regclient/types"
 	"github.com/sirupsen/logrus"
 )
 
 // ImageClient provides registry client requests to images
 type ImageClient interface {
-	ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) error
-	ImageExport(ctx context.Context, ref Ref, outStream io.Writer) error
+	ImageCopy(ctx context.Context, refSrc types.Ref, refTgt types.Ref) error
+	ImageExport(ctx context.Context, ref types.Ref, outStream io.Writer) error
 }
 
-func (rc *regClient) ImageCopy(ctx context.Context, refSrc Ref, refTgt Ref) error {
+func (rc *regClient) ImageCopy(ctx context.Context, refSrc types.Ref, refTgt types.Ref) error {
 	// check if source and destination already match
 	msh, errS := rc.ManifestHead(ctx, refSrc)
 	mdh, errD := rc.ManifestHead(ctx, refTgt)
@@ -144,7 +145,7 @@ type dockerTarManifest struct {
 	Layers   []string
 }
 
-func (rc *regClient) ImageExport(ctx context.Context, ref Ref, outStream io.Writer) error {
+func (rc *regClient) ImageExport(ctx context.Context, ref types.Ref, outStream io.Writer) error {
 	expManifest := dockerTarManifest{}
 	expManifest.RepoTags = append(expManifest.RepoTags, ref.CommonName())
 

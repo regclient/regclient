@@ -2,19 +2,17 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
 
 	"github.com/containerd/containerd/platforms"
-	dockerManifestList "github.com/docker/distribution/manifest/manifestlist"
-	dockerSchema1 "github.com/docker/distribution/manifest/schema1"
-	dockerSchema2 "github.com/docker/distribution/manifest/schema2"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/regclient"
+	"github.com/regclient/regclient/regclient/manifest"
+	"github.com/regclient/regclient/regclient/types"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -83,7 +81,7 @@ func init() {
 	rootCmd.AddCommand(manifestCmd)
 }
 
-func getManifest(rc regclient.RegClient, ref regclient.Ref) (regclient.Manifest, error) {
+func getManifest(rc regclient.RegClient, ref types.Ref) (manifest.Manifest, error) {
 	m, err := rc.ManifestGet(context.Background(), ref)
 	if err != nil {
 		return m, err
@@ -110,7 +108,7 @@ func getManifest(rc regclient.RegClient, ref regclient.Ref) (regclient.Manifest,
 	return m, nil
 }
 
-func getPlatformDesc(rc regclient.RegClient, m regclient.Manifest) (*ociv1.Descriptor, error) {
+func getPlatformDesc(rc regclient.RegClient, m manifest.Manifest) (*ociv1.Descriptor, error) {
 	var desc *ociv1.Descriptor
 	var err error
 	if !m.IsList() {
@@ -158,7 +156,7 @@ func getPlatformDesc(rc regclient.RegClient, m regclient.Manifest) (*ociv1.Descr
 }
 
 func runManifestDelete(cmd *cobra.Command, args []string) error {
-	ref, err := regclient.NewRef(args[0])
+	ref, err := types.NewRef(args[0])
 	if err != nil {
 		return err
 	}
@@ -178,7 +176,7 @@ func runManifestDelete(cmd *cobra.Command, args []string) error {
 }
 
 func runManifestDigest(cmd *cobra.Command, args []string) error {
-	ref, err := regclient.NewRef(args[0])
+	ref, err := types.NewRef(args[0])
 	if err != nil {
 		return err
 	}
@@ -220,7 +218,7 @@ func runManifestDigest(cmd *cobra.Command, args []string) error {
 }
 
 func runManifestGet(cmd *cobra.Command, args []string) error {
-	ref, err := regclient.NewRef(args[0])
+	ref, err := types.NewRef(args[0])
 	if err != nil {
 		return err
 	}
@@ -243,82 +241,18 @@ func runManifestGet(cmd *cobra.Command, args []string) error {
 }
 
 func runManifestPut(cmd *cobra.Command, args []string) error {
-	ref, err := regclient.NewRef(args[0])
+	ref, err := types.NewRef(args[0])
 	if err != nil {
 		return err
 	}
 	rc := newRegClient()
-	var rcM regclient.Manifest
-
-	switch manifestOpts.contentType {
-	case regclient.MediaTypeDocker1Manifest:
-		raw, err := ioutil.ReadAll(os.Stdin)
-		if err != nil {
-			return err
-		}
-		var m dockerSchema1.Manifest
-		err = json.Unmarshal(raw, &m)
-		if err != nil {
-			return err
-		}
-		rcM = regclient.NewManifestDocker1M(m, raw)
-	case regclient.MediaTypeDocker1ManifestSigned:
-		raw, err := ioutil.ReadAll(os.Stdin)
-		if err != nil {
-			return err
-		}
-		var m dockerSchema1.SignedManifest
-		err = json.Unmarshal(raw, &m)
-		if err != nil {
-			return err
-		}
-		rcM = regclient.NewManifestDocker1MS(m, raw)
-	case regclient.MediaTypeDocker2Manifest:
-		raw, err := ioutil.ReadAll(os.Stdin)
-		if err != nil {
-			return err
-		}
-		var m dockerSchema2.Manifest
-		err = json.Unmarshal(raw, &m)
-		if err != nil {
-			return err
-		}
-		rcM = regclient.NewManifestDockerM(m, raw)
-	case regclient.MediaTypeDocker2ManifestList:
-		raw, err := ioutil.ReadAll(os.Stdin)
-		if err != nil {
-			return err
-		}
-		var m dockerManifestList.ManifestList
-		err = json.Unmarshal(raw, &m)
-		if err != nil {
-			return err
-		}
-		rcM = regclient.NewManifestDockerML(m, raw)
-	case regclient.MediaTypeOCI1Manifest:
-		raw, err := ioutil.ReadAll(os.Stdin)
-		if err != nil {
-			return err
-		}
-		var m ociv1.Manifest
-		err = json.Unmarshal(raw, &m)
-		if err != nil {
-			return err
-		}
-		rcM = regclient.NewManifestOCIM(m, raw)
-	case regclient.MediaTypeOCI1ManifestList:
-		raw, err := ioutil.ReadAll(os.Stdin)
-		if err != nil {
-			return err
-		}
-		var m ociv1.Index
-		err = json.Unmarshal(raw, &m)
-		if err != nil {
-			return err
-		}
-		rcM = regclient.NewManifestOCIML(m, raw)
-	default:
-		return fmt.Errorf("%w: unknown content-type: %s", ErrInvalidInput, manifestOpts.contentType)
+	raw, err := ioutil.ReadAll(os.Stdin)
+	if err != nil {
+		return err
+	}
+	rcM, err := manifest.New(manifestOpts.contentType, raw, ref, nil)
+	if err != nil {
+		return err
 	}
 
 	return rc.ManifestPut(context.Background(), ref, rcM)

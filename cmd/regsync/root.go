@@ -14,6 +14,8 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/regclient"
+	"github.com/regclient/regclient/regclient/manifest"
+	"github.com/regclient/regclient/regclient/types"
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -320,7 +322,7 @@ func loadConf() error {
 func (s ConfigSync) process(ctx context.Context, action string) error {
 	switch s.Type {
 	case "repository":
-		sRepoRef, err := regclient.NewRef(s.Source)
+		sRepoRef, err := types.NewRef(s.Source)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"source": s.Source,
@@ -363,7 +365,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 			}).Warn("No matching tags found")
 			return nil
 		}
-		tRepoRef, err := regclient.NewRef(s.Target)
+		tRepoRef, err := types.NewRef(s.Target)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"target": s.Target,
@@ -383,7 +385,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 		}
 
 	case "image":
-		sRef, err := regclient.NewRef(s.Source)
+		sRef, err := types.NewRef(s.Source)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"source": s.Source,
@@ -391,7 +393,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 			}).Error("Failed parsing source")
 			return err
 		}
-		tRef, err := regclient.NewRef(s.Target)
+		tRef, err := types.NewRef(s.Target)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"target": s.Target,
@@ -414,7 +416,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 }
 
 // process a sync step
-func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, action string) error {
+func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action string) error {
 	mSrc, err := rc.ManifestHead(ctx, src)
 	if err != nil {
 		log.WithFields(logrus.Fields{
@@ -535,7 +537,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, acti
 	if tgtExists && s.Backup != "" {
 		// expand template
 		data := struct {
-			Ref  regclient.Ref
+			Ref  types.Ref
 			Step ConfigSync
 		}{Ref: tgt, Step: s}
 		backupStr, err := template.String(s.Backup, data)
@@ -551,7 +553,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt regclient.Ref, acti
 		backupRef := tgt
 		if strings.ContainsAny(backupStr, ":/") {
 			// if the : or / are in the string, parse it as a full reference
-			backupRef, err = regclient.NewRef(backupStr)
+			backupRef, err = types.NewRef(backupStr)
 			if err != nil {
 				log.WithFields(logrus.Fields{
 					"original": tgt.CommonName(),
@@ -648,16 +650,16 @@ func (s ConfigSync) filterTags(in []string) ([]string, error) {
 
 var manifestCache struct {
 	mu        sync.Mutex
-	manifests map[string]regclient.Manifest
+	manifests map[string]manifest.Manifest
 }
 
 func init() {
-	manifestCache.manifests = map[string]regclient.Manifest{}
+	manifestCache.manifests = map[string]manifest.Manifest{}
 }
 
 // getPlatformDigest resolves a manifest list to a specific platform's digest
 // This uses the above cache to only call ManifestGet when a new manifest list digest is seen
-func getPlatformDigest(ctx context.Context, ref regclient.Ref, platStr string, origMan regclient.Manifest) (digest.Digest, error) {
+func getPlatformDigest(ctx context.Context, ref types.Ref, platStr string, origMan manifest.Manifest) (digest.Digest, error) {
 	plat, err := platforms.Parse(platStr)
 	if err != nil {
 		log.WithFields(logrus.Fields{
