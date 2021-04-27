@@ -21,14 +21,16 @@ import (
 	ociv1Specs "github.com/opencontainers/image-spec/specs-go"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/pkg/retryable"
+	"github.com/regclient/regclient/regclient/manifest"
+	"github.com/regclient/regclient/regclient/types"
 	"github.com/sirupsen/logrus"
 )
 
 // TagClient wraps calls to tag list and delete
 type TagClient interface {
-	TagDelete(ctx context.Context, ref Ref) error
-	TagList(ctx context.Context, ref Ref) (TagList, error)
-	TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts) (TagList, error)
+	TagDelete(ctx context.Context, ref types.Ref) error
+	TagList(ctx context.Context, ref types.Ref) (TagList, error)
+	TagListWithOpts(ctx context.Context, ref types.Ref, opts TagOpts) (TagList, error)
 }
 
 // TODO: consider a tag interface for future uses
@@ -49,7 +51,7 @@ type TagList interface {
 }
 
 type tagCommon struct {
-	ref       Ref
+	ref       types.Ref
 	mt        string
 	orig      interface{}
 	rawHeader http.Header
@@ -79,14 +81,42 @@ type TagOpts struct {
 // 1. Make a manifest, for this we put a few labels and timestamps to be unique.
 // 2. Push that manifest to the tag.
 // 3. Delete the digest for that new manifest that is only used by that tag.
-func (rc *regClient) TagDelete(ctx context.Context, ref Ref) error {
-	var tempManifest Manifest
+func (rc *regClient) TagDelete(ctx context.Context, ref types.Ref) error {
+	var tempManifest manifest.Manifest
 	if ref.Tag == "" {
 		return ErrMissingTag
 	}
 
+	// attempt platform specific methods
+	req := httpReq{
+		host:      ref.Registry,
+		noMirrors: true,
+		apis: map[string]httpReqAPI{
+			"hub": {
+				method: "DELETE",
+				path:   "repositories/" + ref.Repository + "/tags/" + ref.Tag + "/",
+			},
+		},
+	}
+
+	resp, err := rc.httpDo(ctx, req)
+	if resp != nil {
+		defer resp.Close()
+	}
+	if err == nil {
+		return nil
+	} else if errors.Is(err, retryable.ErrStatusCode) {
+		return fmt.Errorf("Failed to delete tag %s: %w", ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
+	} else if !errors.Is(err, ErrAPINotFound) {
+		return fmt.Errorf("Failed to delete tag %s: %w", ref.CommonName(), err)
+	}
+	// else ErrAPINotFound, fallback to creating a temporary manifest to replace the tag and deleting that manifest
+
 	// lookup the current manifest media type
-	curManifest, _ := rc.ManifestHead(ctx, ref)
+	curManifest, err := rc.ManifestHead(ctx, ref)
+	if err != nil {
+		return err
+	}
 
 	// create empty image config with single label
 	// Note, this should be MediaType specific, but it appears that docker uses OCI for the config
@@ -119,9 +149,9 @@ func (rc *regClient) TagDelete(ctx context.Context, ref Ref) error {
 	confDigest := digester.Digest()
 
 	// create manifest with config, matching the original tag manifest type
-	switch curManifest.(type) {
-	case *manifestOCIM, *manifestOCIML:
-		om := ociv1.Manifest{
+	switch curManifest.GetMediaType() {
+	case MediaTypeOCI1Manifest, MediaTypeOCI1ManifestList:
+		tempManifest, err = manifest.FromOrig(ociv1.Manifest{
 			Versioned: ociv1Specs.Versioned{
 				SchemaVersion: 1,
 			},
@@ -131,30 +161,12 @@ func (rc *regClient) TagDelete(ctx context.Context, ref Ref) error {
 				Size:      int64(len(confB)),
 			},
 			Layers: []ociv1.Descriptor{},
-		}
-		omBytes, err := json.Marshal(om)
+		})
 		if err != nil {
 			return err
-		}
-		digester = digest.Canonical.Digester()
-		manfBuf := bytes.NewBuffer(omBytes)
-		_, err = manfBuf.WriteTo(digester.Hash())
-		if err != nil {
-			return err
-		}
-		tempManifest = &manifestOCIM{
-			manifestCommon: manifestCommon{
-				mt:       MediaTypeOCI1Manifest,
-				ref:      ref,
-				orig:     om,
-				rawBody:  omBytes,
-				digest:   digester.Digest(),
-				manifSet: true,
-			},
-			Manifest: om,
 		}
 	default: // default to the docker v2 schema
-		dm := dockerSchema2.Manifest{
+		tempManifest, err = manifest.FromOrig(dockerSchema2.Manifest{
 			Versioned: dockerManifest.Versioned{
 				SchemaVersion: 2,
 				MediaType:     MediaTypeDocker2Manifest,
@@ -165,27 +177,9 @@ func (rc *regClient) TagDelete(ctx context.Context, ref Ref) error {
 				Size:      int64(len(confB)),
 			},
 			Layers: []dockerDistribution.Descriptor{},
-		}
-		dmBytes, err := json.Marshal(dm)
+		})
 		if err != nil {
 			return err
-		}
-		digester = digest.Canonical.Digester()
-		manfBuf := bytes.NewBuffer(dmBytes)
-		_, err = manfBuf.WriteTo(digester.Hash())
-		if err != nil {
-			return err
-		}
-		tempManifest = &manifestDockerM{
-			manifestCommon: manifestCommon{
-				mt:       MediaTypeDocker2Manifest,
-				ref:      ref,
-				orig:     dm,
-				rawBody:  dmBytes,
-				digest:   digester.Digest(),
-				manifSet: true,
-			},
-			Manifest: dm,
 		}
 	}
 
@@ -194,7 +188,7 @@ func (rc *regClient) TagDelete(ctx context.Context, ref Ref) error {
 	}).Debug("Sending dummy manifest to replace tag")
 
 	// push config
-	err = rc.BlobPut(ctx, ref, confDigest.String(), ioutil.NopCloser(bytes.NewReader(confB)), MediaTypeDocker2ImageConfig, int64(len(confB)))
+	_, err = rc.BlobPut(ctx, ref, confDigest, ioutil.NopCloser(bytes.NewReader(confB)), MediaTypeDocker2ImageConfig, int64(len(confB)))
 	if err != nil {
 		return fmt.Errorf("Failed sending dummy config to delete %s: %w", ref.CommonName(), err)
 	}
@@ -220,11 +214,11 @@ func (rc *regClient) TagDelete(ctx context.Context, ref Ref) error {
 	return nil
 }
 
-func (rc *regClient) TagList(ctx context.Context, ref Ref) (TagList, error) {
+func (rc *regClient) TagList(ctx context.Context, ref types.Ref) (TagList, error) {
 	return rc.TagListWithOpts(ctx, ref, TagOpts{})
 }
 
-func (rc *regClient) TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts) (TagList, error) {
+func (rc *regClient) TagListWithOpts(ctx context.Context, ref types.Ref, opts TagOpts) (TagList, error) {
 	var tl TagList
 	tc := tagCommon{
 		ref: ref,
@@ -274,11 +268,12 @@ func (rc *regClient) TagListWithOpts(ctx context.Context, ref Ref, opts TagOpts)
 	case "application/json", "text/plain":
 		var tdl TagDockerList
 		err = json.Unmarshal(respBody, &tdl)
-		tc.orig = tdl
-		tl = tagDockerList{
+		tStruct := tagDockerList{
 			tagCommon:     tc,
 			TagDockerList: tdl,
 		}
+		tStruct.orig = &tStruct.TagDockerList
+		tl = tStruct
 	default:
 		return tl, fmt.Errorf("%w: media type: %s, reference: %s", ErrUnsupportedMediaType, mt, ref.CommonName())
 	}

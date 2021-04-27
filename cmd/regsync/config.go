@@ -38,6 +38,7 @@ type ConfigCreds struct {
 	Hostname   string            `yaml:"hostname" json:"hostname"`
 	User       string            `yaml:"user" json:"user"`
 	Pass       string            `yaml:"pass" json:"pass"`
+	Token      string            `json:"token,omitempty"`
 	TLS        regclient.TLSConf `yaml:"tls" json:"tls"`
 	Scheme     string            `yaml:"scheme" json:"scheme"` // TODO: eventually delete
 	RegCert    string            `yaml:"regcert" json:"regcert"`
@@ -157,7 +158,12 @@ func ConfigLoadFile(filename string) (*Config, error) {
 // expand templates in various parts of the config
 func configExpandTemplates(c *Config) error {
 	for i := range c.Creds {
-		val, err := template.String(c.Creds[i].User, nil)
+		val, err := template.String(c.Creds[i].Registry, nil)
+		if err != nil {
+			return err
+		}
+		c.Creds[i].Registry = val
+		val, err = template.String(c.Creds[i].User, nil)
 		if err != nil {
 			return err
 		}

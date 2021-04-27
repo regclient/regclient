@@ -40,6 +40,7 @@ type ConfigHost struct {
 	Hostname   string            `json:"hostname,omitempty"`
 	User       string            `json:"user,omitempty"`
 	Pass       string            `json:"pass,omitempty"`
+	Token      string            `json:"token,omitempty"`
 	PathPrefix string            `json:"pathPrefix,omitempty"` // used for mirrors defined within a repository namespace
 	Mirrors    []string          `json:"mirrors,omitempty"`    // list of other ConfigHost Names to use as mirrors
 	Priority   uint              `json:"priority,omitempty"`   // priority when sorting mirrors, higher priority attempted first

@@ -9,19 +9,21 @@ import (
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/pkg/go2lua"
 	"github.com/regclient/regclient/regclient"
+	"github.com/regclient/regclient/regclient/manifest"
+	"github.com/regclient/regclient/regclient/types"
 	"github.com/sirupsen/logrus"
 	lua "github.com/yuin/gopher-lua"
 )
 
 type config struct {
-	m    regclient.Manifest
-	ref  regclient.Ref
+	m    manifest.Manifest
+	ref  types.Ref
 	conf regclient.BlobOCIConfig
 }
 
-type manifest struct {
-	m   regclient.Manifest
-	ref regclient.Ref
+type sbManifest struct {
+	m   manifest.Manifest
+	ref types.Ref
 }
 
 func setupImage(s *Sandbox) {
@@ -87,11 +89,11 @@ func (s *Sandbox) checkConfig(ls *lua.LState, i int) *config {
 	return c
 }
 
-func (s *Sandbox) checkManifest(ls *lua.LState, i int, list bool, head bool) *manifest {
-	var m *manifest
+func (s *Sandbox) checkManifest(ls *lua.LState, i int, list bool, head bool) *sbManifest {
+	var m *sbManifest
 	switch ls.Get(i).Type() {
 	case lua.LTString:
-		ref, err := regclient.NewRef(ls.CheckString(1))
+		ref, err := types.NewRef(ls.CheckString(1))
 		if err != nil {
 			ls.RaiseError("reference parsing failed: %v", err)
 		}
@@ -100,22 +102,22 @@ func (s *Sandbox) checkManifest(ls *lua.LState, i int, list bool, head bool) *ma
 			if err != nil {
 				ls.RaiseError("Failed retrieving \"%s\" manifest: %v", ref.CommonName(), err)
 			}
-			m = &manifest{m: rcM, ref: ref}
+			m = &sbManifest{m: rcM, ref: ref}
 		} else {
 			rcM, err := s.rcManifestGet(ref, list, "")
 			if err != nil {
 				ls.RaiseError("manifest pull failed: %v", err)
 			}
-			m = &manifest{m: rcM, ref: ref}
+			m = &sbManifest{m: rcM, ref: ref}
 		}
 	case lua.LTUserData:
 		ud := ls.CheckUserData(i)
 		switch ud.Value.(type) {
-		case *manifest:
-			m = ud.Value.(*manifest)
+		case *sbManifest:
+			m = ud.Value.(*sbManifest)
 		case *config:
 			c := ud.Value.(*config)
-			m = &manifest{ref: c.ref, m: c.m}
+			m = &sbManifest{ref: c.ref, m: c.m}
 		case *reference:
 			r := ud.Value.(*reference)
 			if head {
@@ -123,13 +125,13 @@ func (s *Sandbox) checkManifest(ls *lua.LState, i int, list bool, head bool) *ma
 				if err != nil {
 					ls.RaiseError("Failed retrieving \"%s\" manifest: %v", r.ref.CommonName(), err)
 				}
-				m = &manifest{m: rcM, ref: r.ref}
+				m = &sbManifest{m: rcM, ref: r.ref}
 			} else {
 				rcM, err := s.rcManifestGet(r.ref, list, "")
 				if err != nil {
 					ls.RaiseError("manifest pull failed: %v", err)
 				}
-				m = &manifest{m: rcM, ref: r.ref}
+				m = &sbManifest{m: rcM, ref: r.ref}
 			}
 		default:
 			ls.ArgError(i, "manifest expected")
@@ -155,7 +157,7 @@ func (s *Sandbox) configGet(ls *lua.LState) int {
 		ls.RaiseError("Failed looking up \"%s\" config digest: %v", m.ref.CommonName(), err)
 	}
 
-	confBlob, err := s.rc.BlobGetOCIConfig(s.ctx, m.ref, confDigest.String())
+	confBlob, err := s.rc.BlobGetOCIConfig(s.ctx, m.ref, confDigest)
 	if err != nil {
 		ls.RaiseError("Failed retrieving \"%s\" config: %v", m.ref.CommonName(), err)
 	}
@@ -225,7 +227,7 @@ func (s *Sandbox) manifestGetWithOpts(ls *lua.LState, list bool) int {
 		ls.RaiseError("Failed retrieving \"%s\" manifest: %v", ref.ref.CommonName(), err)
 	}
 
-	ud, err := wrapUserData(ls, &manifest{m: m, ref: ref.ref}, m.GetOrigManifest(), luaManifestName)
+	ud, err := wrapUserData(ls, &sbManifest{m: m, ref: ref.ref}, m.GetOrigManifest(), luaManifestName)
 	if err != nil {
 		ls.RaiseError("Failed packaging \"%s\" manifest: %v", ref.ref.CommonName(), err)
 	}
@@ -246,7 +248,7 @@ func (s *Sandbox) manifestHead(ls *lua.LState) int {
 		ls.RaiseError("Failed retrieving \"%s\" manifest: %v", ref.ref.CommonName(), err)
 	}
 
-	ud, err := wrapUserData(ls, &manifest{m: m, ref: ref.ref}, m, luaManifestName)
+	ud, err := wrapUserData(ls, &sbManifest{m: m, ref: ref.ref}, m, luaManifestName)
 	if err != nil {
 		ls.RaiseError("Failed packaging \"%s\" manifest: %v", ref.ref.CommonName(), err)
 	}
@@ -354,7 +356,7 @@ func (s *Sandbox) manifestJSON(ls *lua.LState) int {
 	return 1
 }
 
-func (s *Sandbox) rcManifestGet(ref regclient.Ref, list bool, platform string) (regclient.Manifest, error) {
+func (s *Sandbox) rcManifestGet(ref types.Ref, list bool, platform string) (manifest.Manifest, error) {
 	m, err := s.rc.ManifestGet(s.ctx, ref)
 	if err != nil {
 		return m, err

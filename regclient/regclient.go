@@ -67,13 +67,6 @@ type RegClient interface {
 	BlobClient
 }
 
-// RateLimit is returned from some http requests
-type RateLimit struct {
-	Remain, Limit, Reset int
-	Set                  bool
-	Policies             []string
-}
-
 type regClient struct {
 	certPaths  []string
 	hosts      map[string]*regClientHost
@@ -308,9 +301,9 @@ func (rc *regClient) getRetryable(host *ConfigHost) retryable.Retryable {
 	return rc.hosts[host.Name].retryable
 }
 
-func (host *ConfigHost) authCreds() func(h string) (string, string) {
-	return func(h string) (string, string) {
-		return host.User, host.Pass
+func (host *ConfigHost) authCreds() func(h string) auth.Cred {
+	return func(h string) auth.Cred {
+		return auth.Cred{User: host.User, Password: host.Pass, Token: host.Token}
 	}
 }
 

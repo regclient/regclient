@@ -9,11 +9,17 @@ LD_FLAGS=-X \"github.com/regclient/regclient/regclient.VCSRef=$(VCS_REF)\" \
 GO_BUILD_FLAGS=-ldflags "$(LD_FLAGS)"
 DOCKER_ARGS=--build-arg "VCS_REF=$(VCS_REF)" --build-arg "LD_FLAGS=$(LD_FLAGS)"
 
-.PHONY: all binaries vendor docker test plugin-user plugin-host .FORCE
+.PHONY: all binaries vendor docker fmt vet test plugin-user plugin-host .FORCE
 
 .FORCE:
 
-all: test binaries
+all: fmt vet test binaries
+
+fmt:
+	go fmt ./...
+
+vet:
+	go vet ./...
 
 test:
 	go test ./...

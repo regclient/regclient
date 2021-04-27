@@ -1,9 +1,11 @@
 package auth
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -41,7 +43,12 @@ func init() {
 }
 
 // CredsFn is passed to lookup credentials for a given hostname, response is a username and password or empty strings
-type CredsFn func(string) (string, string)
+type CredsFn func(string) Cred
+
+// Cred is returned by the CredsFn
+type Cred struct {
+	User, Password, Token string
+}
 
 // Auth manages authorization requests/responses for http requests
 type Auth interface {
@@ -62,7 +69,7 @@ type Handler interface {
 }
 
 // HandlerBuild is used to make a new handler for a specific authType and URL
-type HandlerBuild func(client *http.Client, clientID, host, user, pass string) Handler
+type HandlerBuild func(client *http.Client, clientID, host string, cred Cred) Handler
 
 // Opts configures options for NewAuth
 type Opts func(*auth)
@@ -194,8 +201,10 @@ func (a *auth) HandleResponse(resp *http.Response) error {
 			a.hs[host] = map[string]Handler{}
 		}
 		if _, ok := a.hs[host][c.authType]; !ok {
-			user, pass := a.credsFn(host)
-			h := a.hbs[c.authType](a.httpClient, a.clientID, host, user, pass)
+			h := a.hbs[c.authType](a.httpClient, a.clientID, host, a.credsFn(host))
+			if h == nil {
+				continue
+			}
 			a.hs[host][c.authType] = h
 		}
 		err := a.hs[host][c.authType].ProcessChallenge(c)
@@ -260,12 +269,16 @@ func (a *auth) addDefaultHandlers() {
 		a.hbs["bearer"] = NewBearerHandler
 		a.authTypes = append(a.authTypes, "bearer")
 	}
+	if _, ok := a.hbs["jwt"]; !ok {
+		a.hbs["jwt"] = NewJWTHandler
+		a.authTypes = append(a.authTypes, "jwt")
+	}
 }
 
 // DefaultCredsFn is used to return no credentials when auth is not configured with a CredsFn
 // This avoids the need to check for nil pointers
-func DefaultCredsFn(h string) (string, string) {
-	return "", ""
+func DefaultCredsFn(h string) Cred {
+	return Cred{}
 }
 
 // ParseAuthHeaders extracts the scheme and realm from WWW-Authenticate headers
@@ -405,15 +418,15 @@ func ParseAuthHeader(ah string) ([]Challenge, error) {
 
 // BasicHandler supports Basic auth type requests
 type BasicHandler struct {
-	realm, user, pass string
+	realm string
+	cred  Cred
 }
 
 // NewBasicHandler creates a new BasicHandler
-func NewBasicHandler(client *http.Client, clientID, host, user, pass string) Handler {
+func NewBasicHandler(client *http.Client, clientID, host string, cred Cred) Handler {
 	return &BasicHandler{
 		realm: "",
-		user:  user,
-		pass:  pass,
+		cred:  cred,
 	}
 }
 
@@ -431,20 +444,21 @@ func (b *BasicHandler) ProcessChallenge(c Challenge) error {
 
 // GenerateAuth for BasicHandler generates base64 encoded user/pass for a host
 func (b *BasicHandler) GenerateAuth() (string, error) {
-	if b.user == "" || b.pass == "" {
+	if b.cred.User == "" || b.cred.Password == "" {
 		return "", ErrNotFound
 	}
-	auth := base64.StdEncoding.EncodeToString([]byte(b.user + ":" + b.pass))
+	auth := base64.StdEncoding.EncodeToString([]byte(b.cred.User + ":" + b.cred.Password))
 	return fmt.Sprintf("Basic %s", auth), nil
 }
 
 // BearerHandler supports Bearer auth type requests
 type BearerHandler struct {
-	client                     *http.Client
-	clientID                   string
-	realm, service, user, pass string
-	scopes                     []string
-	token                      BearerToken
+	client         *http.Client
+	clientID       string
+	realm, service string
+	cred           Cred
+	scopes         []string
+	token          BearerToken
 }
 
 // BearerToken is the json response to the Bearer request
@@ -458,19 +472,18 @@ type BearerToken struct {
 }
 
 // NewBearerHandler creates a new BearerHandler
-func NewBearerHandler(client *http.Client, clientID, host, user, pass string) Handler {
+func NewBearerHandler(client *http.Client, clientID, host string, cred Cred) Handler {
 	return &BearerHandler{
 		client:   client,
 		clientID: clientID,
-		user:     user,
-		pass:     pass,
+		cred:     cred,
 		realm:    "",
 		service:  "",
 		scopes:   []string{},
 	}
 }
 
-// ProcessChallenge for BasicHandler is a noop
+// ProcessChallenge handles WWW-Authenticate header for bearer tokens
 // Bearer realm="https://auth.docker.io/token",service="registry.docker.io",scope="repository:samalba/my-app:pull,push"
 func (b *BearerHandler) ProcessChallenge(c Challenge) error {
 	if _, ok := c.params["realm"]; !ok {
@@ -558,9 +571,9 @@ func (b *BearerHandler) tryGet() error {
 		reqParams.Add("scope", s)
 	}
 
-	if b.user != "" && b.pass != "" {
-		reqParams.Add("account", b.user)
-		req.SetBasicAuth(b.user, b.pass)
+	if b.cred.User != "" && b.cred.Password != "" {
+		reqParams.Add("account", b.cred.User)
+		req.SetBasicAuth(b.cred.User, b.cred.Password)
 	}
 
 	req.URL.RawQuery = reqParams.Encode()
@@ -586,10 +599,10 @@ func (b *BearerHandler) tryPost() error {
 	if b.token.RefreshToken != "" {
 		form.Set("grant_type", "refresh_token")
 		form.Set("refresh_token", b.token.RefreshToken)
-	} else if b.user != "" && b.pass != "" {
+	} else if b.cred.User != "" && b.cred.Password != "" {
 		form.Set("grant_type", "password")
-		form.Set("username", b.user)
-		form.Set("password", b.pass)
+		form.Set("username", b.cred.User)
+		form.Set("password", b.cred.Password)
 	}
 
 	req, err := http.NewRequest("POST", b.realm, strings.NewReader(form.Encode()))
@@ -645,4 +658,91 @@ func (b *BearerHandler) validateResponse(resp *http.Response) error {
 	}
 
 	return nil
+}
+
+// JWTHandler supports JWT auth type requests
+type JWTHubHandler struct {
+	client   *http.Client
+	clientID string
+	realm    string
+	cred     Cred
+	jwt      string
+}
+
+type jwtHubPost struct {
+	User string `json:"username"`
+	Pass string `json:"password"`
+}
+type jwtHubResp struct {
+	Detail       string `json:"detail"`
+	Token        string `json:"token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+// NewJWTHandler creates a new JWTHandler
+func NewJWTHandler(client *http.Client, clientID, host string, cred Cred) Handler {
+	// JWT handler is only tested against Hub, and the API is Hub specific
+	if host == "hub.docker.com" {
+		return &JWTHubHandler{
+			client:   client,
+			clientID: clientID,
+			cred:     cred,
+			realm:    "https://hub.docker.com/v2/users/login",
+		}
+	}
+	return nil
+}
+
+// ProcessChallenge handles WWW-Authenticate header for JWT auth on Docker Hub
+func (j *JWTHubHandler) ProcessChallenge(c Challenge) error {
+	// use token if provided
+	if j.cred.Token != "" {
+		j.jwt = j.cred.Token
+		return nil
+	}
+
+	// send a login request to hub
+	bodyBytes, err := json.Marshal(jwtHubPost{
+		User: j.cred.User,
+		Pass: j.cred.Password,
+	})
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", j.realm, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return err
+	}
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("User-Agent", j.clientID)
+
+	resp, err := j.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	body, _ := ioutil.ReadAll(resp.Body)
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return ErrUnauthorized
+	}
+
+	var bodyParsed jwtHubResp
+	err = json.Unmarshal(body, &bodyParsed)
+	if err != nil {
+		return err
+	}
+	j.jwt = bodyParsed.Token
+
+	return nil
+}
+
+// GenerateAuth for JWTHubHandler adds JWT header
+func (j *JWTHubHandler) GenerateAuth() (string, error) {
+	if len(j.jwt) > 0 {
+		return fmt.Sprintf("JWT %s", j.jwt), nil
+	}
+	return "", ErrUnauthorized
 }

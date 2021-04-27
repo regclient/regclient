@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"syscall"
 
 	"github.com/regclient/regclient/regclient"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 )
 
 var registryCmd = &cobra.Command{
@@ -90,6 +91,7 @@ func runRegistryConfig(cmd *cobra.Command, args []string) error {
 	// empty out the password fields, do not print them
 	for i := range c.Hosts {
 		c.Hosts[i].Pass = ""
+		c.Hosts[i].Token = ""
 	}
 	var hj []byte
 	if len(args) > 0 {
@@ -152,7 +154,7 @@ func runRegistryLogin(cmd *cobra.Command, args []string) error {
 	} else {
 		// prompt for a password
 		fmt.Print("Enter Password: ")
-		pass, err := terminal.ReadPassword(0)
+		pass, err := term.ReadPassword(syscall.Stdin)
 		if err != nil {
 			return err
 		}
