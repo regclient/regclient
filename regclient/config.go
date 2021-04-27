@@ -85,6 +85,7 @@ type ConfigHost struct {
 	Hostname   string   `json:"hostname,omitempty"` // replaces DNS array with single string
 	User       string   `json:"user,omitempty"`
 	Pass       string   `json:"pass,omitempty"`
+	Token      string   `json:"token,omitempty"`
 	PathPrefix string   `json:"pathPrefix,omitempty"` // used for mirrors defined within a repository namespace
 	Mirrors    []string `json:"mirrors,omitempty"`    // list of other ConfigHost Names to use as mirrors
 	Priority   uint     `json:"priority,omitempty"`   // priority when sorting mirrors, higher priority attempted first
@@ -135,6 +136,15 @@ func (rc *regClient) mergeConfigHost(curHost, newHost ConfigHost, warn bool) Con
 			}).Warn("Changing login password for registry")
 		}
 		curHost.Pass = newHost.Pass
+	}
+
+	if newHost.Token != "" {
+		if warn && curHost.Token != "" && curHost.Token != newHost.Token {
+			rc.log.WithFields(logrus.Fields{
+				"host": name,
+			}).Warn("Changing login token for registry")
+		}
+		curHost.Token = newHost.Token
 	}
 
 	if newHost.TLS != TLSUndefined {

@@ -114,6 +114,7 @@ func newRegClient() regclient.RegClient {
 			Hostname:   host.Hostname,
 			User:       host.User,
 			Pass:       host.Pass,
+			Token:      host.Token,
 			PathPrefix: host.PathPrefix,
 			Mirrors:    host.Mirrors,
 			Priority:   host.Priority,

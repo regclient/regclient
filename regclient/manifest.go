@@ -29,14 +29,14 @@ func (rc *regClient) ManifestDelete(ctx context.Context, ref types.Ref) error {
 
 	// build/send request
 	headers := http.Header{
-		"Accept": []string{
-			MediaTypeDocker1Manifest,
-			MediaTypeDocker1ManifestSigned,
-			MediaTypeDocker2Manifest,
-			MediaTypeDocker2ManifestList,
-			MediaTypeOCI1Manifest,
-			MediaTypeOCI1ManifestList,
-		},
+		// "Accept": []string{
+		// 	MediaTypeDocker1Manifest,
+		// 	MediaTypeDocker1ManifestSigned,
+		// 	MediaTypeDocker2Manifest,
+		// 	MediaTypeDocker2ManifestList,
+		// 	MediaTypeOCI1Manifest,
+		// 	MediaTypeOCI1ManifestList,
+		// },
 	}
 	req := httpReq{
 		host:      ref.Registry,
