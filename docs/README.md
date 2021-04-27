@@ -656,7 +656,10 @@ The following functions have been added in addition to the defaults available wi
 
 1. Q: After deleting tags and images on the registry, I'm still seeing disk space being used.
 
-   A: Registries require garbage collection to run to cleanup untagged manifests and unused blobs. The [registry GC documentation](https://docs.docker.com/registry/garbage-collection/) includes more details and there are various [pull requests](https://github.com/distribution/distribution/pull/3195) that improve garbage collection. With the PR-3195 applied, I use the following for GC of anything at least 1 hour old:
+   A: Registries require garbage collection to run to cleanup untagged manifests and unused blobs.
+   The [registry GC documentation](https://docs.docker.com/registry/garbage-collection/) includes more details and there are various [pull requests](https://github.com/distribution/distribution/pull/3195) that improve garbage collection.
+   Note that I've seen data loss from this PR and still need to submit an example of the issue upstream, so test and backup before implementing yourself.
+   With the PR-3195 applied, I use the following for GC of anything at least 1 hour old:
 
    ```shell
    docker exec registry /bin/registry garbage-collect \
@@ -665,3 +668,26 @@ The following functions have been added in addition to the defaults available wi
      --modification-timeout 3600 \
      /etc/docker/registry/config.yml
    ```
+
+2. Q: Can I delete images from Docker Hub?
+
+   A: Officially, Hub does not support the manifest delete API, you'll get an access denied.
+   For now, I'm waiting to see if Docker will provide support for distribution-spec API's or at least provide tokens that can be used to manage images.
+   Experimentally, the API call has been added to take a token and run the tag delete against `hub.docker.com` instead of `docker.io`.
+   To implement this, add the following section to the `~/.regctl/config.json`:
+
+   ```json
+   {
+     "hosts": {
+       "hub.docker.com": {
+         "api": "hub",
+         "token": "..."
+       }
+     }
+   }
+   ```
+
+   The value of `token` can be found by inspecting the cookies when logged into docker hub from your browser.
+   With this, you can run `regctl tag del hub.docker.com/${repo}:${tag}`, for your repo and tag.
+   Similar API and Token fields are available in regbot, but this remains experimental.
+   Note that no other APIs are currently expected to work against `hub.docker.com`, query `docker.io` for the tag list and inspecting images.

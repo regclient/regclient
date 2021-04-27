@@ -303,6 +303,7 @@ func loadConf() error {
 			Hostname:   host.Hostname,
 			User:       host.User,
 			Pass:       host.Pass,
+			Token:      host.Token,
 			TLS:        host.TLS,
 			RegCert:    host.RegCert,
 			PathPrefix: host.PathPrefix,

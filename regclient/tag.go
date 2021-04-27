@@ -87,6 +87,31 @@ func (rc *regClient) TagDelete(ctx context.Context, ref types.Ref) error {
 		return ErrMissingTag
 	}
 
+	// attempt platform specific methods
+	req := httpReq{
+		host:      ref.Registry,
+		noMirrors: true,
+		apis: map[string]httpReqAPI{
+			"hub": {
+				method: "DELETE",
+				path:   "repositories/" + ref.Repository + "/tags/" + ref.Tag + "/",
+			},
+		},
+	}
+
+	resp, err := rc.httpDo(ctx, req)
+	if resp != nil {
+		defer resp.Close()
+	}
+	if err == nil {
+		return nil
+	} else if errors.Is(err, retryable.ErrStatusCode) {
+		return fmt.Errorf("Failed to delete tag %s: %w", ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
+	} else if !errors.Is(err, ErrAPINotFound) {
+		return fmt.Errorf("Failed to delete tag %s: %w", ref.CommonName(), err)
+	}
+	// else ErrAPINotFound, fallback to creating a temporary manifest to replace the tag and deleting that manifest
+
 	// lookup the current manifest media type
 	curManifest, err := rc.ManifestHead(ctx, ref)
 	if err != nil {

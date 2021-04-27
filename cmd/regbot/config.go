@@ -25,6 +25,7 @@ type ConfigCreds struct {
 	Hostname   string            `yaml:"hostname" json:"hostname"`
 	User       string            `yaml:"user" json:"user"`
 	Pass       string            `yaml:"pass" json:"pass"`
+	Token      string            `json:"token,omitempty"`
 	TLS        regclient.TLSConf `yaml:"tls" json:"tls"`
 	Scheme     string            `yaml:"scheme" json:"scheme"` // TODO: delete
 	RegCert    string            `yaml:"regcert" json:"regcert"`

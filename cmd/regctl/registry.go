@@ -90,6 +90,7 @@ func runRegistryConfig(cmd *cobra.Command, args []string) error {
 	// empty out the password fields, do not print them
 	for i := range c.Hosts {
 		c.Hosts[i].Pass = ""
+		c.Hosts[i].Token = ""
 	}
 	var hj []byte
 	if len(args) > 0 {
