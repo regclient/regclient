@@ -154,7 +154,7 @@ func runRegistryLogin(cmd *cobra.Command, args []string) error {
 	} else {
 		// prompt for a password
 		fmt.Print("Enter Password: ")
-		pass, err := term.ReadPassword(syscall.Stdin)
+		pass, err := term.ReadPassword(int(syscall.Stdin))
 		if err != nil {
 			return err
 		}

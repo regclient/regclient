@@ -1,6 +1,6 @@
 #!/bin/sh
 
-set -x
+set -ex
 VCS_REF=$(git rev-list -1 HEAD)
 VCS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
 LD_FLAGS="-X github.com/regclient/regclient/regclient.VCSRef=${VCS_REF} -X main.VCSRef=${VCS_REF} -X main.VCSTag=${VCS_TAG}"
