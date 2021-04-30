@@ -17,6 +17,7 @@ const (
 	luaManifestName    = "manifest"
 	luaImageName       = "image"
 	luaImageConfigName = "imageconfig"
+	luaBlobName        = "blob"
 )
 
 // Sandbox defines a lua sandbox
@@ -38,6 +39,8 @@ var luaMods = []LuaMod{
 	setupReference,
 	setupTag,
 	setupImage,
+	setupManifest,
+	setupBlob,
 }
 
 // Opt function to process options on sandbox
@@ -165,7 +168,7 @@ func wrapUserData(ls *lua.LState, udVal interface{}, wrapVal interface{}, udType
 	if !ok {
 		return nil, ErrInvalidInput
 	}
-	wrapTab := go2lua.Convert(ls, wrapVal)
+	wrapTab := go2lua.Export(ls, wrapVal)
 	if wrapTab.Type() == lua.LTTable {
 		wrapMT := ls.NewTable()
 		// copy "__tostring" method instead of all methods, overwrite default method on table
@@ -183,9 +186,30 @@ func wrapUserData(ls *lua.LState, udVal interface{}, wrapVal interface{}, udType
 		wrapMT.RawSetString("__index", wrapTab)
 		ls.SetMetatable(ud, wrapMT)
 		ls.SetMetatable(wrapTab, udTypeMT)
+		// returned ud looks like:
+		// ud:
+		//   Value: udVal
+		//   MetaTable: wrapMT
+		//     __tostring: points to __tostring from ud Type's MT
+		//     __index: wrapTab (exported table from go2lua)
+		//       Metatable: ud Type's MT
 	} else {
 		ls.SetMetatable(ud, udTypeMT)
 	}
 
 	return ud, nil
+}
+
+// unwrapUserData extracts the user visible table from the userdata
+func unwrapUserData(ls *lua.LState, lv lua.LValue) (lua.LValue, error) {
+	if lv.Type() != lua.LTUserData {
+		return nil, ErrInvalidInput
+	}
+
+	udMT := ls.GetMetaField(lv, "__index")
+	if udMT.Type() != lua.LTTable {
+		return nil, ErrInvalidInput
+	}
+
+	return udMT, nil
 }
