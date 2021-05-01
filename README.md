@@ -1,5 +1,10 @@
 # regclient
 
+![GitHub Workflow Status](https://img.shields.io/github/workflow/status/regclient/regclient/Go?label=Go%20build)
+![GitHub Workflow Status](https://img.shields.io/github/workflow/status/regclient/regclient/Docker?label=Docker%20build)
+![GitHub](https://img.shields.io/github/license/regclient/regclient)
+[![Go Reference](https://pkg.go.dev/badge/github.com/regclient/regclient.svg)](https://pkg.go.dev/github.com/regclient/regclient)
+
 Client interface for the registry API.
 This includes `regctl` for a command line interface to manage registries.
 
