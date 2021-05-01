@@ -33,7 +33,7 @@ jobs:
       run: go test -v ./...
 
     - name: Build artifacts
-      if: startsWith( github.ref, 'refs/tags/v' )
+      if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'main'
       run: ./build/build-artifacts.sh
 
     - name: Gather release details
@@ -162,3 +162,11 @@ jobs:
         asset_path: ./artifacts/regbot-linux-arm64
         asset_name: regbot-linux-arm64
         asset_content_type: application/octet-stream
+
+    - name: Save artifacts
+      if: github.ref == 'main'
+      uses: actions/upload-artifact@v2
+      with:
+        name: binaries
+        path: ./artifacts/
+        retention-days: 7
