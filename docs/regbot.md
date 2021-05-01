@@ -180,21 +180,40 @@ The following additional functions are available:
 - `manifest.head`:
   Retrieves the manifest using a head request.
   This pulls the digest and current rate limit and can be used with the manifest delete and ratelimit functions.
+- `manifest.put <manifest> <ref>`:
+  Pushes a manifest to the provided reference.
 - `<manifest>:config`:
   See `image.config`
 - `<manifest>:delete`:
   Deletes a manifest.
   Note that a manifest list or manifest head request to retrieve the manifest is recommended, otherwise the registry may delete a single platform's manifest without deleting the entire multi-platform image, leading to errors when attempting to access the remaining manifest.
   If multiple tags can point to the same manifest, then using `tag.delete` is recommended.
+- `<manifest>:export`:
+  Returns a new manifest created with user changes to the current manifest data (user changes are ignored by all other calls).
 - `<manifest>:get`:
   See `image.manifest`.
   This is useful for pulling a manifest when you've only run a head request.
+- `<manifest>:put <ref>`:
+  See `manifest.put`
 - `<manifest>:ratelimit`:
   Return the ratelimit seen when the manifest was last retrieved.
   The ratelimit object includes `Set` (boolean indicating if a rate limit was returned with the manifest), `Remain` (requests remaining), `Limit`
   (maximum limit possible).
 - `<manifest>:ratelimitWait <limit> <poll> <timeout>`:
   See `image.ratelimitWait`
+- `blob.get <ref> <optional digest>`:
+  Retrieve a blob from the repository in the reference.
+  If a separate digest is not provided, the reference must include a digest.
+- `blob.head <ref> <optional digest>`:
+  Same as `blob.get` but only performs a head request.
+- `blob.put <ref> <content>`:
+  Reference is used to lookup the repository where the blob is pushed.
+  Content is a string, another blob, or a config object.
+  The digest and size of the pushed blob are returned.
+- `<blob>:put <content>`:
+  See `blob.put`.
+- `<config>:export`:
+  Returns a new config created with user changes to the current config data (user changes are ignored by all other calls).
 - `image.config <ref>`:
   Returns the image configuration, see `docker image inspect`.
 - `image.copy <src-ref> <tgt-ref>`:

@@ -97,7 +97,6 @@ func (s *Sandbox) blobGet(ls *lua.LState) int {
 	d := ref.ref.Digest
 	if ls.GetTop() >= 2 {
 		d = ls.CheckString(2)
-		return 0
 	}
 	s.log.WithFields(logrus.Fields{
 		"script": s.name,
@@ -122,7 +121,6 @@ func (s *Sandbox) blobHead(ls *lua.LState) int {
 	d := ref.ref.Digest
 	if ls.GetTop() >= 2 {
 		d = ls.CheckString(2)
-		return 0
 	}
 	s.log.WithFields(logrus.Fields{
 		"script": s.name,
@@ -149,6 +147,10 @@ func (s *Sandbox) blobPut(ls *lua.LState) int {
 		"ref":    ref.ref.CommonName(),
 	}).Debug("Put blob")
 
+	if ls.GetTop() < 2 {
+		ls.ArgError(2, "blob content expected")
+	}
+
 	var rdr io.Reader
 	switch ls.Get(2).Type() {
 	case lua.LTString:
@@ -167,7 +169,7 @@ func (s *Sandbox) blobPut(ls *lua.LState) int {
 		}
 	}
 	if rdr == nil {
-		ls.RaiseError("Failed to read content for blob")
+		ls.ArgError(2, "blob content expected")
 	}
 
 	d, size, err := s.rc.BlobPut(s.ctx, ref.ref, "", rdr, "", 0)

@@ -136,15 +136,16 @@ func (s *Sandbox) manifestExport(ls *lua.LState) int {
 		}
 		// get the original manifest object, used to set fields that can be extracted from lua table
 		origMM := origM.m.GetOrigManifest()
-		// newMM := origM.m.GetOrigManifest() // TODO: should make a blank newMM from type of origMM, reflect?
-		newMM := reflect.New(reflect.ValueOf(origMM).Type()).Interface() // Caution: newMM is a pointer to the origMM type
-		// newMM := reflect.New(reflect.ValueOf(origMM).Type()).Elem().Interface() // TODO: why does this cause: reflect.Value.SetInt using unaddressable value on SchemaVersion
-		err = go2lua.Import(ls, utab, &newMM, &origMM)
+		newMMP := reflect.New(reflect.TypeOf(origMM)).Interface()
+		// newMMP is interface{} -> *someManifestType
+		// because it's an empty interface, it needs to remain a "reflect.New" pointer
+		// &newMMP is *interface{} -> *someManifestType, not **someManifestType
+		err = go2lua.Import(ls, utab, &newMMP, origMM)
 		if err != nil {
 			ls.RaiseError("Failed exporting manifest (go2lua): %v", err)
 		}
 		// save image to a new manifest
-		rcM, err := manifest.FromOrig(reflect.ValueOf(newMM).Elem().Interface()) // TODO: is there a cleaner way to deref newMM pointer?
+		rcM, err := manifest.FromOrig(reflect.ValueOf(newMMP).Elem().Interface()) // reflect is needed again to deref the pointer now
 		// rcM, err := manifest.FromOrig(newMM)
 		if err != nil {
 			ls.RaiseError("Failed exporting manifest (from orig): %v", err)
@@ -230,13 +231,13 @@ func (s *Sandbox) manifestJSON(ls *lua.LState) int {
 }
 
 func (s *Sandbox) manifestPut(ls *lua.LState) int {
-	ref := s.checkReference(ls, 1)
+	sbm := s.checkManifest(ls, 1, true, false)
+	ref := s.checkReference(ls, 2)
 	s.log.WithFields(logrus.Fields{
 		"script": s.name,
 		"image":  ref.ref.CommonName(),
 	}).Debug("Put manifest")
 
-	sbm := s.checkManifest(ls, 2, true, false)
 	m, err := manifest.FromOrig(sbm.m.GetOrigManifest())
 	if err != nil {
 		ls.RaiseError("Failed to put manifest: %v", err)

@@ -8,7 +8,7 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
-// Export takes an input interface and converts it to a Lua value
+// Export takes an input Go interface and converts it to a Lua value
 func Export(ls *lua.LState, v interface{}) lua.LValue {
 	return exportReflect(ls, reflect.ValueOf(v))
 }
@@ -31,7 +31,7 @@ func exportReflect(ls *lua.LState, v reflect.Value) lua.LValue {
 	case reflect.Array:
 		lTab := ls.NewTable()
 		for i := 0; i < v.Len(); i++ {
-			lTab.RawSetInt(i, exportReflect(ls, v.Index(i)))
+			lTab.RawSetInt(i+1, exportReflect(ls, v.Index(i)))
 		}
 		return lTab
 	case reflect.Slice:

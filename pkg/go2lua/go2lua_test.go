@@ -3,6 +3,7 @@ package go2lua
 import (
 	"bytes"
 	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 
@@ -15,13 +16,18 @@ type testStructNest struct {
 	private string
 }
 
+type AnonType struct {
+	Ver int
+}
 type testStruct struct {
+	AnonType
 	I       int `json:"i,omitempty"`
 	F       float64
 	S       string
 	B       bool
 	SP      *testStructNest
 	SL      []uint
+	MS      map[string]string
 	UI      uint
 	NP      *bool
 	TD      time.Duration
@@ -35,15 +41,21 @@ func TestExportImport(t *testing.T) {
 	dur, _ := time.ParseDuration("1h")
 	now := time.Now()
 	tsIn := testStruct{
-		I: 42,
-		F: 3.14159,
-		S: "hello world",
-		B: true,
+		AnonType: AnonType{Ver: 2},
+		I:        42,
+		F:        3.14159,
+		S:        "hello world",
+		B:        true,
 		SP: &testStructNest{
 			I8: 8,
 			BP: &b,
 		},
-		SL:      []uint{2, 4, 6, 8},
+		SL: []uint{2, 4, 6, 8},
+		MS: map[string]string{
+			"hello": "world",
+			"foo":   "bar",
+			"bin":   "baz",
+		},
 		UI:      256,
 		TD:      dur,
 		TN:      &now,
@@ -56,8 +68,9 @@ func TestExportImport(t *testing.T) {
 	}
 	lv := Export(ls, tsIn)
 
-	tsOut := &testStruct{}
-	err = Import(ls, lv, tsOut, &tsIn)
+	// tsOut := &testStruct{}
+	tsOut := reflect.New(reflect.ValueOf(tsIn).Type()).Interface()
+	err = Import(ls, lv, tsOut, tsIn)
 	if err != nil {
 		t.Errorf("Import failed: %v", err)
 	}

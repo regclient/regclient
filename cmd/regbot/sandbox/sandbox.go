@@ -129,19 +129,17 @@ func (s *Sandbox) setupMod(name string, funcs map[string]lua.LGFunction, tables 
 }
 
 // RunScript is used to execute a script in the sandbox
-func (s *Sandbox) RunScript(script string) error {
-	var err error
+func (s *Sandbox) RunScript(script string) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			s.log.WithFields(logrus.Fields{
 				"script": s.name,
 				"error":  r,
 			}).Error("Runtime error from script")
+			err = ErrScriptFailed
 		}
-		err = ErrScriptFailed
 	}()
-	err = s.ls.DoString(script)
-	return err
+	return s.ls.DoString(script)
 }
 
 // Close is use to stop the sandbox

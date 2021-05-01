@@ -3,23 +3,37 @@ package go2lua
 import (
 	"fmt"
 	"reflect"
+	"runtime/debug"
 	"strings"
 
 	lua "github.com/yuin/gopher-lua"
 )
 
-// Import takes a Lua value and copies matching values into the provided interface
-func Import(ls *lua.LState, lv lua.LValue, v, orig interface{}) error {
-	return importReflect(ls, lv, reflect.ValueOf(v), reflect.ValueOf(orig))
+// Import takes a Lua value and copies matching values into the provided Go interface.
+// By providing the orig interface, values that cannot be imported from Lua will be copied from orig.
+func Import(ls *lua.LState, lv lua.LValue, v, orig interface{}) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("go2lua import panic: %v\n%s", r, string(debug.Stack()))
+		}
+	}()
+	// orig may not be a pointer or empty interface, dereference v until the two values match
+	rV := reflect.ValueOf(v)
+	rOrig := reflect.ValueOf(orig)
+	for rV.IsValid() && rV.Type() != rOrig.Type() &&
+		(rV.Type().Kind() == reflect.Interface || rV.Type().Kind() == reflect.Ptr) {
+		rV = rV.Elem()
+	}
+	return importReflect(ls, lv, rV, rOrig)
 }
 
 func importReflect(ls *lua.LState, lv lua.LValue, v, orig reflect.Value) error {
 	if !v.IsValid() {
 		return nil
 	}
-	if !orig.IsValid() {
-		fmt.Printf("Orig is not valid, processing %s\n", v.Type().String())
-	}
+	// fmt.Printf("v-type: %s, orig valid: %t\n", v.Type().String(), orig.IsValid()) // for debugging
+	// Switch based on the kind of object we are creating.
+	// Each basic type is similar: if lua has a matching basic type, export the lua value and set with reflection.
 	switch v.Type().Kind() {
 	case reflect.Bool:
 		if lvi, ok := lv.(lua.LBool); ok {
@@ -47,27 +61,26 @@ func importReflect(ls *lua.LState, lv lua.LValue, v, orig reflect.Value) error {
 		}
 		return nil
 	case reflect.Array:
+		// If we have an array, and lua is the expected table, iterate and recursively import contents.
 		if lvi, ok := lv.(*lua.LTable); ok {
 			for i := 0; i < v.Len(); i++ {
+				// Orig is also iterated on if it has a matching type and length
 				var origI reflect.Value
 				if orig.IsValid() && orig.Type() == v.Type() && orig.Len() < i {
 					origI = orig.Index(i)
 				}
-				importReflect(ls, lvi.RawGetInt(i), v.Index(i), origI)
+				importReflect(ls, lvi.RawGetInt(i+1), v.Index(i), origI)
 			}
 		}
 		return nil
 	case reflect.Slice:
+		// Slice follows the same pattern as array, except the slice is firsted created with the desired size.
 		if lvi, ok := lv.(*lua.LTable); ok {
 			newV := reflect.MakeSlice(v.Type(), lvi.Len(), lvi.Len())
 			for i := 0; i < newV.Len(); i++ {
 				var origI reflect.Value
 				if orig.IsValid() && orig.Type() == v.Type() && orig.Len() > i {
 					origI = orig.Index(i)
-				} else if !orig.IsValid() {
-					fmt.Printf("Skipping orig in slice, not valid\n")
-				} else {
-					fmt.Printf("Skipping orig in slice, i = %d, len = %d, v type = %s, o type = %s\n", i, orig.Len(), v.Type().String(), orig.Type().String())
 				}
 				importReflect(ls, lvi.RawGetInt(i+1), newV.Index(i), origI)
 			}
@@ -99,10 +112,8 @@ func importReflect(ls *lua.LState, lv lua.LValue, v, orig reflect.Value) error {
 				field := vType.Field(i)
 				// skip unexported fields
 				if !v.FieldByName(field.Name).CanInterface() {
-					fmt.Printf("Skipping internal field %s\n", field.Name)
 					continue
 				}
-				fmt.Printf("Processing field %s\n", field.Name)
 				foundExported = true
 				key := field.Name
 				// use json keys if defined
@@ -118,7 +129,6 @@ func importReflect(ls *lua.LState, lv lua.LValue, v, orig reflect.Value) error {
 			}
 		}
 		if !foundExported && orig.IsValid() && orig.Type() == v.Type() {
-			fmt.Printf("Struct without exported fields or lua table available copied with Set\n")
 			v.Set(orig)
 		}
 		return nil
@@ -135,7 +145,6 @@ func importReflect(ls *lua.LState, lv lua.LValue, v, orig reflect.Value) error {
 			} else if orig.IsValid() && orig.Type() == v.Elem().Type() {
 				origElem = orig
 			}
-			fmt.Printf("Pointer or interface dereferenced\n")
 			// dereference pointer and recurse
 			importReflect(ls, lv, v.Elem(), origElem)
 			// } else {
@@ -154,10 +163,7 @@ func importReflect(ls *lua.LState, lv lua.LValue, v, orig reflect.Value) error {
 		// Interface
 		// UnsafePointer
 		if orig.IsValid() && orig.Type() == v.Type() {
-			fmt.Printf("Unsupported type, orig copied, type = %s, kind = %s\n", v.Type(), v.Type().Kind())
 			v.Set(orig)
-		} else {
-			fmt.Printf("Unsupported type, orig unavailable, type = %s, kind = %s\n", v.Type(), v.Type().Kind())
 		}
 		return nil
 	}
