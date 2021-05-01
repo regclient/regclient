@@ -23,8 +23,9 @@ type BlobClient interface {
 	BlobCopy(ctx context.Context, refSrc types.Ref, refTgt types.Ref, d digest.Digest) error
 	BlobGet(ctx context.Context, ref types.Ref, d digest.Digest, accepts []string) (BlobReader, error)
 	BlobGetOCIConfig(ctx context.Context, ref types.Ref, d digest.Digest) (BlobOCIConfig, error)
+	BlobHead(ctx context.Context, ref types.Ref, d digest.Digest) (BlobReader, error)
 	BlobMount(ctx context.Context, refSrc types.Ref, refTgt types.Ref, d digest.Digest) error
-	BlobPut(ctx context.Context, ref types.Ref, d digest.Digest, rdr io.Reader, ct string, cl int64) (digest.Digest, error)
+	BlobPut(ctx context.Context, ref types.Ref, d digest.Digest, rdr io.Reader, ct string, cl int64) (digest.Digest, int64, error)
 }
 
 // Blob interface is used for returning blobs
@@ -52,6 +53,7 @@ type blobCommon struct {
 	ref       types.Ref
 	digest    string
 	mt        string
+	blobSet   bool
 	orig      interface{}
 	rawHeader http.Header
 	resp      *http.Response
@@ -82,7 +84,7 @@ func (rc *regClient) BlobCopy(ctx context.Context, refSrc types.Ref, refTgt type
 		return nil
 	}
 	// check if layer already exists
-	if err := rc.BlobHead(ctx, refTgt, d); err == nil {
+	if _, err := rc.BlobHead(ctx, refTgt, d); err == nil {
 		rc.log.WithFields(logrus.Fields{
 			"tgt":    refTgt.Reference,
 			"digest": d,
@@ -117,7 +119,7 @@ func (rc *regClient) BlobCopy(ctx context.Context, refSrc types.Ref, refTgt type
 		return err
 	}
 	defer blobIO.Close()
-	if _, err := rc.BlobPut(ctx, refTgt, d, blobIO, blobIO.MediaType(), blobIO.Response().ContentLength); err != nil {
+	if _, _, err := rc.BlobPut(ctx, refTgt, d, blobIO, blobIO.MediaType(), blobIO.Response().ContentLength); err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"err": err,
 			"src": refSrc.Reference,
@@ -135,8 +137,9 @@ func (rc *regClient) BlobGet(ctx context.Context, ref types.Ref, d digest.Digest
 func (rc *regClient) blobGet(ctx context.Context, ref types.Ref, d digest.Digest, accepts []string) (blobReader, error) {
 	var b blobReader
 	bc := blobCommon{
-		ref:    ref,
-		digest: d.String(),
+		ref:     ref,
+		digest:  d.String(),
+		blobSet: true,
 	}
 
 	// build/send request
@@ -182,8 +185,14 @@ func (rc *regClient) BlobGetOCIConfig(ctx context.Context, ref types.Ref, d dige
 }
 
 // BlobHead is used to verify if a blob exists and is accessible
-// TODO: on success, return a Blob with non-content data configured
-func (rc *regClient) BlobHead(ctx context.Context, ref types.Ref, d digest.Digest) error {
+func (rc *regClient) BlobHead(ctx context.Context, ref types.Ref, d digest.Digest) (BlobReader, error) {
+	var b blobReader
+	bc := blobCommon{
+		ref:     ref,
+		digest:  d.String(),
+		blobSet: false,
+	}
+
 	// build/send request
 	req := httpReq{
 		host: ref.Registry,
@@ -196,14 +205,22 @@ func (rc *regClient) BlobHead(ctx context.Context, ref types.Ref, d digest.Diges
 	}
 	resp, err := rc.httpDo(ctx, req)
 	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
-		return fmt.Errorf("Failed to request blob head, digest %s, ref %s: %w", d, ref.CommonName(), err)
+		return nil, fmt.Errorf("Failed to request blob head, digest %s, ref %s: %w", d, ref.CommonName(), err)
 	}
 	defer resp.Close()
 	if resp.HTTPResponse().StatusCode != 200 {
-		return fmt.Errorf("Failed to request blob head, digest %s, ref %s: %w", d, ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
+		return nil, fmt.Errorf("Failed to request blob head, digest %s, ref %s: %w", d, ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 	}
 
-	return nil
+	bc.resp = resp.HTTPResponse()
+	bc.rawHeader = resp.HTTPResponse().Header
+	bc.mt = resp.HTTPResponse().Header.Get("Content-Type")
+	b = blobReader{
+		blobCommon: bc,
+		ReadCloser: resp,
+	}
+
+	return b, nil
 }
 
 func (rc *regClient) BlobMount(ctx context.Context, refSrc types.Ref, refTgt types.Ref, d digest.Digest) error {
@@ -239,7 +256,7 @@ func (rc *regClient) BlobMount(ctx context.Context, refSrc types.Ref, refTgt typ
 	return nil
 }
 
-func (rc *regClient) BlobPut(ctx context.Context, ref types.Ref, d digest.Digest, rdr io.Reader, ct string, cl int64) (digest.Digest, error) {
+func (rc *regClient) BlobPut(ctx context.Context, ref types.Ref, d digest.Digest, rdr io.Reader, ct string, cl int64) (digest.Digest, int64, error) {
 	// defaults for content-type and length
 	if ct == "" {
 		ct = "application/octet-stream"
@@ -251,14 +268,14 @@ func (rc *regClient) BlobPut(ctx context.Context, ref types.Ref, d digest.Digest
 	// get the upload URL
 	putURL, err := rc.blobGetUploadURL(ctx, ref)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 
 	// send upload as one-chunk
 	if d != "" {
 		err = rc.blobPutUploadFull(ctx, ref, d, putURL, rdr, ct, cl)
 		if err == nil {
-			return digest.Digest(d), nil
+			return digest.Digest(d), cl, nil
 		}
 	}
 
@@ -336,7 +353,7 @@ func (rc *regClient) blobPutUploadFull(ctx context.Context, ref types.Ref, d dig
 	return nil
 }
 
-func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, putURL *url.URL, rdr io.Reader, ct string) (digest.Digest, error) {
+func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, putURL *url.URL, rdr io.Reader, ct string) (digest.Digest, int64, error) {
 	host := rc.hostGet(ref.Registry)
 	bufSize := int64(512 * 1024) // 512k
 
@@ -359,7 +376,7 @@ func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, pu
 		if err == io.EOF {
 			finalChunk = true
 		} else if err != nil {
-			return "", fmt.Errorf("Failed to send blob chunk, ref %s: %w", ref.CommonName(), err)
+			return "", 0, fmt.Errorf("Failed to send blob chunk, ref %s: %w", ref.CommonName(), err)
 		}
 
 		if int64(chunkBuf.Len()) != chunkSize {
@@ -380,11 +397,11 @@ func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, pu
 			rty := rc.getRetryable(host)
 			resp, err := rty.DoRequest(ctx, "PATCH", []url.URL{chunkURL}, opts...)
 			if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
-				return "", fmt.Errorf("Failed to send blob (chunk), ref %s: %w", ref.CommonName(), err)
+				return "", 0, fmt.Errorf("Failed to send blob (chunk), ref %s: %w", ref.CommonName(), err)
 			}
 			resp.Close()
 			if resp.HTTPResponse().StatusCode < 200 || resp.HTTPResponse().StatusCode > 299 {
-				return "", fmt.Errorf("Failed to send blob (chunk), ref %s: %w", ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
+				return "", 0, fmt.Errorf("Failed to send blob (chunk), ref %s: %w", ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 			}
 			chunkStart += chunkSize
 			if chunkBuf.Len() != 0 {
@@ -400,7 +417,7 @@ func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, pu
 			prevURL := resp.HTTPResponse().Request.URL
 			putURL, err = prevURL.Parse(location)
 			if err != nil {
-				return "", fmt.Errorf("Failed to send blob (parse next chunk location), ref %s: %w", ref.CommonName(), err)
+				return "", 0, fmt.Errorf("Failed to send blob (parse next chunk location), ref %s: %w", ref.CommonName(), err)
 			}
 		}
 	}
@@ -423,14 +440,14 @@ func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, pu
 	rty := rc.getRetryable(host)
 	resp, err := rty.DoRequest(ctx, "PUT", []url.URL{*putURL}, opts...)
 	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
-		return "", fmt.Errorf("Failed to send blob (chunk digest), digest %s, ref %s: %w", d, ref.CommonName(), err)
+		return "", 0, fmt.Errorf("Failed to send blob (chunk digest), digest %s, ref %s: %w", d, ref.CommonName(), err)
 	}
 	defer resp.Close()
 	if resp.HTTPResponse().StatusCode < 200 || resp.HTTPResponse().StatusCode > 299 {
-		return "", fmt.Errorf("Failed to send blob (chunk digest), digest %s, ref %s: %w", d, ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
+		return "", 0, fmt.Errorf("Failed to send blob (chunk digest), digest %s, ref %s: %w", d, ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 	}
 
-	return d, nil
+	return d, chunkStart, nil
 }
 
 func (b blobCommon) GetOrig() interface{} {
@@ -466,6 +483,21 @@ func (b blobReader) toOCIConfig() (BlobOCIConfig, error) {
 	}
 	b.orig = &ociImage
 	return blobOCIConfig{blobCommon: b.blobCommon, rawBody: blobBody, Image: ociImage}, nil
+}
+
+// NewBlobOCIConfig creates a new BlobOCIConfig from an OCI Image
+func NewBlobOCIConfig(ociImage ociv1.Image) BlobOCIConfig {
+	bc := blobCommon{
+		blobSet: true,
+		orig:    ociImage,
+	}
+	raw, _ := json.Marshal(ociImage)
+	boc := blobOCIConfig{
+		blobCommon: bc,
+		rawBody:    raw,
+		Image:      ociImage,
+	}
+	return &boc
 }
 
 // GetConfig returns the original body from the request
