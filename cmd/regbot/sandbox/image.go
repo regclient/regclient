@@ -7,7 +7,7 @@ import (
 
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/pkg/go2lua"
-	"github.com/regclient/regclient/regclient"
+	"github.com/regclient/regclient/regclient/blob"
 	"github.com/regclient/regclient/regclient/manifest"
 	"github.com/regclient/regclient/regclient/types"
 	"github.com/sirupsen/logrus"
@@ -17,7 +17,7 @@ import (
 type config struct {
 	m    manifest.Manifest
 	ref  types.Ref
-	conf regclient.BlobOCIConfig
+	conf blob.OCIConfig
 }
 
 func setupImage(s *Sandbox) {
@@ -119,7 +119,7 @@ func (s *Sandbox) configExport(ls *lua.LState) int {
 			ls.RaiseError("Failed exporting config (go2lua): %v", err)
 		}
 		// save image to a new config
-		bc := regclient.NewBlobOCIConfig(ociImage)
+		bc := blob.NewOCIConfig(ociImage)
 		newC = &config{
 			conf: bc,
 			m:    origC.m,
