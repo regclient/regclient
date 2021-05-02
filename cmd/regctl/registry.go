@@ -156,7 +156,7 @@ func runRegistryLogin(cmd *cobra.Command, args []string) error {
 		fmt.Print("Enter Password: ")
 		pass, err := term.ReadPassword(int(syscall.Stdin))
 		if err != nil {
-			return err
+			return fmt.Errorf("Unable to read from tty (resolve by using \"-p\" flag, or winpty on Windows): %w", err)
 		}
 		passwd := strings.TrimSpace(string(pass))
 		if passwd != "" {
