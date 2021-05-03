@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/opencontainers/go-digest"
-	"github.com/regclient/regclient/regclient"
+	"github.com/regclient/regclient/regclient/blob"
 	"github.com/regclient/regclient/regclient/types"
 	"github.com/sirupsen/logrus"
 	lua "github.com/yuin/gopher-lua"
@@ -15,7 +15,7 @@ import (
 
 type sbBlob struct {
 	d   digest.Digest
-	b   regclient.Blob
+	b   blob.Blob
 	ref types.Ref
 	rdr io.Reader
 }
@@ -108,7 +108,7 @@ func (s *Sandbox) blobGet(ls *lua.LState) int {
 		ls.RaiseError("Failed retrieving \"%s\" blob \"%s\": %v", ref.ref.CommonName(), d, err)
 	}
 
-	ud, err := wrapUserData(ls, &sbBlob{b: b, ref: ref.ref, rdr: b}, b.GetOrig(), luaBlobName)
+	ud, err := wrapUserData(ls, &sbBlob{b: b, ref: ref.ref, rdr: b}, nil, luaBlobName)
 	if err != nil {
 		ls.RaiseError("Failed packaging \"%s\" blob \"%s\": %v", ref.ref.CommonName(), d, err)
 	}
@@ -132,7 +132,7 @@ func (s *Sandbox) blobHead(ls *lua.LState) int {
 		ls.RaiseError("Failed retrieving \"%s\" blob \"%s\": %v", ref.ref.CommonName(), d, err)
 	}
 
-	ud, err := wrapUserData(ls, &sbBlob{b: b, ref: ref.ref}, b.GetOrig(), luaBlobName)
+	ud, err := wrapUserData(ls, &sbBlob{b: b, ref: ref.ref}, nil, luaBlobName)
 	if err != nil {
 		ls.RaiseError("Failed packaging \"%s\" blob \"%s\": %v", ref.ref.CommonName(), d, err)
 	}
