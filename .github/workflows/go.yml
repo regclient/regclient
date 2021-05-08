@@ -37,7 +37,7 @@ jobs:
       run: ./build/build-artifacts.sh
 
     - name: Gather release details
-      if: startsWith( github.ref, 'refs/tags/v' )
+      if: startsWith( github.ref, 'refs/tags/v' ) && github.repository_owner == 'regclient'
       id: release_details
       run: |
         VERSION=${GITHUB_REF#refs/tags/}
