@@ -1,33 +1,53 @@
 # syntax=docker/dockerfile:experimental
 
-FROM --platform=$BUILDPLATFORM golang:1.14-alpine as dev
-RUN apk add --no-cache git ca-certificates
+ARG REGISTRY=docker.io
+ARG ALPINE_VER=3
+ARG GO_VER=1.14-alpine
+
+FROM --platform=$BUILDPLATFORM ${REGISTRY}/library/golang:${GO_VER} as dev
+RUN apk add --no-cache \
+      ca-certificates \
+      git \
+      make
 RUN adduser -D appuser \
  && mkdir -p /home/appuser/.docker \
  && chown -R appuser /home/appuser
 WORKDIR /src
 COPY . /src/
-CMD CGO_ENABLED=0 go build -ldflags '-s -w -extldflags -static' -o regbot ./cmd/regbot/ && ./regbot
+ENV PATH=${PATH}:/src/bin
+CMD make bin/regbot && bin/regbot
 
 FROM --platform=$BUILDPLATFORM dev as build
 ARG TARGETOS
 ARG TARGETARCH
-ARG LD_FLAGS
 RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
     --mount=type=cache,id=goroot,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -ldflags "-s -w -extldflags -static ${LD_FLAGS}" -o regbot ./cmd/regbot/
+    GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    make bin/regbot
 USER appuser
-CMD [ "./regbot" ]
+CMD [ "bin/regbot" ]
+
+FROM ${REGISTRY}/library/alpine:${ALPINE_VER} as lua-mods
+RUN apk add git \
+ && mkdir -p /lua /src \
+ && git clone https://github.com/grafi-tt/lunajson.git /src/json \
+ && git clone https://github.com/kikito/semver.lua.git /src/semver \
+ && cp -r /src/json/src/* /lua/ \
+ && cp /src/semver/semver.lua /lua/ \
+ && cd /lua \
+ && ln -s lunajson.lua json.lua
+COPY cmd/regbot/lua/ /lua/
 
 FROM scratch as artifact
-COPY --from=build /src/regbot /regbot
+COPY --from=build /src/bin/regbot /regbot
 
 FROM alpine as release-alpine
 COPY --from=build /etc/passwd /etc/group /etc/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build --chown=appuser /home/appuser /home/appuser
-COPY --from=build /src/regbot /usr/local/bin/regbot
+COPY --from=build /src/bin/regbot /usr/local/bin/regbot
+COPY --from=lua-mods /lua /lua-mods
+ENV LUA_PATH="?;?.lua;/lua-user/?;/lua-user/?.lua;/lua-mods/?;/lua-mods/?.lua"
 USER appuser
 CMD [ "regbot", "--help" ]
 
@@ -50,7 +70,9 @@ FROM scratch as release-scratch
 COPY --from=build /etc/passwd /etc/group /etc/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build --chown=appuser /home/appuser /home/appuser
-COPY --from=build /src/regbot /regbot
+COPY --from=build /src/bin/regbot /regbot
+COPY --from=lua-mods /lua /lua-mods
+ENV LUA_PATH="?;?.lua;/lua-user/?;/lua-user/?.lua;/lua-mods/?;/lua-mods/?.lua"
 USER appuser
 ENTRYPOINT [ "/regbot" ]
 
