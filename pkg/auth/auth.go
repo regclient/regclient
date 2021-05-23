@@ -25,6 +25,9 @@ var defaultClientID = "regclient"
 // minTokenLife tokens are required to last at least 60 seconds to support older docker clients
 var minTokenLife = 60
 
+// tokenBuffer is used to renew a token before it expires to account for time to process requests on the server
+var tokenBuffer = time.Second * 5
+
 const (
 	isSpace charLU = 1 << iota
 	isAlphaNum
@@ -546,12 +549,14 @@ func (b *BearerHandler) GenerateAuth() (string, error) {
 	return "", ErrUnauthorized
 }
 
-// returns true when token issue date is either 0 or token is expired
+// returns true when token issue date is either 0, token has expired, or will expire within buffer time
 func (b *BearerHandler) isExpired() bool {
 	if b.token.IssuedAt.IsZero() {
 		return true
 	}
-	return !time.Now().Before(b.token.IssuedAt.Add(time.Duration(b.token.ExpiresIn) * time.Second))
+	expireSec := b.token.IssuedAt.Add(time.Duration(b.token.ExpiresIn) * time.Second)
+	expireSec.Add(tokenBuffer * -1)
+	return time.Now().After(expireSec)
 }
 
 func (b *BearerHandler) tryGet() error {
