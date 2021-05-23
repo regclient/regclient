@@ -1,13 +1,21 @@
 # syntax=docker/dockerfile:experimental
 
-FROM --platform=$BUILDPLATFORM golang:1.14-alpine as dev
-RUN apk add --no-cache git ca-certificates
+ARG REGISTRY=docker.io
+ARG ALPINE_VER=3
+ARG GO_VER=1.14-alpine
+
+FROM --platform=$BUILDPLATFORM ${REGISTRY}/library/golang:${GO_VER} as dev
+RUN apk add --no-cache \
+      ca-certificates \
+      git \
+      make
 RUN adduser -D appuser \
  && mkdir -p /home/appuser/.docker \
  && chown -R appuser /home/appuser
 WORKDIR /src
 COPY . /src/
-CMD CGO_ENABLED=0 go build -ldflags '-s -w -extldflags -static' -o regsync ./cmd/regsync/ && ./regsync
+ENV PATH=${PATH}:/src/bin
+CMD make bin/regsync && bin/regsync
 
 FROM --platform=$BUILDPLATFORM dev as build
 ARG TARGETOS
@@ -15,19 +23,19 @@ ARG TARGETARCH
 ARG LD_FLAGS
 RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
     --mount=type=cache,id=goroot,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -ldflags "-s -w -extldflags -static ${LD_FLAGS}" -o regsync ./cmd/regsync/
+    GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    make bin/regsync
 USER appuser
-CMD [ "./regsync" ]
+CMD [ "bin/regsync" ]
 
 FROM scratch as artifact
-COPY --from=build /src/regsync /regsync
+COPY --from=build /src/bin/regsync /regsync
 
-FROM alpine as release-alpine
+FROM ${REGISTRY}/library/alpine:${ALPINE_VER} as release-alpine
 COPY --from=build /etc/passwd /etc/group /etc/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build --chown=appuser /home/appuser /home/appuser
-COPY --from=build /src/regsync /usr/local/bin/regsync
+COPY --from=build /src/bin/regsync /usr/local/bin/regsync
 USER appuser
 CMD [ "regsync", "--help" ]
 
@@ -50,7 +58,7 @@ FROM scratch as release-scratch
 COPY --from=build /etc/passwd /etc/group /etc/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build --chown=appuser /home/appuser /home/appuser
-COPY --from=build /src/regsync /regsync
+COPY --from=build /src/bin/regsync /regsync
 USER appuser
 ENTRYPOINT [ "/regsync" ]
 

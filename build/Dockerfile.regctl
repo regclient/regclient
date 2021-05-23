@@ -1,24 +1,31 @@
-FROM golang:1.14-alpine as dev
-RUN apk add --no-cache git ca-certificates
+ARG REGISTRY=docker.io
+ARG ALPINE_VER=3
+ARG GO_VER=1.14-alpine
+
+FROM ${REGISTRY}/library/golang:${GO_VER} as dev
+RUN apk add --no-cache \
+      ca-certificates \
+      git \
+      make
 RUN adduser -D appuser \
  && mkdir -p /home/appuser/.regctl \
  && chown -R appuser /home/appuser/.regctl
 WORKDIR /src
 COPY . /src/
-CMD CGO_ENABLED=0 go build -ldflags '-s -w -extldflags -static' -o regctl ./cmd/regctl/ && ./regctl
+ENV PATH=${PATH}:/src/bin
+CMD make bin/regctl && bin/regctl
 
 FROM dev as build
 ARG LD_FLAGS
-RUN CGO_ENABLED=0 \
-    go build -ldflags "-s -w -extldflags -static ${LD_FLAGS}" -o regctl ./cmd/regctl/
+RUN make bin/regctl
 USER appuser
-CMD [ "./regctl" ]
+CMD [ "bin/regctl" ]
 
-FROM alpine as release-alpine
+FROM ${REGISTRY}/library/alpine:${ALPINE_VER} as release-alpine
 COPY --from=build /etc/passwd /etc/group /etc/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build --chown=appuser /home/appuser /home/appuser
-COPY --from=build /src/regctl /usr/local/bin/regctl
+COPY --from=build /src/bin/regctl /usr/local/bin/regctl
 USER appuser
 CMD [ "regctl", "--help" ]
 
@@ -41,7 +48,7 @@ FROM scratch as release-scratch
 COPY --from=build /etc/passwd /etc/group /etc/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build --chown=appuser /home/appuser /home/appuser
-COPY --from=build /src/regctl /regctl
+COPY --from=build /src/bin/regctl /regctl
 USER appuser
 ENTRYPOINT [ "/regctl" ]
 
