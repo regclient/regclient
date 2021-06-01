@@ -43,9 +43,10 @@ func (rc *regClient) ManifestDelete(ctx context.Context, ref types.Ref) error {
 		noMirrors: true,
 		apis: map[string]httpReqAPI{
 			"": {
-				method:  "DELETE",
-				path:    ref.Repository + "/manifests/" + ref.Digest,
-				headers: headers,
+				method:     "DELETE",
+				repository: ref.Repository,
+				path:       "manifests/" + ref.Digest,
+				headers:    headers,
 			},
 		},
 	}
@@ -86,9 +87,10 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref types.Ref) (manifest.M
 		host: ref.Registry,
 		apis: map[string]httpReqAPI{
 			"": {
-				method:  "GET",
-				path:    ref.Repository + "/manifests/" + tagOrDigest,
-				headers: headers,
+				method:     "GET",
+				repository: ref.Repository,
+				path:       "manifests/" + tagOrDigest,
+				headers:    headers,
 			},
 		},
 	}
@@ -139,9 +141,10 @@ func (rc *regClient) ManifestHead(ctx context.Context, ref types.Ref) (manifest.
 		host: ref.Registry,
 		apis: map[string]httpReqAPI{
 			"": {
-				method:  "HEAD",
-				path:    ref.Repository + "/manifests/" + tagOrDigest,
-				headers: headers,
+				method:     "HEAD",
+				repository: ref.Repository,
+				path:       "manifests/" + tagOrDigest,
+				headers:    headers,
 			},
 		},
 	}
@@ -192,11 +195,12 @@ func (rc *regClient) ManifestPut(ctx context.Context, ref types.Ref, m manifest.
 		noMirrors: true,
 		apis: map[string]httpReqAPI{
 			"": {
-				method:    "PUT",
-				path:      ref.Repository + "/manifests/" + tagOrDigest,
-				headers:   headers,
-				bodyLen:   int64(len(mj)),
-				bodyBytes: mj,
+				method:     "PUT",
+				repository: ref.Repository,
+				path:       "manifests/" + tagOrDigest,
+				headers:    headers,
+				bodyLen:    int64(len(mj)),
+				bodyBytes:  mj,
 			},
 		},
 	}

@@ -237,10 +237,11 @@ func (rc *regClient) TagListWithOpts(ctx context.Context, ref types.Ref, opts Ta
 		host: ref.Registry,
 		apis: map[string]httpReqAPI{
 			"": {
-				method:  "GET",
-				path:    ref.Repository + "/tags/list",
-				query:   query,
-				headers: headers,
+				method:     "GET",
+				repository: ref.Repository,
+				path:       "tags/list",
+				query:      query,
+				headers:    headers,
 			},
 		},
 	}

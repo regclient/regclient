@@ -95,10 +95,11 @@ func (rc *regClient) BlobGet(ctx context.Context, ref types.Ref, d digest.Digest
 		host: ref.Registry,
 		apis: map[string]httpReqAPI{
 			"": {
-				method:  "GET",
-				path:    ref.Repository + "/blobs/" + d.String(),
-				headers: headers,
-				digest:  d,
+				method:     "GET",
+				repository: ref.Repository,
+				path:       "blobs/" + d.String(),
+				headers:    headers,
+				digest:     d,
 			},
 		},
 	}
@@ -131,8 +132,9 @@ func (rc *regClient) BlobHead(ctx context.Context, ref types.Ref, d digest.Diges
 		host: ref.Registry,
 		apis: map[string]httpReqAPI{
 			"": {
-				method: "HEAD",
-				path:   ref.Repository + "/blobs/" + d.String(),
+				method:     "HEAD",
+				repository: ref.Repository,
+				path:       "blobs/" + d.String(),
 			},
 		},
 	}
@@ -166,9 +168,10 @@ func (rc *regClient) BlobMount(ctx context.Context, refSrc types.Ref, refTgt typ
 		noMirrors: true,
 		apis: map[string]httpReqAPI{
 			"": {
-				method: "POST",
-				path:   refTgt.Repository + "/blobs/uploads/",
-				query:  query,
+				method:     "POST",
+				repository: refTgt.Repository,
+				path:       "blobs/uploads/",
+				query:      query,
 			},
 		},
 	}
@@ -202,9 +205,7 @@ func (rc *regClient) BlobPut(ctx context.Context, ref types.Ref, d digest.Digest
 	// send upload as one-chunk
 	if d != "" {
 		err = rc.blobPutUploadFull(ctx, ref, d, putURL, rdr, ct, cl)
-		if err == nil {
-			return digest.Digest(d), cl, nil
-		}
+		return digest.Digest(d), cl, err
 	}
 
 	// send a chunked upload if full upload not possible or failed
@@ -218,8 +219,9 @@ func (rc *regClient) blobGetUploadURL(ctx context.Context, ref types.Ref) (*url.
 		noMirrors: true,
 		apis: map[string]httpReqAPI{
 			"": {
-				method: "POST",
-				path:   ref.Repository + "/blobs/uploads/",
+				method:     "POST",
+				repository: ref.Repository,
+				path:       "blobs/uploads/",
 			},
 		},
 	}
@@ -237,6 +239,7 @@ func (rc *regClient) blobGetUploadURL(ctx context.Context, ref types.Ref) (*url.
 	location := resp.HTTPResponse().Header.Get("Location")
 	rc.log.WithFields(logrus.Fields{
 		"location": location,
+		"headers":  resp.HTTPResponse().Header,
 	}).Debug("Upload location received")
 	// put url may be relative to the above post URL, so parse in that context
 	postURL := resp.HTTPResponse().Request.URL
@@ -269,6 +272,8 @@ func (rc *regClient) blobPutUploadFull(ctx context.Context, ref types.Ref, d dig
 	opts = append(opts, retryable.WithBodyFunc(bodyFunc))
 	opts = append(opts, retryable.WithContentLen(cl))
 	opts = append(opts, retryable.WithHeader("Content-Type", []string{ct}))
+	opts = append(opts, retryable.WithHeader("Content-Length", []string{fmt.Sprintf("%d", cl)}))
+	opts = append(opts, retryable.WithScope(ref.Repository, true))
 	rty := rc.getRetryable(host)
 	resp, err := rty.DoRequest(ctx, "PUT", []url.URL{*putURL}, opts...)
 	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
@@ -296,9 +301,9 @@ func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, pu
 	bodyFunc := func() (io.ReadCloser, error) {
 		return ioutil.NopCloser(chunkBuf), nil
 	}
+	chunkURL := *putURL
 
 	for !finalChunk {
-		chunkURL := *putURL
 		// read a chunk into an input buffer, computing the digest
 		chunkSize, err := io.CopyN(chunkBuf, digestRdr, bufSize)
 		if err == io.EOF {
@@ -317,10 +322,11 @@ func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, pu
 			// write chunk
 			opts := []retryable.OptsReq{}
 			opts = append(opts, retryable.WithBodyFunc(bodyFunc))
-			// opts = append(opts, retryable.WithContentLen(chunkSize))
+			opts = append(opts, retryable.WithContentLen(chunkSize))
 			opts = append(opts, retryable.WithHeader("Content-Type", []string{ct}))
 			opts = append(opts, retryable.WithHeader("Content-Length", []string{fmt.Sprintf("%d", chunkSize)}))
 			opts = append(opts, retryable.WithHeader("Content-Range", []string{fmt.Sprintf("%d-%d", chunkStart, chunkStart+chunkSize)}))
+			opts = append(opts, retryable.WithScope(ref.Repository, true))
 
 			rty := rc.getRetryable(host)
 			resp, err := rty.DoRequest(ctx, "PATCH", []url.URL{chunkURL}, opts...)
@@ -339,13 +345,16 @@ func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, pu
 				}).Debug("Buffer was not read")
 			}
 			location := resp.HTTPResponse().Header.Get("Location")
-			rc.log.WithFields(logrus.Fields{
-				"location": location,
-			}).Debug("Next chunk upload location received")
-			prevURL := resp.HTTPResponse().Request.URL
-			putURL, err = prevURL.Parse(location)
-			if err != nil {
-				return "", 0, fmt.Errorf("Failed to send blob (parse next chunk location), ref %s: %w", ref.CommonName(), err)
+			if location != "" {
+				rc.log.WithFields(logrus.Fields{
+					"location": location,
+				}).Debug("Next chunk upload location received")
+				prevURL := resp.HTTPResponse().Request.URL
+				parseURL, err := prevURL.Parse(location)
+				if err != nil {
+					return "", 0, fmt.Errorf("Failed to send blob (parse next chunk location), ref %s: %w", ref.CommonName(), err)
+				}
+				chunkURL = *parseURL
 			}
 		}
 	}
@@ -353,10 +362,10 @@ func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, pu
 	// write digest to complete request
 	d := digester.Digest()
 	// append digest to request to use the monolithic upload option
-	if putURL.RawQuery != "" {
-		putURL.RawQuery = putURL.RawQuery + "&digest=" + d.String()
+	if chunkURL.RawQuery != "" {
+		chunkURL.RawQuery = chunkURL.RawQuery + "&digest=" + d.String()
 	} else {
-		putURL.RawQuery = "digest=" + d.String()
+		chunkURL.RawQuery = "digest=" + d.String()
 	}
 
 	// send the blob
@@ -365,8 +374,9 @@ func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, pu
 	opts = append(opts, retryable.WithHeader("Content-Length", []string{"0"}))
 	opts = append(opts, retryable.WithHeader("Content-Range", []string{fmt.Sprintf("%d-%d", chunkStart, chunkStart)}))
 	opts = append(opts, retryable.WithHeader("Content-Type", []string{ct}))
+	opts = append(opts, retryable.WithScope(ref.Repository, true))
 	rty := rc.getRetryable(host)
-	resp, err := rty.DoRequest(ctx, "PUT", []url.URL{*putURL}, opts...)
+	resp, err := rty.DoRequest(ctx, "PUT", []url.URL{chunkURL}, opts...)
 	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
 		return "", 0, fmt.Errorf("Failed to send blob (chunk digest), digest %s, ref %s: %w", d, ref.CommonName(), err)
 	}

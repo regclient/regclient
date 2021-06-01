@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/opencontainers/go-digest"
@@ -21,15 +22,16 @@ type httpReq struct {
 }
 
 type httpReqAPI struct {
-	method    string
-	path      string
-	noPrefix  bool
-	query     url.Values
-	bodyLen   int64
-	bodyBytes []byte
-	bodyFunc  func() (io.ReadCloser, error)
-	headers   http.Header
-	digest    digest.Digest
+	method     string
+	noPrefix   bool
+	repository string
+	path       string
+	query      url.Values
+	bodyLen    int64
+	bodyBytes  []byte
+	bodyFunc   func() (io.ReadCloser, error)
+	headers    http.Header
+	digest     digest.Digest
 }
 
 type httpResp interface {
@@ -78,11 +80,16 @@ func (rc *regClient) httpDo(ctx context.Context, req httpReq) (httpResp, error) 
 			Host:   h.Hostname,
 			Scheme: "https",
 		}
-		if h.PathPrefix == "" || api.noPrefix {
-			u.Path = fmt.Sprintf("/v2/%s", api.path)
-		} else {
-			u.Path = fmt.Sprintf("/v2/%s/%s", h.PathPrefix, api.path)
+		path := strings.Builder{}
+		path.WriteString("/v2")
+		if h.PathPrefix != "" && !api.noPrefix {
+			path.WriteString("/" + h.PathPrefix)
 		}
+		if api.repository != "" {
+			path.WriteString("/" + api.repository)
+		}
+		path.WriteString("/" + api.path)
+		u.Path = path.String()
 		if h.TLS == TLSDisabled {
 			u.Scheme = "http"
 		}
@@ -107,7 +114,13 @@ func (rc *regClient) httpDo(ctx context.Context, req httpReq) (httpResp, error) 
 		if api.digest != "" {
 			opts = append(opts, retryable.WithDigest(api.digest))
 		}
-
+		if api.repository != "" {
+			push := false
+			if api.method != "HEAD" && api.method != "GET" {
+				push = true
+			}
+			opts = append(opts, retryable.WithScope(api.repository, push))
+		}
 		// call retryable
 		rty := rc.getRetryable(h)
 		resp, err = rty.DoRequest(ctx, api.method, []url.URL{u}, opts...)
