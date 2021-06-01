@@ -36,6 +36,7 @@ type Response interface {
 
 // Auth is used to process Www-Authenticate header and update request with Authorization header
 type Auth interface {
+	AddScope(host, scope string) error
 	HandleResponse(*http.Response) error
 	UpdateRequest(*http.Request) error
 }
@@ -364,6 +365,18 @@ func WithHeaders(headers http.Header) OptsReq {
 func WithProgressCB(cb func(int64, error)) OptsReq {
 	return func(req *request) {
 		req.progressCB = cb
+	}
+}
+
+func WithScope(repo string, push bool) OptsReq {
+	scope := "repository:" + repo + ":pull"
+	if push {
+		scope = scope + ",push"
+	}
+	return func(req *request) {
+		for _, url := range req.urls {
+			req.r.auth.AddScope(url.Host, scope)
+		}
 	}
 }
 

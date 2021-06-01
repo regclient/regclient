@@ -166,6 +166,14 @@ func runRegistryLogin(cmd *cobra.Command, args []string) error {
 			return ErrMissingInput
 		}
 	}
+	// if username is <token> then process password as an identity token
+	if h.User == "<token>" {
+		h.Token = h.Pass
+		h.User = ""
+		h.Pass = ""
+	} else {
+		h.Token = ""
+	}
 	err = c.ConfigSave()
 	if err != nil {
 		return err
@@ -194,6 +202,7 @@ func runRegistryLogout(cmd *cobra.Command, args []string) error {
 	}
 	h.User = ""
 	h.Pass = ""
+	h.Token = ""
 	err = c.ConfigSave()
 	if err != nil {
 		return err
