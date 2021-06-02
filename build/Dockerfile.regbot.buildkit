@@ -37,7 +37,8 @@ RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
     --mount=type=cache,id=goroot,target=/root/.cache/go-build \
     GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go get -u github.com/awslabs/amazon-ecr-credential-helper/ecr-login/cli/docker-credential-ecr-login \
- && cp "${GOPATH}/bin/docker-credential-ecr-login" /usr/local/bin/docker-credential-ecr-login
+ && ( cp "${GOPATH}/bin/docker-credential-ecr-login" /usr/local/bin/docker-credential-ecr-login \
+   || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-ecr-login" /usr/local/bin/docker-credential-ecr-login )
 
 FROM --platform=$BUILDPLATFORM dev as docker-cred-gcr
 ARG TARGETOS
@@ -46,9 +47,10 @@ RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
     --mount=type=cache,id=goroot,target=/root/.cache/go-build \
     GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go get -u github.com/GoogleCloudPlatform/docker-credential-gcr \
- && cp "${GOPATH}/bin/docker-credential-gcr" /usr/local/bin/docker-credential-gcr
+ && ( cp "${GOPATH}/bin/docker-credential-gcr" /usr/local/bin/docker-credential-gcr \
+   || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-gcr" /usr/local/bin/docker-credential-gcr )
 
-FROM ${REGISTRY}/library/alpine:${ALPINE_VER} as lua-mods
+FROM --platform=$BUILDPLATFORM ${REGISTRY}/library/alpine:${ALPINE_VER} as lua-mods
 RUN apk add git \
  && mkdir -p /lua /src \
  && git clone https://github.com/grafi-tt/lunajson.git /src/json \
