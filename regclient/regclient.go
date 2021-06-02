@@ -211,31 +211,39 @@ func (rc *regClient) loadDockerCreds() error {
 	if err != nil {
 		return fmt.Errorf("Failed to load docker creds %s", err)
 	}
-	for _, cred := range creds {
-		if cred.ServerAddress == "" || cred.Username == "" || cred.Password == "" {
+	for name, cred := range creds {
+		if (cred.Username == "" || cred.Password == "") && cred.IdentityToken == "" {
+			rc.log.WithFields(logrus.Fields{
+				"host": cred.ServerAddress,
+			}).Debug("Docker cred: Skipping empty pass and token")
 			continue
 		}
+		if cred.ServerAddress == "" {
+			cred.ServerAddress = name
+		}
 		// Docker Hub is a special case
-		hostname := cred.ServerAddress
-		if cred.ServerAddress == DockerRegistryAuth {
-			cred.ServerAddress = DockerRegistry
-			hostname = DockerRegistryDNS
+		if name == DockerRegistryAuth {
+			name = DockerRegistry
+			cred.ServerAddress = DockerRegistryDNS
 		}
 		rc.log.WithFields(logrus.Fields{
-			"name": cred.ServerAddress,
-			"host": hostname,
-			"user": cred.Username,
+			"name":      name,
+			"host":      cred.ServerAddress,
+			"user":      cred.Username,
+			"pass-set":  cred.Password != "",
+			"token-set": cred.IdentityToken != "",
 		}).Debug("Loading docker cred")
 		err = rc.hostSet(ConfigHost{
-			Name:     cred.ServerAddress,
-			Hostname: hostname,
+			Name:     name,
+			Hostname: cred.ServerAddress,
 			User:     cred.Username,
 			Pass:     cred.Password,
+			Token:    cred.IdentityToken, // TODO: verify token can be used
 		})
 		if err != nil {
 			// treat each of these as non-fatal
 			rc.log.WithFields(logrus.Fields{
-				"registry": cred.ServerAddress,
+				"registry": name,
 				"user":     cred.Username,
 				"error":    err,
 			}).Warn("Failed to use docker credential")

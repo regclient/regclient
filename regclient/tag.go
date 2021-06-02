@@ -188,7 +188,7 @@ func (rc *regClient) TagDelete(ctx context.Context, ref types.Ref) error {
 	}).Debug("Sending dummy manifest to replace tag")
 
 	// push config
-	_, err = rc.BlobPut(ctx, ref, confDigest, ioutil.NopCloser(bytes.NewReader(confB)), MediaTypeDocker2ImageConfig, int64(len(confB)))
+	_, _, err = rc.BlobPut(ctx, ref, confDigest, ioutil.NopCloser(bytes.NewReader(confB)), MediaTypeDocker2ImageConfig, int64(len(confB)))
 	if err != nil {
 		return fmt.Errorf("Failed sending dummy config to delete %s: %w", ref.CommonName(), err)
 	}
@@ -237,10 +237,11 @@ func (rc *regClient) TagListWithOpts(ctx context.Context, ref types.Ref, opts Ta
 		host: ref.Registry,
 		apis: map[string]httpReqAPI{
 			"": {
-				method:  "GET",
-				path:    ref.Repository + "/tags/list",
-				query:   query,
-				headers: headers,
+				method:     "GET",
+				repository: ref.Repository,
+				path:       "tags/list",
+				query:      query,
+				headers:    headers,
 			},
 		},
 	}

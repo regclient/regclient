@@ -110,15 +110,17 @@ func runBlobPut(cmd *cobra.Command, args []string) error {
 		"digest":       blobOpts.digest,
 		"content-type": blobOpts.mt,
 	}).Debug("Pushing blob")
-	dOut, err := rc.BlobPut(context.Background(), ref, digest.Digest(blobOpts.digest), os.Stdin, blobOpts.mt, 0)
+	dOut, size, err := rc.BlobPut(context.Background(), ref, digest.Digest(blobOpts.digest), os.Stdin, blobOpts.mt, 0)
 	if err != nil {
 		return err
 	}
 
 	result := struct {
 		Digest digest.Digest
+		Size   int64
 	}{
 		Digest: dOut,
+		Size:   size,
 	}
 
 	return template.Writer(os.Stdout, blobOpts.format, result, template.WithFuncs(regclient.TemplateFuncs))

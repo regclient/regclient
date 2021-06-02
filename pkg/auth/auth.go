@@ -25,6 +25,9 @@ var defaultClientID = "regclient"
 // minTokenLife tokens are required to last at least 60 seconds to support older docker clients
 var minTokenLife = 60
 
+// tokenBuffer is used to renew a token before it expires to account for time to process requests on the server
+var tokenBuffer = time.Second * 5
+
 const (
 	isSpace charLU = 1 << iota
 	isAlphaNum
@@ -52,6 +55,7 @@ type Cred struct {
 
 // Auth manages authorization requests/responses for http requests
 type Auth interface {
+	AddScope(host, scope string) error
 	HandleResponse(*http.Response) error
 	UpdateRequest(*http.Request) error
 }
@@ -64,6 +68,7 @@ type Challenge struct {
 
 // Handler handles a challenge for a host to return an auth header
 type Handler interface {
+	AddScope(scope string) error
 	ProcessChallenge(Challenge) error
 	GenerateAuth() (string, error)
 }
@@ -159,6 +164,28 @@ func WithLog(log *logrus.Logger) Opts {
 	return func(a *auth) {
 		a.log = log
 	}
+}
+
+func (a *auth) AddScope(host, scope string) error {
+	success := false
+	for _, at := range a.authTypes {
+		if a.hs[host][at] != nil {
+			err := a.hs[host][at].AddScope(scope)
+			if err == nil {
+				success = true
+			} else if err != ErrNoNewChallenge {
+				return err
+			}
+		}
+	}
+	if !success {
+		return ErrNoNewChallenge
+	}
+	a.log.WithFields(logrus.Fields{
+		"host":  host,
+		"scope": scope,
+	}).Debug("Auth scope added")
+	return nil
 }
 
 func (a *auth) HandleResponse(resp *http.Response) error {
@@ -430,6 +457,11 @@ func NewBasicHandler(client *http.Client, clientID, host string, cred Cred) Hand
 	}
 }
 
+// AddScope is not valid for BasicHandler
+func (b *BasicHandler) AddScope(scope string) error {
+	return ErrNoNewChallenge
+}
+
 // ProcessChallenge for BasicHandler is a noop
 func (b *BasicHandler) ProcessChallenge(c Challenge) error {
 	if _, ok := c.params["realm"]; !ok {
@@ -483,6 +515,22 @@ func NewBearerHandler(client *http.Client, clientID, host string, cred Cred) Han
 	}
 }
 
+// AddScope appends a new scope if it doesn't already exist
+func (b *BearerHandler) AddScope(scope string) error {
+	existingScope := b.scopeExists(scope)
+
+	if existingScope && (b.token.Token == "" || !b.isExpired()) {
+		return ErrNoNewChallenge
+	}
+	if !existingScope {
+		b.scopes = append(b.scopes, scope)
+	}
+
+	// delete any scope specific or invalid token
+	b.token.Token = ""
+	return nil
+}
+
 // ProcessChallenge handles WWW-Authenticate header for bearer tokens
 // Bearer realm="https://auth.docker.io/token",service="registry.docker.io",scope="repository:samalba/my-app:pull,push"
 func (b *BearerHandler) ProcessChallenge(c Challenge) error {
@@ -516,7 +564,7 @@ func (b *BearerHandler) ProcessChallenge(c Challenge) error {
 		b.scopes = append(b.scopes, c.params["scope"])
 	}
 
-	// delete any scope specific token
+	// delete any scope specific or invalid token
 	b.token.Token = ""
 
 	return nil
@@ -546,12 +594,14 @@ func (b *BearerHandler) GenerateAuth() (string, error) {
 	return "", ErrUnauthorized
 }
 
-// returns true when token issue date is either 0 or token is expired
+// returns true when token issue date is either 0, token has expired, or will expire within buffer time
 func (b *BearerHandler) isExpired() bool {
 	if b.token.IssuedAt.IsZero() {
 		return true
 	}
-	return !time.Now().Before(b.token.IssuedAt.Add(time.Duration(b.token.ExpiresIn) * time.Second))
+	expireSec := b.token.IssuedAt.Add(time.Duration(b.token.ExpiresIn) * time.Second)
+	expireSec.Add(tokenBuffer * -1)
+	return time.Now().After(expireSec)
 }
 
 func (b *BearerHandler) tryGet() error {
@@ -597,6 +647,9 @@ func (b *BearerHandler) tryPost() error {
 	}
 	form.Set("client_id", b.clientID)
 	if b.token.RefreshToken != "" {
+		form.Set("grant_type", "refresh_token")
+		form.Set("refresh_token", b.token.RefreshToken)
+	} else if b.cred.Token != "" { // TODO: verify identity token works as a refresh token
 		form.Set("grant_type", "refresh_token")
 		form.Set("refresh_token", b.token.RefreshToken)
 	} else if b.cred.User != "" && b.cred.Password != "" {
@@ -691,6 +744,11 @@ func NewJWTHandler(client *http.Client, clientID, host string, cred Cred) Handle
 		}
 	}
 	return nil
+}
+
+// AddScope is not valid for JWTHubHandler
+func (j *JWTHubHandler) AddScope(scope string) error {
+	return ErrNoNewChallenge
 }
 
 // ProcessChallenge handles WWW-Authenticate header for JWT auth on Docker Hub

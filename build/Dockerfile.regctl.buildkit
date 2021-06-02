@@ -1,33 +1,62 @@
 # syntax=docker/dockerfile:experimental
 
-FROM --platform=$BUILDPLATFORM golang:1.14-alpine as dev
-RUN apk add --no-cache git ca-certificates
+ARG REGISTRY=docker.io
+ARG ALPINE_VER=3
+ARG GO_VER=1.14-alpine
+
+FROM --platform=$BUILDPLATFORM ${REGISTRY}/library/golang:${GO_VER} as dev
+RUN apk add --no-cache \
+      ca-certificates \
+      git \
+      make
 RUN adduser -D appuser \
  && mkdir -p /home/appuser/.regctl \
  && chown -R appuser /home/appuser/.regctl
 WORKDIR /src
 COPY . /src/
-CMD CGO_ENABLED=0 go build -ldflags '-s -w -extldflags -static' -o regctl ./cmd/regctl/ && ./regctl
+ENV PATH=${PATH}:/src/bin
+CMD make bin/regctl && bin/regctl
 
 FROM --platform=$BUILDPLATFORM dev as build
 ARG TARGETOS
 ARG TARGETARCH
-ARG LD_FLAGS
 RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
     --mount=type=cache,id=goroot,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -ldflags "-s -w -extldflags -static ${LD_FLAGS}" -o regctl ./cmd/regctl/
+    GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    make bin/regctl
 USER appuser
-CMD [ "./regctl" ]
+CMD [ "bin/regctl" ]
 
 FROM scratch as artifact
-COPY --from=build /src/regctl /regctl
+COPY --from=build /src/bin/regctl /regctl
 
-FROM alpine as release-alpine
+FROM --platform=$BUILDPLATFORM dev as docker-cred-ecr-login
+ARG TARGETOS
+ARG TARGETARCH
+RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
+    --mount=type=cache,id=goroot,target=/root/.cache/go-build \
+    GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go get -u github.com/awslabs/amazon-ecr-credential-helper/ecr-login/cli/docker-credential-ecr-login \
+ && ( cp "${GOPATH}/bin/docker-credential-ecr-login" /usr/local/bin/docker-credential-ecr-login \
+   || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-ecr-login" /usr/local/bin/docker-credential-ecr-login )
+
+FROM --platform=$BUILDPLATFORM dev as docker-cred-gcr
+ARG TARGETOS
+ARG TARGETARCH
+RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
+    --mount=type=cache,id=goroot,target=/root/.cache/go-build \
+    GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go get -u github.com/GoogleCloudPlatform/docker-credential-gcr \
+ && ( cp "${GOPATH}/bin/docker-credential-gcr" /usr/local/bin/docker-credential-gcr \
+   || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-gcr" /usr/local/bin/docker-credential-gcr )
+
+FROM ${REGISTRY}/library/alpine:${ALPINE_VER} as release-alpine
 COPY --from=build /etc/passwd /etc/group /etc/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build --chown=appuser /home/appuser /home/appuser
-COPY --from=build /src/regctl /usr/local/bin/regctl
+COPY --from=docker-cred-ecr-login /usr/local/bin/docker-credential-* /usr/local/bin/
+COPY --from=docker-cred-gcr /usr/local/bin/docker-credential-* /usr/local/bin/
+COPY --from=build /src/bin/regctl /usr/local/bin/regctl
 USER appuser
 CMD [ "regctl", "--help" ]
 
@@ -50,7 +79,7 @@ FROM scratch as release-scratch
 COPY --from=build /etc/passwd /etc/group /etc/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build --chown=appuser /home/appuser /home/appuser
-COPY --from=build /src/regctl /regctl
+COPY --from=build /src/bin/regctl /regctl
 USER appuser
 ENTRYPOINT [ "/regctl" ]
 

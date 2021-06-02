@@ -1,15 +1,19 @@
 COMMANDS=regctl regsync regbot
 BINARIES=$(addprefix bin/,$(COMMANDS))
-IMAGE_TAGS=regctl regsync regbot
-IMAGES=$(addprefix docker-,$(IMAGE_TAGS))
+IMAGES=$(addprefix docker-,$(COMMANDS))
+ARTIFACT_PLATFORMS=linux-amd64 linux-arm64 darwin-amd64 windows-amd64.exe
+ARTIFACTS=$(foreach cmd,$(addprefix artifacts/,$(COMMANDS)),$(addprefix $(cmd)-,$(ARTIFACT_PLATFORMS)))
+TEST_PLATFORMS=linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x
 VCS_REF=$(shell git rev-list -1 HEAD)
 VCS_TAG=$(shell git describe --tags --abbrev=0 2>/dev/null || echo "none")
 LD_FLAGS=-X \"github.com/regclient/regclient/regclient.VCSRef=$(VCS_REF)\" \
-         -X \"main.VCSRef=$(VCS_REF)\" -X \"main.VCSTag=$(VCS_TAG)\"
+         -X \"main.VCSRef=$(VCS_REF)\" -X \"main.VCSTag=$(VCS_TAG)\" \
+				 -s -w -extldflags -static
 GO_BUILD_FLAGS=-ldflags "$(LD_FLAGS)"
-DOCKER_ARGS=--build-arg "VCS_REF=$(VCS_REF)" --build-arg "LD_FLAGS=$(LD_FLAGS)"
+DOCKERFILE_EXT=$(shell if docker build --help | grep -q -- '--progress'; then echo ".buildkit"; fi)
+DOCKER_ARGS=--build-arg "VCS_REF=$(VCS_REF)"
 
-.PHONY: all binaries vendor docker fmt vet test plugin-user plugin-host .FORCE
+.PHONY: all fmt vet test vendor binaries docker artifacts artifact-pre plugin-user plugin-host .FORCE
 
 .FORCE:
 
@@ -24,33 +28,42 @@ vet:
 test:
 	go test ./...
 
-binaries: vendor $(BINARIES)
-
-bin/regctl: .FORCE
-	go build ${GO_BUILD_FLAGS} -o bin/regctl ./cmd/regctl
-
-bin/regsync: .FORCE
-	go build ${GO_BUILD_FLAGS} -o bin/regsync ./cmd/regsync
-
-bin/regbot: .FORCE
-	go build ${GO_BUILD_FLAGS} -o bin/regbot ./cmd/regbot
-
 vendor:
 	go mod vendor
 
+binaries: vendor $(BINARIES)
+
+bin/%: .FORCE
+	CGO_ENABLED=0 go build ${GO_BUILD_FLAGS} -o bin/$* ./cmd/$*
+
 docker: $(IMAGES)
 
-docker-regctl:
-	docker build -t regclient/regctl -f build/Dockerfile.regctl $(DOCKER_ARGS) .
-	docker build -t regclient/regctl:alpine -f build/Dockerfile.regctl --target release-alpine $(DOCKER_ARGS) .
+docker-%: .FORCE
+	docker build -t regclient/$* -f build/Dockerfile.$*$(DOCKERFILE_EXT) $(DOCKER_ARGS) .
+	docker build -t regclient/$*:alpine -f build/Dockerfile.$*$(DOCKERFILE_EXT) --target release-alpine $(DOCKER_ARGS) .
 
-docker-regsync:
-	docker build -t regclient/regsync -f build/Dockerfile.regsync $(DOCKER_ARGS) .
-	docker build -t regclient/regsync:alpine -f build/Dockerfile.regsync --target release-alpine $(DOCKER_ARGS) .
+test-docker: $(addprefix test-docker-,$(COMMANDS))
 
-docker-regbot:
-	docker build -t regclient/regbot -f build/Dockerfile.regbot $(DOCKER_ARGS) .
-	docker build -t regclient/regbot:alpine -f build/Dockerfile.regbot --target release-alpine $(DOCKER_ARGS) .
+test-docker-%:
+	docker buildx build --platform="$(TEST_PLATFORMS)" -f build/Dockerfile.$*.buildkit .
+	docker buildx build --platform="$(TEST_PLATFORMS)" -f build/Dockerfile.$*.buildkit --target release-alpine .
+
+artifacts: $(ARTIFACTS)
+
+artifact-pre:
+	mkdir -p artifacts
+
+artifacts/%: artifact-pre .FORCE
+	@target="$*"; \
+	command="$${target%%-*}"; \
+	platform_ext="$${target#*-}"; \
+	platform="$${platform_ext%.*}"; \
+	export GOOS="$${platform%%-*}"; \
+	export GOARCH="$${platform#*-}"; \
+	echo export GOOS=$${GOOS}; \
+	echo export GOARCH=$${GOARCH}; \
+	echo go build ${GO_BUILD_FLAGS} -o "$@" ./cmd/$${command}/; \
+	CGO_ENABLED=0 go build ${GO_BUILD_FLAGS} -o "$@" ./cmd/$${command}/
 
 plugin-user:
 	mkdir -p ${HOME}/.docker/cli-plugins/

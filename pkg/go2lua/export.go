@@ -8,12 +8,12 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
-// Convert takes an input interface and converts it to a Lua value
-func Convert(ls *lua.LState, v interface{}) lua.LValue {
-	return convertReflect(ls, reflect.ValueOf(v))
+// Export takes an input Go interface and converts it to a Lua value
+func Export(ls *lua.LState, v interface{}) lua.LValue {
+	return exportReflect(ls, reflect.ValueOf(v))
 }
 
-func convertReflect(ls *lua.LState, v reflect.Value) lua.LValue {
+func exportReflect(ls *lua.LState, v reflect.Value) lua.LValue {
 	if !v.IsValid() {
 		return lua.LNil
 	}
@@ -31,13 +31,13 @@ func convertReflect(ls *lua.LState, v reflect.Value) lua.LValue {
 	case reflect.Array:
 		lTab := ls.NewTable()
 		for i := 0; i < v.Len(); i++ {
-			lTab.RawSetInt(i, convertReflect(ls, v.Index(i)))
+			lTab.RawSetInt(i+1, exportReflect(ls, v.Index(i)))
 		}
 		return lTab
 	case reflect.Slice:
 		lTab := ls.NewTable()
 		for i := 0; i < v.Len(); i++ {
-			lTab.RawSetInt(i, convertReflect(ls, v.Index(i)))
+			lTab.RawSetInt(i+1, exportReflect(ls, v.Index(i)))
 		}
 		return lTab
 	case reflect.Map:
@@ -45,9 +45,9 @@ func convertReflect(ls *lua.LState, v reflect.Value) lua.LValue {
 		for _, k := range v.MapKeys() {
 			// only support String and Int keys, all other map keys are ignored
 			if k.Type().Kind() == reflect.String {
-				lTab.RawSetString(k.String(), convertReflect(ls, v.MapIndex(k)))
+				lTab.RawSetString(k.String(), exportReflect(ls, v.MapIndex(k)))
 			} else if k.Type().Kind() == reflect.Int {
-				lTab.RawSetInt(int(k.Int()), convertReflect(ls, v.MapIndex(k)))
+				lTab.RawSetInt(int(k.Int()), exportReflect(ls, v.MapIndex(k)))
 			}
 		}
 		return lTab
@@ -62,7 +62,7 @@ func convertReflect(ls *lua.LState, v reflect.Value) lua.LValue {
 				continue
 			}
 			foundExported = true
-			lVal := convertReflect(ls, v.FieldByName(field.Name))
+			lVal := exportReflect(ls, v.FieldByName(field.Name))
 			lTab.RawSetString(field.Name, lVal)
 			// map json keys to values if defined
 			jsonName := strings.Split(field.Tag.Get("json"), ",")[0]
@@ -85,7 +85,7 @@ func convertReflect(ls *lua.LState, v reflect.Value) lua.LValue {
 		if v.IsNil() {
 			return lua.LNil
 		}
-		return convertReflect(ls, v.Elem())
+		return exportReflect(ls, v.Elem())
 	default:
 		// Unsupported reflect types:
 		// Invalid

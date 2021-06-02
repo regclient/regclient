@@ -48,80 +48,85 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc types.Ref, refTgt typ
 		return err
 	}
 
-	if m.IsList() {
-		pd, err := m.GetDescriptorList()
-		if err != nil {
-			return err
-		}
-		for _, entry := range pd {
-			entrySrc := refSrc
-			entryTgt := refTgt
-			entrySrc.Tag = ""
-			entryTgt.Tag = ""
-			entrySrc.Digest = entry.Digest.String()
-			entryTgt.Digest = entry.Digest.String()
-			if err := rc.ImageCopy(ctx, entrySrc, entryTgt); err != nil {
+	if refSrc.Registry != refTgt.Registry || refSrc.Repository != refTgt.Repository {
+		// copy components of the image if the repository is different
+		if m.IsList() {
+			// manifest lists need to recursively copy nested images by digest
+			pd, err := m.GetDescriptorList()
+			if err != nil {
 				return err
 			}
-		}
-	} else {
-		// transfer the config
-		cd, err := m.GetConfigDigest()
-		if err != nil {
-			// docker schema v1 does not have a config object, ignore if it's missing
-			if !errors.Is(err, ErrUnsupportedMediaType) {
-				rc.log.WithFields(logrus.Fields{
-					"ref": refSrc.Reference,
-					"err": err,
-				}).Warn("Failed to get config digest from manifest")
-				return fmt.Errorf("Failed to get config digest for %s: %w", refSrc.CommonName(), err)
+			for _, entry := range pd {
+				entrySrc := refSrc
+				entryTgt := refTgt
+				entrySrc.Tag = ""
+				entryTgt.Tag = ""
+				entrySrc.Digest = entry.Digest.String()
+				entryTgt.Digest = entry.Digest.String()
+				if err := rc.ImageCopy(ctx, entrySrc, entryTgt); err != nil {
+					return err
+				}
 			}
 		} else {
-			rc.log.WithFields(logrus.Fields{
-				"source": refSrc.Reference,
-				"target": refTgt.Reference,
-				"digest": cd.String(),
-			}).Info("Copy config")
-			if err := rc.BlobCopy(ctx, refSrc, refTgt, cd); err != nil {
+			// copy components of an image
+			// transfer the config
+			cd, err := m.GetConfigDigest()
+			if err != nil {
+				// docker schema v1 does not have a config object, ignore if it's missing
+				if !errors.Is(err, ErrUnsupportedMediaType) {
+					rc.log.WithFields(logrus.Fields{
+						"ref": refSrc.Reference,
+						"err": err,
+					}).Warn("Failed to get config digest from manifest")
+					return fmt.Errorf("Failed to get config digest for %s: %w", refSrc.CommonName(), err)
+				}
+			} else {
 				rc.log.WithFields(logrus.Fields{
 					"source": refSrc.Reference,
 					"target": refTgt.Reference,
 					"digest": cd.String(),
-					"err":    err,
-				}).Warn("Failed to copy config")
+				}).Info("Copy config")
+				if err := rc.BlobCopy(ctx, refSrc, refTgt, cd); err != nil {
+					rc.log.WithFields(logrus.Fields{
+						"source": refSrc.Reference,
+						"target": refTgt.Reference,
+						"digest": cd.String(),
+						"err":    err,
+					}).Warn("Failed to copy config")
+					return err
+				}
+			}
+
+			// copy filesystem layers
+			l, err := m.GetLayers()
+			if err != nil {
 				return err
 			}
-		}
-
-		// copy filesystem layers
-		l, err := m.GetLayers()
-		if err != nil {
-			return err
-		}
-		for _, layerSrc := range l {
-			// skip blobs where the URLs are defined, these aren't hosted and won't be pulled from the source
-			if len(layerSrc.URLs) > 0 {
-				rc.log.WithFields(logrus.Fields{
-					"source":        refSrc.Reference,
-					"target":        refTgt.Reference,
-					"layer":         layerSrc.Digest.String(),
-					"external-urls": layerSrc.URLs,
-				}).Debug("Skipping external layer")
-				continue
-			}
-			rc.log.WithFields(logrus.Fields{
-				"source": refSrc.Reference,
-				"target": refTgt.Reference,
-				"layer":  layerSrc.Digest.String(),
-			}).Info("Copy layer")
-			if err := rc.BlobCopy(ctx, refSrc, refTgt, layerSrc.Digest); err != nil {
+			for _, layerSrc := range l {
+				if len(layerSrc.URLs) > 0 {
+					// skip blobs where the URLs are defined, these aren't hosted and won't be pulled from the source
+					rc.log.WithFields(logrus.Fields{
+						"source":        refSrc.Reference,
+						"target":        refTgt.Reference,
+						"layer":         layerSrc.Digest.String(),
+						"external-urls": layerSrc.URLs,
+					}).Debug("Skipping external layer")
+					continue
+				}
 				rc.log.WithFields(logrus.Fields{
 					"source": refSrc.Reference,
 					"target": refTgt.Reference,
 					"layer":  layerSrc.Digest.String(),
-					"err":    err,
-				}).Warn("Failed to copy layer")
-				return err
+				}).Info("Copy layer")
+				if err := rc.BlobCopy(ctx, refSrc, refTgt, layerSrc.Digest); err != nil {
+					rc.log.WithFields(logrus.Fields{
+						"source": refSrc.Reference,
+						"target": refTgt.Reference,
+						"layer":  layerSrc.Digest.String(),
+						"err":    err,
+					}).Warn("Failed to copy layer")
+					return err
+				}
 			}
 		}
 	}

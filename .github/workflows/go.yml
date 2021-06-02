@@ -30,14 +30,14 @@ jobs:
         go get -v -t -d ./...
 
     - name: Test
-      run: go test -v ./...
+      run: make test
 
     - name: Build artifacts
-      if: startsWith( github.ref, 'refs/tags/v' )
-      run: ./build/build-artifacts.sh
+      if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main'
+      run: make artifacts
 
     - name: Gather release details
-      if: startsWith( github.ref, 'refs/tags/v' )
+      if: startsWith( github.ref, 'refs/tags/v' ) && github.repository_owner == 'regclient'
       id: release_details
       run: |
         VERSION=${GITHUB_REF#refs/tags/}
@@ -57,108 +57,32 @@ jobs:
     - name: Create release
       if: steps.release_details.outputs.valid == 'true'
       id: release_create
-      uses: actions/create-release@v1
+      uses: softprops/action-gh-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: ${{ steps.release_details.outputs.version }}
-        release_name: ${{ steps.release_details.outputs.version }}
         body: ${{ steps.release_details.outputs.release_notes }}
         draft: false
         prerelease: false
+        files: |
+          ./artifacts/regbot-darwin-amd64
+          ./artifacts/regbot-linux-amd64
+          ./artifacts/regbot-linux-arm64
+          ./artifacts/regbot-windows-amd64.exe
+          ./artifacts/regctl-darwin-amd64
+          ./artifacts/regctl-linux-amd64
+          ./artifacts/regctl-linux-arm64
+          ./artifacts/regctl-windows-amd64.exe
+          ./artifacts/regsync-darwin-amd64
+          ./artifacts/regsync-linux-amd64
+          ./artifacts/regsync-linux-arm64
+          ./artifacts/regsync-windows-amd64.exe
 
-    - name: Upload Release Asset - regctl-linux-amd64
-      if: steps.release_details.outputs.valid == 'true'
-      id: release_assets_regctl_linux_amd64
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Save artifacts
+      if: github.ref == 'refs/heads/main'
+      uses: actions/upload-artifact@v2
       with:
-        upload_url: ${{ steps.release_create.outputs.upload_url }}
-        asset_path: ./artifacts/regctl-linux-amd64
-        asset_name: regctl-linux-amd64
-        asset_content_type: application/octet-stream
-
-    - name: Upload Release Asset - regctl-linux-arm64
-      if: steps.release_details.outputs.valid == 'true'
-      id: release_assets_regctl_linux_arm64
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.release_create.outputs.upload_url }}
-        asset_path: ./artifacts/regctl-linux-arm64
-        asset_name: regctl-linux-arm64
-        asset_content_type: application/octet-stream
-
-    - name: Upload Release Asset - regctl-darwin-amd64
-      if: steps.release_details.outputs.valid == 'true'
-      id: release_assets_regctl_darwin_amd64
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.release_create.outputs.upload_url }}
-        asset_path: ./artifacts/regctl-darwin-amd64
-        asset_name: regctl-darwin-amd64
-        asset_content_type: application/octet-stream
-
-    - name: Upload Release Asset - regctl-windows-amd64
-      if: steps.release_details.outputs.valid == 'true'
-      id: release_assets_regctl_windows_amd64
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.release_create.outputs.upload_url }}
-        asset_path: ./artifacts/regctl-windows-amd64
-        asset_name: regctl-windows-amd64
-        asset_content_type: application/octet-stream
-
-    - name: Upload Release Asset - regsync-linux-amd64
-      if: steps.release_details.outputs.valid == 'true'
-      id: release_assets_regsync_linux_amd64
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.release_create.outputs.upload_url }}
-        asset_path: ./artifacts/regsync-linux-amd64
-        asset_name: regsync-linux-amd64
-        asset_content_type: application/octet-stream
-
-    - name: Upload Release Asset - regsync-linux-arm64
-      if: steps.release_details.outputs.valid == 'true'
-      id: release_assets_regsync_linux_arm64
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.release_create.outputs.upload_url }}
-        asset_path: ./artifacts/regsync-linux-arm64
-        asset_name: regsync-linux-arm64
-        asset_content_type: application/octet-stream
-
-    - name: Upload Release Asset - regbot-linux-amd64
-      if: steps.release_details.outputs.valid == 'true'
-      id: release_assets_regbot_linux_amd64
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.release_create.outputs.upload_url }}
-        asset_path: ./artifacts/regbot-linux-amd64
-        asset_name: regbot-linux-amd64
-        asset_content_type: application/octet-stream
-
-    - name: Upload Release Asset - regbot-linux-arm64
-      if: steps.release_details.outputs.valid == 'true'
-      id: release_assets_regbot_linux_arm64
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.release_create.outputs.upload_url }}
-        asset_path: ./artifacts/regbot-linux-arm64
-        asset_name: regbot-linux-arm64
-        asset_content_type: application/octet-stream
+        name: binaries
+        path: ./artifacts/
+        retention-days: 7
