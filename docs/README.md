@@ -86,3 +86,21 @@ The following functions have been added in addition to the defaults available in
    With this, you can run `regctl tag del hub.docker.com/${repo}:${tag}`, for your repo and tag.
    Similar API and Token fields are available in regbot, but this remains experimental.
    Note that no other APIs are currently expected to work against `hub.docker.com`, query `docker.io` for the tag list and inspecting images.
+
+3. Q: Can I use docker credential helpers?
+
+   A: If your `$HOME/.docker/config.json` includes a section like the following:
+
+   ```json
+   "credHelpers": {
+      "gcr.io": "gcr", 
+      "public.ecr.aws": "ecr-login", 
+   },
+   ```
+
+   These will work with standalone binaries or with the alpine image variants.
+   You will need to include the source for the credentials as a volume when running the image (e.g. `$HOME/.aws` and `$HOME/.config/gcloud`).
+   The alpine image only includes `ecr-login` and `gcr` helpers.
+   Note that the `gcloud` helper is not included since it results in a significant increase in the alpine image size (40M vs over 500M).
+   Instead you can switch to `gcr` and copy your key to `$HOME/.config/gcloud/application_default_credentials.json`.
+   For more details on the gcr helper, see <https://github.com/GoogleCloudPlatform/docker-credential-gcr>.
