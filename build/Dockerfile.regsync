@@ -25,13 +25,15 @@ FROM dev as docker-cred-ecr-login
 ARG TARGETOS
 ARG TARGETARCH
 RUN go get -u github.com/awslabs/amazon-ecr-credential-helper/ecr-login/cli/docker-credential-ecr-login \
- && cp "${GOPATH}/bin/docker-credential-ecr-login" /usr/local/bin/docker-credential-ecr-login
+ && ( cp "${GOPATH}/bin/docker-credential-ecr-login" /usr/local/bin/docker-credential-ecr-login \
+   || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-ecr-login" /usr/local/bin/docker-credential-ecr-login )
 
 FROM dev as docker-cred-gcr
 ARG TARGETOS
 ARG TARGETARCH
 RUN go get -u github.com/GoogleCloudPlatform/docker-credential-gcr \
- && cp "${GOPATH}/bin/docker-credential-gcr" /usr/local/bin/docker-credential-gcr
+ && ( cp "${GOPATH}/bin/docker-credential-gcr" /usr/local/bin/docker-credential-gcr \
+   || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-gcr" /usr/local/bin/docker-credential-gcr )
 
 FROM ${REGISTRY}/library/alpine:${ALPINE_VER} as release-alpine
 COPY --from=build /etc/passwd /etc/group /etc/

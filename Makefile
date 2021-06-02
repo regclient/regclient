@@ -3,6 +3,7 @@ BINARIES=$(addprefix bin/,$(COMMANDS))
 IMAGES=$(addprefix docker-,$(COMMANDS))
 ARTIFACT_PLATFORMS=linux-amd64 linux-arm64 darwin-amd64 windows-amd64.exe
 ARTIFACTS=$(foreach cmd,$(addprefix artifacts/,$(COMMANDS)),$(addprefix $(cmd)-,$(ARTIFACT_PLATFORMS)))
+TEST_PLATFORMS=linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x
 VCS_REF=$(shell git rev-list -1 HEAD)
 VCS_TAG=$(shell git describe --tags --abbrev=0 2>/dev/null || echo "none")
 LD_FLAGS=-X \"github.com/regclient/regclient/regclient.VCSRef=$(VCS_REF)\" \
@@ -40,6 +41,12 @@ docker: $(IMAGES)
 docker-%: .FORCE
 	docker build -t regclient/$* -f build/Dockerfile.$*$(DOCKERFILE_EXT) $(DOCKER_ARGS) .
 	docker build -t regclient/$*:alpine -f build/Dockerfile.$*$(DOCKERFILE_EXT) --target release-alpine $(DOCKER_ARGS) .
+
+test-docker: $(addprefix test-docker-,$(COMMANDS))
+
+test-docker-%:
+	docker buildx build --platform="$(TEST_PLATFORMS)" -f build/Dockerfile.$*.buildkit .
+	docker buildx build --platform="$(TEST_PLATFORMS)" -f build/Dockerfile.$*.buildkit --target release-alpine .
 
 artifacts: $(ARTIFACTS)
 
