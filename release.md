@@ -1,5 +1,9 @@
-# Release v0.3.2
+# Release v0.3.3
 
-Fixes:
+Features and Changes:
 
-- Fixing broken build of regctl on Windows
+- regbot: Support for push API calls to modify images
+- regclient: Refactoring blobs into a separate package
+- Update auth token shortly before expiration to avoid race conditions
+- Adding support for docker credential helpers
+- Include ECR and GCR helpers in alpine images
