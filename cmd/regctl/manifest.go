@@ -26,31 +26,40 @@ var manifestDeleteCmd = &cobra.Command{
 	Use:     "delete <image_ref>",
 	Aliases: []string{"del", "rm", "remove"},
 	Short:   "delete a manifest",
-	Args:    cobra.RangeArgs(1, 1),
-	RunE:    runManifestDelete,
+	Long: `Delete a manifest. This will delete the manifest, and all tags pointing to that
+manifest. You must specify a digest, not a tag on this command (e.g. 
+image_name@sha256:1234abc...). It is up to the registry whether the delete
+API is supported. Additionally, registries may garbage collect the filesystem
+layers (blobs) separately or not at all. See also the "tag delete" command.`,
+	Args:      cobra.ExactArgs(1),
+	ValidArgs: []string{}, // do not auto complete digests
+	RunE:      runManifestDelete,
 }
 
 var manifestDigestCmd = &cobra.Command{
-	Use:   "digest <image_ref>",
-	Short: "retrieve digest of manifest",
-	Args:  cobra.RangeArgs(1, 1),
-	RunE:  runManifestDigest,
+	Use:               "digest <image_ref>",
+	Short:             "retrieve digest of manifest",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeArgTag,
+	RunE:              runManifestDigest,
 }
 
 var manifestGetCmd = &cobra.Command{
-	Use:   "get <image_ref>",
-	Short: "retrieve manifest or manifest list",
-	Long:  `Shows the manifest or manifest list of the specified image.`,
-	Args:  cobra.RangeArgs(1, 1),
-	RunE:  runManifestGet,
+	Use:               "get <image_ref>",
+	Short:             "retrieve manifest or manifest list",
+	Long:              `Shows the manifest or manifest list of the specified image.`,
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeArgTag,
+	RunE:              runManifestGet,
 }
 
 var manifestPutCmd = &cobra.Command{
-	Use:   "put <image_ref>",
-	Short: "push manifest or manifest list",
-	Long:  `Pushes a manifest or manifest list to a repository.`,
-	Args:  cobra.RangeArgs(1, 1),
-	RunE:  runManifestPut,
+	Use:               "put <image_ref>",
+	Short:             "push manifest or manifest list",
+	Long:              `Pushes a manifest or manifest list to a repository.`,
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeArgTag,
+	RunE:              runManifestPut,
 }
 
 var manifestOpts struct {
@@ -65,14 +74,18 @@ func init() {
 	manifestDigestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", false, "Do not resolve platform from manifest list (recommended)")
 	manifestDigestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
 	manifestDigestCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
+	manifestDigestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 
 	manifestGetCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", false, "Output manifest list if available")
 	manifestGetCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
 	manifestGetCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
 	manifestGetCmd.Flags().StringVarP(&manifestOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+	manifestGetCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
+	manifestGetCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
 	manifestPutCmd.Flags().StringVarP(&manifestOpts.contentType, "content-type", "t", "", "Specify content-type (e.g. application/vnd.docker.distribution.manifest.v2+json)")
 	manifestPutCmd.MarkFlagRequired("content-type")
+	manifestPutCmd.RegisterFlagCompletionFunc("content-type", completeArgMediaTypeManifest)
 
 	manifestCmd.AddCommand(manifestDeleteCmd)
 	manifestCmd.AddCommand(manifestDigestCmd)

@@ -20,8 +20,10 @@ Usage:
 
 Available Commands:
   blob        manage image blobs/layers
+  completion  Generate completion script
   help        Help about any command
   image       manage images
+  manifest    manage manifests
   registry    manage registries
   repo        manage repositories
   tag         manage tags
@@ -39,6 +41,14 @@ Use "regctl [command] --help" for more information about a command.
 This is useful for parsing in external tools like Elastic/Splunk.
 
 The `version` command will show details about the git commit and tag if available.
+
+Shell completion is available with the completion command, e.g. for `bash`:
+
+```bash
+source <(regctl completion bash)
+```
+
+Instructions for other shells is available from `regctl completion --help`.
 
 ## Registry Commands
 
@@ -126,7 +136,7 @@ This will impact all tags pointing to the same manifest and requires a digest to
 
 The `digest` command is useful to pin the image used within your deployment to an immutable sha256 checksum.
 
-The `export`/import commands allow you to copy images between registry servers that may be disconnected, or to export an image directly from a registry without a docker engine and loading it into a potentially disconnected docker host. (Note that import is not yet implemented.)
+The `export`/`import` commands allow you to copy images between registry servers that may be disconnected, or to export an image directly from a registry without a docker engine and loading it into a potentially disconnected docker host. (Note that import is not yet implemented.)
 
 The `inspect` command pulls the image config json blob. This is the same json shown with a `docker image inspect` command, and includes labels, the entrypoint/cmd, and layer history.
 This can be useful with image pruning scripts, or other tools that need the image labels without the need to pull all of the layers.
@@ -135,6 +145,33 @@ The `manifest` command shows the low level layers and digests that can be pulled
 This is also useful for analyzing multi-platform manifest lists to see what platforms are available for a particular image.
 
 The `ratelimit` command shows the current rate limit on the manifest API using a http HEAD request that does not count against the Docker Hub limits.
+
+## Manifest Commands
+
+The manifest command acts on manifests within the registry.
+These manifests are the top level of an image, and many commands are aliases for `image` commands.
+
+```text
+Usage:
+  regctl manifest [command]
+
+Available Commands:
+  delete      delete a manifest
+  digest      retrieve digest of manifest
+  get         retrieve manifest or manifest list
+  put         push manifest or manifest list
+```
+
+The `delete` command removes the image manifest from the server.
+This will impact all tags pointing to the same manifest and requires a digest to be included in the image reference to be deleted (e.g. `myimage@sha256:abcd...`).
+
+The `digest` command is useful to pin the image used within your deployment to an immutable sha256 checksum.
+
+The `get` command retrieves the manifest from the registry, showing individual components of an image.
+This is also useful for analyzing multi-platform manifest lists to see what platforms are available for a particular image.
+
+The `put` command uploads the manifest to the registry.
+This can be used to create or modify an image.
 
 ## Blob Commands
 

@@ -25,8 +25,9 @@ var blobGetCmd = &cobra.Command{
 	Long: `Download a blob from the registry. The output is the blob itself which may
 be a compressed tar file, a json config, or any other blob supported by the
 registry. The blob or layer digest can be found in the image manifest.`,
-	Args: cobra.RangeArgs(2, 2),
-	RunE: runBlobGet,
+	Args:      cobra.ExactArgs(2),
+	ValidArgs: []string{}, // do not auto complete repository or digest
+	RunE:      runBlobGet,
 }
 var blobPutCmd = &cobra.Command{
 	Use:     "put <repository>",
@@ -34,8 +35,9 @@ var blobPutCmd = &cobra.Command{
 	Short:   "upload a blob/layer",
 	Long: `Upload a blob to a repository. Stdin must be the blob contents. The output
 is the digest of the blob.`,
-	Args: cobra.RangeArgs(1, 1),
-	RunE: runBlobPut,
+	Args:      cobra.ExactArgs(1),
+	ValidArgs: []string{}, // do not auto complete repository
+	RunE:      runBlobPut,
 }
 
 var blobOpts struct {
@@ -47,9 +49,21 @@ var blobOpts struct {
 func init() {
 	blobGetCmd.Flags().StringVarP(&blobOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	blobGetCmd.Flags().StringVarP(&blobOpts.mt, "media-type", "", "", "Set the requested mediaType")
+	blobGetCmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	blobGetCmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{
+			"application/octet-stream",
+		}, cobra.ShellCompDirectiveNoFileComp
+	})
 
 	blobPutCmd.Flags().StringVarP(&blobOpts.mt, "content-type", "", "", "Set the requested content type")
 	blobPutCmd.Flags().StringVarP(&blobOpts.digest, "digest", "", "", "Set the expected digest")
+	blobPutCmd.RegisterFlagCompletionFunc("content-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{
+			"application/octet-stream",
+		}, cobra.ShellCompDirectiveNoFileComp
+	})
+	blobPutCmd.RegisterFlagCompletionFunc("digest", completeArgNone)
 
 	blobCmd.AddCommand(blobGetCmd)
 	blobCmd.AddCommand(blobPutCmd)

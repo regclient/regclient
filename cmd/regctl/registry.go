@@ -23,31 +23,35 @@ var registryConfigCmd = &cobra.Command{
 	Short: "show registry config",
 	Long: `Displays the configuration used for a registry. Passwords are not included
 in the output.`,
-	Args: cobra.RangeArgs(0, 1),
-	RunE: runRegistryConfig,
+	Args:              cobra.RangeArgs(0, 1),
+	ValidArgsFunction: registryArgListReg,
+	RunE:              runRegistryConfig,
 }
 var registryLoginCmd = &cobra.Command{
 	Use:   "login <registry>",
 	Short: "login to a registry",
 	Long: `Provide login credentials for a registry. This may not be necessary if you
 have already logged in with docker.`,
-	Args: cobra.RangeArgs(0, 1),
-	RunE: runRegistryLogin,
+	Args:              cobra.RangeArgs(0, 1),
+	ValidArgsFunction: registryArgListReg,
+	RunE:              runRegistryLogin,
 }
 var registryLogoutCmd = &cobra.Command{
-	Use:   "logout <registry>",
-	Short: "logout of a registry",
-	Long:  `Remove registry credentials from the configuration.`,
-	Args:  cobra.RangeArgs(0, 1),
-	RunE:  runRegistryLogout,
+	Use:               "logout <registry>",
+	Short:             "logout of a registry",
+	Long:              `Remove registry credentials from the configuration.`,
+	Args:              cobra.RangeArgs(0, 1),
+	ValidArgsFunction: registryArgListReg,
+	RunE:              runRegistryLogout,
 }
 var registrySetCmd = &cobra.Command{
 	Use:   "set <registry>",
 	Short: "set options on a registry",
 	Long: `Set or modify the configuration of a registry. To pass a certificate, include
 the contents of the file, e.g. --cacert "$(cat reg-ca.crt)"`,
-	Args: cobra.RangeArgs(0, 1),
-	RunE: runRegistrySet,
+	Args:              cobra.RangeArgs(0, 1),
+	ValidArgsFunction: registryArgListReg,
+	RunE:              runRegistrySet,
 }
 var registryOpts struct {
 	user, pass           string // login opts
@@ -62,13 +66,27 @@ var registryOpts struct {
 func init() {
 	registryLoginCmd.Flags().StringVarP(&registryOpts.user, "user", "u", "", "Username")
 	registryLoginCmd.Flags().StringVarP(&registryOpts.pass, "pass", "p", "", "Password")
+	registryLoginCmd.RegisterFlagCompletionFunc("user", completeArgNone)
+	registryLoginCmd.RegisterFlagCompletionFunc("pass", completeArgNone)
 
-	registrySetCmd.Flags().StringVarP(&registryOpts.cacert, "cacert", "", "", "CA Certificate")
+	registrySetCmd.Flags().StringVarP(&registryOpts.cacert, "cacert", "", "", "CA Certificate (not a filename, use \"$(cat ca.pem)\" to use a file)")
 	registrySetCmd.Flags().StringVarP(&registryOpts.tls, "tls", "", "", "TLS (enabled, insecure, disabled)")
 	registrySetCmd.Flags().StringVarP(&registryOpts.hostname, "hostname", "", "", "Hostname or ip with port")
 	registrySetCmd.Flags().StringVarP(&registryOpts.pathPrefix, "path-prefix", "", "", "Prefix to all repositories")
 	registrySetCmd.Flags().StringArrayVarP(&registryOpts.mirrors, "mirror", "", nil, "List of mirrors (registry names)")
 	registrySetCmd.Flags().UintVarP(&registryOpts.priority, "priority", "", 0, "Priority (for sorting mirrors)")
+	registrySetCmd.RegisterFlagCompletionFunc("cacert", completeArgNone)
+	registrySetCmd.RegisterFlagCompletionFunc("tls", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{
+			"enabled",
+			"insecure",
+			"disabled",
+		}, cobra.ShellCompDirectiveNoFileComp
+	})
+	registrySetCmd.RegisterFlagCompletionFunc("hostname", completeArgNone)
+	registrySetCmd.RegisterFlagCompletionFunc("path-prefix", completeArgNone)
+	registrySetCmd.RegisterFlagCompletionFunc("mirror", completeArgNone)
+	registrySetCmd.RegisterFlagCompletionFunc("priority", completeArgNone)
 
 	// TODO: eventually remove
 	registrySetCmd.Flags().StringVarP(&registryOpts.scheme, "scheme", "", "", "[Deprecated] Scheme (http, https)")
@@ -81,6 +99,20 @@ func init() {
 	registryCmd.AddCommand(registryLogoutCmd)
 	registryCmd.AddCommand(registrySetCmd)
 	rootCmd.AddCommand(registryCmd)
+}
+
+func registryArgListReg(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	result := []string{}
+	c, err := ConfigLoadDefault()
+	if err != nil {
+		return result, cobra.ShellCompDirectiveNoFileComp
+	}
+	for host := range c.Hosts {
+		if strings.HasPrefix(host, toComplete) {
+			result = append(result, host)
+		}
+	}
+	return result, cobra.ShellCompDirectiveNoFileComp
 }
 
 func runRegistryConfig(cmd *cobra.Command, args []string) error {

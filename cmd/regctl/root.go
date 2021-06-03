@@ -36,7 +36,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show the version",
 	Long:  `Show the version`,
-	Args:  cobra.RangeArgs(0, 0),
+	Args:  cobra.ExactArgs(0),
 	RunE:  runVersion,
 }
 
@@ -53,11 +53,18 @@ func init() {
 		Hooks:     make(logrus.LevelHooks),
 		Level:     logrus.WarnLevel,
 	}
+
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.WarnLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
 	rootCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
-	rootCmd.PersistentPreRunE = rootPreRun
+	rootCmd.RegisterFlagCompletionFunc("verbosity", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"debug", "info", "warn", "error", "fatal", "panic"}, cobra.ShellCompDirectiveNoFileComp
+	})
+	rootCmd.RegisterFlagCompletionFunc("logopt", completeArgNone)
 
 	versionCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{jsonPretty .}}", "Format output with go template syntax")
+	versionCmd.RegisterFlagCompletionFunc("format", completeArgNone)
+
+	rootCmd.PersistentPreRunE = rootPreRun
 	rootCmd.AddCommand(versionCmd)
 }
 

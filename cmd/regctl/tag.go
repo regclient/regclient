@@ -21,8 +21,9 @@ var tagDeleteCmd = &cobra.Command{
 	Short:   "delete a tag in a repo",
 	Long: `Delete a tag in a repository without removing other tags pointing to the
 same manifest`,
-	Args: cobra.RangeArgs(1, 1),
-	RunE: runTagDelete,
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeArgTag,
+	RunE:              runTagDelete,
 }
 var tagLsCmd = &cobra.Command{
 	Use:     "ls <repository>",
@@ -30,8 +31,9 @@ var tagLsCmd = &cobra.Command{
 	Short:   "list tags in a repo",
 	Long: `List tags in a repository.
 Note: most registries ignore the pagination options.`,
-	Args: cobra.RangeArgs(1, 1),
-	RunE: runTagLs,
+	Args:      cobra.ExactArgs(1),
+	ValidArgs: []string{},
+	RunE:      runTagLs,
 }
 
 var tagOpts struct {
@@ -44,6 +46,9 @@ func init() {
 	tagLsCmd.Flags().StringVarP(&tagOpts.Last, "last", "", "", "Specify the last tag from a previous request for pagination")
 	tagLsCmd.Flags().IntVarP(&tagOpts.Limit, "limit", "", 0, "Specify the number of tags to retrieve")
 	tagLsCmd.Flags().StringVarP(&tagOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+	tagLsCmd.RegisterFlagCompletionFunc("last", completeArgNone)
+	tagLsCmd.RegisterFlagCompletionFunc("limit", completeArgNone)
+	tagLsCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
 	tagCmd.AddCommand(tagDeleteCmd)
 	tagCmd.AddCommand(tagLsCmd)
