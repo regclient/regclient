@@ -27,8 +27,14 @@ type docker1SignedManifest struct {
 	dockerSchema1.SignedManifest
 }
 
+func (m *docker1Manifest) GetConfigDescriptor() (ociv1.Descriptor, error) {
+	return ociv1.Descriptor{}, wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.mt), ErrUnsupportedMediaType)
+}
 func (m *docker1Manifest) GetConfigDigest() (digest.Digest, error) {
 	return "", wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.mt), ErrUnsupportedMediaType)
+}
+func (m *docker1SignedManifest) GetConfigDescriptor() (ociv1.Descriptor, error) {
+	return ociv1.Descriptor{}, wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.mt), ErrUnsupportedMediaType)
 }
 func (m *docker1SignedManifest) GetConfigDigest() (digest.Digest, error) {
 	return "", wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.mt), ErrUnsupportedMediaType)

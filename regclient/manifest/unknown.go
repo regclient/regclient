@@ -17,6 +17,10 @@ type UnknownData struct {
 	Data map[string]interface{}
 }
 
+func (m *unknown) GetConfigDescriptor() (ociv1.Descriptor, error) {
+	return ociv1.Descriptor{}, wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.mt), ErrUnsupportedMediaType)
+}
+
 func (m *unknown) GetConfigDigest() (digest.Digest, error) {
 	return "", wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.mt), ErrUnsupportedMediaType)
 }
