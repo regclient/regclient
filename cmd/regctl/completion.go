@@ -73,8 +73,14 @@ func init() {
 	rootCmd.AddCommand(completionCmd)
 }
 
+type completeFunc func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective)
+
 func completeArgNone(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	return nil, cobra.ShellCompDirectiveNoFileComp
+}
+
+func completeArgDefault(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	return nil, cobra.ShellCompDirectiveDefault
 }
 
 func completeArgPlatform(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -97,9 +103,21 @@ func completeArgMediaTypeManifest(cmd *cobra.Command, args []string, toComplete 
 	}, cobra.ShellCompDirectiveNoFileComp
 }
 
+// completeArgList takes a list of completion functions and completes each arg separately
+func completeArgList(funcList []completeFunc) completeFunc {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		pos := len(args)
+		if pos >= len(funcList) {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		return funcList[pos](cmd, args, toComplete)
+	}
+}
+
 // TODO: for bash, this requires https://github.com/spf13/cobra/pull/1146 to be merged
 func completeArgTag(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	result := []string{}
+	// TODO: is it possible to expand registry, then repo, then tag?
 	input := strings.TrimRight(toComplete, ":")
 	ref, err := types.NewRef(input)
 	if err != nil || ref.Digest != "" {

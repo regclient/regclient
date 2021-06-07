@@ -58,10 +58,13 @@ Example usage: regctl image export registry:5000/yourimg:v1 >yourimg-v1.tar`,
 	RunE:              runImageExport,
 }
 var imageImportCmd = &cobra.Command{
-	Use:               "import <image_ref>",
-	Short:             "import image",
-	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: completeArgTag,
+	Use:   "import <image_ref> <filename>",
+	Short: "import image",
+	Long: `Imports an image from a tar file. This must be either a docker formatted tar
+from "docker save" or an OCI Layout compatible tar. The output from
+"regctl image export" can be used. Stdin is not permitted for the tar file.`,
+	Args:              cobra.ExactArgs(2),
+	ValidArgsFunction: completeArgList([]completeFunc{completeArgTag, completeArgDefault}),
 	RunE:              runImageImport,
 }
 var imageInspectCmd = &cobra.Command{
@@ -160,15 +163,24 @@ func runImageExport(cmd *cobra.Command, args []string) error {
 	}
 	rc := newRegClient()
 	log.WithFields(logrus.Fields{
-		"host": ref.Registry,
-		"repo": ref.Repository,
-		"tag":  ref.Tag,
+		"ref": ref.CommonName(),
 	}).Debug("Image export")
 	return rc.ImageExport(context.Background(), ref, os.Stdout)
 }
 
 func runImageImport(cmd *cobra.Command, args []string) error {
-	return ErrNotImplemented
+	ref, err := types.NewRef(args[0])
+	if err != nil {
+		return err
+	}
+	tarFile := args[1]
+	rc := newRegClient()
+	log.WithFields(logrus.Fields{
+		"ref":  ref.CommonName(),
+		"file": tarFile,
+	}).Debug("Image import")
+
+	return rc.ImageImport(context.Background(), ref, tarFile)
 }
 
 func runImageInspect(cmd *cobra.Command, args []string) error {

@@ -202,7 +202,7 @@ func (rc *regClient) BlobPut(ctx context.Context, ref types.Ref, d digest.Digest
 	}
 
 	// send upload as one-chunk
-	if d != "" {
+	if d != "" && cl > 0 {
 		err = rc.blobPutUploadFull(ctx, ref, d, putURL, rdr, ct, cl)
 		return digest.Digest(d), cl, err
 	}
@@ -238,7 +238,6 @@ func (rc *regClient) blobGetUploadURL(ctx context.Context, ref types.Ref) (*url.
 	location := resp.HTTPResponse().Header.Get("Location")
 	rc.log.WithFields(logrus.Fields{
 		"location": location,
-		"headers":  resp.HTTPResponse().Header,
 	}).Debug("Upload location received")
 	// put url may be relative to the above post URL, so parse in that context
 	postURL := resp.HTTPResponse().Request.URL

@@ -51,6 +51,8 @@ const (
 	MediaTypeOCI1ManifestList = ociv1.MediaTypeImageIndex
 	// MediaTypeOCI1ImageConfig OCI v1 configuration json object media type
 	MediaTypeOCI1ImageConfig = ociv1.MediaTypeImageConfig
+	// MediaTypeDocker2Layer is the default compressed layer for docker schema2
+	MediaTypeDocker2Layer = dockerSchema2.MediaTypeLayer
 )
 
 var (
