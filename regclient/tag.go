@@ -20,7 +20,6 @@ import (
 	"github.com/opencontainers/go-digest"
 	ociv1Specs "github.com/opencontainers/image-spec/specs-go"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/regclient/regclient/pkg/retryable"
 	"github.com/regclient/regclient/regclient/manifest"
 	"github.com/regclient/regclient/regclient/types"
 	"github.com/sirupsen/logrus"
@@ -105,8 +104,6 @@ func (rc *regClient) TagDelete(ctx context.Context, ref types.Ref) error {
 	}
 	if err == nil {
 		return nil
-	} else if errors.Is(err, retryable.ErrStatusCode) {
-		return fmt.Errorf("Failed to delete tag %s: %w", ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 	} else if !errors.Is(err, ErrAPINotFound) {
 		return fmt.Errorf("Failed to delete tag %s: %w", ref.CommonName(), err)
 	}
@@ -246,7 +243,7 @@ func (rc *regClient) TagListWithOpts(ctx context.Context, ref types.Ref, opts Ta
 		},
 	}
 	resp, err := rc.httpDo(ctx, req)
-	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
+	if err != nil {
 		return tl, fmt.Errorf("Failed to list tags for %s: %w", ref.CommonName(), err)
 	}
 	defer resp.Close()

@@ -3,7 +3,6 @@ package regclient
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -104,7 +103,7 @@ func (rc *regClient) BlobGet(ctx context.Context, ref types.Ref, d digest.Digest
 		},
 	}
 	resp, err := rc.httpDo(ctx, req)
-	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
+	if err != nil {
 		return nil, fmt.Errorf("Failed to get blob, digest %s, ref %s: %w", d, ref.CommonName(), err)
 	}
 	if resp.HTTPResponse().StatusCode != 200 {
@@ -139,7 +138,7 @@ func (rc *regClient) BlobHead(ctx context.Context, ref types.Ref, d digest.Diges
 		},
 	}
 	resp, err := rc.httpDo(ctx, req)
-	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
+	if err != nil {
 		return nil, fmt.Errorf("Failed to request blob head, digest %s, ref %s: %w", d, ref.CommonName(), err)
 	}
 	defer resp.Close()
@@ -176,7 +175,7 @@ func (rc *regClient) BlobMount(ctx context.Context, refSrc types.Ref, refTgt typ
 		},
 	}
 	resp, err := rc.httpDo(ctx, req)
-	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
+	if err != nil {
 		return fmt.Errorf("Failed to mount blob, digest %s, ref %s: %w", d, refTgt.CommonName(), err)
 	}
 	defer resp.Close()
@@ -226,7 +225,7 @@ func (rc *regClient) blobGetUploadURL(ctx context.Context, ref types.Ref) (*url.
 		},
 	}
 	resp, err := rc.httpDo(ctx, req)
-	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
+	if err != nil {
 		return nil, fmt.Errorf("Failed to send blob post, ref %s: %w", ref.CommonName(), err)
 	}
 	defer resp.Close()
@@ -276,7 +275,7 @@ func (rc *regClient) blobPutUploadFull(ctx context.Context, ref types.Ref, d dig
 	opts = append(opts, retryable.WithScope(ref.Repository, true))
 	rty := rc.getRetryable(host)
 	resp, err := rty.DoRequest(ctx, "PUT", []url.URL{*putURL}, opts...)
-	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
+	if err != nil {
 		return fmt.Errorf("Failed to send blob (put), digest %s, ref %s: %w", d, ref.CommonName(), err)
 	}
 	defer resp.Close()
@@ -330,7 +329,7 @@ func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, pu
 
 			rty := rc.getRetryable(host)
 			resp, err := rty.DoRequest(ctx, "PATCH", []url.URL{chunkURL}, opts...)
-			if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
+			if err != nil {
 				return "", 0, fmt.Errorf("Failed to send blob (chunk), ref %s: %w", ref.CommonName(), err)
 			}
 			resp.Close()
@@ -377,7 +376,7 @@ func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, pu
 	opts = append(opts, retryable.WithScope(ref.Repository, true))
 	rty := rc.getRetryable(host)
 	resp, err := rty.DoRequest(ctx, "PUT", []url.URL{chunkURL}, opts...)
-	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
+	if err != nil {
 		return "", 0, fmt.Errorf("Failed to send blob (chunk digest), digest %s, ref %s: %w", d, ref.CommonName(), err)
 	}
 	defer resp.Close()

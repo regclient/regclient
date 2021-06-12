@@ -157,11 +157,12 @@ func WithConfigHosts(configHosts []ConfigHost) Opt {
 					configHost.Hostname = DockerRegistryDNS
 				}
 			}
+			tls, _ := configHost.TLS.MarshalText()
 			rc.log.WithFields(logrus.Fields{
 				"name":       configHost.Name,
 				"user":       configHost.User,
 				"hostname":   configHost.Hostname,
-				"tls":        configHost.TLS,
+				"tls":        string(tls),
 				"pathPrefix": configHost.PathPrefix,
 				"mirrors":    configHost.Mirrors,
 				"api":        configHost.API,

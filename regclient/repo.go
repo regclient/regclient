@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -13,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/regclient/regclient/pkg/retryable"
 	"github.com/sirupsen/logrus"
 )
 
@@ -91,7 +89,7 @@ func (rc *regClient) RepoListWithOpts(ctx context.Context, hostname string, opts
 		},
 	}
 	resp, err := rc.httpDo(ctx, req)
-	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
+	if err != nil {
 		return rl, fmt.Errorf("Failed to list repositories for %s: %w", hostname, err)
 	}
 	defer resp.Close()
