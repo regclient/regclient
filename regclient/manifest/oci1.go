@@ -29,8 +29,14 @@ type oci1Index struct {
 	ociv1.Index
 }
 
+func (m *oci1Manifest) GetConfigDescriptor() (ociv1.Descriptor, error) {
+	return m.Config, nil
+}
 func (m *oci1Manifest) GetConfigDigest() (digest.Digest, error) {
 	return m.Config.Digest, nil
+}
+func (m *oci1Index) GetConfigDescriptor() (ociv1.Descriptor, error) {
+	return ociv1.Descriptor{}, wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.mt), ErrUnsupportedMediaType)
 }
 func (m *oci1Index) GetConfigDigest() (digest.Digest, error) {
 	return "", wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.mt), ErrUnsupportedMediaType)

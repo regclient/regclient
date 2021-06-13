@@ -2,12 +2,10 @@ package regclient
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 
-	"github.com/regclient/regclient/pkg/retryable"
 	"github.com/regclient/regclient/pkg/wraperr"
 	"github.com/regclient/regclient/regclient/manifest"
 	"github.com/regclient/regclient/regclient/types"
@@ -51,7 +49,7 @@ func (rc *regClient) ManifestDelete(ctx context.Context, ref types.Ref) error {
 		},
 	}
 	resp, err := rc.httpDo(ctx, req)
-	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
+	if err != nil {
 		return fmt.Errorf("Failed to delete manifest %s: %w", ref.CommonName(), err)
 	}
 	defer resp.Close()
@@ -95,7 +93,7 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref types.Ref) (manifest.M
 		},
 	}
 	resp, err := rc.httpDo(ctx, req)
-	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
+	if err != nil {
 		return nil, fmt.Errorf("Failed to get manifest %s: %w", ref.CommonName(), err)
 	}
 	defer resp.Close()
@@ -149,7 +147,7 @@ func (rc *regClient) ManifestHead(ctx context.Context, ref types.Ref) (manifest.
 		},
 	}
 	resp, err := rc.httpDo(ctx, req)
-	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
+	if err != nil {
 		return nil, fmt.Errorf("Failed to request manifest head %s: %w", ref.CommonName(), err)
 	}
 	defer resp.Close()
@@ -205,7 +203,7 @@ func (rc *regClient) ManifestPut(ctx context.Context, ref types.Ref, m manifest.
 		},
 	}
 	resp, err := rc.httpDo(ctx, req)
-	if err != nil && !errors.Is(err, retryable.ErrStatusCode) {
+	if err != nil {
 		return fmt.Errorf("Failed to put manifest %s: %w", ref.CommonName(), err)
 	}
 	defer resp.Close()

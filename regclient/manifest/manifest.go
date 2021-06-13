@@ -18,6 +18,7 @@ import (
 
 // Manifest abstracts the various types of manifests that are supported
 type Manifest interface {
+	GetConfigDescriptor() (ociv1.Descriptor, error)
 	GetConfigDigest() (digest.Digest, error)
 	GetDigest() digest.Digest
 	GetDescriptorList() ([]ociv1.Descriptor, error)
@@ -42,8 +43,6 @@ type Manifest interface {
 // ref: reference, may be unset
 // header: headers from request, used to extract content type, digest, and rate limits
 func New(mediaType string, raw []byte, ref types.Ref, header http.Header) (Manifest, error) {
-	var m Manifest
-	var err error
 	mc := common{
 		ref:     ref,
 		mt:      mediaType,
@@ -63,56 +62,18 @@ func New(mediaType string, raw []byte, ref types.Ref, header http.Header) (Manif
 			mc.digest = digest.FromBytes(raw)
 		}
 	}
-	switch mediaType {
-	case MediaTypeDocker1Manifest:
-		var mOrig dockerSchema1.Manifest
-		if len(raw) > 0 {
-			err = json.Unmarshal(mc.rawBody, &mOrig)
-		}
-		m = &docker1Manifest{common: mc, Manifest: mOrig}
-	case MediaTypeDocker1ManifestSigned:
-		var mOrig dockerSchema1.SignedManifest
-		if len(raw) > 0 {
-			err = json.Unmarshal(mc.rawBody, &mOrig)
-			mc.digest = digest.FromBytes(mOrig.Canonical)
-		}
-		m = &docker1SignedManifest{common: mc, SignedManifest: mOrig}
-	case MediaTypeDocker2Manifest:
-		var mOrig dockerSchema2.Manifest
-		if len(raw) > 0 {
-			err = json.Unmarshal(mc.rawBody, &mOrig)
-		}
-		m = &docker2Manifest{common: mc, Manifest: mOrig}
-	case MediaTypeDocker2ManifestList:
-		var mOrig dockerManifestList.ManifestList
-		if len(raw) > 0 {
-			err = json.Unmarshal(mc.rawBody, &mOrig)
-		}
-		m = &docker2ManifestList{common: mc, ManifestList: mOrig}
-	case MediaTypeOCI1Manifest:
-		var mOrig ociv1.Manifest
-		if len(raw) > 0 {
-			err = json.Unmarshal(mc.rawBody, &mOrig)
-		}
-		m = &oci1Manifest{common: mc, Manifest: mOrig}
-	case MediaTypeOCI1ManifestList:
-		var mOrig ociv1.Index
-		if len(raw) > 0 {
-			err = json.Unmarshal(mc.rawBody, &mOrig)
-		}
-		m = &oci1Index{common: mc, Index: mOrig}
-	default:
-		var mOrig UnknownData
-		if len(raw) > 0 {
-			err = json.Unmarshal(mc.rawBody, &mOrig)
-		}
-		m = &unknown{common: mc, UnknownData: mOrig}
-	}
-	if err != nil {
-		return nil, fmt.Errorf("Error unmarshaling manifest for %s: %w", ref.CommonName(), err)
-	}
+	return fromCommon(mc)
+}
 
-	return m, nil
+// FromDescriptor creates a new manifest from a descriptor and the raw manifest bytes.
+func FromDescriptor(desc ociv1.Descriptor, mBytes []byte) (Manifest, error) {
+	mc := common{
+		digest:   desc.Digest,
+		mt:       desc.MediaType,
+		manifSet: true,
+		rawBody:  mBytes,
+	}
+	return fromCommon(mc)
 }
 
 // FromOrig creates a new manifest from the original upstream manifest type.
@@ -176,6 +137,60 @@ func FromOrig(orig interface{}) (Manifest, error) {
 		return nil, fmt.Errorf("Unsupported type to convert to a manifest: %T", orig)
 	}
 
+}
+
+func fromCommon(mc common) (Manifest, error) {
+	var err error
+	var m Manifest
+	switch mc.mt {
+	case MediaTypeDocker1Manifest:
+		var mOrig dockerSchema1.Manifest
+		if len(mc.rawBody) > 0 {
+			err = json.Unmarshal(mc.rawBody, &mOrig)
+		}
+		m = &docker1Manifest{common: mc, Manifest: mOrig}
+	case MediaTypeDocker1ManifestSigned:
+		var mOrig dockerSchema1.SignedManifest
+		if len(mc.rawBody) > 0 {
+			err = json.Unmarshal(mc.rawBody, &mOrig)
+			mc.digest = digest.FromBytes(mOrig.Canonical)
+		}
+		m = &docker1SignedManifest{common: mc, SignedManifest: mOrig}
+	case MediaTypeDocker2Manifest:
+		var mOrig dockerSchema2.Manifest
+		if len(mc.rawBody) > 0 {
+			err = json.Unmarshal(mc.rawBody, &mOrig)
+		}
+		m = &docker2Manifest{common: mc, Manifest: mOrig}
+	case MediaTypeDocker2ManifestList:
+		var mOrig dockerManifestList.ManifestList
+		if len(mc.rawBody) > 0 {
+			err = json.Unmarshal(mc.rawBody, &mOrig)
+		}
+		m = &docker2ManifestList{common: mc, ManifestList: mOrig}
+	case MediaTypeOCI1Manifest:
+		var mOrig ociv1.Manifest
+		if len(mc.rawBody) > 0 {
+			err = json.Unmarshal(mc.rawBody, &mOrig)
+		}
+		m = &oci1Manifest{common: mc, Manifest: mOrig}
+	case MediaTypeOCI1ManifestList:
+		var mOrig ociv1.Index
+		if len(mc.rawBody) > 0 {
+			err = json.Unmarshal(mc.rawBody, &mOrig)
+		}
+		m = &oci1Index{common: mc, Index: mOrig}
+	default:
+		var mOrig UnknownData
+		if len(mc.rawBody) > 0 {
+			err = json.Unmarshal(mc.rawBody, &mOrig)
+		}
+		m = &unknown{common: mc, UnknownData: mOrig}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("Error unmarshaling manifest for %s: %w", mc.ref.CommonName(), err)
+	}
+	return m, nil
 }
 
 func getPlatformDesc(p *ociv1.Platform, dl []ociv1.Descriptor) (*ociv1.Descriptor, error) {

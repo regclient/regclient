@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"sort"
@@ -42,6 +43,7 @@ type httpResp interface {
 // different API's for different registry types, and then uses retryable to run
 // requests
 func (rc *regClient) httpDo(ctx context.Context, req httpReq) (httpResp, error) {
+	errBody := []byte{}
 	upstreamHost := rc.hostGet(req.host)
 	hosts := make([]*ConfigHost, 0, 1+len(upstreamHost.Mirrors))
 	if !req.noMirrors {
@@ -129,16 +131,25 @@ func (rc *regClient) httpDo(ctx context.Context, req httpReq) (httpResp, error) 
 		if err == nil {
 			return resp, nil
 		}
-		// on failures, close the response
-		if resp != nil {
-			resp.Close()
-		}
+		// on failures, log, cache the body, and close the response
 		rc.log.WithFields(logrus.Fields{
 			"error": err,
 			"host":  h.Name,
 		}).Debug("HTTP request failed")
+		if resp != nil {
+			errBody, _ = ioutil.ReadAll(resp)
+		}
+		if resp != nil {
+			resp.Close()
+		}
 	}
 	// out of hosts, return final error
+	if err != nil && resp != nil && resp.HTTPResponse() != nil {
+		err = httpError(resp.HTTPResponse().StatusCode)
+	}
+	if err != nil && len(errBody) > 0 {
+		err = fmt.Errorf("%w: %s", err, errBody)
+	}
 	return resp, err
 }
 
@@ -146,15 +157,15 @@ func (rc *regClient) httpDo(ctx context.Context, req httpReq) (httpResp, error) 
 func httpError(statusCode int) error {
 	switch statusCode {
 	case 401:
-		return ErrUnauthorized
+		return fmt.Errorf("%w [http %d]", ErrUnauthorized, statusCode)
 	case 403:
-		return ErrUnauthorized
+		return fmt.Errorf("%w [http %d]", ErrUnauthorized, statusCode)
 	case 404:
-		return ErrNotFound
+		return fmt.Errorf("%w [http %d]", ErrNotFound, statusCode)
 	case 429:
-		return ErrRateLimit
+		return fmt.Errorf("%w [http %d]", ErrRateLimit, statusCode)
 	default:
-		return fmt.Errorf("http response code %d", statusCode)
+		return fmt.Errorf("%w [http %d]", ErrHttpStatus, statusCode)
 	}
 }
 
