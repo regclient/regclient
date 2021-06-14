@@ -561,8 +561,15 @@ func (req *request) nextURL(removeLast bool) {
 	// next mirror based on whether remove flag is set
 	if removeLast {
 		req.urls = append(req.urls[:req.curURL], req.urls[req.curURL+1:]...)
+		if req.curURL >= len(req.urls) {
+			req.curURL = 0
+		}
 	} else {
-		req.curURL = (req.curURL + 1) % len(req.urls)
+		if len(req.urls) > 0 {
+			req.curURL = (req.curURL + 1) % len(req.urls)
+		} else {
+			req.curURL = 0
+		}
 	}
 }
 
@@ -580,17 +587,21 @@ func (req *request) Read(b []byte) (int, error) {
 	i, err := req.reader.Read(b)
 	req.curRead += int64(i)
 	if err == io.EOF && lastResp.ContentLength > 0 {
-		// handle early EOF or other failed connection with a retry from an offset
-		if req.curRead < lastResp.ContentLength {
-			req.offset += req.curRead
+		if lastResp.Request.Method == "HEAD" {
+			// no body on a head request
+			req.done = true
+		} else if req.curRead < lastResp.ContentLength {
+			// TODO: handle early EOF or other failed connection with a retry
+			// req.offset += req.curRead
+			// err = req.retryLoop()
+			// if err != nil {
+			// 	return i, err
+			// }
 			req.log.WithFields(logrus.Fields{
-				"url":    req.urls[req.curURL].String(),
-				"offset": req.offset,
-			}).Warn("EOF before reading all content, retrying")
-			err = req.retryLoop()
-			if err != nil {
-				return i, err
-			}
+				"curRead":    req.curRead,
+				"contentLen": lastResp.ContentLength,
+			}).Debug("EOF before reading all content, retrying")
+			return i, err
 		} else if req.curRead >= lastResp.ContentLength {
 			req.done = true
 		}

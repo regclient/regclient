@@ -3,6 +3,7 @@ package sandbox
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"time"
 
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -26,6 +27,8 @@ func setupImage(s *Sandbox) {
 		map[string]lua.LGFunction{
 			"config":        s.configGet,
 			"copy":          s.imageCopy,
+			"exportTar":     s.imageExportTar,
+			"importTar":     s.imageImportTar,
 			"manifest":      s.manifestGet,
 			"manifestHead":  s.manifestHead,
 			"manifestList":  s.manifestGetList,
@@ -166,6 +169,38 @@ func (s *Sandbox) imageCopy(ls *lua.LState) int {
 	err := s.rc.ImageCopy(s.ctx, src.ref, tgt.ref)
 	if err != nil {
 		ls.RaiseError("Failed copying \"%s\" to \"%s\": %v", src.ref.CommonName(), tgt.ref.CommonName(), err)
+	}
+	return 0
+}
+
+func (s *Sandbox) imageExportTar(ls *lua.LState) int {
+	src := s.checkReference(ls, 1)
+	file := ls.CheckString(2)
+	if s.sem != nil {
+		s.sem.Acquire(s.ctx, 1)
+		defer s.sem.Release(1)
+	}
+	fh, err := os.Create(file)
+	if err != nil {
+		ls.RaiseError("Failed to open \"%s\": %v", file, err)
+	}
+	err = s.rc.ImageExport(s.ctx, src.ref, fh)
+	if err != nil {
+		ls.RaiseError("Failed to export image \"%s\" to \"%s\": %v", src.ref.CommonName(), file, err)
+	}
+	return 0
+}
+
+func (s *Sandbox) imageImportTar(ls *lua.LState) int {
+	tgt := s.checkReference(ls, 1)
+	file := ls.CheckString(2)
+	if s.sem != nil {
+		s.sem.Acquire(s.ctx, 1)
+		defer s.sem.Release(1)
+	}
+	err := s.rc.ImageImport(s.ctx, tgt.ref, file)
+	if err != nil {
+		ls.RaiseError("Failed to import image \"%s\" from \"%s\": %v", tgt.ref.CommonName(), file, err)
 	}
 	return 0
 }

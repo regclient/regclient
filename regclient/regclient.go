@@ -51,6 +51,8 @@ const (
 	MediaTypeOCI1ManifestList = ociv1.MediaTypeImageIndex
 	// MediaTypeOCI1ImageConfig OCI v1 configuration json object media type
 	MediaTypeOCI1ImageConfig = ociv1.MediaTypeImageConfig
+	// MediaTypeDocker2Layer is the default compressed layer for docker schema2
+	MediaTypeDocker2Layer = dockerSchema2.MediaTypeLayer
 )
 
 var (
@@ -157,11 +159,12 @@ func WithConfigHosts(configHosts []ConfigHost) Opt {
 					configHost.Hostname = DockerRegistryDNS
 				}
 			}
+			tls, _ := configHost.TLS.MarshalText()
 			rc.log.WithFields(logrus.Fields{
 				"name":       configHost.Name,
 				"user":       configHost.User,
 				"hostname":   configHost.Hostname,
-				"tls":        configHost.TLS,
+				"tls":        string(tls),
 				"pathPrefix": configHost.PathPrefix,
 				"mirrors":    configHost.Mirrors,
 				"api":        configHost.API,

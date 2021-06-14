@@ -31,8 +31,21 @@ type docker2ManifestList struct {
 	dockerManifestList.ManifestList
 }
 
+func (m *docker2Manifest) GetConfigDescriptor() (ociv1.Descriptor, error) {
+	return ociv1.Descriptor{
+		MediaType:   m.Config.MediaType,
+		Digest:      m.Config.Digest,
+		Size:        m.Config.Size,
+		URLs:        m.Config.URLs,
+		Annotations: m.Config.Annotations,
+		Platform:    m.Config.Platform,
+	}, nil
+}
 func (m *docker2Manifest) GetConfigDigest() (digest.Digest, error) {
 	return m.Config.Digest, nil
+}
+func (m *docker2ManifestList) GetConfigDescriptor() (ociv1.Descriptor, error) {
+	return ociv1.Descriptor{}, wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.mt), ErrUnsupportedMediaType)
 }
 func (m *docker2ManifestList) GetConfigDigest() (digest.Digest, error) {
 	return "", wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.mt), ErrUnsupportedMediaType)

@@ -21,8 +21,9 @@ var repoLsCmd = &cobra.Command{
 	Short:   "list repositories in a registry",
 	Long: `List repositories in a registry.
 Note: Docker Hub does not support this API request.`,
-	Args: cobra.RangeArgs(1, 1),
-	RunE: runRepoLs,
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: registryArgListReg,
+	RunE:              runRepoLs,
 }
 
 var repoOpts struct {
@@ -34,6 +35,9 @@ func init() {
 	repoLsCmd.Flags().StringVarP(&repoOpts.Last, "last", "", "", "Specify the last repo from a previous request for pagination")
 	repoLsCmd.Flags().IntVarP(&repoOpts.Limit, "limit", "", 0, "Specify the number of repos to retrieve")
 	repoLsCmd.Flags().StringVarP(&repoOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+	repoLsCmd.RegisterFlagCompletionFunc("last", completeArgNone)
+	repoLsCmd.RegisterFlagCompletionFunc("limit", completeArgNone)
+	repoLsCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
 	repoCmd.AddCommand(repoLsCmd)
 	rootCmd.AddCommand(repoCmd)

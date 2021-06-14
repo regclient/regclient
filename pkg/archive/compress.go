@@ -29,6 +29,40 @@ var compressHeaders = map[CompressType][]byte{
 	CompressXz:    []byte("\xFD\x37\x7A\x58\x5A\x00"),
 }
 
+func Compress(r io.Reader, oComp CompressType) (io.Reader, error) {
+	br := bufio.NewReader(r)
+	head, err := br.Peek(10)
+	if err != nil {
+		return br, err
+	}
+	rComp := DetectCompression(head)
+	if rComp == oComp {
+		return br, nil
+	}
+	switch oComp {
+	case CompressGzip:
+		switch rComp {
+		case CompressNone:
+			return compressGzip(br)
+		case CompressBzip2:
+			return compressGzip(bzip2.NewReader(br))
+		}
+	}
+	// No other types currently supported
+	return nil, ErrUnknownType
+}
+
+func compressGzip(src io.Reader) (io.Reader, error) {
+	pipeR, pipeW := io.Pipe()
+	go func() {
+		defer pipeW.Close()
+		gzipW := gzip.NewWriter(pipeW)
+		defer gzipW.Close()
+		io.Copy(gzipW, src)
+	}()
+	return pipeR, nil
+}
+
 // Decompress extracts gzip and bzip streams
 func Decompress(r io.Reader) (io.Reader, error) {
 	// create bufio to peak on first few bytes
@@ -48,7 +82,6 @@ func Decompress(r io.Reader) (io.Reader, error) {
 		return br, ErrXzUnsupported
 	default:
 		return br, nil
-
 	}
 }
 

@@ -7,6 +7,8 @@ var (
 	ErrAPINotFound = errors.New("API not found")
 	// ErrCanceled if the context was canceled
 	ErrCanceled = errors.New("Context was canceled")
+	// ErrHttpStatus if the http status code was unexpected
+	ErrHttpStatus = errors.New("Unexpected http status code")
 	// ErrMissingDigest returned when image reference does not include a digest
 	ErrMissingDigest = errors.New("Digest missing from image reference")
 	// ErrMissingName returned when name missing for host
