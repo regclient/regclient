@@ -219,6 +219,10 @@ The following additional functions are available:
 - `image.copy <src-ref> <tgt-ref>`:
   Copies an image.
   This may be retagging within the same repository, copying between repositories, or copying between registries.
+- `image.exportTar <src-ref> <tar-filename>`:
+  Exports an image from the registry to a tar file.
+- `image.importTar <tgt-ref> <tar-filename>`:
+  Imports an image from a tar file to the registry.
 - `image.ratelimitWait <ref> <limit> <poll> <timeout>`:
   Polls a registry for the rate limit remaining to increase at or above the specified limit.
   By default the polling interval is `5m` and timeout is `6h`.
