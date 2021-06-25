@@ -76,6 +76,9 @@ sync:
       - "3.0"
     schedule: *sched-a
     backup: "{{$t := time.Now}}{{printf \"%s/backups/%s:%s-%d%d%d\" .Ref.Registry .Ref.Repository .Ref.Tag $t.Year $t.Month $t.Day}}"
+  - source: localreg:5000
+    target: localcopy:5000
+    type: registry
 ```
 
 - `version`:
@@ -159,14 +162,15 @@ sync:
 - `sync`:
   Array of steps to run for copying images from the source to target repository.
   - `source`:
-    Source image or repository.
+    Source registry, repository, or image.
   - `target`:
-    Target image or repository.
+    Target registry, repository, or image.
   - `type`:
-    "repository" or "image".
-    Repository will copy all tags from the source repository.
+    "registry", "repository", or "image".
+    "registry" expects a registry name (host:port) and will copy every repository.
+    "repository" will copy all tags from the source repository.
   - `tags`:
-    Implements filters on tags for "repository" types, regex values are automatically bound to the beginning and ending of each string (`^` and `$`).
+    Implements filters on tags for "registry" and "repository" types, regex values are automatically bound to the beginning and ending of each string (`^` and `$`).
     - `allow`:
       Array of regex strings to allow specific tags.
     - `deny`:
