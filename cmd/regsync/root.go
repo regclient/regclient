@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"regexp"
@@ -322,6 +323,88 @@ func loadConf() error {
 // process a sync step
 func (s ConfigSync) process(ctx context.Context, action string) error {
 	switch s.Type {
+	case "registry":
+		sRepos, err := rc.RepoList(ctx, s.Source)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"source": s.Source,
+				"error":  err,
+			}).Error("Failed to list source repositories")
+			return err
+		}
+		sRepoList, err := sRepos.GetRepos()
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"source": s.Source,
+				"error":  err,
+			}).Error("Failed to list source repositories")
+			return err
+		}
+		for _, repo := range sRepoList {
+			sRepoRef, err := types.NewRef(fmt.Sprintf("%s/%s", s.Source, repo))
+			if err != nil {
+				log.WithFields(logrus.Fields{
+					"source": s.Source,
+					"repo":   repo,
+					"error":  err,
+				}).Error("Failed to define source reference")
+				return err
+			}
+			sTags, err := rc.TagList(ctx, sRepoRef)
+			if err != nil {
+				log.WithFields(logrus.Fields{
+					"source": sRepoRef.CommonName(),
+					"error":  err,
+				}).Error("Failed getting source tags")
+				continue
+			}
+			sTagsList, err := sTags.GetTags()
+			if err != nil {
+				log.WithFields(logrus.Fields{
+					"source": sRepoRef.CommonName(),
+					"error":  err,
+				}).Error("Failed getting source tags")
+				continue
+			}
+			sTagList, err := s.filterTags(sTagsList)
+			if err != nil {
+				log.WithFields(logrus.Fields{
+					"source": sRepoRef.CommonName(),
+					"allow":  s.Tags.Allow,
+					"deny":   s.Tags.Deny,
+					"error":  err,
+				}).Error("Failed processing tag filters")
+				continue
+			}
+			if len(sTagList) == 0 {
+				log.WithFields(logrus.Fields{
+					"source":    sRepoRef.CommonName(),
+					"allow":     s.Tags.Allow,
+					"deny":      s.Tags.Deny,
+					"available": sTagsList,
+				}).Info("No matching tags found")
+				continue
+			}
+			tRepoRef, err := types.NewRef(fmt.Sprintf("%s/%s", s.Target, repo))
+			if err != nil {
+				log.WithFields(logrus.Fields{
+					"target": s.Target,
+					"repo":   repo,
+					"error":  err,
+				}).Error("Failed parsing target")
+				return err
+			}
+			for _, tag := range sTagList {
+				sRef := sRepoRef
+				sRef.Tag = tag
+				tRef := tRepoRef
+				tRef.Tag = tag
+				err = s.processRef(ctx, sRef, tRef, action)
+				if err != nil {
+					return err
+				}
+			}
+		}
 	case "repository":
 		sRepoRef, err := types.NewRef(s.Source)
 		if err != nil {
@@ -410,7 +493,8 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 	default:
 		log.WithFields(logrus.Fields{
 			"step": s,
-		}).Error("Type not recognized, must be image or repository")
+			"type": s.Type,
+		}).Error("Type not recognized, must be one of: registry, repository, or image")
 		return ErrInvalidInput
 	}
 	return nil
