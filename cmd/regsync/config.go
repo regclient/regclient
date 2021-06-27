@@ -120,9 +120,6 @@ func ConfigLoadReader(r io.Reader) (*Config, error) {
 		return c, ErrUnsupportedConfigVersion
 	}
 	// apply top level defaults
-	if c.Defaults.Parallel <= 0 {
-		c.Defaults.Parallel = 1
-	}
 	if c.Defaults.RateLimit.Retry < rateLimitRetryMin {
 		c.Defaults.RateLimit.Retry = rateLimitRetryMin
 	}

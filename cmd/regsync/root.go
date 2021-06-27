@@ -151,23 +151,7 @@ func runOnce(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
-	var mainErr error
-	for _, s := range config.Sync {
-		s := s
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			err := s.process(ctx, "copy")
-			if err != nil {
-				if mainErr == nil {
-					mainErr = err
-				}
-				return
-			}
-		}()
-	}
-	// wait on interrupt signal
+	// handle interrupt signal
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	go func() {
@@ -176,6 +160,31 @@ func runOnce(cmd *cobra.Command, args []string) error {
 		// clean shutdown
 		cancel()
 	}()
+	var wg sync.WaitGroup
+	var mainErr error
+	for _, s := range config.Sync {
+		s := s
+		if config.Defaults.Parallel > 0 {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				err := s.process(ctx, "copy")
+				if err != nil {
+					if mainErr == nil {
+						mainErr = err
+					}
+					return
+				}
+			}()
+		} else {
+			err := s.process(ctx, "copy")
+			if err != nil {
+				if mainErr == nil {
+					mainErr = err
+				}
+			}
+		}
+	}
 	wg.Wait()
 	return mainErr
 }
@@ -280,10 +289,14 @@ func loadConf() error {
 		return ErrMissingInput
 	}
 	// use a semaphore to control parallelism
+	concurrent := int64(config.Defaults.Parallel)
+	if concurrent <= 0 {
+		concurrent = 1
+	}
 	log.WithFields(logrus.Fields{
-		"parallel": config.Defaults.Parallel,
+		"concurrent": concurrent,
 	}).Debug("Configuring parallel settings")
-	sem = semaphore.NewWeighted(int64(config.Defaults.Parallel))
+	sem = semaphore.NewWeighted(concurrent)
 	// set the regclient, loading docker creds unless disabled, and inject logins from config file
 	rcOpts := []regclient.Opt{
 		regclient.WithLog(log),
@@ -322,6 +335,7 @@ func loadConf() error {
 
 // process a sync step
 func (s ConfigSync) process(ctx context.Context, action string) error {
+	var retErr error
 	switch s.Type {
 	case "registry":
 		sRepos, err := rc.RepoList(ctx, s.Source)
@@ -356,6 +370,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 					"source": sRepoRef.CommonName(),
 					"error":  err,
 				}).Error("Failed getting source tags")
+				retErr = err
 				continue
 			}
 			sTagsList, err := sTags.GetTags()
@@ -364,6 +379,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 					"source": sRepoRef.CommonName(),
 					"error":  err,
 				}).Error("Failed getting source tags")
+				retErr = err
 				continue
 			}
 			sTagList, err := s.filterTags(sTagsList)
@@ -374,6 +390,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 					"deny":   s.Tags.Deny,
 					"error":  err,
 				}).Error("Failed processing tag filters")
+				retErr = err
 				continue
 			}
 			if len(sTagList) == 0 {
@@ -383,6 +400,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 					"deny":      s.Tags.Deny,
 					"available": sTagsList,
 				}).Info("No matching tags found")
+				retErr = err
 				continue
 			}
 			tRepoRef, err := types.NewRef(fmt.Sprintf("%s/%s", s.Target, repo))
@@ -401,7 +419,12 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 				tRef.Tag = tag
 				err = s.processRef(ctx, sRef, tRef, action)
 				if err != nil {
-					return err
+					log.WithFields(logrus.Fields{
+						"target": tRef.CommonName(),
+						"source": sRef.CommonName(),
+						"error":  err,
+					}).Error("Failed to sync")
+					retErr = err
 				}
 			}
 		}
@@ -464,7 +487,12 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 			tRef.Tag = tag
 			err = s.processRef(ctx, sRef, tRef, action)
 			if err != nil {
-				return err
+				log.WithFields(logrus.Fields{
+					"target": tRef.CommonName(),
+					"source": sRef.CommonName(),
+					"error":  err,
+				}).Error("Failed to sync")
+				retErr = err
 			}
 		}
 
@@ -487,7 +515,12 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 		}
 		err = s.processRef(ctx, sRef, tRef, action)
 		if err != nil {
-			return err
+			log.WithFields(logrus.Fields{
+				"target": tRef.CommonName(),
+				"source": sRef.CommonName(),
+				"error":  err,
+			}).Error("Failed to sync")
+			retErr = err
 		}
 
 	default:
@@ -497,7 +530,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 		}).Error("Type not recognized, must be one of: registry, repository, or image")
 		return ErrInvalidInput
 	}
-	return nil
+	return retErr
 }
 
 // process a sync step
