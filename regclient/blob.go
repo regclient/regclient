@@ -153,40 +153,13 @@ func (rc *regClient) BlobHead(ctx context.Context, ref types.Ref, d digest.Diges
 }
 
 func (rc *regClient) BlobMount(ctx context.Context, refSrc types.Ref, refTgt types.Ref, d digest.Digest) error {
-	if refSrc.Registry != refTgt.Registry {
-		return fmt.Errorf("Registry must match for blob mount")
-	}
-
-	// build/send request
-	query := url.Values{}
-	query.Set("mount", d.String())
-	query.Set("from", refSrc.Repository)
-
-	req := httpReq{
-		host:      refTgt.Registry,
-		noMirrors: true,
-		apis: map[string]httpReqAPI{
-			"": {
-				method:     "POST",
-				repository: refTgt.Repository,
-				path:       "blobs/uploads/",
-				query:      query,
-			},
-		},
-	}
-	resp, err := rc.httpDo(ctx, req)
-	if err != nil {
-		return fmt.Errorf("Failed to mount blob, digest %s, ref %s: %w", d, refTgt.CommonName(), err)
-	}
-	defer resp.Close()
-	if resp.HTTPResponse().StatusCode < 200 || resp.HTTPResponse().StatusCode > 299 {
-		return fmt.Errorf("Failed to mount blob, digest %s, ref %s: %w", d, refTgt.CommonName(), httpError(resp.HTTPResponse().StatusCode))
-	}
-
-	return nil
+	_, err := rc.blobMount(ctx, refTgt, d, refSrc)
+	return err
 }
 
 func (rc *regClient) BlobPut(ctx context.Context, ref types.Ref, d digest.Digest, rdr io.Reader, ct string, cl int64) (digest.Digest, int64, error) {
+	var putURL *url.URL
+	var err error
 	// defaults for content-type and length
 	if ct == "" {
 		ct = "application/octet-stream"
@@ -195,10 +168,22 @@ func (rc *regClient) BlobPut(ctx context.Context, ref types.Ref, d digest.Digest
 		cl = -1
 	}
 
-	// get the upload URL
-	putURL, err := rc.blobGetUploadURL(ctx, ref)
-	if err != nil {
-		return "", 0, err
+	// attempt an anonymous blob mount
+	if d != "" && cl > 0 {
+		putURL, err = rc.blobMount(ctx, ref, d, types.Ref{})
+		if err == nil {
+			return digest.Digest(d), cl, nil
+		}
+		if err != ErrMountReturnedLocation {
+			putURL = nil
+		}
+	}
+	// fallback to requesting upload URL
+	if putURL == nil {
+		putURL, err = rc.blobGetUploadURL(ctx, ref)
+		if err != nil {
+			return "", 0, err
+		}
 	}
 
 	// send upload as one-chunk
@@ -250,6 +235,55 @@ func (rc *regClient) blobGetUploadURL(ctx context.Context, ref types.Ref) (*url.
 		return nil, fmt.Errorf("Blob upload url invalid, ref %s: %w", ref.CommonName(), err)
 	}
 	return putURL, nil
+}
+
+func (rc *regClient) blobMount(ctx context.Context, refTgt types.Ref, d digest.Digest, refSrc types.Ref) (*url.URL, error) {
+	// build/send request
+	query := url.Values{}
+	query.Set("mount", d.String())
+	if refSrc.Registry == refTgt.Registry && refSrc.Repository != "" {
+		query.Set("from", refSrc.Repository)
+	}
+
+	req := httpReq{
+		host:      refTgt.Registry,
+		noMirrors: true,
+		apis: map[string]httpReqAPI{
+			"": {
+				method:     "POST",
+				repository: refTgt.Repository,
+				path:       "blobs/uploads/",
+				query:      query,
+			},
+		},
+	}
+	resp, err := rc.httpDo(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to mount blob, digest %s, ref %s: %w", d, refTgt.CommonName(), err)
+	}
+	defer resp.Close()
+	// 201 indicates the blob mount succeeded
+	if resp.HTTPResponse().StatusCode == 201 {
+		return nil, nil
+	}
+	// 202 indicates blob mount failed but server ready to receive an upload at location
+	location := resp.HTTPResponse().Header.Get("Location")
+	if resp.HTTPResponse().StatusCode == 202 && location != "" {
+		postURL := resp.HTTPResponse().Request.URL
+		putURL, err := postURL.Parse(location)
+		if err != nil {
+			rc.log.WithFields(logrus.Fields{
+				"digest":   d,
+				"target":   refTgt.CommonName(),
+				"location": location,
+				"err":      err,
+			}).Warn("Mount location header failed to parse")
+		} else {
+			return putURL, ErrMountReturnedLocation
+		}
+	}
+	// all other responses unhandled
+	return nil, fmt.Errorf("Failed to mount blob, digest %s, ref %s: %w", d, refTgt.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 }
 
 func (rc *regClient) blobPutUploadFull(ctx context.Context, ref types.Ref, d digest.Digest, putURL *url.URL, rdr io.Reader, ct string, cl int64) error {
