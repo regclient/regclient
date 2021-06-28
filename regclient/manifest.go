@@ -207,7 +207,7 @@ func (rc *regClient) ManifestPut(ctx context.Context, ref types.Ref, m manifest.
 		return fmt.Errorf("Failed to put manifest %s: %w", ref.CommonName(), err)
 	}
 	defer resp.Close()
-	if resp.HTTPResponse().StatusCode < 200 || resp.HTTPResponse().StatusCode > 299 {
+	if resp.HTTPResponse().StatusCode != 201 {
 		return fmt.Errorf("Failed to put manifest %s: %w", ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 	}
 

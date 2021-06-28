@@ -24,6 +24,7 @@ import (
 // Retryable is used to create requests with built in retry capabilities
 type Retryable interface {
 	DoRequest(ctx context.Context, method string, u []url.URL, opts ...OptsReq) (Response, error)
+	BackoffClear()
 	BackoffUntil() time.Time
 }
 
@@ -200,7 +201,7 @@ func WithUserAgent(ua string) Opts {
 	}
 }
 
-func (r *retryable) backoffClear() {
+func (r *retryable) BackoffClear() {
 	if r.backoffCur > 0 {
 		r.backoffCur--
 		if r.backoffCur == 0 {
@@ -429,7 +430,7 @@ func (req *request) retryLoop() error {
 		switch {
 		case 200 <= statusCode && statusCode < 300:
 			// all 200 status codes are successful
-			req.r.backoffClear()
+			req.r.BackoffClear()
 			return nil
 		case statusCode == http.StatusUnauthorized:
 			err := req.handleAuth()

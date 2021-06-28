@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -86,11 +85,17 @@ func (rc *regClient) TagDelete(ctx context.Context, ref types.Ref) error {
 		return ErrMissingTag
 	}
 
-	// attempt platform specific methods
+	// attempt to delete the tag directly, available in OCI distribution-spec, and Hub API
 	req := httpReq{
 		host:      ref.Registry,
 		noMirrors: true,
 		apis: map[string]httpReqAPI{
+			"": {
+				method:     "DELETE",
+				repository: ref.Repository,
+				path:       "manifests/" + ref.Tag,
+				ignoreErr:  true, // do not trigger backoffs if this fails
+			},
 			"hub": {
 				method: "DELETE",
 				path:   "repositories/" + ref.Repository + "/tags/" + ref.Tag + "/",
@@ -102,12 +107,11 @@ func (rc *regClient) TagDelete(ctx context.Context, ref types.Ref) error {
 	if resp != nil {
 		defer resp.Close()
 	}
-	if err == nil {
+	// TODO: Hub may return a different status
+	if err == nil && resp != nil && resp.HTTPResponse().StatusCode == 202 {
 		return nil
-	} else if !errors.Is(err, ErrAPINotFound) {
-		return fmt.Errorf("Failed to delete tag %s: %w", ref.CommonName(), err)
 	}
-	// else ErrAPINotFound, fallback to creating a temporary manifest to replace the tag and deleting that manifest
+	// ignore errors, fallback to creating a temporary manifest to replace the tag and deleting that manifest
 
 	// lookup the current manifest media type
 	curManifest, err := rc.ManifestHead(ctx, ref)
