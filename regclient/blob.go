@@ -154,6 +154,7 @@ func (rc *regClient) BlobHead(ctx context.Context, ref types.Ref, d digest.Diges
 
 func (rc *regClient) BlobMount(ctx context.Context, refSrc types.Ref, refTgt types.Ref, d digest.Digest) error {
 	_, err := rc.blobMount(ctx, refTgt, d, refSrc)
+	// TODO: if mount fails and returns an upload location, cancel that upload
 	return err
 }
 
@@ -214,7 +215,7 @@ func (rc *regClient) blobGetUploadURL(ctx context.Context, ref types.Ref) (*url.
 		return nil, fmt.Errorf("Failed to send blob post, ref %s: %w", ref.CommonName(), err)
 	}
 	defer resp.Close()
-	if resp.HTTPResponse().StatusCode < 200 || resp.HTTPResponse().StatusCode > 299 {
+	if resp.HTTPResponse().StatusCode != 202 {
 		return nil, fmt.Errorf("Failed to send blob post, ref %s: %w", ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 	}
 
@@ -312,7 +313,7 @@ func (rc *regClient) blobPutUploadFull(ctx context.Context, ref types.Ref, d dig
 		return fmt.Errorf("Failed to send blob (put), digest %s, ref %s: %w", d, ref.CommonName(), err)
 	}
 	defer resp.Close()
-	if resp.HTTPResponse().StatusCode < 200 || resp.HTTPResponse().StatusCode > 299 {
+	if resp.HTTPResponse().StatusCode != 201 && resp.HTTPResponse().StatusCode != 204 {
 		return fmt.Errorf("Failed to send blob (put), digest %s, ref %s: %w", d, ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 	}
 	return nil
@@ -366,7 +367,7 @@ func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, pu
 				return "", 0, fmt.Errorf("Failed to send blob (chunk), ref %s: %w", ref.CommonName(), err)
 			}
 			resp.Close()
-			if resp.HTTPResponse().StatusCode < 200 || resp.HTTPResponse().StatusCode > 299 {
+			if resp.HTTPResponse().StatusCode != 204 {
 				return "", 0, fmt.Errorf("Failed to send blob (chunk), ref %s: %w", ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 			}
 			chunkStart += chunkSize
@@ -413,7 +414,7 @@ func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, pu
 		return "", 0, fmt.Errorf("Failed to send blob (chunk digest), digest %s, ref %s: %w", d, ref.CommonName(), err)
 	}
 	defer resp.Close()
-	if resp.HTTPResponse().StatusCode < 200 || resp.HTTPResponse().StatusCode > 299 {
+	if resp.HTTPResponse().StatusCode != 204 {
 		return "", 0, fmt.Errorf("Failed to send blob (chunk digest), digest %s, ref %s: %w", d, ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 	}
 
