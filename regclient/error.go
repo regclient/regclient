@@ -11,6 +11,8 @@ var (
 	ErrHttpStatus = errors.New("Unexpected http status code")
 	// ErrMissingDigest returned when image reference does not include a digest
 	ErrMissingDigest = errors.New("Digest missing from image reference")
+	// ErrMissingLocation returned when the location header is missing
+	ErrMissingLocation = errors.New("Location header missing")
 	// ErrMissingName returned when name missing for host
 	ErrMissingName = errors.New("Name missing")
 	// ErrMissingTag returned when image reference does not include a tag
