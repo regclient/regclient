@@ -58,7 +58,7 @@ PowerShell:
 	Run: func(cmd *cobra.Command, args []string) {
 		switch args[0] {
 		case "bash":
-			cmd.Root().GenBashCompletion(os.Stdout)
+			cmd.Root().GenBashCompletionV2(os.Stdout, true)
 		case "zsh":
 			cmd.Root().GenZshCompletion(os.Stdout)
 		case "fish":
@@ -114,7 +114,6 @@ func completeArgList(funcList []completeFunc) completeFunc {
 	}
 }
 
-// TODO: for bash, this requires https://github.com/spf13/cobra/pull/1146 to be merged
 func completeArgTag(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	result := []string{}
 	// TODO: is it possible to expand registry, then repo, then tag?
