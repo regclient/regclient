@@ -13,7 +13,6 @@ import (
 
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/pkg/retryable"
-	"github.com/sirupsen/logrus"
 )
 
 type httpReq struct {
@@ -33,6 +32,7 @@ type httpReqAPI struct {
 	bodyFunc   func() (io.ReadCloser, error)
 	headers    http.Header
 	digest     digest.Digest
+	ignoreErr  bool
 }
 
 type httpResp interface {
@@ -131,16 +131,15 @@ func (rc *regClient) httpDo(ctx context.Context, req httpReq) (httpResp, error) 
 		if err == nil {
 			return resp, nil
 		}
-		// on failures, log, cache the body, and close the response
-		rc.log.WithFields(logrus.Fields{
-			"error": err,
-			"host":  h.Name,
-		}).Debug("HTTP request failed")
+		// on failures, cache the body, and close the response
 		if resp != nil {
 			errBody, _ = ioutil.ReadAll(resp)
 		}
 		if resp != nil {
 			resp.Close()
+		}
+		if api.ignoreErr {
+			rty.BackoffClear()
 		}
 	}
 	// out of hosts, return final error

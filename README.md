@@ -16,7 +16,8 @@ This includes `regctl` for a command line interface to manage registries.
 - Ability to copy or retag an image without pulling it into docker.
   Layers are only pulled if you are copying between different registries and the target registry does not have the layers already.
 - Ability to copy all platforms of a multi-platform image.
-- Ability to export an image from a registry without a docker engine.
+- Ability to import an image to a registry from a tar file (OCI or Docker formatted).
+- Ability to export an image from a registry to a tar file (using a combined OCI and Docker format).
 - Ability to delete an image manifest.
 - Ability to delete a tag without removing the entire manifest.
 - Uses docker registry logins and `/etc/docker/certs.d` by default to support private repositories and self signed registries.
@@ -55,8 +56,6 @@ This includes `regctl` for a command line interface to manage registries.
 This project is in active development, a few features are not complete.
 Unfinished or not yet started work includes:
 
-- Ability to import images from a tar to a registry.
-- Ability to export a multi-platform image.
 - Ability to retry from a partial layer download.
 - Documentation.
 - Testing.

@@ -687,7 +687,7 @@ func (b *BearerHandler) scopeExists(search string) bool {
 }
 
 func (b *BearerHandler) validateResponse(resp *http.Response) error {
-	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
+	if resp.StatusCode != 200 {
 		return ErrUnauthorized
 	}
 
@@ -783,7 +783,7 @@ func (j *JWTHubHandler) ProcessChallenge(c Challenge) error {
 	defer resp.Body.Close()
 	body, _ := ioutil.ReadAll(resp.Body)
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+	if resp.StatusCode != 200 || resp.StatusCode >= 300 {
 		return ErrUnauthorized
 	}
 

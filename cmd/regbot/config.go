@@ -72,10 +72,6 @@ func ConfigLoadReader(r io.Reader) (*Config, error) {
 	if c.Version > 1 {
 		return c, ErrUnsupportedConfigVersion
 	}
-	// apply top level defaults
-	if c.Defaults.Parallel <= 0 {
-		c.Defaults.Parallel = 1
-	}
 	// apply defaults to each step
 	for i := range c.Scripts {
 		scriptSetDefaults(&c.Scripts[i], c.Defaults)
