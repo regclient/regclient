@@ -63,16 +63,20 @@ type retryable struct {
 	mu            sync.Mutex
 }
 
+var defaultDelayInit, _ = time.ParseDuration("1s")
+var defaultDelayMax, _ = time.ParseDuration("30s")
+var defaultLimit = 3
+
 // NewRetryable returns a retryable interface
 func NewRetryable(opts ...Opts) Retryable {
 	r := &retryable{
 		httpClient: &http.Client{},
-		limit:      5,
+		limit:      defaultLimit,
+		delayInit:  defaultDelayInit,
+		delayMax:   defaultDelayMax,
 		log:        &logrus.Logger{Out: ioutil.Discard},
 		rootCAPool: [][]byte{},
 	}
-	r.delayInit, _ = time.ParseDuration("1s")
-	r.delayMax, _ = time.ParseDuration("30s")
 
 	for _, opt := range opts {
 		opt(r)
@@ -152,8 +156,6 @@ func WithDelay(delayInit time.Duration, delayMax time.Duration) Opts {
 	return func(r *retryable) {
 		if delayInit > 0 {
 			r.delayInit = delayInit
-		} else {
-			r.delayInit = 0
 		}
 		// delayMax must be at least delayInit, if 0 initialize to 30x delayInit
 		if delayMax > r.delayInit {
@@ -176,7 +178,9 @@ func WithHTTPClient(h *http.Client) Opts {
 // WithLimit restricts the number of retries (defaults to 5)
 func WithLimit(l int) Opts {
 	return func(r *retryable) {
-		r.limit = l
+		if l > 0 {
+			r.limit = l
+		}
 	}
 }
 
@@ -202,6 +206,9 @@ func WithUserAgent(ua string) Opts {
 }
 
 func (r *retryable) BackoffClear() {
+	if r.backoffCur > r.limit {
+		r.backoffCur = r.limit
+	}
 	if r.backoffCur > 0 {
 		r.backoffCur--
 		if r.backoffCur == 0 {
@@ -213,9 +220,6 @@ func (r *retryable) BackoffClear() {
 
 func (r *retryable) backoffSet(lastResp *http.Response) error {
 	r.backoffCur++
-	if r.backoffCur >= r.limit {
-		r.backoffCur = r.limit
-	}
 	// sleep for backoff time
 	sleepTime := r.delayInit << r.backoffCur
 	// limit to max delay
@@ -384,6 +388,7 @@ func WithScope(repo string, push bool) OptsReq {
 func (req *request) retryLoop() error {
 	req.r.mu.Lock()
 	defer req.r.mu.Unlock()
+	curRetry := 0
 
 	var httpErr error
 	for {
@@ -392,6 +397,10 @@ func (req *request) retryLoop() error {
 			if httpErr != nil {
 				return httpErr
 			}
+			return ErrAllRequestsFailed
+		}
+		curRetry++
+		if curRetry > req.r.limit {
 			return ErrAllRequestsFailed
 		}
 
@@ -455,17 +464,23 @@ func (req *request) retryLoop() error {
 				"Status": lastResp.Status,
 			}).Debug("Not found")
 			removeURL = true
+		case statusCode == http.StatusTooManyRequests:
+			req.log.WithFields(logrus.Fields{
+				"URL":    lastURL.String(),
+				"Status": lastResp.Status,
+			}).Debug("Rate limit exceeded")
+			runBackoff = true
 		case statusCode == http.StatusRequestTimeout:
 			req.log.WithFields(logrus.Fields{
 				"URL":    lastURL.String(),
 				"Status": lastResp.Status,
 			}).Debug("Timeout")
 			runBackoff = true
-		case statusCode == http.StatusTooManyRequests:
+		case statusCode == http.StatusGatewayTimeout:
 			req.log.WithFields(logrus.Fields{
 				"URL":    lastURL.String(),
 				"Status": lastResp.Status,
-			}).Debug("Rate limit exceeded")
+			}).Debug("Gateway timeout")
 			runBackoff = true
 		default:
 			req.log.WithFields(logrus.Fields{

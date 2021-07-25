@@ -8,6 +8,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
 
 	"github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -84,6 +86,112 @@ func (rc *regClient) BlobCopy(ctx context.Context, refSrc types.Ref, refTgt type
 	return nil
 }
 
+// blobGetRetryable tracks read bytes, and resends a blobGetRange on errors to get a new pass through reader
+type blobGetRetryable struct {
+	rc         *regClient
+	r          io.ReadCloser
+	offset     int64
+	start, end int64
+	offsetErr  int64
+	ctx        context.Context
+	ref        types.Ref
+	d          digest.Digest
+	accepts    []string
+}
+
+func (bgr *blobGetRetryable) newReader() error {
+	// request new reader for range
+	r, err := bgr.rc.blobGetRange(bgr.ctx, bgr.ref, bgr.d, bgr.accepts, bgr.start+bgr.offset, bgr.end)
+	if err != nil {
+		return err
+	}
+	// close previously erroring reader, ignoring errors
+	_ = bgr.r.Close()
+	// save new reader
+	bgr.r = r
+	return nil
+}
+
+func (bgr *blobGetRetryable) setEnd() error {
+	if bgr.end == 0 {
+		br, err := bgr.rc.BlobHead(bgr.ctx, bgr.ref, bgr.d)
+		if err != nil {
+			return err
+		}
+		if br.Response().Header["Accept-Ranges"] == nil {
+			return fmt.Errorf("Registry does not support range requests")
+		}
+		bgr.end, err = strconv.ParseInt(br.Response().Header.Get("Content-Length"), 10, 64)
+		if bgr.end == 0 {
+			return fmt.Errorf("Registry reported empty blob")
+		}
+	}
+	return nil
+}
+
+func (bgr *blobGetRetryable) Close() error {
+	return bgr.r.Close()
+}
+
+func (bgr *blobGetRetryable) Read(p []byte) (int, error) {
+	i, err := bgr.r.Read(p)
+	if err != nil && err != io.EOF {
+		// on repeat failures, give up and error
+		if bgr.offsetErr == bgr.offset {
+			return i, err
+		}
+		bgr.offsetErr = bgr.offset
+		// recreate reader with a range request
+		err = bgr.setEnd()
+		if err != nil {
+			return 0, err
+		}
+		err = bgr.newReader()
+		if err != nil {
+			return 0, err
+		}
+		i, err = bgr.r.Read(p)
+	}
+	bgr.offset += int64(i)
+	return i, err
+}
+
+func (bgr *blobGetRetryable) Seek(offset int64, whence int) (int64, error) {
+	// noop to return current offset
+	if offset == 0 && whence == io.SeekCurrent {
+		return bgr.offset, nil
+	}
+
+	// set end sends a head request to verify registry support for range requests
+	if offset != 0 || whence != io.SeekStart {
+		err := bgr.setEnd()
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	// update offset based on whence and provided offset
+	switch whence {
+	case io.SeekCurrent:
+		bgr.offset += offset
+	case io.SeekStart:
+		bgr.offset = offset
+	case io.SeekEnd:
+		bgr.offset = bgr.end + offset
+	}
+	if bgr.offset < 0 {
+		return bgr.offset, fmt.Errorf("Seek before start not allowed")
+	}
+
+	// submit a new request
+	err := bgr.newReader()
+	if err != nil {
+		return 0, err
+	}
+
+	return bgr.offset, nil
+}
+
 func (rc *regClient) BlobGet(ctx context.Context, ref types.Ref, d digest.Digest, accepts []string) (blob.Reader, error) {
 	// build/send request
 	headers := http.Header{}
@@ -98,7 +206,6 @@ func (rc *regClient) BlobGet(ctx context.Context, ref types.Ref, d digest.Digest
 				repository: ref.Repository,
 				path:       "blobs/" + d.String(),
 				headers:    headers,
-				digest:     d,
 			},
 		},
 	}
@@ -110,10 +217,56 @@ func (rc *regClient) BlobGet(ctx context.Context, ref types.Ref, d digest.Digest
 		return nil, fmt.Errorf("Failed to get blob, digest %s, ref %s: %w", d, ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 	}
 
-	b := blob.NewReader(resp)
+	bgr := blobGetRetryable{
+		r:       resp,
+		rc:      rc,
+		ctx:     ctx,
+		ref:     ref,
+		d:       d,
+		accepts: accepts,
+	}
+	b := blob.NewReader(&bgr)
 	b.SetMeta(ref, d, 0)
 	b.SetResp(resp.HTTPResponse())
 	return b, nil
+}
+
+// TODO: consider adding a BlobGetRange that returns a blob.Reader
+
+func (rc *regClient) blobGetRange(ctx context.Context, ref types.Ref, d digest.Digest, accepts []string, start, end int64) (io.ReadCloser, error) {
+	// check for valid range
+	if start < 0 || end < 0 || start > end {
+		return nil, fmt.Errorf("Invalid range, start %d, end %d", start, end)
+	}
+	// build/send request
+	headers := http.Header{}
+	if len(accepts) > 0 {
+		headers["Accept"] = accepts
+	}
+	// if start and end are both 0, skip the range, return the full blob
+	if start > 0 || (start == 0 && end > 0) {
+		headers["Range"] = []string{fmt.Sprintf("bytes=%d-%d", start, end)}
+	}
+	req := httpReq{
+		host: ref.Registry,
+		apis: map[string]httpReqAPI{
+			"": {
+				method:     "GET",
+				repository: ref.Repository,
+				path:       "blobs/" + d.String(),
+				headers:    headers,
+			},
+		},
+	}
+	resp, err := rc.httpDo(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get blob, digest %s, ref %s: %w", d, ref.CommonName(), err)
+	}
+	if resp.HTTPResponse().StatusCode != 200 {
+		return nil, fmt.Errorf("Failed to get blob, digest %s, ref %s: %w", d, ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
+	}
+
+	return resp, nil
 }
 
 func (rc *regClient) BlobGetOCIConfig(ctx context.Context, ref types.Ref, d digest.Digest) (blob.OCIConfig, error) {
@@ -191,12 +344,23 @@ func (rc *regClient) BlobPut(ctx context.Context, ref types.Ref, d digest.Digest
 	}
 
 	// send upload as one-chunk
-	if d != "" && cl > 0 {
+	if d != "" && cl > 0 && cl < rc.blobMaxPut {
 		err = rc.blobPutUploadFull(ctx, ref, d, putURL, rdr, ct, cl)
-		return digest.Digest(d), cl, err
+		if err == nil {
+			return digest.Digest(d), cl, nil
+		}
+		// on failure, attempt to seek back to start to perform a chunked upload
+		rdrSeek, ok := rdr.(io.ReadSeeker)
+		if !ok {
+			return digest.Digest(d), cl, err
+		}
+		offset, errR := rdrSeek.Seek(0, io.SeekStart)
+		if errR != nil || offset != 0 {
+			return digest.Digest(d), cl, err
+		}
 	}
 
-	// send a chunked upload if full upload not possible or failed
+	// send a chunked upload if full upload not possible or too large
 	return rc.blobPutUploadChunked(ctx, ref, putURL, rdr, ct)
 }
 
@@ -305,7 +469,20 @@ func (rc *regClient) blobPutUploadFull(ctx context.Context, ref types.Ref, d dig
 
 	// send the blob
 	opts := []retryable.OptsReq{}
+	readOnce := false
 	bodyFunc := func() (io.ReadCloser, error) {
+		// if reader is reused,
+		if readOnce {
+			rdrSeek, ok := rdr.(io.ReadSeeker)
+			if !ok {
+				return nil, fmt.Errorf("Unable to reuse reader")
+			}
+			_, err := rdrSeek.Seek(0, io.SeekStart)
+			if err != nil {
+				return nil, fmt.Errorf("Unable to reuse reader")
+			}
+		}
+		readOnce = true
 		return ioutil.NopCloser(rdr), nil
 	}
 	opts = append(opts, retryable.WithBodyFunc(bodyFunc))
@@ -328,44 +505,57 @@ func (rc *regClient) blobPutUploadFull(ctx context.Context, ref types.Ref, d dig
 
 func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, putURL *url.URL, rdr io.Reader, ct string) (digest.Digest, int64, error) {
 	host := rc.hostGet(ref.Registry)
-	bufSize := int64(512 * 1024) // 512k
+	bufSize := int64(rc.blobChunkSize)
+	bufBytes := make([]byte, bufSize)
+	bufRdr := bytes.NewReader(bufBytes)
+	lenChange := false
 
 	// setup buffer and digest pipe
-	// read manifest and compute digest
 	digester := digest.Canonical.Digester()
 	digestRdr := io.TeeReader(rdr, digester.Hash())
-	chunkBuf := new(bytes.Buffer)
-	chunkBuf.Grow(int(bufSize))
 	finalChunk := false
 	chunkStart := int64(0)
 	bodyFunc := func() (io.ReadCloser, error) {
-		return ioutil.NopCloser(chunkBuf), nil
+		// reset to the start on every new read
+		_, err := bufRdr.Seek(0, io.SeekStart)
+		if err != nil {
+			return nil, err
+		}
+		return ioutil.NopCloser(bufRdr), nil
 	}
 	chunkURL := *putURL
 
 	for !finalChunk {
+		lenChange = false
+		// reset length if previous read was short
+		if cap(bufBytes) != len(bufBytes) {
+			bufBytes = bufBytes[:cap(bufBytes)]
+			lenChange = true
+		}
 		// read a chunk into an input buffer, computing the digest
-		chunkSize, err := io.CopyN(chunkBuf, digestRdr, bufSize)
+		chunkSize, err := io.ReadFull(digestRdr, bufBytes)
 		if err == io.EOF {
 			finalChunk = true
 		} else if err != nil {
 			return "", 0, fmt.Errorf("Failed to send blob chunk, ref %s: %w", ref.CommonName(), err)
 		}
-
-		if int64(chunkBuf.Len()) != chunkSize {
-			rc.log.WithFields(logrus.Fields{
-				"buf-size":   chunkBuf.Len(),
-				"chunk-size": chunkSize,
-			}).Debug("Buffer/chunk size mismatch")
+		// update length on partial read
+		if chunkSize != len(bufBytes) {
+			bufBytes = bufBytes[:chunkSize]
+			lenChange = true
 		}
+		if lenChange {
+			bufRdr = bytes.NewReader(bufBytes)
+		}
+
 		if chunkSize > 0 {
 			// write chunk
 			opts := []retryable.OptsReq{}
 			opts = append(opts, retryable.WithBodyFunc(bodyFunc))
-			opts = append(opts, retryable.WithContentLen(chunkSize))
+			opts = append(opts, retryable.WithContentLen(int64(chunkSize)))
 			opts = append(opts, retryable.WithHeader("Content-Type", []string{ct}))
 			opts = append(opts, retryable.WithHeader("Content-Length", []string{fmt.Sprintf("%d", chunkSize)}))
-			opts = append(opts, retryable.WithHeader("Content-Range", []string{fmt.Sprintf("%d-%d", chunkStart, chunkStart+chunkSize)}))
+			opts = append(opts, retryable.WithHeader("Content-Range", []string{fmt.Sprintf("%d-%d", chunkStart, chunkStart+int64(chunkSize))}))
 			opts = append(opts, retryable.WithScope(ref.Repository, true))
 
 			rty := rc.getRetryable(host)
@@ -377,13 +567,7 @@ func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, pu
 			if resp.HTTPResponse().StatusCode != 202 {
 				return "", 0, fmt.Errorf("Failed to send blob (chunk), ref %s: %w", ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 			}
-			chunkStart += chunkSize
-			if chunkBuf.Len() != 0 {
-				rc.log.WithFields(logrus.Fields{
-					"buf-size":   chunkBuf.Len(),
-					"chunk-size": chunkSize,
-				}).Debug("Buffer was not read")
-			}
+			chunkStart += int64(chunkSize)
 			location := resp.HTTPResponse().Header.Get("Location")
 			if location != "" {
 				rc.log.WithFields(logrus.Fields{
@@ -429,6 +613,7 @@ func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, pu
 	return d, chunkStart, nil
 }
 
+// TODO: just take a putURL rather than the uuid and call a delete on that url
 func (rc *regClient) blobUploadCancel(ctx context.Context, ref types.Ref, uuid string) error {
 	if uuid == "" {
 		return fmt.Errorf("Failed to cancel upload %s: uuid undefined", ref.CommonName())
@@ -453,4 +638,36 @@ func (rc *regClient) blobUploadCancel(ctx context.Context, ref types.Ref, uuid s
 		return fmt.Errorf("Failed to cancel upload %s: %w", ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 	}
 	return nil
+}
+
+// blobUploadStatus provides a response with headers indicating the progress of an upload
+func (rc *regClient) blobUploadStatus(ctx context.Context, ref types.Ref, putURL *url.URL) (*http.Response, error) {
+	host := rc.hostGet(ref.Registry)
+	rty := rc.getRetryable(host)
+	opts := []retryable.OptsReq{}
+	opts = append(opts, retryable.WithScope(ref.Repository, true))
+	resp, err := rty.DoRequest(ctx, "GET", []url.URL{*putURL}, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get upload status: %v", err)
+	}
+	defer resp.Close()
+	if resp.HTTPResponse().StatusCode != 204 {
+		return resp.HTTPResponse(), fmt.Errorf("Failed to get upload status: %v", httpError(resp.HTTPResponse().StatusCode))
+	}
+	return resp.HTTPResponse(), nil
+}
+
+func blobUploadCurBytes(resp *http.Response) (int64, error) {
+	if resp == nil {
+		return 0, fmt.Errorf("Missing response")
+	}
+	r := resp.Header.Get("Range")
+	if r == "" {
+		return 0, fmt.Errorf("Missing range header")
+	}
+	rSplit := strings.SplitN(r, "-", 2)
+	if len(rSplit) < 2 {
+		return 0, fmt.Errorf("Missing offset in range header")
+	}
+	return strconv.ParseInt(rSplit[2], 10, 64)
 }
