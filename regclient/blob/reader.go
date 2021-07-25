@@ -23,7 +23,7 @@ type reader struct {
 	common
 	readBytes int64
 	reader    io.Reader
-	closer    io.Closer
+	origRdr   io.ReadCloser
 	digester  digest.Digester
 	// io.ReadCloser
 }
@@ -41,14 +41,17 @@ func NewReader(rdr io.ReadCloser) Reader {
 	br := reader{
 		common:   bc,
 		reader:   digestRdr,
-		closer:   rdr,
+		origRdr:  rdr,
 		digester: digester,
 	}
 	return &br
 }
 
 func (b *reader) Close() error {
-	return b.closer.Close()
+	if b.origRdr == nil {
+		return nil
+	}
+	return b.origRdr.Close()
 }
 
 // RawBody returns the original body from the request
@@ -75,6 +78,33 @@ func (b *reader) Read(p []byte) (int, error) {
 		}
 	}
 	return size, err
+}
+
+// Seek passes through the seek operation, reseting or invalidating the digest
+func (b *reader) Seek(offset int64, whence int) (int64, error) {
+	if offset == 0 && whence == io.SeekCurrent {
+		return b.readBytes, nil
+	}
+	// cannot do an arbitrary seek and still digest without a lot more complication
+	if offset != 0 || whence != io.SeekStart {
+		return b.readBytes, fmt.Errorf("Unable to seek to arbitrary position")
+	}
+	rdrSeek, ok := b.origRdr.(io.Seeker)
+	if !ok {
+		return b.readBytes, fmt.Errorf("Seek unsupported")
+	}
+	o, err := rdrSeek.Seek(offset, whence)
+	if err != nil || o != 0 {
+		return b.readBytes, err
+	}
+	// reset internal offset and digest calculation
+	digester := digest.Canonical.Digester()
+	digestRdr := io.TeeReader(b.origRdr, digester.Hash())
+	b.digester = digester
+	b.readBytes = 0
+	b.reader = digestRdr
+
+	return 0, nil
 }
 
 // ToOCIConfig converts a blobReader to a BlobOCIConfig
