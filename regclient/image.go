@@ -71,15 +71,23 @@ type tarWriteData struct {
 
 func (rc *regClient) ImageCopy(ctx context.Context, refSrc types.Ref, refTgt types.Ref) error {
 	// check if source and destination already match
-	msh, errS := rc.ManifestHead(ctx, refSrc)
 	mdh, errD := rc.ManifestHead(ctx, refTgt)
-	if errS == nil && errD == nil && msh.GetDigest() == mdh.GetDigest() {
+	if errD == nil && refTgt.Digest != "" && digest.Digest(refTgt.Digest) == mdh.GetDigest() {
 		rc.log.WithFields(logrus.Fields{
-			"source": refSrc.Reference,
 			"target": refTgt.Reference,
-			"digest": msh.GetDigest().String(),
+			"digest": mdh.GetDigest().String(),
 		}).Info("Copy not needed, target already up to date")
 		return nil
+	} else if errD == nil && refTgt.Digest == "" {
+		msh, errS := rc.ManifestHead(ctx, refSrc)
+		if errS == nil && msh.GetDigest() == mdh.GetDigest() {
+			rc.log.WithFields(logrus.Fields{
+				"source": refSrc.Reference,
+				"target": refTgt.Reference,
+				"digest": mdh.GetDigest().String(),
+			}).Info("Copy not needed, target already up to date")
+			return nil
+		}
 	}
 
 	// get the manifest for the source
@@ -107,7 +115,26 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc types.Ref, refTgt typ
 				entryTgt.Tag = ""
 				entrySrc.Digest = entry.Digest.String()
 				entryTgt.Digest = entry.Digest.String()
-				if err := rc.ImageCopy(ctx, entrySrc, entryTgt); err != nil {
+				switch entry.MediaType {
+				case MediaTypeDocker1Manifest, MediaTypeDocker1ManifestSigned,
+					MediaTypeDocker2Manifest, MediaTypeDocker2ManifestList,
+					MediaTypeOCI1Manifest, MediaTypeOCI1ManifestList:
+					// known manifest media type
+					err = rc.ImageCopy(ctx, entrySrc, entryTgt)
+				case MediaTypeDocker2ImageConfig, MediaTypeOCI1ImageConfig,
+					MediaTypeDocker2Layer, MediaTypeOCI1Layer, MediaTypeOCI1LayerGzip,
+					MediaTypeBuildkitCacheConfig:
+					// known blob media type
+					err = rc.BlobCopy(ctx, entrySrc, entryTgt, entry.Digest)
+				default:
+					// unknown media type, first try an image copy
+					err = rc.ImageCopy(ctx, entrySrc, entryTgt)
+					if err != nil {
+						// fall back to trying to copy a blob
+						err = rc.BlobCopy(ctx, entrySrc, entryTgt, entry.Digest)
+					}
+				}
+				if err != nil {
 					return err
 				}
 			}
