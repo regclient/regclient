@@ -681,11 +681,29 @@ func (rc *regClient) imageImportOCIHandleManifest(ctx context.Context, ref types
 						if err != nil {
 							return err
 						}
-						md, err := manifest.FromDescriptor(d, b)
-						if err != nil {
-							return err
+						switch d.MediaType {
+						case MediaTypeDocker1Manifest, MediaTypeDocker1ManifestSigned,
+							MediaTypeDocker2Manifest, MediaTypeDocker2ManifestList,
+							MediaTypeOCI1Manifest, MediaTypeOCI1ManifestList:
+							// known manifest media types
+							md, err := manifest.FromDescriptor(d, b)
+							if err != nil {
+								return err
+							}
+							return rc.imageImportOCIHandleManifest(ctx, ref, md, trd, true)
+						case MediaTypeDocker2ImageConfig, MediaTypeOCI1ImageConfig,
+							MediaTypeDocker2Layer, MediaTypeOCI1Layer, MediaTypeOCI1LayerGzip,
+							MediaTypeBuildkitCacheConfig:
+							// known blob media types
+							return rc.imageImportBlob(ctx, ref, d, trd)
+						default:
+							// attempt manifest import, fall back to blob import
+							md, err := manifest.FromDescriptor(d, b)
+							if err == nil {
+								return rc.imageImportOCIHandleManifest(ctx, ref, md, trd, true)
+							}
+							return rc.imageImportBlob(ctx, ref, d, trd)
 						}
-						return rc.imageImportOCIHandleManifest(ctx, ref, md, trd, true)
 					}
 				}(d)
 			}
