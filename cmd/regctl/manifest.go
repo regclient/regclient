@@ -112,6 +112,9 @@ func getManifest(rc regclient.RegClient, ref types.Ref) (manifest.Manifest, erro
 	// retrieve the specified platform from the manifest list
 	if m.IsList() && !manifestOpts.list && !manifestOpts.requireList {
 		desc, err := getPlatformDesc(rc, m)
+		if err != nil {
+			return m, fmt.Errorf("Failed to lookup platform specific digest: %w", err)
+		}
 		ref.Digest = desc.Digest.String()
 		m, err = rc.ManifestGet(context.Background(), ref)
 		if err != nil {

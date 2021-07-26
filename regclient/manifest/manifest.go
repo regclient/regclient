@@ -196,17 +196,19 @@ func fromCommon(mc common) (Manifest, error) {
 func getPlatformDesc(p *ociv1.Platform, dl []ociv1.Descriptor) (*ociv1.Descriptor, error) {
 	platformCmp := platforms.NewMatcher(*p)
 	for _, d := range dl {
-		if platformCmp.Match(*d.Platform) {
+		if d.Platform != nil && platformCmp.Match(*d.Platform) {
 			return &d, nil
 		}
 	}
-	return nil, wraperr.New(fmt.Errorf("Platform not found: %v", p), ErrNotFound)
+	return nil, wraperr.New(fmt.Errorf("Platform not found: %s", platforms.Format(*p)), ErrNotFound)
 }
 
 func getPlatformList(dl []ociv1.Descriptor) ([]*ociv1.Platform, error) {
 	var l []*ociv1.Platform
 	for _, d := range dl {
-		l = append(l, d.Platform)
+		if d.Platform != nil {
+			l = append(l, d.Platform)
+		}
 	}
 	return l, nil
 }
