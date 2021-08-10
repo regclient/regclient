@@ -1,7 +1,7 @@
 COMMANDS=regctl regsync regbot
 BINARIES=$(addprefix bin/,$(COMMANDS))
 IMAGES=$(addprefix docker-,$(COMMANDS))
-ARTIFACT_PLATFORMS=linux-amd64 linux-arm64 darwin-amd64 windows-amd64.exe
+ARTIFACT_PLATFORMS=linux-amd64 linux-arm64 linux-ppc64le linux-s390x darwin-amd64 windows-amd64.exe
 ARTIFACTS=$(foreach cmd,$(addprefix artifacts/,$(COMMANDS)),$(addprefix $(cmd)-,$(ARTIFACT_PLATFORMS)))
 TEST_PLATFORMS=linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x
 VCS_REF=$(shell git rev-list -1 HEAD)
