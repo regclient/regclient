@@ -54,6 +54,12 @@ const (
 	MediaTypeOCI1ImageConfig = ociv1.MediaTypeImageConfig
 	// MediaTypeDocker2Layer is the default compressed layer for docker schema2
 	MediaTypeDocker2Layer = dockerSchema2.MediaTypeLayer
+	// MediaTypeOCI1Layer is the uncompressed layer for OCIv1
+	MediaTypeOCI1Layer = ociv1.MediaTypeImageLayer
+	// MediaTypeOCI1LayerGzip is the gzip compressed layer for OCI v1
+	MediaTypeOCI1LayerGzip = ociv1.MediaTypeImageLayerGzip
+	// MediaTypeBuildkitCacheConfig is used by buildkit cache images
+	MediaTypeBuildkitCacheConfig = "application/vnd.buildkit.cacheconfig.v0"
 )
 
 var (
