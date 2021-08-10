@@ -69,14 +69,20 @@ jobs:
           ./artifacts/regbot-darwin-amd64
           ./artifacts/regbot-linux-amd64
           ./artifacts/regbot-linux-arm64
+          ./artifacts/regbot-linux-ppc64le
+          ./artifacts/regbot-linux-s390x
           ./artifacts/regbot-windows-amd64.exe
           ./artifacts/regctl-darwin-amd64
           ./artifacts/regctl-linux-amd64
           ./artifacts/regctl-linux-arm64
+          ./artifacts/regctl-linux-ppc64le
+          ./artifacts/regctl-linux-s390x
           ./artifacts/regctl-windows-amd64.exe
           ./artifacts/regsync-darwin-amd64
           ./artifacts/regsync-linux-amd64
           ./artifacts/regsync-linux-arm64
+          ./artifacts/regsync-linux-ppc64le
+          ./artifacts/regsync-linux-s390x
           ./artifacts/regsync-windows-amd64.exe
 
     - name: Save artifacts
