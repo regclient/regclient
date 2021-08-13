@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	// crypto libraries included for go-digest
 	_ "crypto/sha256"
@@ -24,7 +25,7 @@ import (
 
 const (
 	// DefaultRetryLimit sets how many retry attempts are made for non-fatal errors
-	DefaultRetryLimit = 5
+	DefaultRetryLimit = 3
 	// DefaultUserAgent sets the header on http requests
 	DefaultUserAgent = "regclient/regclient"
 	// DockerCertDir default location for docker certs
@@ -53,6 +54,12 @@ const (
 	MediaTypeOCI1ImageConfig = ociv1.MediaTypeImageConfig
 	// MediaTypeDocker2Layer is the default compressed layer for docker schema2
 	MediaTypeDocker2Layer = dockerSchema2.MediaTypeLayer
+	// MediaTypeOCI1Layer is the uncompressed layer for OCIv1
+	MediaTypeOCI1Layer = ociv1.MediaTypeImageLayer
+	// MediaTypeOCI1LayerGzip is the gzip compressed layer for OCI v1
+	MediaTypeOCI1LayerGzip = ociv1.MediaTypeImageLayerGzip
+	// MediaTypeBuildkitCacheConfig is used by buildkit cache images
+	MediaTypeBuildkitCacheConfig = "application/vnd.buildkit.cacheconfig.v0"
 )
 
 var (
@@ -70,12 +77,16 @@ type RegClient interface {
 }
 
 type regClient struct {
-	certPaths  []string
-	hosts      map[string]*regClientHost
-	log        *logrus.Logger
-	retryLimit int
-	mu         sync.Mutex
-	userAgent  string
+	certPaths      []string
+	hosts          map[string]*regClientHost
+	log            *logrus.Logger
+	retryLimit     int
+	retryDelayInit time.Duration
+	retryDelayMax  time.Duration
+	blobChunkSize  int64
+	blobMaxPut     int64
+	mu             sync.Mutex
+	userAgent      string
 }
 
 type regClientHost struct {
@@ -89,10 +100,12 @@ type Opt func(*regClient)
 // NewRegClient returns a registry client
 func NewRegClient(opts ...Opt) RegClient {
 	var rc = regClient{
-		certPaths:  []string{},
-		hosts:      map[string]*regClientHost{},
-		retryLimit: DefaultRetryLimit,
-		userAgent:  DefaultUserAgent,
+		certPaths:     []string{},
+		hosts:         map[string]*regClientHost{},
+		retryLimit:    DefaultRetryLimit,
+		userAgent:     DefaultUserAgent,
+		blobChunkSize: 1024 * 1024,       // 1M chunks, this is allocated in a memory buffer
+		blobMaxPut:    100 * 1024 * 1024, // 100M, switch to chunked above this threshold to avoid timeouts
 		// logging is disabled by default
 		log: &logrus.Logger{Out: ioutil.Discard},
 	}
@@ -187,10 +200,30 @@ func WithConfigHost(configHost ConfigHost) Opt {
 	return WithConfigHosts([]ConfigHost{configHost})
 }
 
+// WithBlobSize overrides default blob sizes
+func WithBlobSize(chunk, max int64) Opt {
+	return func(rc *regClient) {
+		if chunk > 0 {
+			rc.blobChunkSize = chunk
+		}
+		if max > 0 {
+			rc.blobMaxPut = max
+		}
+	}
+}
+
 // WithLog overrides default logrus Logger
 func WithLog(log *logrus.Logger) Opt {
 	return func(rc *regClient) {
 		rc.log = log
+	}
+}
+
+// WithRetryDelay specifies the time permitted for retry delays
+func WithRetryDelay(delayInit, delayMax time.Duration) Opt {
+	return func(rc *regClient) {
+		rc.retryDelayInit = delayInit
+		rc.retryDelayMax = delayMax
 	}
 }
 
@@ -305,6 +338,12 @@ func (rc *regClient) getRetryable(host *ConfigHost) retryable.Retryable {
 		}
 		if host.RegCert != "" {
 			rOpts = append(rOpts, retryable.WithCerts([][]byte{[]byte(host.RegCert)}))
+		}
+		if rc.retryLimit > 0 {
+			rOpts = append(rOpts, retryable.WithLimit(rc.retryLimit))
+		}
+		if rc.retryDelayInit > 0 || rc.retryDelayMax > 0 {
+			rOpts = append(rOpts, retryable.WithDelay(rc.retryDelayInit, rc.retryDelayMax))
 		}
 		r := retryable.NewRetryable(rOpts...)
 		rc.hosts[host.Name].retryable = r
