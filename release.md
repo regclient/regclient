@@ -1,9 +1,7 @@
-# Release v0.3.5
+# Release v0.3.6
 
 Features and Changes:
 
-- regctl: bash completion with colons in arg is now supported
-- regbot and regsync: run "once" commands single threaded when parallel set to 0
-- regsync: support for copying entire registry
-- regclient: Improve http status code handling to better follow docker registry spec
-- regclient: OCI distribution-spec 1.0 support
+- add retry capability on blob push/pulls
+- buildkit cache images can be copied and imported/exported
+- ci: binaries for s390x and ppc64le are now built
