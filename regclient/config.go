@@ -90,6 +90,8 @@ type ConfigHost struct {
 	Mirrors    []string `json:"mirrors,omitempty"`    // list of other ConfigHost Names to use as mirrors
 	Priority   uint     `json:"priority,omitempty"`   // priority when sorting mirrors, higher priority attempted first
 	API        string   `json:"api,omitempty"`        // registry API to use
+	BlobChunk  int64    `json:"blobChunk,omitempty"`  // size of each blob chunk
+	BlobMax    int64    `json:"blobMax,omitempty"`    // threshold to switch to chunked upload, -1 to disable, 0 for regclient.blobMaxPut
 }
 
 // ConfigHostNew creates a default ConfigHost entry
@@ -245,6 +247,28 @@ func (rc *regClient) mergeConfigHost(curHost, newHost ConfigHost, warn bool) Con
 			}).Warn("Changing API settings for registry")
 		}
 		curHost.API = newHost.API
+	}
+
+	if newHost.BlobChunk > 0 {
+		if warn && curHost.BlobChunk != 0 && curHost.BlobChunk != newHost.BlobChunk {
+			rc.log.WithFields(logrus.Fields{
+				"orig": curHost.BlobChunk,
+				"new":  newHost.BlobChunk,
+				"host": name,
+			}).Warn("Changing blobChunk settings for registry")
+		}
+		curHost.BlobChunk = newHost.BlobChunk
+	}
+
+	if newHost.BlobMax != 0 {
+		if warn && curHost.BlobMax != 0 && curHost.BlobMax != newHost.BlobMax {
+			rc.log.WithFields(logrus.Fields{
+				"orig": curHost.BlobMax,
+				"new":  newHost.BlobMax,
+				"host": name,
+			}).Warn("Changing blobMax settings for registry")
+		}
+		curHost.BlobMax = newHost.BlobMax
 	}
 
 	return curHost

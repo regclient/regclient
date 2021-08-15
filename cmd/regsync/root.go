@@ -312,19 +312,7 @@ func loadConf() error {
 				"name": host.Registry,
 			}).Warn("Scheme is deprecated, for http set TLS to disabled")
 		}
-		rcHosts = append(rcHosts, regclient.ConfigHost{
-			Name:       host.Registry,
-			Hostname:   host.Hostname,
-			User:       host.User,
-			Pass:       host.Pass,
-			Token:      host.Token,
-			TLS:        host.TLS,
-			RegCert:    host.RegCert,
-			PathPrefix: host.PathPrefix,
-			Mirrors:    host.Mirrors,
-			Priority:   host.Priority,
-			API:        host.API,
-		})
+		rcHosts = append(rcHosts, credsToRCHost(host))
 	}
 	if len(rcHosts) > 0 {
 		rcOpts = append(rcOpts, regclient.WithConfigHosts(rcHosts))

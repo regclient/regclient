@@ -24,6 +24,10 @@ import (
 )
 
 const (
+	// DefaultBlobChunk 1M chunks, this is allocated in a memory buffer
+	DefaultBlobChunk = 1024 * 1024
+	// DefaultBlobMax 100M, switch to chunked above this threshold to avoid timeouts
+	DefaultBlobMax = 100 * 1024 * 1024
 	// DefaultRetryLimit sets how many retry attempts are made for non-fatal errors
 	DefaultRetryLimit = 3
 	// DefaultUserAgent sets the header on http requests
@@ -104,8 +108,8 @@ func NewRegClient(opts ...Opt) RegClient {
 		hosts:         map[string]*regClientHost{},
 		retryLimit:    DefaultRetryLimit,
 		userAgent:     DefaultUserAgent,
-		blobChunkSize: 1024 * 1024,       // 1M chunks, this is allocated in a memory buffer
-		blobMaxPut:    100 * 1024 * 1024, // 100M, switch to chunked above this threshold to avoid timeouts
+		blobChunkSize: DefaultBlobChunk,
+		blobMaxPut:    DefaultBlobMax,
 		// logging is disabled by default
 		log: &logrus.Logger{Out: ioutil.Discard},
 	}
@@ -181,6 +185,8 @@ func WithConfigHosts(configHosts []ConfigHost) Opt {
 				"pathPrefix": configHost.PathPrefix,
 				"mirrors":    configHost.Mirrors,
 				"api":        configHost.API,
+				"blobMax":    configHost.BlobMax,
+				"blobChunk":  configHost.BlobChunk,
 			}).Debug("Loading host config")
 			err := rc.hostSet(configHost)
 			if err != nil {

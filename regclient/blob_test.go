@@ -471,9 +471,12 @@ func TestBlobPut(t *testing.T) {
 	tsHost := tsURL.Host
 	rcHosts := []ConfigHost{
 		{
-			Name:     tsHost,
-			Hostname: tsHost,
-			TLS:      TLSDisabled,
+			Name:      tsHost,
+			Hostname:  tsHost,
+			TLS:       TLSDisabled,
+			BlobChunk: int64(blobChunk),
+			// BlobMax:   int64(blobLen * 10),
+			BlobMax: int64(-1),
 		},
 	}
 	log := &logrus.Logger{
@@ -487,7 +490,7 @@ func TestBlobPut(t *testing.T) {
 	rc := NewRegClient(
 		WithConfigHosts(rcHosts),
 		WithLog(log),
-		WithBlobSize(int64(blobChunk), int64(blobLen*10)),
+		// WithBlobSize(int64(blobChunk), int64(blobLen*10)),
 		WithRetryDelay(delayInit, delayMax),
 	)
 

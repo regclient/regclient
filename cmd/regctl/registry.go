@@ -59,6 +59,7 @@ var registryOpts struct {
 	cacert, tls          string // set opts
 	mirrors              []string
 	priority             uint
+	blobChunk, blobMax   int64
 	scheme               string   // TODO: remove
 	dns                  []string // TODO: remove
 }
@@ -75,6 +76,8 @@ func init() {
 	registrySetCmd.Flags().StringVarP(&registryOpts.pathPrefix, "path-prefix", "", "", "Prefix to all repositories")
 	registrySetCmd.Flags().StringArrayVarP(&registryOpts.mirrors, "mirror", "", nil, "List of mirrors (registry names)")
 	registrySetCmd.Flags().UintVarP(&registryOpts.priority, "priority", "", 0, "Priority (for sorting mirrors)")
+	registrySetCmd.Flags().Int64VarP(&registryOpts.blobChunk, "blob-chunk", "", 0, "Blob chunk size")
+	registrySetCmd.Flags().Int64VarP(&registryOpts.blobMax, "blob-max", "", 0, "Blob size before switching to chunked push, -1 to disable")
 	registrySetCmd.RegisterFlagCompletionFunc("cacert", completeArgNone)
 	registrySetCmd.RegisterFlagCompletionFunc("tls", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{
@@ -87,6 +90,8 @@ func init() {
 	registrySetCmd.RegisterFlagCompletionFunc("path-prefix", completeArgNone)
 	registrySetCmd.RegisterFlagCompletionFunc("mirror", completeArgNone)
 	registrySetCmd.RegisterFlagCompletionFunc("priority", completeArgNone)
+	registrySetCmd.RegisterFlagCompletionFunc("blob-chunk", completeArgNone)
+	registrySetCmd.RegisterFlagCompletionFunc("blob-max", completeArgNone)
 
 	// TODO: eventually remove
 	registrySetCmd.Flags().StringVarP(&registryOpts.scheme, "scheme", "", "", "[Deprecated] Scheme (http, https)")
@@ -295,6 +300,12 @@ func runRegistrySet(cmd *cobra.Command, args []string) error {
 	}
 	if registryOpts.priority != 0 {
 		h.Priority = registryOpts.priority
+	}
+	if registryOpts.blobChunk != 0 {
+		h.BlobChunk = registryOpts.blobChunk
+	}
+	if registryOpts.blobMax != 0 {
+		h.BlobMax = registryOpts.blobMax
 	}
 
 	err = c.ConfigSave()

@@ -344,7 +344,18 @@ func (rc *regClient) BlobPut(ctx context.Context, ref types.Ref, d digest.Digest
 	}
 
 	// send upload as one-chunk
-	if d != "" && cl > 0 && cl < rc.blobMaxPut {
+	tryPut := bool(d != "" && cl > 0)
+	if tryPut {
+		host := rc.hostGet(ref.Registry)
+		maxPut := host.BlobMax
+		if maxPut == 0 {
+			maxPut = rc.blobMaxPut
+		}
+		if maxPut > 0 && cl > maxPut {
+			tryPut = false
+		}
+	}
+	if tryPut {
 		err = rc.blobPutUploadFull(ctx, ref, d, putURL, rdr, ct, cl)
 		if err == nil {
 			return digest.Digest(d), cl, nil
@@ -505,7 +516,10 @@ func (rc *regClient) blobPutUploadFull(ctx context.Context, ref types.Ref, d dig
 
 func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, putURL *url.URL, rdr io.Reader, ct string) (digest.Digest, int64, error) {
 	host := rc.hostGet(ref.Registry)
-	bufSize := int64(rc.blobChunkSize)
+	bufSize := host.BlobChunk
+	if bufSize <= 0 {
+		bufSize = rc.blobChunkSize
+	}
 	bufBytes := make([]byte, bufSize)
 	bufRdr := bytes.NewReader(bufBytes)
 	lenChange := false
@@ -534,7 +548,7 @@ func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, pu
 		}
 		// read a chunk into an input buffer, computing the digest
 		chunkSize, err := io.ReadFull(digestRdr, bufBytes)
-		if err == io.EOF {
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
 			finalChunk = true
 		} else if err != nil {
 			return "", 0, fmt.Errorf("Failed to send blob chunk, ref %s: %w", ref.CommonName(), err)
