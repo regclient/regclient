@@ -126,6 +126,8 @@ func newRegClient() regclient.RegClient {
 			Mirrors:    host.Mirrors,
 			Priority:   host.Priority,
 			API:        host.API,
+			BlobChunk:  host.BlobChunk,
+			BlobMax:    host.BlobMax,
 		})
 	}
 	if len(rcHosts) > 0 {
