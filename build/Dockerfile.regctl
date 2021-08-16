@@ -2,7 +2,7 @@ ARG REGISTRY=docker.io
 ARG ALPINE_VER=3
 ARG GO_VER=1.14-alpine
 
-FROM ${REGISTRY}/library/golang:${GO_VER} as dev
+FROM ${REGISTRY}/library/golang:${GO_VER} as golang
 RUN apk add --no-cache \
       ca-certificates \
       git \
@@ -11,6 +11,8 @@ RUN adduser -D appuser \
  && mkdir -p /home/appuser/.regctl \
  && chown -R appuser /home/appuser/.regctl
 WORKDIR /src
+
+FROM golang as dev
 COPY . /src/
 ENV PATH=${PATH}:/src/bin
 CMD make bin/regctl && bin/regctl
@@ -20,14 +22,14 @@ RUN make bin/regctl
 USER appuser
 CMD [ "bin/regctl" ]
 
-FROM dev as docker-cred-ecr-login
+FROM golang as docker-cred-ecr-login
 ARG TARGETOS
 ARG TARGETARCH
 RUN go get -u github.com/awslabs/amazon-ecr-credential-helper/ecr-login/cli/docker-credential-ecr-login \
  && ( cp "${GOPATH}/bin/docker-credential-ecr-login" /usr/local/bin/docker-credential-ecr-login \
    || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-ecr-login" /usr/local/bin/docker-credential-ecr-login )
 
-FROM dev as docker-cred-gcr
+FROM golang as docker-cred-gcr
 ARG TARGETOS
 ARG TARGETARCH
 RUN go get -u github.com/GoogleCloudPlatform/docker-credential-gcr \
