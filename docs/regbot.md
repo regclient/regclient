@@ -118,6 +118,14 @@ scripts:
   - `priority`:
     Non-negative integer priority used for sorting mirrors.
     This defaults to 0.
+  - `blobChunk`:
+    Chunk size for pushing blobs.
+    Each chunk is a separate http request, incurring network overhead.
+    The entire chunk is stored in memory, so chunks should be small enough not to exhaust RAM.
+  - `blobMax`:
+    Blob size which skips the single put request in favor of the chunked upload.
+    Note that a failed blob put will fall back to a chunked upload in most cases.
+    Disable with -1 to always try a single put regardless of blob size.
 
 - `defaults`:
   Global settings and default values applied to each sync entry:

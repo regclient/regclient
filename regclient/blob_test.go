@@ -267,11 +267,14 @@ func TestBlobPut(t *testing.T) {
 	seed := time.Now().UTC().Unix()
 	t.Logf("Using seed %d", seed)
 	blobChunk := 512
-	blobLen := 1024 // must be blobChunk < blobLen <= blobChunk * 2
+	blobLen := 1024  // must be blobChunk < blobLen <= blobChunk * 2
+	blobLen3 := 1000 // blob without a full final chunk
 	d1, blob1 := newRandomBlob(blobLen, seed)
 	uuid1 := uuid.New()
 	d2, blob2 := newRandomBlob(blobLen, seed+1)
 	uuid2 := uuid.New()
+	d3, blob3 := newRandomBlob(blobLen3, seed+2)
+	uuid3 := uuid.New()
 	// dMissing := digest.FromBytes([]byte("missing"))
 	// define req/resp entries
 	rrs := []ReqResp{
@@ -375,7 +378,7 @@ func TestBlobPut(t *testing.T) {
 					"chunk": {"2"},
 				},
 				Headers: http.Header{
-					"Content-Length": {fmt.Sprintf("%d", blobChunk)},
+					"Content-Length": {fmt.Sprintf("%d", blobLen-blobChunk)},
 					"Content-Range":  {fmt.Sprintf("%d-%d", blobChunk, blobLen)},
 					"Content-Type":   {"application/octet-stream"},
 				},
@@ -399,7 +402,7 @@ func TestBlobPut(t *testing.T) {
 					"chunk": {"2"},
 				},
 				Headers: http.Header{
-					"Content-Length": {fmt.Sprintf("%d", blobChunk)},
+					"Content-Length": {fmt.Sprintf("%d", blobLen-blobChunk)},
 					"Content-Range":  {fmt.Sprintf("%d-%d", blobChunk, blobLen)},
 					"Content-Type":   {"application/octet-stream"},
 				},
@@ -461,6 +464,149 @@ func TestBlobPut(t *testing.T) {
 				},
 			},
 		},
+
+		// get upload3 location
+		{
+			ReqEntry: ReqEntry{
+				Name:   "POST for d3",
+				Method: "POST",
+				Path:   "/v2" + blobRepo + "/blobs/uploads/",
+				Query: map[string][]string{
+					"mount": {d3.String()},
+				},
+			},
+			RespEntry: RespEntry{
+				Status: http.StatusAccepted,
+				Headers: http.Header{
+					"Content-Length": {"0"},
+					"Range":          {"bytes=0-0"},
+					"Location":       {uuid3.String()},
+				},
+			},
+		},
+		// upload put for d3
+		{
+			ReqEntry: ReqEntry{
+				DelOnUse: false,
+				Name:     "PUT for patched d3",
+				Method:   "PUT",
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3.String(),
+				Query: map[string][]string{
+					"digest": {d3.String()},
+					"chunk":  {"3"},
+				},
+				Headers: http.Header{
+					"Content-Length": {"0"},
+					"Content-Range":  {fmt.Sprintf("%d-%d", blobLen3, blobLen3)},
+					"Content-Type":   {"application/octet-stream"},
+				},
+			},
+			RespEntry: RespEntry{
+				Status: http.StatusCreated,
+				Headers: http.Header{
+					"Content-Length":        {"0"},
+					"Location":              {"/v2" + blobRepo + "/blobs/" + d3.String()},
+					"Docker-Content-Digest": {d3.String()},
+				},
+			},
+		},
+		// upload patch 2 fail for d3
+		// {
+		// 	ReqEntry: ReqEntry{
+		// 		DelOnUse: true,
+		// 		Name:     "PATCH 2 fail for d3",
+		// 		Method:   "PATCH",
+		// 		Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3.String(),
+		// 		Query: map[string][]string{
+		// 			"chunk": {"2"},
+		// 		},
+		// 		Headers: http.Header{
+		// 			"Content-Length": {fmt.Sprintf("%d", blobLen3-blobChunk)},
+		// 			"Content-Range":  {fmt.Sprintf("%d-%d", blobChunk, blobLen3)},
+		// 			"Content-Type":   {"application/octet-stream"},
+		// 		},
+		// 		Body: blob2[blobChunk:],
+		// 	},
+		// 	RespEntry: RespEntry{
+		// 		Status: http.StatusGatewayTimeout,
+		// 		Headers: http.Header{
+		// 			"Content-Length": {fmt.Sprintf("%d", 0)},
+		// 		},
+		// 	},
+		// },
+		// upload patch 2 for d3
+		{
+			ReqEntry: ReqEntry{
+				DelOnUse: false,
+				Name:     "PATCH 2 for d3",
+				Method:   "PATCH",
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3.String(),
+				Query: map[string][]string{
+					"chunk": {"2"},
+				},
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", blobLen3-blobChunk)},
+					"Content-Range":  {fmt.Sprintf("%d-%d", blobChunk, blobLen3)},
+					"Content-Type":   {"application/octet-stream"},
+				},
+				Body: blob3[blobChunk:],
+			},
+			RespEntry: RespEntry{
+				Status: http.StatusAccepted,
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", 0)},
+					"Range":          {fmt.Sprintf("bytes=0-%d", blobLen3)},
+					"Location":       {uuid3.String() + "?chunk=3"},
+				},
+			},
+		},
+		// upload patch 1 for d3
+		{
+			ReqEntry: ReqEntry{
+				DelOnUse: false,
+				Name:     "PATCH 1 for d3",
+				Method:   "PATCH",
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3.String(),
+				Query:    map[string][]string{},
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", blobChunk)},
+					"Content-Range":  {fmt.Sprintf("0-%d", blobChunk)},
+					"Content-Type":   {"application/octet-stream"},
+				},
+				Body: blob3[0:blobChunk],
+			},
+			RespEntry: RespEntry{
+				Status: http.StatusAccepted,
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", 0)},
+					"Range":          {fmt.Sprintf("bytes=0-%d", blobChunk)},
+					"Location":       {uuid3.String() + "?chunk=2"},
+				},
+			},
+		},
+		// upload blob d3
+		{
+			ReqEntry: ReqEntry{
+				DelOnUse: false,
+				Name:     "PUT for d3",
+				Method:   "PUT",
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3.String(),
+				Query: map[string][]string{
+					"digest": {d3.String()},
+				},
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", len(blob3))},
+					"Content-Type":   {"application/octet-stream"},
+				},
+				Body: blob3,
+			},
+			RespEntry: RespEntry{
+				Status: http.StatusGatewayTimeout,
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", 0)},
+				},
+			},
+		},
 	}
 	rrs = append(rrs, rrBaseEntries...)
 	// create a server
@@ -471,9 +617,11 @@ func TestBlobPut(t *testing.T) {
 	tsHost := tsURL.Host
 	rcHosts := []ConfigHost{
 		{
-			Name:     tsHost,
-			Hostname: tsHost,
-			TLS:      TLSDisabled,
+			Name:      tsHost,
+			Hostname:  tsHost,
+			TLS:       TLSDisabled,
+			BlobChunk: int64(blobChunk),
+			BlobMax:   int64(-1),
 		},
 	}
 	log := &logrus.Logger{
@@ -482,12 +630,12 @@ func TestBlobPut(t *testing.T) {
 		Hooks:     make(logrus.LevelHooks),
 		Level:     logrus.WarnLevel,
 	}
-	delayInit, _ := time.ParseDuration("0.1s")
-	delayMax, _ := time.ParseDuration("0.5s")
+	// use short delays for fast tests
+	delayInit, _ := time.ParseDuration("0.05s")
+	delayMax, _ := time.ParseDuration("0.10s")
 	rc := NewRegClient(
 		WithConfigHosts(rcHosts),
 		WithLog(log),
-		WithBlobSize(int64(blobChunk), int64(blobLen*10)),
 		WithRetryDelay(delayInit, delayMax),
 	)
 
@@ -527,6 +675,26 @@ func TestBlobPut(t *testing.T) {
 		}
 		if clp != int64(len(blob2)) {
 			t.Errorf("Content length mismatch, expected %d, received %d", len(blob2), clp)
+		}
+
+	})
+
+	t.Run("PartialChunk", func(t *testing.T) {
+		ref, err := types.NewRef(tsURL.Host + blobRepo)
+		if err != nil {
+			t.Errorf("Failed creating ref: %v", err)
+		}
+		br := bytes.NewReader(blob3)
+		dp, clp, err := rc.BlobPut(ctx, ref, d3, br, "", int64(len(blob3)))
+		if err != nil {
+			t.Errorf("Failed running BlobPut: %v", err)
+			return
+		}
+		if dp.String() != d3.String() {
+			t.Errorf("Digest mismatch, expected %s, received %s", d3.String(), dp.String())
+		}
+		if clp != int64(len(blob3)) {
+			t.Errorf("Content length mismatch, expected %d, received %d", len(blob3), clp)
 		}
 
 	})

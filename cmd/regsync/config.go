@@ -38,7 +38,7 @@ type ConfigCreds struct {
 	Hostname   string            `yaml:"hostname" json:"hostname"`
 	User       string            `yaml:"user" json:"user"`
 	Pass       string            `yaml:"pass" json:"pass"`
-	Token      string            `json:"token,omitempty"`
+	Token      string            `yaml:"token" json:"token"`
 	TLS        regclient.TLSConf `yaml:"tls" json:"tls"`
 	Scheme     string            `yaml:"scheme" json:"scheme"` // TODO: eventually delete
 	RegCert    string            `yaml:"regcert" json:"regcert"`
@@ -46,6 +46,26 @@ type ConfigCreds struct {
 	Mirrors    []string          `yaml:"mirrors" json:"mirrors"`
 	Priority   uint              `yaml:"priority" json:"priority"`
 	API        string            `yaml:"api" json:"api"`
+	BlobChunk  int64             `yaml:"blobChunk" json:"blobChunk"`
+	BlobMax    int64             `yaml:"blobMax" json:"blobMax"`
+}
+
+func credsToRCHost(c ConfigCreds) regclient.ConfigHost {
+	return regclient.ConfigHost{
+		Name:       c.Registry,
+		Hostname:   c.Hostname,
+		User:       c.User,
+		Pass:       c.Pass,
+		Token:      c.Token,
+		TLS:        c.TLS,
+		RegCert:    c.RegCert,
+		PathPrefix: c.PathPrefix,
+		Mirrors:    c.Mirrors,
+		Priority:   c.Priority,
+		API:        c.API,
+		BlobChunk:  c.BlobChunk,
+		BlobMax:    c.BlobMax,
+	}
 }
 
 // ConfigDefaults is uses for general options and defaults for ConfigSync entries

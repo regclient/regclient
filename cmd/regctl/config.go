@@ -45,6 +45,8 @@ type ConfigHost struct {
 	Mirrors    []string          `json:"mirrors,omitempty"`    // list of other ConfigHost Names to use as mirrors
 	Priority   uint              `json:"priority,omitempty"`   // priority when sorting mirrors, higher priority attempted first
 	API        string            `json:"api,omitempty"`        // registry API to use
+	BlobChunk  int64             `json:"blobChunk,omitempty"`  // size of each blob chunk
+	BlobMax    int64             `json:"blobMax,omitempty"`    // threshold to switch to chunked upload, -1 to disable
 }
 
 // ConfigHostNew creates a default ConfigHost entry
