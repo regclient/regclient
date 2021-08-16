@@ -4,7 +4,7 @@ ARG REGISTRY=docker.io
 ARG ALPINE_VER=3
 ARG GO_VER=1.14-alpine
 
-FROM --platform=$BUILDPLATFORM ${REGISTRY}/library/golang:${GO_VER} as dev
+FROM --platform=$BUILDPLATFORM ${REGISTRY}/library/golang:${GO_VER} as golang
 RUN apk add --no-cache \
       ca-certificates \
       git \
@@ -13,6 +13,8 @@ RUN adduser -D appuser \
  && mkdir -p /home/appuser/.regctl \
  && chown -R appuser /home/appuser/.regctl
 WORKDIR /src
+
+FROM --platform=$BUILDPLATFORM golang as dev
 COPY . /src/
 ENV PATH=${PATH}:/src/bin
 CMD make bin/regctl && bin/regctl
@@ -30,7 +32,7 @@ CMD [ "bin/regctl" ]
 FROM scratch as artifact
 COPY --from=build /src/bin/regctl /regctl
 
-FROM --platform=$BUILDPLATFORM dev as docker-cred-ecr-login
+FROM --platform=$BUILDPLATFORM golang as docker-cred-ecr-login
 ARG TARGETOS
 ARG TARGETARCH
 RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
@@ -40,7 +42,7 @@ RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
  && ( cp "${GOPATH}/bin/docker-credential-ecr-login" /usr/local/bin/docker-credential-ecr-login \
    || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-ecr-login" /usr/local/bin/docker-credential-ecr-login )
 
-FROM --platform=$BUILDPLATFORM dev as docker-cred-gcr
+FROM --platform=$BUILDPLATFORM golang as docker-cred-gcr
 ARG TARGETOS
 ARG TARGETARCH
 RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
