@@ -1,7 +1,7 @@
-# Release v0.3.6
+# Release v0.3.7
 
 Features and Changes:
 
-- add retry capability on blob push/pulls
-- buildkit cache images can be copied and imported/exported
-- ci: binaries for s390x and ppc64le are now built
+- Fixes a bug that breaks chunked blob pushes
+- Adds registry configurable chunk sizes and threshold to switch to chunked pushes
+- Docker improves caching of credential helpers between builds
