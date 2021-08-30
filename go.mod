@@ -3,7 +3,7 @@ module github.com/regclient/regclient
 go 1.14
 
 require (
-	github.com/containerd/containerd v1.5.1
+	github.com/containerd/containerd v1.5.4
 	github.com/docker/cli v20.10.6+incompatible
 	github.com/docker/distribution v2.7.1+incompatible
 	github.com/docker/docker v20.10.6+incompatible // indirect
