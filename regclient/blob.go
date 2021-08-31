@@ -578,7 +578,9 @@ func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, pu
 				return "", 0, fmt.Errorf("Failed to send blob (chunk), ref %s: %w", ref.CommonName(), err)
 			}
 			resp.Close()
-			if resp.HTTPResponse().StatusCode != 202 {
+
+			// distribution-spec is 202, AWS ECR returns a 201
+			if resp.HTTPResponse().StatusCode != 202 && resp.HTTPResponse().StatusCode != 201 {
 				return "", 0, fmt.Errorf("Failed to send blob (chunk), ref %s: %w", ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 			}
 			chunkStart += int64(chunkSize)
