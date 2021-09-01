@@ -483,9 +483,11 @@ func (req *request) retryLoop() error {
 			}).Debug("Gateway timeout")
 			runBackoff = true
 		default:
+			body, _ := ioutil.ReadAll(lastResp.Body)
 			req.log.WithFields(logrus.Fields{
 				"URL":    lastURL.String(),
 				"Status": lastResp.Status,
+				"Body":   string(body),
 			}).Debug("Unexpected status")
 			runBackoff = true
 			removeURL = true
