@@ -89,6 +89,7 @@ jobs:
       if: github.repository_owner == 'regclient'
       uses: docker/login-action@v1 
       with:
+        registry: ghcr.io
         username: ${{ secrets.GHCR_USERNAME }}
         password: ${{ secrets.GHCR_TOKEN }}
 
