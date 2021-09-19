@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -35,7 +34,7 @@ const (
 type ImageClient interface {
 	ImageCopy(ctx context.Context, refSrc types.Ref, refTgt types.Ref) error
 	ImageExport(ctx context.Context, ref types.Ref, outStream io.Writer) error
-	ImageImport(ctx context.Context, ref types.Ref, tarFile string) error
+	ImageImport(ctx context.Context, ref types.Ref, rs io.ReadSeeker) error
 }
 
 // used by import/export to match docker tar expected format
@@ -440,17 +439,12 @@ func (rc *regClient) imageExportDescriptor(ctx context.Context, ref types.Ref, d
 }
 
 // ImageImport pushes an image from a tar file to a registry
-func (rc *regClient) ImageImport(ctx context.Context, ref types.Ref, tarFile string) error {
+func (rc *regClient) ImageImport(ctx context.Context, ref types.Ref, rs io.ReadSeeker) error {
 	trd := &tarReadData{
 		handlers:  map[string]tarFileHandler{},
 		processed: map[string]bool{},
 		finish:    []func() error{},
 		manifests: map[digest.Digest]manifest.Manifest{},
-	}
-	// open tarFile
-	fh, err := os.Open(tarFile)
-	if err != nil {
-		return err
 	}
 
 	// add handler for oci-layout, index.json, and manifest.json
@@ -458,14 +452,14 @@ func (rc *regClient) ImageImport(ctx context.Context, ref types.Ref, tarFile str
 	rc.imageImportDockerAddHandler(trd)
 
 	// process tar file looking for oci-layout and index.json, load manifests/blobs on success
-	err = trd.tarReadAll(fh)
+	err := trd.tarReadAll(rs)
 
 	if err != nil && errors.Is(err, ErrNotFound) && trd.dockerManifestFound {
 		// import failed but manifest.json found, fall back to manifest.json processing
 		// add handlers for the docker manifest layers
 		rc.imageImportDockerAddLayerHandlers(ctx, ref, trd)
 		// reprocess the tar looking for manifest.json files
-		err = trd.tarReadAll(fh)
+		err = trd.tarReadAll(rs)
 		if err != nil {
 			return fmt.Errorf("Failed to import layers from docker tar: %w", err)
 		}
@@ -790,18 +784,18 @@ func oci2DDesc(od ociv1.Descriptor) distribution.Descriptor {
 
 // tarReadAll processes the tar file in a loop looking for matching filenames in the list of handlers
 // handlers for filenames are added at the top level, and by manifest imports
-func (trd *tarReadData) tarReadAll(fh *os.File) error {
+func (trd *tarReadData) tarReadAll(rs io.ReadSeeker) error {
 	// return immediately if nothing to do
 	if len(trd.handlers) == 0 {
 		return nil
 	}
 	for {
 		// reset back to beginning of tar file
-		_, err := fh.Seek(0, 0)
+		_, err := rs.Seek(0, 0)
 		if err != nil {
 			return err
 		}
-		trd.tr = tar.NewReader(fh)
+		trd.tr = tar.NewReader(rs)
 		trd.handleAdded = false
 		// loop over each entry of the tar file
 		for {
