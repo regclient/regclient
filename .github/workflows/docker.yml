@@ -97,7 +97,8 @@ jobs:
       uses: actions/cache@v2
       with:
         path: /tmp/.buildx-cache
-        key: ${{ runner.os }}-buildx
+        key: ${{ runner.os }}-buildx-${{ github.sha }}
+        restore-keys: ${{ runner.os }}-buildx-
 
     - name: Build and push regctl scratch
       uses: docker/build-push-action@v2
@@ -108,8 +109,8 @@ jobs:
         push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
         target: release-scratch
         tags: ${{ steps.prep.outputs.regctl_tags_scratch }}
-        cache-from: type=local,src=/tmp/.buildx-cache/regctl-scratch
-        cache-to: type=local,dest=/tmp/.buildx-cache/regctl-scratch
+        cache-from: type=local,src=/tmp/.buildx-cache-new/regctl-scratch
+        cache-to: type=local,dest=/tmp/.buildx-cache-new/regctl-scratch,mode=max
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |
@@ -127,8 +128,8 @@ jobs:
         push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
         target: release-alpine
         tags: ${{ steps.prep.outputs.regctl_tags_alpine }}
-        cache-from: type=local,src=/tmp/.buildx-cache/regctl-alpine
-        cache-to: type=local,dest=/tmp/.buildx-cache/regctl-alpine
+        cache-from: type=local,src=/tmp/.buildx-cache-new/regctl-alpine
+        cache-to: type=local,dest=/tmp/.buildx-cache-new/regctl-alpine,mode=max
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |
@@ -146,8 +147,8 @@ jobs:
         push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
         target: release-scratch
         tags: ${{ steps.prep.outputs.regsync_tags_scratch }}
-        cache-from: type=local,src=/tmp/.buildx-cache/regsync-scratch
-        cache-to: type=local,dest=/tmp/.buildx-cache/regsync-scratch
+        cache-from: type=local,src=/tmp/.buildx-cache-new/regsync-scratch
+        cache-to: type=local,dest=/tmp/.buildx-cache-new/regsync-scratch,mode=max
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |
@@ -165,8 +166,8 @@ jobs:
         push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
         target: release-alpine
         tags: ${{ steps.prep.outputs.regsync_tags_alpine }}
-        cache-from: type=local,src=/tmp/.buildx-cache/regsync-alpine
-        cache-to: type=local,dest=/tmp/.buildx-cache/regsync-alpine
+        cache-from: type=local,src=/tmp/.buildx-cache-new/regsync-alpine
+        cache-to: type=local,dest=/tmp/.buildx-cache-new/regsync-alpine,mode=max
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |
@@ -184,8 +185,8 @@ jobs:
         push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
         target: release-scratch
         tags: ${{ steps.prep.outputs.regbot_tags_scratch }}
-        cache-from: type=local,src=/tmp/.buildx-cache/regbot-scratch
-        cache-to: type=local,dest=/tmp/.buildx-cache/regbot-scratch
+        cache-from: type=local,src=/tmp/.buildx-cache-new/regbot-scratch
+        cache-to: type=local,dest=/tmp/.buildx-cache-new/regbot-scratch,mode=max
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |
@@ -203,8 +204,8 @@ jobs:
         push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
         target: release-alpine
         tags: ${{ steps.prep.outputs.regbot_tags_alpine }}
-        cache-from: type=local,src=/tmp/.buildx-cache/regbot-alpine
-        cache-to: type=local,dest=/tmp/.buildx-cache/regbot-alpine
+        cache-from: type=local,src=/tmp/.buildx-cache-new/regbot-alpine
+        cache-to: type=local,dest=/tmp/.buildx-cache-new/regbot-alpine,mode=max
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |
@@ -212,3 +213,11 @@ jobs:
           org.opencontainers.image.source=${{ github.repositoryUrl }}
           org.opencontainers.image.version=${{ steps.prep.outputs.version }}
           org.opencontainers.image.revision=${{ github.sha }}
+
+    # Temp fix
+    # https://github.com/docker/build-push-action/issues/252
+    # https://github.com/moby/buildkit/issues/1896
+    - name: Move cache
+      run: |
+        rm -rf /tmp/.buildx-cache
+        mv /tmp/.buildx-cache-new /tmp/.buildx-cache
