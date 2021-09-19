@@ -109,7 +109,7 @@ jobs:
         push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
         target: release-scratch
         tags: ${{ steps.prep.outputs.regctl_tags_scratch }}
-        cache-from: type=local,src=/tmp/.buildx-cache-new/regctl-scratch
+        cache-from: type=local,src=/tmp/.buildx-cache/regctl-scratch
         cache-to: type=local,dest=/tmp/.buildx-cache-new/regctl-scratch,mode=max
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
@@ -128,7 +128,7 @@ jobs:
         push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
         target: release-alpine
         tags: ${{ steps.prep.outputs.regctl_tags_alpine }}
-        cache-from: type=local,src=/tmp/.buildx-cache-new/regctl-alpine
+        cache-from: type=local,src=/tmp/.buildx-cache/regctl-alpine
         cache-to: type=local,dest=/tmp/.buildx-cache-new/regctl-alpine,mode=max
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
@@ -147,7 +147,7 @@ jobs:
         push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
         target: release-scratch
         tags: ${{ steps.prep.outputs.regsync_tags_scratch }}
-        cache-from: type=local,src=/tmp/.buildx-cache-new/regsync-scratch
+        cache-from: type=local,src=/tmp/.buildx-cache/regsync-scratch
         cache-to: type=local,dest=/tmp/.buildx-cache-new/regsync-scratch,mode=max
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
@@ -166,7 +166,7 @@ jobs:
         push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
         target: release-alpine
         tags: ${{ steps.prep.outputs.regsync_tags_alpine }}
-        cache-from: type=local,src=/tmp/.buildx-cache-new/regsync-alpine
+        cache-from: type=local,src=/tmp/.buildx-cache/regsync-alpine
         cache-to: type=local,dest=/tmp/.buildx-cache-new/regsync-alpine,mode=max
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
@@ -185,7 +185,7 @@ jobs:
         push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
         target: release-scratch
         tags: ${{ steps.prep.outputs.regbot_tags_scratch }}
-        cache-from: type=local,src=/tmp/.buildx-cache-new/regbot-scratch
+        cache-from: type=local,src=/tmp/.buildx-cache/regbot-scratch
         cache-to: type=local,dest=/tmp/.buildx-cache-new/regbot-scratch,mode=max
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
@@ -204,7 +204,7 @@ jobs:
         push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
         target: release-alpine
         tags: ${{ steps.prep.outputs.regbot_tags_alpine }}
-        cache-from: type=local,src=/tmp/.buildx-cache-new/regbot-alpine
+        cache-from: type=local,src=/tmp/.buildx-cache/regbot-alpine
         cache-to: type=local,dest=/tmp/.buildx-cache-new/regbot-alpine,mode=max
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
