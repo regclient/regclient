@@ -26,8 +26,8 @@ import (
 const (
 	// DefaultBlobChunk 1M chunks, this is allocated in a memory buffer
 	DefaultBlobChunk = 1024 * 1024
-	// DefaultBlobMax 100M, switch to chunked above this threshold to avoid timeouts
-	DefaultBlobMax = 100 * 1024 * 1024
+	// DefaultBlobMax is disabled to support registries without chunked upload support
+	DefaultBlobMax = -1
 	// DefaultRetryLimit sets how many retry attempts are made for non-fatal errors
 	DefaultRetryLimit = 3
 	// DefaultUserAgent sets the header on http requests
@@ -212,7 +212,7 @@ func WithBlobSize(chunk, max int64) Opt {
 		if chunk > 0 {
 			rc.blobChunkSize = chunk
 		}
-		if max > 0 {
+		if max != 0 {
 			rc.blobMaxPut = max
 		}
 	}
