@@ -1,0 +1,77 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "regsync-cm"
+  labels:
+    app: "regsync"
+data:
+  regsync.yml: |+
+    version: 1
+    creds:
+      - registry: registry:5000
+        hostname: registry.registry:5000
+        tls: disabled
+      - registry: docker.io
+        # user: "{{env \"HUB_USER\"}}"
+        # pass: "{{file \"/home/appuser/.docker/hub_token\"}}"
+    defaults:
+      ratelimit:
+        min: 10
+        retry: 15m
+      parallel: 1
+      interval: 5m
+      backup: "bkup-{{.Ref.Tag}}"
+    sync:
+      - source: busybox:latest
+        target: registry:5000/library/busybox:latest
+        type: repository
+        tags:
+          allow:
+          - "latest"
+      - source: alpine
+        target: registry:5000/library/alpine
+        type: repository
+        tags:
+          allow:
+          - "latest"
+          - "3"
+      - source: debian
+        target: registry:5000/library/debian
+        type: repository
+        tags:
+          allow:
+          - "latest"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: regsync
+  labels:
+    app: regsync
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: "regsync"
+  template:
+    metadata:
+      labels:
+        app: "regsync"
+    spec:
+      containers:
+      - name: regsync
+        image: regclient/regsync:latest
+        imagePullPolicy: IfNotPresent
+        args: ["server", "-c", "/etc/regsync/regsync.yml"]
+        volumeMounts:
+        - name: regsync-config
+          mountPath: /etc/regsync/regsync.yml
+          subPath: regsync.yml
+      volumes:
+      - name: regsync-config
+        configMap:
+          name: "regsync-cm"
