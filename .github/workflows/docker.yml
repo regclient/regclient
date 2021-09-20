@@ -19,9 +19,12 @@ jobs:
     - name: Prepare
       id: prep
       run: |
-        REGCTL_IMAGE=regclient/regctl
-        REGSYNC_IMAGE=regclient/regsync
-        REGBOT_IMAGE=regclient/regbot
+        REGCTL_HUB_IMAGE=regclient/regctl
+        REGSYNC_HUB_IMAGE=regclient/regsync
+        REGBOT_HUB_IMAGE=regclient/regbot
+        REGCTL_GHCR_IMAGE=ghcr.io/regclient/regctl
+        REGSYNC_GHCR_IMAGE=ghcr.io/regclient/regsync
+        REGBOT_GHCR_IMAGE=ghcr.io/regclient/regbot
         VERSION=noop
         if [ "${{ github.event_name }}" = "schedule" ]; then
           VERSION=edge
@@ -35,23 +38,35 @@ jobs:
         elif [[ $GITHUB_REF == refs/pull/* ]]; then
           VERSION=pr-${{ github.event.number }}
         fi
-        REGCTL_TAGS_SCRATCH="${REGCTL_IMAGE}:${VERSION}"
-        REGCTL_TAGS_ALPINE="${REGCTL_IMAGE}:${VERSION}-alpine"
-        REGSYNC_TAGS_SCRATCH="${REGSYNC_IMAGE}:${VERSION}"
-        REGSYNC_TAGS_ALPINE="${REGSYNC_IMAGE}:${VERSION}-alpine"
-        REGBOT_TAGS_SCRATCH="${REGBOT_IMAGE}:${VERSION}"
-        REGBOT_TAGS_ALPINE="${REGBOT_IMAGE}:${VERSION}-alpine"
+        REGCTL_TAGS_SCRATCH="${REGCTL_HUB_IMAGE}:${VERSION},${REGCTL_GHCR_IMAGE}:${VERSION}"
+        REGCTL_TAGS_ALPINE="${REGCTL_HUB_IMAGE}:${VERSION}-alpine,${REGCTL_GHCR_IMAGE}:${VERSION}-alpine"
+        REGSYNC_TAGS_SCRATCH="${REGSYNC_HUB_IMAGE}:${VERSION},${REGSYNC_GHCR_IMAGE}:${VERSION}"
+        REGSYNC_TAGS_ALPINE="${REGSYNC_HUB_IMAGE}:${VERSION}-alpine,${REGSYNC_GHCR_IMAGE}:${VERSION}-alpine"
+        REGBOT_TAGS_SCRATCH="${REGBOT_HUB_IMAGE}:${VERSION},${REGBOT_GHCR_IMAGE}:${VERSION}"
+        REGBOT_TAGS_ALPINE="${REGBOT_HUB_IMAGE}:${VERSION}-alpine,${REGBOT_GHCR_IMAGE}:${VERSION}-alpine"
         if [[ $VERSION =~ ^v[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
           MINOR=${VERSION%.*}
           MAJOR=${MINOR%.*}
-          REGCTL_TAGS_SCRATCH="${REGCTL_TAGS_SCRATCH},${REGCTL_IMAGE}:${MINOR},${REGCTL_IMAGE}:${MAJOR},${REGCTL_IMAGE}:latest"
-          REGCTL_TAGS_ALPINE="${REGCTL_TAGS_ALPINE},${REGCTL_IMAGE}:${MINOR}-alpine,${REGCTL_IMAGE}:${MAJOR}-alpine,${REGCTL_IMAGE}:alpine"
-          REGSYNC_TAGS_SCRATCH="${REGSYNC_TAGS_SCRATCH},${REGSYNC_IMAGE}:${MINOR},${REGSYNC_IMAGE}:${MAJOR},${REGSYNC_IMAGE}:latest"
-          REGSYNC_TAGS_ALPINE="${REGSYNC_TAGS_ALPINE},${REGSYNC_IMAGE}:${MINOR}-alpine,${REGSYNC_IMAGE}:${MAJOR}-alpine,${REGSYNC_IMAGE}:alpine"
-          REGBOT_TAGS_SCRATCH="${REGBOT_TAGS_SCRATCH},${REGBOT_IMAGE}:${MINOR},${REGBOT_IMAGE}:${MAJOR},${REGBOT_IMAGE}:latest"
-          REGBOT_TAGS_ALPINE="${REGBOT_TAGS_ALPINE},${REGBOT_IMAGE}:${MINOR}-alpine,${REGBOT_IMAGE}:${MAJOR}-alpine,${REGBOT_IMAGE}:alpine"
+          REGCTL_TAGS_SCRATCH="${REGCTL_TAGS_SCRATCH},${REGCTL_HUB_IMAGE}:${MINOR},${REGCTL_HUB_IMAGE}:${MAJOR},${REGCTL_HUB_IMAGE}:latest"
+          REGCTL_TAGS_SCRATCH="${REGCTL_TAGS_SCRATCH},${REGCTL_GHCR_IMAGE}:${MINOR},${REGCTL_GHCR_IMAGE}:${MAJOR},${REGCTL_GHCR_IMAGE}:latest"
+          REGCTL_TAGS_ALPINE="${REGCTL_TAGS_ALPINE},${REGCTL_HUB_IMAGE}:${MINOR}-alpine,${REGCTL_HUB_IMAGE}:${MAJOR}-alpine,${REGCTL_HUB_IMAGE}:alpine"
+          REGCTL_TAGS_ALPINE="${REGCTL_TAGS_ALPINE},${REGCTL_GHCR_IMAGE}:${MINOR}-alpine,${REGCTL_GHCR_IMAGE}:${MAJOR}-alpine,${REGCTL_GHCR_IMAGE}:alpine"
+          REGSYNC_TAGS_SCRATCH="${REGSYNC_TAGS_SCRATCH},${REGSYNC_HUB_IMAGE}:${MINOR},${REGSYNC_HUB_IMAGE}:${MAJOR},${REGSYNC_HUB_IMAGE}:latest"
+          REGSYNC_TAGS_SCRATCH="${REGSYNC_TAGS_SCRATCH},${REGSYNC_GHCR_IMAGE}:${MINOR},${REGSYNC_GHCR_IMAGE}:${MAJOR},${REGSYNC_GHCR_IMAGE}:latest"
+          REGSYNC_TAGS_ALPINE="${REGSYNC_TAGS_ALPINE},${REGSYNC_HUB_IMAGE}:${MINOR}-alpine,${REGSYNC_HUB_IMAGE}:${MAJOR}-alpine,${REGSYNC_HUB_IMAGE}:alpine"
+          REGSYNC_TAGS_ALPINE="${REGSYNC_TAGS_ALPINE},${REGSYNC_GHCR_IMAGE}:${MINOR}-alpine,${REGSYNC_GHCR_IMAGE}:${MAJOR}-alpine,${REGSYNC_GHCR_IMAGE}:alpine"
+          REGBOT_TAGS_SCRATCH="${REGBOT_TAGS_SCRATCH},${REGBOT_HUB_IMAGE}:${MINOR},${REGBOT_HUB_IMAGE}:${MAJOR},${REGBOT_HUB_IMAGE}:latest"
+          REGBOT_TAGS_SCRATCH="${REGBOT_TAGS_SCRATCH},${REGBOT_GHCR_IMAGE}:${MINOR},${REGBOT_GHCR_IMAGE}:${MAJOR},${REGBOT_GHCR_IMAGE}:latest"
+          REGBOT_TAGS_ALPINE="${REGBOT_TAGS_ALPINE},${REGBOT_HUB_IMAGE}:${MINOR}-alpine,${REGBOT_HUB_IMAGE}:${MAJOR}-alpine,${REGBOT_HUB_IMAGE}:alpine"
+          REGBOT_TAGS_ALPINE="${REGBOT_TAGS_ALPINE},${REGBOT_GHCR_IMAGE}:${MINOR}-alpine,${REGBOT_GHCR_IMAGE}:${MAJOR}-alpine,${REGBOT_GHCR_IMAGE}:alpine"
         fi
         echo ::set-output name=version::${VERSION}
+        echo ::set-output name=regctl_cache_scratch::${REGCTL_GHCR_IMAGE}:buildcache-scratch
+        echo ::set-output name=regctl_cache_alpine::${REGCTL_GHCR_IMAGE}:buildcache-alpine
+        echo ::set-output name=regsync_cache_scratch::${REGSYNC_GHCR_IMAGE}:buildcache-scratch
+        echo ::set-output name=regsync_cache_alpine::${REGSYNC_GHCR_IMAGE}:buildcache-alpine
+        echo ::set-output name=regbot_cache_scratch::${REGBOT_GHCR_IMAGE}:buildcache-scratch
+        echo ::set-output name=regbot_cache_alpine::${REGBOT_GHCR_IMAGE}:buildcache-alpine
         echo ::set-output name=regctl_tags_scratch::${REGCTL_TAGS_SCRATCH}
         echo ::set-output name=regctl_tags_alpine::${REGCTL_TAGS_ALPINE}
         echo ::set-output name=regsync_tags_scratch::${REGSYNC_TAGS_SCRATCH}
@@ -75,12 +90,14 @@ jobs:
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
-     
-    - name: Cache docker build
-      uses: actions/cache@v2
+
+    - name: Login to GHCR
+      if: github.repository_owner == 'regclient'
+      uses: docker/login-action@v1 
       with:
-        path: /tmp/.buildx-cache
-        key: ${{ runner.os }}-buildx
+        registry: ghcr.io
+        username: ${{ secrets.GHCR_USERNAME }}
+        password: ${{ secrets.GHCR_TOKEN }}
 
     - name: Build and push regctl scratch
       uses: docker/build-push-action@v2
@@ -91,8 +108,8 @@ jobs:
         push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
         target: release-scratch
         tags: ${{ steps.prep.outputs.regctl_tags_scratch }}
-        cache-from: type=local,src=/tmp/.buildx-regctl-cache
-        cache-to: type=local,dest=/tmp/.buildx-regctl-cache
+        cache-from: type=registry,ref=${{ steps.prep.outputs.regctl_cache_scratch }}
+        cache-to: type=registry,ref=${{ steps.prep.outputs.regctl_cache_scratch }},mode=max
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |
@@ -110,8 +127,8 @@ jobs:
         push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
         target: release-alpine
         tags: ${{ steps.prep.outputs.regctl_tags_alpine }}
-        cache-from: type=local,src=/tmp/.buildx-regctl-cache
-        cache-to: type=local,dest=/tmp/.buildx-regctl-cache
+        cache-from: type=registry,ref=${{ steps.prep.outputs.regctl_cache_alpine }}
+        cache-to: type=registry,ref=${{ steps.prep.outputs.regctl_cache_alpine }},mode=max
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |
@@ -129,8 +146,8 @@ jobs:
         push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
         target: release-scratch
         tags: ${{ steps.prep.outputs.regsync_tags_scratch }}
-        cache-from: type=local,src=/tmp/.buildx-regsync-cache
-        cache-to: type=local,dest=/tmp/.buildx-regsync-cache
+        cache-from: type=registry,ref=${{ steps.prep.outputs.regsync_cache_scratch }}
+        cache-to: type=registry,ref=${{ steps.prep.outputs.regsync_cache_scratch }},mode=max
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |
@@ -148,8 +165,8 @@ jobs:
         push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
         target: release-alpine
         tags: ${{ steps.prep.outputs.regsync_tags_alpine }}
-        cache-from: type=local,src=/tmp/.buildx-regsync-cache
-        cache-to: type=local,dest=/tmp/.buildx-regsync-cache
+        cache-from: type=registry,ref=${{ steps.prep.outputs.regsync_cache_alpine }}
+        cache-to: type=registry,ref=${{ steps.prep.outputs.regsync_cache_alpine }},mode=max
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |
@@ -167,8 +184,8 @@ jobs:
         push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
         target: release-scratch
         tags: ${{ steps.prep.outputs.regbot_tags_scratch }}
-        cache-from: type=local,src=/tmp/.buildx-regbot-cache
-        cache-to: type=local,dest=/tmp/.buildx-regbot-cache
+        cache-from: type=registry,ref=${{ steps.prep.outputs.regbot_cache_scratch }}
+        cache-to: type=registry,ref=${{ steps.prep.outputs.regbot_cache_scratch }},mode=max
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |
@@ -186,8 +203,8 @@ jobs:
         push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
         target: release-alpine
         tags: ${{ steps.prep.outputs.regbot_tags_alpine }}
-        cache-from: type=local,src=/tmp/.buildx-regbot-cache
-        cache-to: type=local,dest=/tmp/.buildx-regbot-cache
+        cache-from: type=registry,ref=${{ steps.prep.outputs.regbot_cache_alpine }}
+        cache-to: type=registry,ref=${{ steps.prep.outputs.regbot_cache_alpine }},mode=max
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |

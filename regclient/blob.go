@@ -473,9 +473,9 @@ func (rc *regClient) blobPutUploadFull(ctx context.Context, ref types.Ref, d dig
 
 	// append digest to request to use the monolithic upload option
 	if putURL.RawQuery != "" {
-		putURL.RawQuery = putURL.RawQuery + "&digest=" + d.String()
+		putURL.RawQuery = putURL.RawQuery + "&digest=" + url.QueryEscape(d.String())
 	} else {
-		putURL.RawQuery = "digest=" + d.String()
+		putURL.RawQuery = "digest=" + url.QueryEscape(d.String())
 	}
 
 	// send the blob
@@ -559,6 +559,8 @@ func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, pu
 			lenChange = true
 		}
 		if lenChange {
+			// need to recreate the reader on a change to the slice length,
+			// old reader is looking at the old slice metadata
 			bufRdr = bytes.NewReader(bufBytes)
 		}
 
@@ -578,7 +580,15 @@ func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, pu
 				return "", 0, fmt.Errorf("Failed to send blob (chunk), ref %s: %w", ref.CommonName(), err)
 			}
 			resp.Close()
-			if resp.HTTPResponse().StatusCode != 202 {
+
+			// distribution-spec is 202, AWS ECR returns a 201 and rejects the put
+			if resp.HTTPResponse().StatusCode == 201 {
+				rc.log.WithFields(logrus.Fields{
+					"ref":        ref.CommonName(),
+					"chunkStart": chunkStart,
+					"chunkSize":  chunkSize,
+				}).Debug("Early accept of chunk in PATCH before PUT request")
+			} else if resp.HTTPResponse().StatusCode != 202 {
 				return "", 0, fmt.Errorf("Failed to send blob (chunk), ref %s: %w", ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 			}
 			chunkStart += int64(chunkSize)
@@ -597,18 +607,18 @@ func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, pu
 		}
 	}
 
-	// write digest to complete request
+	// compute digest
 	d := digester.Digest()
+
+	// send the final put
 	// append digest to request to use the monolithic upload option
 	if chunkURL.RawQuery != "" {
-		chunkURL.RawQuery = chunkURL.RawQuery + "&digest=" + d.String()
+		chunkURL.RawQuery = chunkURL.RawQuery + "&digest=" + url.QueryEscape(d.String())
 	} else {
-		chunkURL.RawQuery = "digest=" + d.String()
+		chunkURL.RawQuery = "digest=" + url.QueryEscape(d.String())
 	}
 
-	// send the blob
 	opts := []retryable.OptsReq{}
-	// opts = append(opts, retryable.WithContentLen(0))
 	opts = append(opts, retryable.WithHeader("Content-Length", []string{"0"}))
 	opts = append(opts, retryable.WithHeader("Content-Range", []string{fmt.Sprintf("%d-%d", chunkStart, chunkStart)}))
 	opts = append(opts, retryable.WithHeader("Content-Type", []string{ct}))

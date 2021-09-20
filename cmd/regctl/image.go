@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"os"
 
 	"github.com/regclient/regclient/pkg/template"
@@ -48,12 +49,12 @@ var imageDigestCmd = &cobra.Command{
 	RunE:              runManifestDigest,
 }
 var imageExportCmd = &cobra.Command{
-	Use:   "export <image_ref>",
+	Use:   "export <image_ref> [filename]",
 	Short: "export image",
 	Long: `Exports an image into a tar file that can be later loaded into a docker
 engine with "docker load". The tar file is output to stdout by default.
 Example usage: regctl image export registry:5000/yourimg:v1 >yourimg-v1.tar`,
-	Args:              cobra.ExactArgs(1),
+	Args:              cobra.RangeArgs(1, 2),
 	ValidArgsFunction: completeArgTag,
 	RunE:              runImageExport,
 }
@@ -161,11 +162,20 @@ func runImageExport(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	var w io.Writer
+	if len(args) == 2 {
+		w, err = os.Create(args[1])
+		if err != nil {
+			return err
+		}
+	} else {
+		w = os.Stdout
+	}
 	rc := newRegClient()
 	log.WithFields(logrus.Fields{
 		"ref": ref.CommonName(),
 	}).Debug("Image export")
-	return rc.ImageExport(context.Background(), ref, os.Stdout)
+	return rc.ImageExport(context.Background(), ref, w)
 }
 
 func runImageImport(cmd *cobra.Command, args []string) error {
@@ -173,14 +183,18 @@ func runImageImport(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	tarFile := args[1]
+	rs, err := os.Open(args[1])
+	if err != nil {
+		return err
+	}
+	defer rs.Close()
 	rc := newRegClient()
 	log.WithFields(logrus.Fields{
 		"ref":  ref.CommonName(),
-		"file": tarFile,
+		"file": args[1],
 	}).Debug("Image import")
 
-	return rc.ImageImport(context.Background(), ref, tarFile)
+	return rc.ImageImport(context.Background(), ref, rs)
 }
 
 func runImageInspect(cmd *cobra.Command, args []string) error {

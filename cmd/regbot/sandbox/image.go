@@ -198,7 +198,11 @@ func (s *Sandbox) imageImportTar(ls *lua.LState) int {
 		s.sem.Acquire(s.ctx, 1)
 		defer s.sem.Release(1)
 	}
-	err := s.rc.ImageImport(s.ctx, tgt.ref, file)
+	rs, err := os.Open(file)
+	if err != nil {
+		ls.RaiseError("Failed to read from \"%s\": %v", file, err)
+	}
+	err = s.rc.ImageImport(s.ctx, tgt.ref, rs)
 	if err != nil {
 		ls.RaiseError("Failed to import image \"%s\" from \"%s\": %v", tgt.ref.CommonName(), file, err)
 	}
