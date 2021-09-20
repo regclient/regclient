@@ -37,11 +37,11 @@ The following functions have been added in addition to the defaults available in
 - `split`:
   Split a string based on a separator.
 - `time`:
-  See Go time package for more details on implemented functions:
+  See [Go time package](https://pkg.go.dev/time) for more details on implemented functions:
   - `time.Now`:
     Returns current time object, e.g. `{{ $t := time.Now }}{{printf "%d%d%d" $t.Year $t.Month $t.Day}}`.
   - `time.Parse`:
-    Parses string using layout into time object, e.g. `{{ $t := time.Parse "1970-12-31" "2020-06-07"}}`.
+    Parses string using layout into time object, e.g. `{{ $t := time.Parse "2006-01-02" "2020-06-07"}}`.
 - `title`:
   Makes the first letter of each word uppercase.
 - `upper`:
