@@ -12,6 +12,7 @@ import (
 
 	"github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/regclient/regclient/pkg/archive"
 	"github.com/regclient/regclient/regclient/manifest"
 	"github.com/regclient/regclient/regclient/types"
 	"github.com/spf13/cobra"
@@ -221,6 +222,7 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 						}
 					}
 				}
+				// TODO: if there's a trailing slash, expand the compressed blob into the folder
 				// create file as writer
 				out := filepath.Join(artifactOpts.outputDir, f)
 				fh, err := os.Create(out)
@@ -324,8 +326,28 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 			// wrap in a closure to trigger defer on each step, avoiding open file handles
 			err = func() error {
 				mt := artifactOpts.artifactMT[i]
-				// TODO: handle if file is a directory
-				rdr, err := os.Open(f)
+				openF := f
+				// if file is a directory, compress it into a tgz first
+				// this unfortunately needs a temp file for the digest
+				fi, err := os.Stat(f)
+				if err != nil {
+					return err
+				}
+				if fi.IsDir() {
+					tf, err := os.CreateTemp("", "regctl-artifact-*.tgz")
+					if err != nil {
+						return err
+					}
+					defer tf.Close()
+					// change the file being opened to the temp file
+					openF = tf.Name()
+					defer os.Remove(openF)
+					err = archive.Tar(ctx, f, tf, archive.TarCompressGzip)
+					if err != nil {
+						return err
+					}
+				}
+				rdr, err := os.Open(openF)
 				if err != nil {
 					return err
 				}
