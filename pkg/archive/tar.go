@@ -2,6 +2,7 @@ package archive
 
 import (
 	"archive/tar"
+	"compress/gzip"
 	"context"
 	"io"
 	"os"
@@ -12,11 +13,20 @@ import (
 // TarOpts configures options for Create/Extract tar
 type TarOpts func(*tarOpts)
 
-// TODO: add support for compressed files with either gzip or bzip
-type tarOpts struct{}
+// TODO: add support for compressed files with bzip
+type tarOpts struct {
+	allowRelative bool // allow relative paths outside of target folder
+	compress      string
+}
 
-// Uncompressed option to tar (noop)
-func Uncompressed(to *tarOpts) {
+// TarCompressGzip option to use gzip compression on tar files
+func TarCompressGzip(to *tarOpts) {
+	to.compress = "gzip"
+	return
+}
+
+// TarUncompressed option to tar (noop)
+func TarUncompressed(to *tarOpts) {
 	return
 }
 
@@ -29,7 +39,14 @@ func Tar(ctx context.Context, path string, w io.Writer, opts ...TarOpts) error {
 		opt(&to)
 	}
 
-	tw := tar.NewWriter(w)
+	twOut := w
+	if to.compress == "gzip" {
+		gw := gzip.NewWriter(w)
+		defer gw.Close()
+		twOut = gw
+	}
+
+	tw := tar.NewWriter(twOut)
 	defer tw.Close()
 
 	// walk the path performing a recursive tar
@@ -41,6 +58,7 @@ func Tar(ctx context.Context, path string, w io.Writer, opts ...TarOpts) error {
 
 		// TODO: handle symlinks, security attributes, hard links
 		// TODO: add options for file owner and timestamps
+		// TODO: add options to override time, or disable access/change stamps
 
 		// adjust for relative path
 		relPath, err := filepath.Rel(path, file)
