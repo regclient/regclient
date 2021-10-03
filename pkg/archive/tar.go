@@ -4,7 +4,9 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
@@ -105,10 +107,55 @@ func Extract(ctx context.Context, path string, r io.Reader, opts ...TarOpts) err
 		opt(&to)
 	}
 
-	// TODO: verify path exists
-	// TODO: decompress
+	// verify path exists
+	fi, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !fi.IsDir() {
+		return fmt.Errorf("extract path must be a directory: \"%s\"", path)
+	}
 
-	// TODO: implement tar extract method
+	// decompress
+	rd, err := Decompress(r)
+	if err != nil {
+		return err
+	}
 
-	return ErrNotImplemented
+	rt := tar.NewReader(rd)
+	for {
+		hdr, err := rt.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		// join a cleaned version of the filename with the path
+		fn := filepath.Join(path, filepath.Clean("/"+hdr.Name))
+		switch hdr.Typeflag {
+		case tar.TypeDir:
+			err = os.MkdirAll(fn, fs.FileMode(hdr.Mode))
+			if err != nil {
+				return err
+			}
+		case tar.TypeReg:
+			// TODO: configure file mode, creation timestamp, etc
+			fh, err := os.Create(fn)
+			if err != nil {
+				return err
+			}
+			n, err := io.Copy(fh, rt)
+			fh.Close()
+			if err != nil {
+				return err
+			}
+			if n != hdr.Size {
+				return fmt.Errorf("size mismatch extracting \"%s\", expected %d, extracted %d", hdr.Name, hdr.Size, n)
+			}
+			// TODO: handle other tar types (symlinks, etc)
+		}
+	}
+
+	return nil
 }
