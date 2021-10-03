@@ -65,6 +65,7 @@ var artifactOpts struct {
 	configFile   string
 	configMT     string
 	outputDir    string
+	stripDirs    bool
 }
 
 func init() {
@@ -75,6 +76,7 @@ func init() {
 	})
 	artifactGetCmd.Flags().StringVarP(&artifactOpts.configFile, "config-file", "", "", "Config filename to output")
 	artifactGetCmd.Flags().StringVarP(&artifactOpts.outputDir, "output", "o", "", "Output directory for multiple artifacts")
+	artifactGetCmd.Flags().BoolVarP(&artifactOpts.stripDirs, "strip-dirs", "", false, "Strip directories from filenames in output dir")
 
 	artifactPutCmd.Flags().StringArrayVarP(&artifactOpts.annotations, "annotation", "", []string{}, "Annotation to include on manifest")
 	artifactPutCmd.Flags().StringArrayVarP(&artifactOpts.artifactFile, "file", "f", []string{}, "Artifact filename")
@@ -200,39 +202,48 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 					f = l.Digest.Encoded()
 				}
 				f = path.Clean("/" + f)
+				if strings.HasSuffix(l.Annotations[ociAnnotTitle], "/") || l.Annotations["io.deis.oras.content.unpack"] == "true" {
+					f = f + "/"
+				}
+				if artifactOpts.stripDirs {
+					f = f[strings.LastIndex(f, "/"):]
+				}
 				dirs := strings.Split(f, "/")
-				// strip the leading empty dir and trailing filename
-				dirs = dirs[1 : len(dirs)-1]
 				// create nested folders if needed
-				if len(dirs) > 0 {
-					curDir := artifactOpts.outputDir
-					for _, d := range dirs {
-						curDir = filepath.Join(curDir, d)
-						fi, err := os.Stat(curDir)
-						if err != nil && os.IsNotExist(err) {
-							// create dir
-							err = os.Mkdir(curDir, 0755)
-							if err != nil {
-								return err
-							}
-						} else if err != nil {
+				if len(dirs) > 2 {
+					// strip the leading empty dir and trailing filename
+					dirs = dirs[1 : len(dirs)-1]
+					dest := filepath.Join(artifactOpts.outputDir, filepath.Join(dirs...))
+					fi, err := os.Stat(dest)
+					if os.IsNotExist(err) {
+						err = os.MkdirAll(dest, 0755)
+						if err != nil {
 							return err
-						} else if !fi.IsDir() {
-							return fmt.Errorf("output must be a directory: \"%s\"", curDir)
 						}
+					} else if err != nil {
+						return err
+					} else if !fi.IsDir() {
+						return fmt.Errorf("destination exists and is not a directory: \"%s\"", dest)
 					}
 				}
-				// TODO: if there's a trailing slash, expand the compressed blob into the folder
-				// create file as writer
-				out := filepath.Join(artifactOpts.outputDir, f)
-				fh, err := os.Create(out)
-				if err != nil {
-					return err
-				}
-				defer fh.Close()
-				_, err = io.Copy(fh, rdr)
-				if err != nil {
-					return err
+				// if there's a trailing slash, expand the compressed blob into the folder
+				if strings.HasSuffix(f, "/") {
+					err = archive.Extract(ctx, filepath.Join(artifactOpts.outputDir, f), rdr)
+					if err != nil {
+						return err
+					}
+				} else {
+					// create file as writer
+					out := filepath.Join(artifactOpts.outputDir, f)
+					fh, err := os.Create(out)
+					if err != nil {
+						return err
+					}
+					defer fh.Close()
+					_, err = io.Copy(fh, rdr)
+					if err != nil {
+						return err
+					}
 				}
 				return nil
 			}()
