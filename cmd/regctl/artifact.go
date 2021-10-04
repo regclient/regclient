@@ -21,18 +21,21 @@ import (
 const (
 	ociAnnotTitle   = "org.opencontainers.image.title"
 	defaultMTConfig = "application/vnd.unknown.config.v1+json"
-	defaultMTLayer  = "application/vnd.oci.image.layer.v1.tar"
+	defaultMTLayer  = "application/octet-stream"
 )
 
 var artifactKnownTypes = []string{
 	"application/octet-stream",
-	defaultMTLayer,
+	"application/tar+gzip",
+	"application/vnd.oci.image.layer.v1.tar",
+	"application/vnd.oci.image.layer.v1.tar+zstd",
+	"application/vnd.oci.image.layer.v1.tar+gzip",
 }
 var configKnownTypes = []string{
-	defaultMTConfig,
 	"application/vnd.oci.image.config.v1+json",
 	"application/vnd.cncf.helm.chart.config.v1+json",
 	"application/vnd.sylabs.sif.config.v1+json",
+	"application/vnd.unknown.config.v1+json",
 }
 
 var artifactCmd = &cobra.Command{
@@ -45,16 +48,16 @@ var artifactGetCmd = &cobra.Command{
 	Short:     "download artifacts",
 	Long:      `Download artifacts from the registry.`,
 	Args:      cobra.ExactArgs(1),
-	ValidArgs: []string{}, // do not auto complete repository or digest
+	ValidArgs: []string{}, // do not auto complete repository/tag
 	RunE:      runArtifactGet,
 }
 var artifactPutCmd = &cobra.Command{
 	Use:       "put <reference>",
-	Aliases:   []string{"put", "push"},
+	Aliases:   []string{"push"},
 	Short:     "upload artifacts",
 	Long:      `Upload artifacts to the registry.`,
 	Args:      cobra.ExactArgs(1),
-	ValidArgs: []string{}, // do not auto complete repository
+	ValidArgs: []string{}, // do not auto complete repository/tag
 	RunE:      runArtifactPut,
 }
 
@@ -89,6 +92,7 @@ func init() {
 	artifactPutCmd.RegisterFlagCompletionFunc("config-media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return artifactKnownTypes, cobra.ShellCompDirectiveNoFileComp
 	})
+	artifactPutCmd.Flags().BoolVarP(&artifactOpts.stripDirs, "strip-dirs", "", false, "Strip directories from filenames in artifact")
 
 	artifactCmd.AddCommand(artifactGetCmd)
 	artifactCmd.AddCommand(artifactPutCmd)
@@ -357,6 +361,9 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 					if err != nil {
 						return err
 					}
+					if !strings.HasSuffix(f, "/") {
+						f = f + "/"
+					}
 				}
 				rdr, err := os.Open(openF)
 				if err != nil {
@@ -371,12 +378,21 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 				}
 				d := digester.Digest()
 				// add layer to manifest
+				af := f
+				if artifactOpts.stripDirs {
+					fSplit := strings.Split(f, "/")
+					if fSplit[len(fSplit)-1] != "" {
+						af = fSplit[len(fSplit)-1]
+					} else if len(fSplit) > 1 {
+						af = fSplit[len(fSplit)-2] + "/"
+					}
+				}
 				m.Layers = append(m.Layers, ociv1.Descriptor{
 					MediaType: mt,
 					Digest:    d,
 					Size:      l,
 					Annotations: map[string]string{
-						ociAnnotTitle: f,
+						ociAnnotTitle: af,
 					},
 				})
 				// if blob already exists, skip Put
