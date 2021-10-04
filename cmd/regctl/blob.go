@@ -31,7 +31,7 @@ registry. The blob or layer digest can be found in the image manifest.`,
 }
 var blobPutCmd = &cobra.Command{
 	Use:     "put <repository>",
-	Aliases: []string{"pull"},
+	Aliases: []string{"push"},
 	Short:   "upload a blob/layer",
 	Long: `Upload a blob to a repository. Stdin must be the blob contents. The output
 is the digest of the blob.`,

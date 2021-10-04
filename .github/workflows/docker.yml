@@ -109,7 +109,7 @@ jobs:
         target: release-scratch
         tags: ${{ steps.prep.outputs.regctl_tags_scratch }}
         cache-from: type=registry,ref=${{ steps.prep.outputs.regctl_cache_scratch }}
-        cache-to: type=registry,ref=${{ steps.prep.outputs.regctl_cache_scratch }},mode=max
+        cache-to: ${{ github.repository_owner == 'regclient' && format('type=registry,ref={0},mode=max', steps.prep.outputs.regctl_cache_scratch) || 'type=inline'}}
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |
@@ -128,7 +128,7 @@ jobs:
         target: release-alpine
         tags: ${{ steps.prep.outputs.regctl_tags_alpine }}
         cache-from: type=registry,ref=${{ steps.prep.outputs.regctl_cache_alpine }}
-        cache-to: type=registry,ref=${{ steps.prep.outputs.regctl_cache_alpine }},mode=max
+        cache-to: ${{ github.repository_owner == 'regclient' && format('type=registry,ref={0},mode=max', steps.prep.outputs.regctl_cache_alpine) || 'type=inline'}}
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |
@@ -147,7 +147,7 @@ jobs:
         target: release-scratch
         tags: ${{ steps.prep.outputs.regsync_tags_scratch }}
         cache-from: type=registry,ref=${{ steps.prep.outputs.regsync_cache_scratch }}
-        cache-to: type=registry,ref=${{ steps.prep.outputs.regsync_cache_scratch }},mode=max
+        cache-to: ${{ github.repository_owner == 'regclient' && format('type=registry,ref={0},mode=max', steps.prep.outputs.regsync_cache_scratch) || 'type=inline'}}
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |
@@ -166,7 +166,7 @@ jobs:
         target: release-alpine
         tags: ${{ steps.prep.outputs.regsync_tags_alpine }}
         cache-from: type=registry,ref=${{ steps.prep.outputs.regsync_cache_alpine }}
-        cache-to: type=registry,ref=${{ steps.prep.outputs.regsync_cache_alpine }},mode=max
+        cache-to: ${{ github.repository_owner == 'regclient' && format('type=registry,ref={0},mode=max', steps.prep.outputs.regsync_cache_alpine) || 'type=inline'}}
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |
@@ -185,7 +185,7 @@ jobs:
         target: release-scratch
         tags: ${{ steps.prep.outputs.regbot_tags_scratch }}
         cache-from: type=registry,ref=${{ steps.prep.outputs.regbot_cache_scratch }}
-        cache-to: type=registry,ref=${{ steps.prep.outputs.regbot_cache_scratch }},mode=max
+        cache-to: ${{ github.repository_owner == 'regclient' && format('type=registry,ref={0},mode=max', steps.prep.outputs.regbot_cache_scratch) || 'type=inline'}}
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |
@@ -204,7 +204,7 @@ jobs:
         target: release-alpine
         tags: ${{ steps.prep.outputs.regbot_tags_alpine }}
         cache-from: type=registry,ref=${{ steps.prep.outputs.regbot_cache_alpine }}
-        cache-to: type=registry,ref=${{ steps.prep.outputs.regbot_cache_alpine }},mode=max
+        cache-to: ${{ github.repository_owner == 'regclient' && format('type=registry,ref={0},mode=max', steps.prep.outputs.regbot_cache_alpine) || 'type=inline'}}
         build-args: |
           LD_FLAGS=-X github.com/regclient/regclient/regclient.VCSRef=${{ github.sha }} -X main.VCSRef=${{ github.sha}} -X main.VCSTag=${{ steps.prep.outputs.version }}
         labels: |

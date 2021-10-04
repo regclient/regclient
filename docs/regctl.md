@@ -6,6 +6,7 @@
 - [Tag commands](#tag-commands)
 - [Image commands](#image-commands)
 - [Blob commands](#blob-commands)
+- [Artifact commands](#artifact-commands)
 - [Format flag](#format-flag)
 
 ## Top Level Commands
@@ -19,6 +20,7 @@ Usage:
   regctl [command]
 
 Available Commands:
+  artifact    manage artifacts
   blob        manage image blobs/layers
   completion  Generate completion script
   help        Help about any command
@@ -184,6 +186,7 @@ Usage:
 
 Available Commands:
   get         download a blob/layer
+  put         upload a blob/layer
 ```
 
 The `get` command will pull a specific sha256 blob from the registry and returns it to stdout.
@@ -225,6 +228,71 @@ $ regctl blob get busybox sha256:6858809bf669cc5da7cb6af83d0fae838284d12e1be0182
     "OpenStdin": false,
     "StdinOnce": false,
     ...
+```
+
+The `put` command uploads a blob to the registry.
+The digest of the blob is output.
+Note that blobs should be referenced by a manifest to avoid garbage collection.
+
+## Artifact Commands
+
+The artifact command works with OCI artifacts.
+This is used to store arbitrary data within a registry, with an associated manifest and json config.
+
+```text
+Usage:
+  regctl artifact [command]
+
+Available Commands:
+  get         download artifacts
+  put         upload artifacts
+```
+
+The `get` command retrieves an artifact from the registry.
+By default, the artifact contents are written to stdout, redirect this to a file for binary content.
+For retrieving multiple files from a single artifact, specify an output directory.
+Filters can be added for the filename and media type, and the config json can also be output to a separate file.
+
+The `put` command uploads an artifact to the registry.
+Each file should have a media type passed in the same order on the command line.
+A single file may be pushed using stdin.
+The config json may also be pushed, and have it's own media type.
+To set annotations on the manifest, use `--annotation name=value`, and repeat the flag for additional annotations.
+
+The following demonstrates uploading a simple artifact from stdin/stdout:
+
+```shell
+$ regctl artifact put \
+  --annotation demo=true --annotation format=oci \
+  localhost:5000/artifact:demo <<EOF
+Test artifact from regctl.
+This follows the OCI artifact format
+EOF
+
+$ regctl manifest get localhost:5000/artifact:demo
+{
+  "schemaVersion": 2,
+  "config": {
+    "mediaType": "application/vnd.unknown.config.v1+json",
+    "digest": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "size": 2
+  },
+  "layers": [
+    {
+      "mediaType": "application/octet-stream",
+      "digest": "sha256:7f8028bb058b780630dcd31cde93cb3efe96d60108ffbfe2727e4e76fdf4c9dc",
+      "size": 64
+    }
+  ],
+  "annotations": {
+    "demo": "true",
+    "format": "oci"
+  }
+}
+
+$ regctl artifact get localhost:5000/artifact:demo
+Test artifact from regctl.
+This follows the OCI artifact format
 ```
 
 ## Format Flag

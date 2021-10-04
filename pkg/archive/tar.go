@@ -2,8 +2,11 @@ package archive
 
 import (
 	"archive/tar"
+	"compress/gzip"
 	"context"
+	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
@@ -12,11 +15,20 @@ import (
 // TarOpts configures options for Create/Extract tar
 type TarOpts func(*tarOpts)
 
-// TODO: add support for compressed files with either gzip or bzip
-type tarOpts struct{}
+// TODO: add support for compressed files with bzip
+type tarOpts struct {
+	allowRelative bool // allow relative paths outside of target folder
+	compress      string
+}
 
-// Uncompressed option to tar (noop)
-func Uncompressed(to *tarOpts) {
+// TarCompressGzip option to use gzip compression on tar files
+func TarCompressGzip(to *tarOpts) {
+	to.compress = "gzip"
+	return
+}
+
+// TarUncompressed option to tar (noop)
+func TarUncompressed(to *tarOpts) {
 	return
 }
 
@@ -29,7 +41,14 @@ func Tar(ctx context.Context, path string, w io.Writer, opts ...TarOpts) error {
 		opt(&to)
 	}
 
-	tw := tar.NewWriter(w)
+	twOut := w
+	if to.compress == "gzip" {
+		gw := gzip.NewWriter(w)
+		defer gw.Close()
+		twOut = gw
+	}
+
+	tw := tar.NewWriter(twOut)
 	defer tw.Close()
 
 	// walk the path performing a recursive tar
@@ -41,6 +60,7 @@ func Tar(ctx context.Context, path string, w io.Writer, opts ...TarOpts) error {
 
 		// TODO: handle symlinks, security attributes, hard links
 		// TODO: add options for file owner and timestamps
+		// TODO: add options to override time, or disable access/change stamps
 
 		// adjust for relative path
 		relPath, err := filepath.Rel(path, file)
@@ -87,10 +107,55 @@ func Extract(ctx context.Context, path string, r io.Reader, opts ...TarOpts) err
 		opt(&to)
 	}
 
-	// TODO: verify path exists
-	// TODO: decompress
+	// verify path exists
+	fi, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !fi.IsDir() {
+		return fmt.Errorf("extract path must be a directory: \"%s\"", path)
+	}
 
-	// TODO: implement tar extract method
+	// decompress
+	rd, err := Decompress(r)
+	if err != nil {
+		return err
+	}
 
-	return ErrNotImplemented
+	rt := tar.NewReader(rd)
+	for {
+		hdr, err := rt.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		// join a cleaned version of the filename with the path
+		fn := filepath.Join(path, filepath.Clean("/"+hdr.Name))
+		switch hdr.Typeflag {
+		case tar.TypeDir:
+			err = os.MkdirAll(fn, fs.FileMode(hdr.Mode))
+			if err != nil {
+				return err
+			}
+		case tar.TypeReg:
+			// TODO: configure file mode, creation timestamp, etc
+			fh, err := os.Create(fn)
+			if err != nil {
+				return err
+			}
+			n, err := io.Copy(fh, rt)
+			fh.Close()
+			if err != nil {
+				return err
+			}
+			if n != hdr.Size {
+				return fmt.Errorf("size mismatch extracting \"%s\", expected %d, extracted %d", hdr.Name, hdr.Size, n)
+			}
+			// TODO: handle other tar types (symlinks, etc)
+		}
+	}
+
+	return nil
 }

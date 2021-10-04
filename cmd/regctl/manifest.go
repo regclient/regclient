@@ -46,6 +46,7 @@ var manifestDigestCmd = &cobra.Command{
 
 var manifestGetCmd = &cobra.Command{
 	Use:               "get <image_ref>",
+	Aliases:           []string{"pull"},
 	Short:             "retrieve manifest or manifest list",
 	Long:              `Shows the manifest or manifest list of the specified image.`,
 	Args:              cobra.ExactArgs(1),
@@ -55,6 +56,7 @@ var manifestGetCmd = &cobra.Command{
 
 var manifestPutCmd = &cobra.Command{
 	Use:               "put <image_ref>",
+	Aliases:           []string{"push"},
 	Short:             "push manifest or manifest list",
 	Long:              `Pushes a manifest or manifest list to a repository.`,
 	Args:              cobra.ExactArgs(1),
