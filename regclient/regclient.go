@@ -10,6 +10,7 @@ import (
 	// crypto libraries included for go-digest
 	_ "crypto/sha256"
 	_ "crypto/sha512"
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"os"
@@ -141,6 +142,7 @@ func WithConfigHosts(configHosts []ConfigHost) Opt {
 		}
 		for _, configHost := range configHosts {
 			if configHost.Name == "" {
+				// TODO: should this error or warn?
 				continue
 			}
 			if configHost.Name == DockerRegistry || configHost.Name == DockerRegistryDNS || configHost.Name == DockerRegistryAuth {
@@ -300,6 +302,13 @@ func (rc *regClient) getRetryable(host *ConfigHost) retryable.Retryable {
 	}
 	if rc.hosts[host.Name].retryable == nil {
 		c := &http.Client{}
+		if host.TLS == TLSInsecure {
+			c.Transport = &http.Transport{
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: true,
+				},
+			}
+		}
 		a := auth.NewAuth(
 			auth.WithLog(rc.log),
 			auth.WithHTTPClient(c),
