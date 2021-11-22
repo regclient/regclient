@@ -32,6 +32,9 @@ jobs:
     - name: Verify go fmt
       run: test -z "$(go fmt ./...)"
 
+    - name: Verify go vet
+      run: test -z "$(go vet ./...)"
+
     - name: Test
       run: make test
 
