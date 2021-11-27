@@ -58,9 +58,6 @@ func New(mediaType string, raw []byte, ref types.Ref, header http.Header) (Manif
 	}
 	if len(raw) > 0 {
 		mc.manifSet = true
-		if mc.digest == "" {
-			mc.digest = digest.FromBytes(raw)
-		}
 	}
 	return fromCommon(mc)
 }
@@ -79,105 +76,145 @@ func FromDescriptor(desc ociv1.Descriptor, mBytes []byte) (Manifest, error) {
 // FromOrig creates a new manifest from the original upstream manifest type.
 // This method should be used if you are creating a new manifest rather than pulling one from a registry.
 func FromOrig(orig interface{}) (Manifest, error) {
-	var d digest.Digest
-	mj, err := json.Marshal(orig)
-	if err == nil {
-		d = digest.FromBytes(mj)
-	}
+	var mt string
+	var m Manifest
 
+	mj, err := json.Marshal(orig)
+	if err != nil {
+		return nil, err
+	}
 	mc := common{
-		digest:   d,
+		digest:   digest.FromBytes(mj),
+		rawBody:  mj,
 		manifSet: true,
 	}
-
+	// create manifest based on type
 	switch orig.(type) {
 	case dockerSchema1.Manifest:
+		mOrig := orig.(dockerSchema1.Manifest)
+		mt = mOrig.MediaType
 		mc.mt = MediaTypeDocker1Manifest
-		return &docker1Manifest{
+		m = &docker1Manifest{
 			common:   mc,
-			Manifest: orig.(dockerSchema1.Manifest),
-		}, nil
+			Manifest: mOrig,
+		}
 	case dockerSchema1.SignedManifest:
-		mc.digest = digest.FromBytes(orig.(dockerSchema1.SignedManifest).Canonical)
+		mOrig := orig.(dockerSchema1.SignedManifest)
+		mt = mOrig.MediaType
+		// recompute digest on the canonical data
+		mc.digest = digest.FromBytes(mOrig.Canonical)
 		mc.mt = MediaTypeDocker1ManifestSigned
-		return &docker1SignedManifest{
+		m = &docker1SignedManifest{
 			common:         mc,
-			SignedManifest: orig.(dockerSchema1.SignedManifest),
-		}, nil
+			SignedManifest: mOrig,
+		}
 	case dockerSchema2.Manifest:
+		mOrig := orig.(dockerSchema2.Manifest)
+		mt = mOrig.MediaType
 		mc.mt = MediaTypeDocker2Manifest
-		return &docker2Manifest{
+		m = &docker2Manifest{
 			common:   mc,
-			Manifest: orig.(dockerSchema2.Manifest),
-		}, nil
+			Manifest: mOrig,
+		}
 	case dockerManifestList.ManifestList:
+		mOrig := orig.(dockerManifestList.ManifestList)
+		mt = mOrig.MediaType
 		mc.mt = MediaTypeDocker2ManifestList
-		return &docker2ManifestList{
+		m = &docker2ManifestList{
 			common:       mc,
-			ManifestList: orig.(dockerManifestList.ManifestList),
-		}, nil
+			ManifestList: mOrig,
+		}
 	case ociv1.Manifest:
+		mOrig := orig.(ociv1.Manifest)
+		mt = mOrig.MediaType
 		mc.mt = MediaTypeOCI1Manifest
-		return &oci1Manifest{
+		m = &oci1Manifest{
 			common:   mc,
-			Manifest: orig.(ociv1.Manifest),
-		}, nil
+			Manifest: mOrig,
+		}
 	case ociv1.Index:
+		mOrig := orig.(ociv1.Index)
+		mt = mOrig.MediaType
 		mc.mt = MediaTypeOCI1ManifestList
-		return &oci1Index{
+		m = &oci1Index{
 			common: mc,
 			Index:  orig.(ociv1.Index),
-		}, nil
+		}
 	case UnknownData:
-		return &unknown{
+		m = &unknown{
 			common:      mc,
 			UnknownData: orig.(UnknownData),
-		}, nil
+		}
 	default:
 		return nil, fmt.Errorf("Unsupported type to convert to a manifest: %T", orig)
 	}
-
+	// verify media type
+	err = verifyMT(mc.mt, mt)
+	if err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func fromCommon(mc common) (Manifest, error) {
 	var err error
 	var m Manifest
+	var mt string
+	// compute/verify digest
+	if len(mc.rawBody) > 0 {
+		var d digest.Digest
+		if mc.mt == MediaTypeDocker1ManifestSigned {
+			d = digest.FromBytes(m.(*docker1SignedManifest).Canonical)
+		} else {
+			d = digest.FromBytes(mc.rawBody)
+		}
+		if mc.digest == "" {
+			mc.digest = d
+		} else if mc.digest != d {
+			return nil, fmt.Errorf("digest mismatch, expected %s, found %s", mc.digest.String(), d.String())
+		}
+	}
 	switch mc.mt {
 	case MediaTypeDocker1Manifest:
 		var mOrig dockerSchema1.Manifest
 		if len(mc.rawBody) > 0 {
 			err = json.Unmarshal(mc.rawBody, &mOrig)
+			mt = mOrig.MediaType
 		}
 		m = &docker1Manifest{common: mc, Manifest: mOrig}
 	case MediaTypeDocker1ManifestSigned:
 		var mOrig dockerSchema1.SignedManifest
 		if len(mc.rawBody) > 0 {
 			err = json.Unmarshal(mc.rawBody, &mOrig)
-			mc.digest = digest.FromBytes(mOrig.Canonical)
+			mt = mOrig.MediaType
 		}
 		m = &docker1SignedManifest{common: mc, SignedManifest: mOrig}
 	case MediaTypeDocker2Manifest:
 		var mOrig dockerSchema2.Manifest
 		if len(mc.rawBody) > 0 {
 			err = json.Unmarshal(mc.rawBody, &mOrig)
+			mt = mOrig.MediaType
 		}
 		m = &docker2Manifest{common: mc, Manifest: mOrig}
 	case MediaTypeDocker2ManifestList:
 		var mOrig dockerManifestList.ManifestList
 		if len(mc.rawBody) > 0 {
 			err = json.Unmarshal(mc.rawBody, &mOrig)
+			mt = mOrig.MediaType
 		}
 		m = &docker2ManifestList{common: mc, ManifestList: mOrig}
 	case MediaTypeOCI1Manifest:
 		var mOrig ociv1.Manifest
 		if len(mc.rawBody) > 0 {
 			err = json.Unmarshal(mc.rawBody, &mOrig)
+			mt = mOrig.MediaType
 		}
 		m = &oci1Manifest{common: mc, Manifest: mOrig}
 	case MediaTypeOCI1ManifestList:
 		var mOrig ociv1.Index
 		if len(mc.rawBody) > 0 {
 			err = json.Unmarshal(mc.rawBody, &mOrig)
+			mt = mOrig.MediaType
 		}
 		m = &oci1Index{common: mc, Index: mOrig}
 	default:
@@ -188,9 +225,21 @@ func fromCommon(mc common) (Manifest, error) {
 		m = &unknown{common: mc, UnknownData: mOrig}
 	}
 	if err != nil {
-		return nil, fmt.Errorf("Error unmarshaling manifest for %s: %w", mc.ref.CommonName(), err)
+		return nil, fmt.Errorf("error unmarshaling manifest for %s: %w", mc.ref.CommonName(), err)
+	}
+	// verify media type
+	err = verifyMT(mc.mt, mt)
+	if err != nil {
+		return nil, err
 	}
 	return m, nil
+}
+
+func verifyMT(expected, received string) error {
+	if received != "" && expected != received {
+		return fmt.Errorf("manifest contains an unexpected media type: expected %s, received %s", expected, received)
+	}
+	return nil
 }
 
 func getPlatformDesc(p *ociv1.Platform, dl []ociv1.Descriptor) (*ociv1.Descriptor, error) {
