@@ -65,14 +65,17 @@ var manifestPutCmd = &cobra.Command{
 }
 
 var manifestOpts struct {
-	list        bool
-	platform    string
-	requireList bool
-	format      string
-	contentType string
+	list          bool
+	platform      string
+	requireList   bool
+	format        string
+	contentType   string
+	forceTagDeref bool
 }
 
 func init() {
+	manifestDeleteCmd.Flags().BoolVarP(&manifestOpts.forceTagDeref, "force-tag-dereference", "", false, "Dereference the a tag to a digest, this is unsafe")
+
 	manifestDigestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", false, "Do not resolve platform from manifest list (recommended)")
 	manifestDigestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
 	manifestDigestCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
@@ -180,11 +183,23 @@ func runManifestDelete(cmd *cobra.Command, args []string) error {
 	}
 	rc := newRegClient()
 
+	if ref.Digest == "" && manifestOpts.forceTagDeref {
+		m, err := rc.ManifestHead(context.Background(), ref)
+		if err != nil {
+			return err
+		}
+		ref.Digest = m.GetDigest().String()
+		log.WithFields(logrus.Fields{
+			"tag":    ref.Tag,
+			"digest": ref.Digest,
+		}).Debug("Forced dereference of tag")
+	}
+
 	log.WithFields(logrus.Fields{
-		"host": ref.Registry,
-		"repo": ref.Repository,
-		"tag":  ref.Tag,
-	}).Debug("Image digest")
+		"host":   ref.Registry,
+		"repo":   ref.Repository,
+		"digest": ref.Digest,
+	}).Debug("Manifest delete")
 
 	err = rc.ManifestDelete(context.Background(), ref)
 	if err != nil {
@@ -204,7 +219,7 @@ func runManifestDigest(cmd *cobra.Command, args []string) error {
 		"host": ref.Registry,
 		"repo": ref.Repository,
 		"tag":  ref.Tag,
-	}).Debug("Image digest")
+	}).Debug("Manifest digest")
 
 	// attempt to request only the headers, avoids Docker Hub rate limits
 	m, err := rc.ManifestHead(context.Background(), ref)

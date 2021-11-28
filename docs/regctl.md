@@ -135,6 +135,8 @@ The `copy` command allows images to be copied between registries, between reposi
 
 The `delete` command removes the image manifest from the server.
 This will impact all tags pointing to the same manifest and requires a digest to be included in the image reference to be deleted (e.g. `myimage@sha256:abcd...`).
+Using `--force-tag-dereference` will automatically lookup the digest for a specific tag, and will delete the underlying image which will delete any other tags pointing to the same image.
+Use `tag delete` to remove a single tag.
 
 The `digest` command is useful to pin the image used within your deployment to an immutable sha256 checksum.
 
@@ -166,6 +168,8 @@ Available Commands:
 
 The `delete` command removes the image manifest from the server.
 This will impact all tags pointing to the same manifest and requires a digest to be included in the image reference to be deleted (e.g. `myimage@sha256:abcd...`).
+Using `--force-tag-dereference` will automatically lookup the digest for a specific tag, and will delete the underlying image which will delete any other tags pointing to the same image.
+Use `tag delete` to remove a single tag.
 
 The `digest` command is useful to pin the image used within your deployment to an immutable sha256 checksum.
 
