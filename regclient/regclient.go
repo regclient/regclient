@@ -45,16 +45,16 @@ var (
 	VCSRef = "unknown"
 )
 
-// RegClient provides an interfaces to working with registries
-type RegClient interface {
-	RepoClient
-	TagClient
-	ManifestClient
-	ImageClient
-	BlobClient
+// RegClient remains for backwards compatibility
+type RegClient = *Client
+
+type ociAPI interface {
+	ociTagAPI
+	ociManifestAPI
+	ociBlobAPI
 }
 
-type regClient struct {
+type Client struct {
 	certPaths      []string
 	hosts          map[string]*regClientHost
 	log            *logrus.Logger
@@ -73,11 +73,11 @@ type regClientHost struct {
 }
 
 // Opt functions are used to configure NewRegClient
-type Opt func(*regClient)
+type Opt func(*Client)
 
 // NewRegClient returns a registry client
-func NewRegClient(opts ...Opt) RegClient {
-	var rc = regClient{
+func NewRegClient(opts ...Opt) *Client {
+	var rc = Client{
 		certPaths:     []string{},
 		hosts:         map[string]*regClientHost{},
 		retryLimit:    DefaultRetryLimit,
@@ -106,7 +106,7 @@ func NewRegClient(opts ...Opt) RegClient {
 
 // WithCertDir adds a path of certificates to trust similar to Docker's /etc/docker/certs.d
 func WithCertDir(path string) Opt {
-	return func(rc *regClient) {
+	return func(rc *Client) {
 		rc.certPaths = append(rc.certPaths, path)
 		return
 	}
@@ -114,7 +114,7 @@ func WithCertDir(path string) Opt {
 
 // WithDockerCerts adds certificates trusted by docker in /etc/docker/certs.d
 func WithDockerCerts() Opt {
-	return func(rc *regClient) {
+	return func(rc *Client) {
 		rc.certPaths = append(rc.certPaths, DockerCertDir)
 		return
 	}
@@ -123,7 +123,7 @@ func WithDockerCerts() Opt {
 // WithDockerCreds adds configuration from users docker config with registry logins
 // This changes the default value from the config file, and should be added after the config file is loaded
 func WithDockerCreds() Opt {
-	return func(rc *regClient) {
+	return func(rc *Client) {
 		err := rc.loadDockerCreds()
 		if err != nil {
 			rc.log.WithFields(logrus.Fields{
@@ -136,7 +136,7 @@ func WithDockerCreds() Opt {
 
 // WithConfigHosts adds a list of config host settings
 func WithConfigHosts(configHosts []ConfigHost) Opt {
-	return func(rc *regClient) {
+	return func(rc *Client) {
 		if configHosts == nil || len(configHosts) == 0 {
 			return
 		}
@@ -183,7 +183,7 @@ func WithConfigHost(configHost ConfigHost) Opt {
 
 // WithBlobSize overrides default blob sizes
 func WithBlobSize(chunk, max int64) Opt {
-	return func(rc *regClient) {
+	return func(rc *Client) {
 		if chunk > 0 {
 			rc.blobChunkSize = chunk
 		}
@@ -195,14 +195,14 @@ func WithBlobSize(chunk, max int64) Opt {
 
 // WithLog overrides default logrus Logger
 func WithLog(log *logrus.Logger) Opt {
-	return func(rc *regClient) {
+	return func(rc *Client) {
 		rc.log = log
 	}
 }
 
 // WithRetryDelay specifies the time permitted for retry delays
 func WithRetryDelay(delayInit, delayMax time.Duration) Opt {
-	return func(rc *regClient) {
+	return func(rc *Client) {
 		rc.retryDelayInit = delayInit
 		rc.retryDelayMax = delayMax
 	}
@@ -210,19 +210,19 @@ func WithRetryDelay(delayInit, delayMax time.Duration) Opt {
 
 // WithRetryLimit specifies the number of retries for non-fatal errors
 func WithRetryLimit(retryLimit int) Opt {
-	return func(rc *regClient) {
+	return func(rc *Client) {
 		rc.retryLimit = retryLimit
 	}
 }
 
 // WithUserAgent specifies the User-Agent http header
 func WithUserAgent(ua string) Opt {
-	return func(rc *regClient) {
+	return func(rc *Client) {
 		rc.userAgent = ua
 	}
 }
 
-func (rc *regClient) loadDockerCreds() error {
+func (rc *Client) loadDockerCreds() error {
 	conffile := dockercfg.LoadDefaultConfigFile(os.Stderr)
 	creds, err := conffile.GetAllCredentials()
 	if err != nil {
@@ -269,7 +269,7 @@ func (rc *regClient) loadDockerCreds() error {
 	return nil
 }
 
-func (rc *regClient) hostGet(hostname string) *ConfigHost {
+func (rc *Client) hostGet(hostname string) *ConfigHost {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	if _, ok := rc.hosts[hostname]; !ok {
@@ -281,7 +281,7 @@ func (rc *regClient) hostGet(hostname string) *ConfigHost {
 	return rc.hosts[hostname].config
 }
 
-func (rc *regClient) hostSet(newHost ConfigHost) error {
+func (rc *Client) hostSet(newHost ConfigHost) error {
 	name := newHost.Name
 	if _, ok := rc.hosts[name]; !ok {
 		// merge newHost with default host settings
@@ -294,7 +294,7 @@ func (rc *regClient) hostSet(newHost ConfigHost) error {
 	return nil
 }
 
-func (rc *regClient) getRetryable(host *ConfigHost) retryable.Retryable {
+func (rc *Client) getRetryable(host *ConfigHost) retryable.Retryable {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	if _, ok := rc.hosts[host.Name]; !ok {
@@ -345,7 +345,7 @@ func (host *ConfigHost) authCreds() func(h string) auth.Cred {
 	}
 }
 
-func (rc *regClient) getCerts(host *ConfigHost) []string {
+func (rc *Client) getCerts(host *ConfigHost) []string {
 	var certs []string
 
 	for _, certPath := range rc.certPaths {

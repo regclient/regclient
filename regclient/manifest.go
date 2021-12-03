@@ -12,15 +12,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// ManifestClient provides registry client requests to manifests
-type ManifestClient interface {
+type ociManifestAPI interface {
 	ManifestDelete(ctx context.Context, ref types.Ref) error
 	ManifestGet(ctx context.Context, ref types.Ref) (manifest.Manifest, error)
 	ManifestHead(ctx context.Context, ref types.Ref) (manifest.Manifest, error)
 	ManifestPut(ctx context.Context, ref types.Ref, m manifest.Manifest) error
 }
 
-func (rc *regClient) ManifestDelete(ctx context.Context, ref types.Ref) error {
+func (rc *Client) ManifestDelete(ctx context.Context, ref types.Ref) error {
 	if ref.Digest == "" {
 		return wraperr.New(fmt.Errorf("Digest required to delete manifest, reference %s", ref.CommonName()), ErrMissingDigest)
 	}
@@ -60,7 +59,7 @@ func (rc *regClient) ManifestDelete(ctx context.Context, ref types.Ref) error {
 	return nil
 }
 
-func (rc *regClient) ManifestGet(ctx context.Context, ref types.Ref) (manifest.Manifest, error) {
+func (rc *Client) ManifestGet(ctx context.Context, ref types.Ref) (manifest.Manifest, error) {
 	var tagOrDigest string
 	if ref.Digest != "" {
 		tagOrDigest = ref.Digest
@@ -113,7 +112,7 @@ func (rc *regClient) ManifestGet(ctx context.Context, ref types.Ref) (manifest.M
 	return manifest.New(mt, rawBody, ref, resp.HTTPResponse().Header)
 }
 
-func (rc *regClient) ManifestHead(ctx context.Context, ref types.Ref) (manifest.Manifest, error) {
+func (rc *Client) ManifestHead(ctx context.Context, ref types.Ref) (manifest.Manifest, error) {
 	// build the request
 	var tagOrDigest string
 	if ref.Digest != "" {
@@ -161,7 +160,7 @@ func (rc *regClient) ManifestHead(ctx context.Context, ref types.Ref) (manifest.
 	return manifest.New(mt, []byte{}, ref, resp.HTTPResponse().Header)
 }
 
-func (rc *regClient) ManifestPut(ctx context.Context, ref types.Ref, m manifest.Manifest) error {
+func (rc *Client) ManifestPut(ctx context.Context, ref types.Ref, m manifest.Manifest) error {
 	var tagOrDigest string
 	if ref.Digest != "" {
 		tagOrDigest = ref.Digest

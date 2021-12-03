@@ -119,7 +119,7 @@ func ConfigHostNewName(host string) *ConfigHost {
 	return &h
 }
 
-func (rc *regClient) mergeConfigHost(curHost, newHost ConfigHost, warn bool) ConfigHost {
+func (rc *Client) mergeConfigHost(curHost, newHost ConfigHost, warn bool) ConfigHost {
 	name := newHost.Name
 
 	// merge the existing and new config host

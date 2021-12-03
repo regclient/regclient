@@ -15,12 +15,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// RepoClient provides registry client requests to repositories
-type RepoClient interface {
-	RepoList(ctx context.Context, hostname string) (RepoList, error)
-	RepoListWithOpts(ctx context.Context, hostname string, opts RepoOpts) (RepoList, error)
-}
-
 // RepoList interface is used for listing tags
 type RepoList interface {
 	GetOrig() interface{}
@@ -54,11 +48,11 @@ type RepoOpts struct {
 	Last  string
 }
 
-func (rc *regClient) RepoList(ctx context.Context, hostname string) (RepoList, error) {
+func (rc *Client) RepoList(ctx context.Context, hostname string) (RepoList, error) {
 	return rc.RepoListWithOpts(ctx, hostname, RepoOpts{})
 }
 
-func (rc *regClient) RepoListWithOpts(ctx context.Context, hostname string, opts RepoOpts) (RepoList, error) {
+func (rc *Client) RepoListWithOpts(ctx context.Context, hostname string, opts RepoOpts) (RepoList, error) {
 	var rl RepoList
 	rlc := repoCommon{
 		host: hostname,

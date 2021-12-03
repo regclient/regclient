@@ -43,7 +43,7 @@ type httpResp interface {
 // httpDo wraps the http calls from regClient to handle mirrors, potentially
 // different API's for different registry types, and then uses retryable to run
 // requests
-func (rc *regClient) httpDo(ctx context.Context, req httpReq) (httpResp, error) {
+func (rc *Client) httpDo(ctx context.Context, req httpReq) (httpResp, error) {
 	errBody := []byte{}
 	upstreamHost := rc.hostGet(req.host)
 	hosts := make([]*ConfigHost, 0, 1+len(upstreamHost.Mirrors))
@@ -179,7 +179,7 @@ func httpError(statusCode int) error {
 }
 
 // sortHostCmp to sort host list of mirrors
-func sortHostsCmp(rc *regClient, hosts []*ConfigHost, upstream string) func(i, j int) bool {
+func sortHostsCmp(rc *Client, hosts []*ConfigHost, upstream string) func(i, j int) bool {
 	// build map of host name to retryable DownUntil times
 	backoffUntil := map[string]time.Time{}
 	for _, h := range hosts {

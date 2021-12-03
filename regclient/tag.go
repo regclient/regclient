@@ -25,11 +25,9 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// TagClient wraps calls to tag list and delete
-type TagClient interface {
+type ociTagAPI interface {
 	TagDelete(ctx context.Context, ref types.Ref) error
-	TagList(ctx context.Context, ref types.Ref) (TagList, error)
-	TagListWithOpts(ctx context.Context, ref types.Ref, opts TagOpts) (TagList, error)
+	TagList(ctx context.Context, ref types.Ref, opts ...TagOpts) (TagList, error)
 }
 
 // TODO: consider a tag interface for future uses
@@ -69,9 +67,21 @@ type TagDockerList struct {
 }
 
 // TagOpts is used for options to the tag functions
-type TagOpts struct {
+type tagOpts struct {
 	Limit int
 	Last  string
+}
+type TagOpts func(*tagOpts)
+
+func TagOptLimit(limit int) TagOpts {
+	return func(t *tagOpts) {
+		t.Limit = limit
+	}
+}
+func TagOptLast(last string) TagOpts {
+	return func(t *tagOpts) {
+		t.Last = last
+	}
 }
 
 // TagDelete deletes a tag from the registry. Since there's no API for this,
@@ -80,7 +90,7 @@ type TagOpts struct {
 // 1. Make a manifest, for this we put a few labels and timestamps to be unique.
 // 2. Push that manifest to the tag.
 // 3. Delete the digest for that new manifest that is only used by that tag.
-func (rc *regClient) TagDelete(ctx context.Context, ref types.Ref) error {
+func (rc *Client) TagDelete(ctx context.Context, ref types.Ref) error {
 	var tempManifest manifest.Manifest
 	if ref.Tag == "" {
 		return ErrMissingTag
@@ -220,21 +230,22 @@ func (rc *regClient) TagDelete(ctx context.Context, ref types.Ref) error {
 	return nil
 }
 
-func (rc *regClient) TagList(ctx context.Context, ref types.Ref) (TagList, error) {
-	return rc.TagListWithOpts(ctx, ref, TagOpts{})
-}
-
-func (rc *regClient) TagListWithOpts(ctx context.Context, ref types.Ref, opts TagOpts) (TagList, error) {
+func (rc *Client) TagList(ctx context.Context, ref types.Ref, opts ...TagOpts) (TagList, error) {
 	var tl TagList
+	var tOpts tagOpts
+	for _, opt := range opts {
+		opt(&tOpts)
+	}
+
 	tc := tagCommon{
 		ref: ref,
 	}
 	query := url.Values{}
-	if opts.Last != "" {
-		query.Set("last", opts.Last)
+	if tOpts.Last != "" {
+		query.Set("last", tOpts.Last)
 	}
-	if opts.Limit > 0 {
-		query.Set("n", strconv.Itoa(opts.Limit))
+	if tOpts.Limit > 0 {
+		query.Set("n", strconv.Itoa(tOpts.Limit))
 	}
 	headers := http.Header{
 		"Accept": []string{"application/json"},

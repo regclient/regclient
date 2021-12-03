@@ -19,17 +19,15 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// BlobClient provides registry client requests to Blobs
-type BlobClient interface {
-	BlobCopy(ctx context.Context, refSrc types.Ref, refTgt types.Ref, d digest.Digest) error
+type ociBlobAPI interface {
+	BlobDelete(ctx context.Context, ref types.Ref, d digest.Digest) error
 	BlobGet(ctx context.Context, ref types.Ref, d digest.Digest, accepts []string) (blob.Reader, error)
-	BlobGetOCIConfig(ctx context.Context, ref types.Ref, d digest.Digest) (blob.OCIConfig, error)
 	BlobHead(ctx context.Context, ref types.Ref, d digest.Digest) (blob.Reader, error)
 	BlobMount(ctx context.Context, refSrc types.Ref, refTgt types.Ref, d digest.Digest) error
 	BlobPut(ctx context.Context, ref types.Ref, d digest.Digest, rdr io.Reader, ct string, cl int64) (digest.Digest, int64, error)
 }
 
-func (rc *regClient) BlobCopy(ctx context.Context, refSrc types.Ref, refTgt types.Ref, d digest.Digest) error {
+func (rc *Client) BlobCopy(ctx context.Context, refSrc types.Ref, refTgt types.Ref, d digest.Digest) error {
 	// for the same repository, there's nothing to copy
 	if refSrc.Registry == refTgt.Registry && refSrc.Repository == refTgt.Repository {
 		rc.log.WithFields(logrus.Fields{
@@ -88,7 +86,7 @@ func (rc *regClient) BlobCopy(ctx context.Context, refSrc types.Ref, refTgt type
 
 // blobGetRetryable tracks read bytes, and resends a blobGetRange on errors to get a new pass through reader
 type blobGetRetryable struct {
-	rc         *regClient
+	rc         *Client
 	r          io.ReadCloser
 	offset     int64
 	start, end int64
@@ -192,7 +190,13 @@ func (bgr *blobGetRetryable) Seek(offset int64, whence int) (int64, error) {
 	return bgr.offset, nil
 }
 
-func (rc *regClient) BlobGet(ctx context.Context, ref types.Ref, d digest.Digest, accepts []string) (blob.Reader, error) {
+func (rc *Client) BlobDelete(ctx context.Context, ref types.Ref, d digest.Digest) error {
+	// TODO: implement
+	return ErrNotImplemented
+}
+
+// TODO: remove accepts argument
+func (rc *Client) BlobGet(ctx context.Context, ref types.Ref, d digest.Digest, accepts []string) (blob.Reader, error) {
 	// build/send request
 	headers := http.Header{}
 	if len(accepts) > 0 {
@@ -233,7 +237,7 @@ func (rc *regClient) BlobGet(ctx context.Context, ref types.Ref, d digest.Digest
 
 // TODO: consider adding a BlobGetRange that returns a blob.Reader
 
-func (rc *regClient) blobGetRange(ctx context.Context, ref types.Ref, d digest.Digest, accepts []string, start, end int64) (io.ReadCloser, error) {
+func (rc *Client) blobGetRange(ctx context.Context, ref types.Ref, d digest.Digest, accepts []string, start, end int64) (io.ReadCloser, error) {
 	// check for valid range
 	if start < 0 || end < 0 || start > end {
 		return nil, fmt.Errorf("Invalid range, start %d, end %d", start, end)
@@ -269,7 +273,7 @@ func (rc *regClient) blobGetRange(ctx context.Context, ref types.Ref, d digest.D
 	return resp, nil
 }
 
-func (rc *regClient) BlobGetOCIConfig(ctx context.Context, ref types.Ref, d digest.Digest) (blob.OCIConfig, error) {
+func (rc *Client) BlobGetOCIConfig(ctx context.Context, ref types.Ref, d digest.Digest) (blob.OCIConfig, error) {
 	b, err := rc.BlobGet(ctx, ref, d, []string{MediaTypeDocker2ImageConfig, ociv1.MediaTypeImageConfig})
 	if err != nil {
 		return nil, err
@@ -278,7 +282,7 @@ func (rc *regClient) BlobGetOCIConfig(ctx context.Context, ref types.Ref, d dige
 }
 
 // BlobHead is used to verify if a blob exists and is accessible
-func (rc *regClient) BlobHead(ctx context.Context, ref types.Ref, d digest.Digest) (blob.Reader, error) {
+func (rc *Client) BlobHead(ctx context.Context, ref types.Ref, d digest.Digest) (blob.Reader, error) {
 	// build/send request
 	req := httpReq{
 		host: ref.Registry,
@@ -305,7 +309,7 @@ func (rc *regClient) BlobHead(ctx context.Context, ref types.Ref, d digest.Diges
 	return b, nil
 }
 
-func (rc *regClient) BlobMount(ctx context.Context, refSrc types.Ref, refTgt types.Ref, d digest.Digest) error {
+func (rc *Client) BlobMount(ctx context.Context, refSrc types.Ref, refTgt types.Ref, d digest.Digest) error {
 	_, uuid, err := rc.blobMount(ctx, refTgt, d, refSrc)
 	// if mount fails and returns an upload location, cancel that upload
 	if err != nil {
@@ -314,7 +318,8 @@ func (rc *regClient) BlobMount(ctx context.Context, refSrc types.Ref, refTgt typ
 	return err
 }
 
-func (rc *regClient) BlobPut(ctx context.Context, ref types.Ref, d digest.Digest, rdr io.Reader, ct string, cl int64) (digest.Digest, int64, error) {
+// TODO: remove content-type arg
+func (rc *Client) BlobPut(ctx context.Context, ref types.Ref, d digest.Digest, rdr io.Reader, ct string, cl int64) (digest.Digest, int64, error) {
 	var putURL *url.URL
 	var err error
 	// defaults for content-type and length
@@ -375,7 +380,7 @@ func (rc *regClient) BlobPut(ctx context.Context, ref types.Ref, d digest.Digest
 	return rc.blobPutUploadChunked(ctx, ref, putURL, rdr, ct)
 }
 
-func (rc *regClient) blobGetUploadURL(ctx context.Context, ref types.Ref) (*url.URL, error) {
+func (rc *Client) blobGetUploadURL(ctx context.Context, ref types.Ref) (*url.URL, error) {
 	// request an upload location
 	req := httpReq{
 		host:      ref.Registry,
@@ -418,7 +423,7 @@ func (rc *regClient) blobGetUploadURL(ctx context.Context, ref types.Ref) (*url.
 	return putURL, nil
 }
 
-func (rc *regClient) blobMount(ctx context.Context, refTgt types.Ref, d digest.Digest, refSrc types.Ref) (*url.URL, string, error) {
+func (rc *Client) blobMount(ctx context.Context, refTgt types.Ref, d digest.Digest, refSrc types.Ref) (*url.URL, string, error) {
 	// build/send request
 	query := url.Values{}
 	query.Set("mount", d.String())
@@ -468,7 +473,7 @@ func (rc *regClient) blobMount(ctx context.Context, refTgt types.Ref, d digest.D
 	return nil, "", fmt.Errorf("Failed to mount blob, digest %s, ref %s: %w", d, refTgt.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 }
 
-func (rc *regClient) blobPutUploadFull(ctx context.Context, ref types.Ref, d digest.Digest, putURL *url.URL, rdr io.Reader, ct string, cl int64) error {
+func (rc *Client) blobPutUploadFull(ctx context.Context, ref types.Ref, d digest.Digest, putURL *url.URL, rdr io.Reader, ct string, cl int64) error {
 	host := rc.hostGet(ref.Registry)
 
 	// append digest to request to use the monolithic upload option
@@ -514,7 +519,7 @@ func (rc *regClient) blobPutUploadFull(ctx context.Context, ref types.Ref, d dig
 	return nil
 }
 
-func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, putURL *url.URL, rdr io.Reader, ct string) (digest.Digest, int64, error) {
+func (rc *Client) blobPutUploadChunked(ctx context.Context, ref types.Ref, putURL *url.URL, rdr io.Reader, ct string) (digest.Digest, int64, error) {
 	host := rc.hostGet(ref.Registry)
 	bufSize := host.BlobChunk
 	if bufSize <= 0 {
@@ -638,7 +643,7 @@ func (rc *regClient) blobPutUploadChunked(ctx context.Context, ref types.Ref, pu
 }
 
 // TODO: just take a putURL rather than the uuid and call a delete on that url
-func (rc *regClient) blobUploadCancel(ctx context.Context, ref types.Ref, uuid string) error {
+func (rc *Client) blobUploadCancel(ctx context.Context, ref types.Ref, uuid string) error {
 	if uuid == "" {
 		return fmt.Errorf("Failed to cancel upload %s: uuid undefined", ref.CommonName())
 	}
@@ -665,7 +670,7 @@ func (rc *regClient) blobUploadCancel(ctx context.Context, ref types.Ref, uuid s
 }
 
 // blobUploadStatus provides a response with headers indicating the progress of an upload
-func (rc *regClient) blobUploadStatus(ctx context.Context, ref types.Ref, putURL *url.URL) (*http.Response, error) {
+func (rc *Client) blobUploadStatus(ctx context.Context, ref types.Ref, putURL *url.URL) (*http.Response, error) {
 	host := rc.hostGet(ref.Registry)
 	rty := rc.getRetryable(host)
 	opts := []retryable.OptsReq{}
