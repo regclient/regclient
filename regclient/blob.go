@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/opencontainers/go-digest"
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/pkg/retryable"
 	"github.com/regclient/regclient/regclient/blob"
 	"github.com/regclient/regclient/regclient/types"
@@ -21,10 +20,10 @@ import (
 
 type ociBlobAPI interface {
 	BlobDelete(ctx context.Context, ref types.Ref, d digest.Digest) error
-	BlobGet(ctx context.Context, ref types.Ref, d digest.Digest, accepts []string) (blob.Reader, error)
+	BlobGet(ctx context.Context, ref types.Ref, d digest.Digest) (blob.Reader, error)
 	BlobHead(ctx context.Context, ref types.Ref, d digest.Digest) (blob.Reader, error)
 	BlobMount(ctx context.Context, refSrc types.Ref, refTgt types.Ref, d digest.Digest) error
-	BlobPut(ctx context.Context, ref types.Ref, d digest.Digest, rdr io.Reader, ct string, cl int64) (digest.Digest, int64, error)
+	BlobPut(ctx context.Context, ref types.Ref, d digest.Digest, rdr io.Reader, cl int64) (digest.Digest, int64, error)
 }
 
 func (rc *Client) BlobCopy(ctx context.Context, refSrc types.Ref, refTgt types.Ref, d digest.Digest) error {
@@ -63,7 +62,7 @@ func (rc *Client) BlobCopy(ctx context.Context, refSrc types.Ref, refTgt types.R
 		}).Warn("Failed to mount blob")
 	}
 	// fast options failed, download layer from source and push to target
-	blobIO, err := rc.BlobGet(ctx, refSrc, d, []string{})
+	blobIO, err := rc.BlobGet(ctx, refSrc, d)
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"err":    err,
@@ -73,7 +72,7 @@ func (rc *Client) BlobCopy(ctx context.Context, refSrc types.Ref, refTgt types.R
 		return err
 	}
 	defer blobIO.Close()
-	if _, _, err := rc.BlobPut(ctx, refTgt, d, blobIO, blobIO.MediaType(), blobIO.Response().ContentLength); err != nil {
+	if _, _, err := rc.BlobPut(ctx, refTgt, d, blobIO, blobIO.Response().ContentLength); err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"err": err,
 			"src": refSrc.Reference,
@@ -94,12 +93,11 @@ type blobGetRetryable struct {
 	ctx        context.Context
 	ref        types.Ref
 	d          digest.Digest
-	accepts    []string
 }
 
 func (bgr *blobGetRetryable) newReader() error {
 	// request new reader for range
-	r, err := bgr.rc.blobGetRange(bgr.ctx, bgr.ref, bgr.d, bgr.accepts, bgr.start+bgr.offset, bgr.end)
+	r, err := bgr.rc.blobGetRange(bgr.ctx, bgr.ref, bgr.d, bgr.start+bgr.offset, bgr.end)
 	if err != nil {
 		return err
 	}
@@ -191,17 +189,29 @@ func (bgr *blobGetRetryable) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (rc *Client) BlobDelete(ctx context.Context, ref types.Ref, d digest.Digest) error {
-	// TODO: implement
-	return ErrNotImplemented
+	req := httpReq{
+		host: ref.Registry,
+		apis: map[string]httpReqAPI{
+			"": {
+				method:     "DELETE",
+				repository: ref.Repository,
+				path:       "blobs/" + d.String(),
+			},
+		},
+	}
+	resp, err := rc.httpDo(ctx, req)
+	if err != nil {
+		return fmt.Errorf("failed to delete blob, digest %s, ref %s: %w", d, ref.CommonName(), err)
+	}
+	if resp.HTTPResponse().StatusCode != 202 {
+		return fmt.Errorf("failed to delete blob, digest %s, ref %s: %w", d, ref.CommonName(), httpError(resp.HTTPResponse().StatusCode))
+	}
+	return nil
 }
 
 // TODO: remove accepts argument
-func (rc *Client) BlobGet(ctx context.Context, ref types.Ref, d digest.Digest, accepts []string) (blob.Reader, error) {
+func (rc *Client) BlobGet(ctx context.Context, ref types.Ref, d digest.Digest) (blob.Reader, error) {
 	// build/send request
-	headers := http.Header{}
-	if len(accepts) > 0 {
-		headers["Accept"] = accepts
-	}
 	req := httpReq{
 		host: ref.Registry,
 		apis: map[string]httpReqAPI{
@@ -209,7 +219,6 @@ func (rc *Client) BlobGet(ctx context.Context, ref types.Ref, d digest.Digest, a
 				method:     "GET",
 				repository: ref.Repository,
 				path:       "blobs/" + d.String(),
-				headers:    headers,
 			},
 		},
 	}
@@ -222,12 +231,11 @@ func (rc *Client) BlobGet(ctx context.Context, ref types.Ref, d digest.Digest, a
 	}
 
 	bgr := blobGetRetryable{
-		r:       resp,
-		rc:      rc,
-		ctx:     ctx,
-		ref:     ref,
-		d:       d,
-		accepts: accepts,
+		r:   resp,
+		rc:  rc,
+		ctx: ctx,
+		ref: ref,
+		d:   d,
 	}
 	b := blob.NewReader(&bgr)
 	b.SetMeta(ref, d, 0)
@@ -237,16 +245,13 @@ func (rc *Client) BlobGet(ctx context.Context, ref types.Ref, d digest.Digest, a
 
 // TODO: consider adding a BlobGetRange that returns a blob.Reader
 
-func (rc *Client) blobGetRange(ctx context.Context, ref types.Ref, d digest.Digest, accepts []string, start, end int64) (io.ReadCloser, error) {
+func (rc *Client) blobGetRange(ctx context.Context, ref types.Ref, d digest.Digest, start, end int64) (io.ReadCloser, error) {
 	// check for valid range
 	if start < 0 || end < 0 || start > end {
 		return nil, fmt.Errorf("Invalid range, start %d, end %d", start, end)
 	}
 	// build/send request
 	headers := http.Header{}
-	if len(accepts) > 0 {
-		headers["Accept"] = accepts
-	}
 	// if start and end are both 0, skip the range, return the full blob
 	if start > 0 || (start == 0 && end > 0) {
 		headers["Range"] = []string{fmt.Sprintf("bytes=%d-%d", start, end)}
@@ -274,7 +279,7 @@ func (rc *Client) blobGetRange(ctx context.Context, ref types.Ref, d digest.Dige
 }
 
 func (rc *Client) BlobGetOCIConfig(ctx context.Context, ref types.Ref, d digest.Digest) (blob.OCIConfig, error) {
-	b, err := rc.BlobGet(ctx, ref, d, []string{MediaTypeDocker2ImageConfig, ociv1.MediaTypeImageConfig})
+	b, err := rc.BlobGet(ctx, ref, d)
 	if err != nil {
 		return nil, err
 	}
@@ -319,13 +324,10 @@ func (rc *Client) BlobMount(ctx context.Context, refSrc types.Ref, refTgt types.
 }
 
 // TODO: remove content-type arg
-func (rc *Client) BlobPut(ctx context.Context, ref types.Ref, d digest.Digest, rdr io.Reader, ct string, cl int64) (digest.Digest, int64, error) {
+func (rc *Client) BlobPut(ctx context.Context, ref types.Ref, d digest.Digest, rdr io.Reader, cl int64) (digest.Digest, int64, error) {
 	var putURL *url.URL
 	var err error
 	// defaults for content-type and length
-	if ct == "" {
-		ct = "application/octet-stream"
-	}
 	if cl == 0 {
 		cl = -1
 	}
@@ -361,7 +363,7 @@ func (rc *Client) BlobPut(ctx context.Context, ref types.Ref, d digest.Digest, r
 		}
 	}
 	if tryPut {
-		err = rc.blobPutUploadFull(ctx, ref, d, putURL, rdr, ct, cl)
+		err = rc.blobPutUploadFull(ctx, ref, d, putURL, rdr, cl)
 		if err == nil {
 			return digest.Digest(d), cl, nil
 		}
@@ -377,7 +379,7 @@ func (rc *Client) BlobPut(ctx context.Context, ref types.Ref, d digest.Digest, r
 	}
 
 	// send a chunked upload if full upload not possible or too large
-	return rc.blobPutUploadChunked(ctx, ref, putURL, rdr, ct)
+	return rc.blobPutUploadChunked(ctx, ref, putURL, rdr)
 }
 
 func (rc *Client) blobGetUploadURL(ctx context.Context, ref types.Ref) (*url.URL, error) {
@@ -473,8 +475,9 @@ func (rc *Client) blobMount(ctx context.Context, refTgt types.Ref, d digest.Dige
 	return nil, "", fmt.Errorf("Failed to mount blob, digest %s, ref %s: %w", d, refTgt.CommonName(), httpError(resp.HTTPResponse().StatusCode))
 }
 
-func (rc *Client) blobPutUploadFull(ctx context.Context, ref types.Ref, d digest.Digest, putURL *url.URL, rdr io.Reader, ct string, cl int64) error {
+func (rc *Client) blobPutUploadFull(ctx context.Context, ref types.Ref, d digest.Digest, putURL *url.URL, rdr io.Reader, cl int64) error {
 	host := rc.hostGet(ref.Registry)
+	ct := "application/octet-stream"
 
 	// append digest to request to use the monolithic upload option
 	if putURL.RawQuery != "" {
@@ -519,7 +522,7 @@ func (rc *Client) blobPutUploadFull(ctx context.Context, ref types.Ref, d digest
 	return nil
 }
 
-func (rc *Client) blobPutUploadChunked(ctx context.Context, ref types.Ref, putURL *url.URL, rdr io.Reader, ct string) (digest.Digest, int64, error) {
+func (rc *Client) blobPutUploadChunked(ctx context.Context, ref types.Ref, putURL *url.URL, rdr io.Reader) (digest.Digest, int64, error) {
 	host := rc.hostGet(ref.Registry)
 	bufSize := host.BlobChunk
 	if bufSize <= 0 {
@@ -528,6 +531,7 @@ func (rc *Client) blobPutUploadChunked(ctx context.Context, ref types.Ref, putUR
 	bufBytes := make([]byte, bufSize)
 	bufRdr := bytes.NewReader(bufBytes)
 	lenChange := false
+	ct := "application/octet-stream"
 
 	// setup buffer and digest pipe
 	digester := digest.Canonical.Digester()

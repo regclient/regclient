@@ -509,7 +509,7 @@ func (rc *Client) imageExportDescriptor(ctx context.Context, ref types.Ref, desc
 
 	default:
 		// get blob
-		blobR, err := rc.BlobGet(ctx, ref, desc.Digest, []string{})
+		blobR, err := rc.BlobGet(ctx, ref, desc.Digest)
 		if err != nil {
 			return err
 		}
@@ -585,7 +585,7 @@ func (rc *Client) imageImportBlob(ctx context.Context, ref types.Ref, desc ociv1
 		return nil
 	}
 	// upload blob
-	_, _, err = rc.BlobPut(ctx, ref, desc.Digest, trd.tr, "", desc.Size)
+	_, _, err = rc.BlobPut(ctx, ref, desc.Digest, trd.tr, desc.Size)
 	if err != nil {
 		return err
 	}
@@ -618,7 +618,7 @@ func (rc *Client) imageImportDockerAddLayerHandlers(ctx context.Context, ref typ
 	// add handler for config
 	trd.handlers[trd.dockerManifestList[0].Config] = func(header *tar.Header, trd *tarReadData) error {
 		// upload blob, digest is unknown
-		d, size, err := rc.BlobPut(ctx, ref, "", trd.tr, "", header.Size)
+		d, size, err := rc.BlobPut(ctx, ref, "", trd.tr, header.Size)
 		if err != nil {
 			return err
 		}
@@ -644,7 +644,7 @@ func (rc *Client) imageImportDockerAddLayerHandlers(ctx context.Context, ref typ
 					return err
 				}
 				// upload blob, digest and size is unknown
-				d, size, err := rc.BlobPut(ctx, ref, "", gzipR, "", 0)
+				d, size, err := rc.BlobPut(ctx, ref, "", gzipR, 0)
 				if err != nil {
 					return err
 				}

@@ -131,7 +131,7 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		rdr, err := rc.BlobGet(ctx, ref, d, []string{})
+		rdr, err := rc.BlobGet(ctx, ref, d)
 		if err != nil {
 			return err
 		}
@@ -195,7 +195,7 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 			// wrap in a closure to trigger defer on each step, avoiding open file handles
 			err = func() error {
 				// perform blob get
-				rdr, err := rc.BlobGet(ctx, ref, l.Digest, []string{})
+				rdr, err := rc.BlobGet(ctx, ref, l.Digest)
 				if err != nil {
 					return err
 				}
@@ -262,7 +262,7 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("more than one matching layer found, add filters or specify output dir")
 		}
 		// pull blob, write to stdout
-		rdr, err := rc.BlobGet(ctx, ref, layers[0].Digest, []string{})
+		rdr, err := rc.BlobGet(ctx, ref, layers[0].Digest)
 		if err != nil {
 			return err
 		}
@@ -324,7 +324,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	}
 	configDigest := digest.FromBytes(configBytes)
 	// push config to registry
-	_, _, err = rc.BlobPut(ctx, ref, configDigest, bytes.NewReader(configBytes), "", int64(len(configBytes)))
+	_, _, err = rc.BlobPut(ctx, ref, configDigest, bytes.NewReader(configBytes), int64(len(configBytes)))
 	if err != nil {
 		return err
 	}
@@ -406,7 +406,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 				if err != nil {
 					return err
 				}
-				_, _, err = rc.BlobPut(ctx, ref, d, rdr, "", l)
+				_, _, err = rc.BlobPut(ctx, ref, d, rdr, l)
 				if err != nil {
 					return err
 				}
@@ -422,7 +422,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 		if len(artifactOpts.artifactMT) > 0 {
 			mt = artifactOpts.artifactMT[0]
 		}
-		d, l, err := rc.BlobPut(ctx, ref, "", os.Stdin, "", 0)
+		d, l, err := rc.BlobPut(ctx, ref, "", os.Stdin, 0)
 		if err != nil {
 			return err
 		}

@@ -48,15 +48,16 @@ var blobOpts struct {
 
 func init() {
 	blobGetCmd.Flags().StringVarP(&blobOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
-	blobGetCmd.Flags().StringVarP(&blobOpts.mt, "media-type", "", "", "Set the requested mediaType")
+	blobGetCmd.Flags().StringVarP(&blobOpts.mt, "media-type", "", "", "Set the requested mediaType (deprecated)")
 	blobGetCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 	blobGetCmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{
 			"application/octet-stream",
 		}, cobra.ShellCompDirectiveNoFileComp
 	})
+	blobGetCmd.Flags().MarkHidden("media-type")
 
-	blobPutCmd.Flags().StringVarP(&blobOpts.mt, "content-type", "", "", "Set the requested content type")
+	blobPutCmd.Flags().StringVarP(&blobOpts.mt, "content-type", "", "", "Set the requested content type (deprecated)")
 	blobPutCmd.Flags().StringVarP(&blobOpts.digest, "digest", "", "", "Set the expected digest")
 	blobPutCmd.RegisterFlagCompletionFunc("content-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{
@@ -64,6 +65,7 @@ func init() {
 		}, cobra.ShellCompDirectiveNoFileComp
 	})
 	blobPutCmd.RegisterFlagCompletionFunc("digest", completeArgNone)
+	blobPutCmd.Flags().MarkHidden("content-type")
 
 	blobCmd.AddCommand(blobGetCmd)
 	blobCmd.AddCommand(blobPutCmd)
@@ -76,9 +78,10 @@ func runBlobGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	rc := newRegClient()
-	accepts := []string{}
 	if blobOpts.mt != "" {
-		accepts = []string{blobOpts.mt}
+		log.WithFields(logrus.Fields{
+			"mt": blobOpts.mt,
+		}).Info("Specifying the blob media type is deprecated")
 	}
 
 	log.WithFields(logrus.Fields{
@@ -90,7 +93,7 @@ func runBlobGet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	blob, err := rc.BlobGet(context.Background(), ref, d, accepts)
+	blob, err := rc.BlobGet(context.Background(), ref, d)
 	if err != nil {
 		return err
 	}
@@ -118,13 +121,18 @@ func runBlobPut(cmd *cobra.Command, args []string) error {
 	}
 	rc := newRegClient()
 
+	if blobOpts.mt != "" {
+		log.WithFields(logrus.Fields{
+			"mt": blobOpts.mt,
+		}).Info("Specifying the blob media type is deprecated")
+	}
+
 	log.WithFields(logrus.Fields{
-		"host":         ref.Registry,
-		"repository":   ref.Repository,
-		"digest":       blobOpts.digest,
-		"content-type": blobOpts.mt,
+		"host":       ref.Registry,
+		"repository": ref.Repository,
+		"digest":     blobOpts.digest,
 	}).Debug("Pushing blob")
-	dOut, size, err := rc.BlobPut(context.Background(), ref, digest.Digest(blobOpts.digest), os.Stdin, blobOpts.mt, 0)
+	dOut, size, err := rc.BlobPut(context.Background(), ref, digest.Digest(blobOpts.digest), os.Stdin, 0)
 	if err != nil {
 		return err
 	}

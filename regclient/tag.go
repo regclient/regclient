@@ -204,7 +204,7 @@ func (rc *Client) TagDelete(ctx context.Context, ref types.Ref) error {
 	}).Debug("Sending dummy manifest to replace tag")
 
 	// push config
-	_, _, err = rc.BlobPut(ctx, ref, confDigest, ioutil.NopCloser(bytes.NewReader(confB)), MediaTypeDocker2ImageConfig, int64(len(confB)))
+	_, _, err = rc.BlobPut(ctx, ref, confDigest, ioutil.NopCloser(bytes.NewReader(confB)), int64(len(confB)))
 	if err != nil {
 		return fmt.Errorf("Failed sending dummy config to delete %s: %w", ref.CommonName(), err)
 	}

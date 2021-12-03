@@ -172,7 +172,7 @@ func TestBlobGet(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed creating ref: %v", err)
 		}
-		br, err := rc.BlobGet(ctx, ref, d1, nil)
+		br, err := rc.BlobGet(ctx, ref, d1)
 		if err != nil {
 			t.Errorf("Failed running BlobGet: %v", err)
 			return
@@ -209,7 +209,7 @@ func TestBlobGet(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed creating ref: %v", err)
 		}
-		br, err := rc.BlobGet(ctx, ref, dMissing, nil)
+		br, err := rc.BlobGet(ctx, ref, dMissing)
 		if err == nil {
 			defer br.Close()
 			t.Errorf("Unexpected success running BlobGet")
@@ -225,7 +225,7 @@ func TestBlobGet(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed creating ref: %v", err)
 		}
-		br, err := rc.BlobGet(ctx, ref, d2, nil)
+		br, err := rc.BlobGet(ctx, ref, d2)
 		if err != nil {
 			t.Errorf("Failed running BlobGet: %v", err)
 			return
@@ -246,7 +246,7 @@ func TestBlobGet(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed creating ref: %v", err)
 		}
-		br, err := rc.BlobGet(ctx, ref, d1, nil)
+		br, err := rc.BlobGet(ctx, ref, d1)
 		if err == nil {
 			defer br.Close()
 			t.Errorf("Unexpected success running BlobGet")
@@ -645,7 +645,7 @@ func TestBlobPut(t *testing.T) {
 			t.Errorf("Failed creating ref: %v", err)
 		}
 		br := bytes.NewReader(blob1)
-		dp, clp, err := rc.BlobPut(ctx, ref, d1, br, "", int64(len(blob1)))
+		dp, clp, err := rc.BlobPut(ctx, ref, d1, br, int64(len(blob1)))
 		if err != nil {
 			t.Errorf("Failed running BlobPut: %v", err)
 			return
@@ -665,7 +665,7 @@ func TestBlobPut(t *testing.T) {
 			t.Errorf("Failed creating ref: %v", err)
 		}
 		br := bytes.NewReader(blob2)
-		dp, clp, err := rc.BlobPut(ctx, ref, d2, br, "", int64(len(blob2)))
+		dp, clp, err := rc.BlobPut(ctx, ref, d2, br, int64(len(blob2)))
 		if err != nil {
 			t.Errorf("Failed running BlobPut: %v", err)
 			return
@@ -685,7 +685,7 @@ func TestBlobPut(t *testing.T) {
 			t.Errorf("Failed creating ref: %v", err)
 		}
 		br := bytes.NewReader(blob3)
-		dp, clp, err := rc.BlobPut(ctx, ref, d3, br, "", int64(len(blob3)))
+		dp, clp, err := rc.BlobPut(ctx, ref, d3, br, int64(len(blob3)))
 		if err != nil {
 			t.Errorf("Failed running BlobPut: %v", err)
 			return
