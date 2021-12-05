@@ -6,7 +6,7 @@ import (
 
 	"github.com/containerd/containerd/platforms"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/regclient/regclient/pkg/go2lua"
+	"github.com/regclient/regclient/internal/go2lua"
 	"github.com/regclient/regclient/regclient/manifest"
 	"github.com/regclient/regclient/regclient/types"
 	"github.com/sirupsen/logrus"

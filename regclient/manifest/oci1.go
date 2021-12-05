@@ -10,7 +10,7 @@ import (
 	"github.com/containerd/containerd/platforms"
 	digest "github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/regclient/regclient/pkg/wraperr"
+	"github.com/regclient/regclient/internal/wraperr"
 )
 
 const (

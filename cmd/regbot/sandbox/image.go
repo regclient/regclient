@@ -7,7 +7,7 @@ import (
 	"time"
 
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/regclient/regclient/pkg/go2lua"
+	"github.com/regclient/regclient/internal/go2lua"
 	"github.com/regclient/regclient/regclient"
 	"github.com/regclient/regclient/regclient/blob"
 	"github.com/regclient/regclient/regclient/manifest"

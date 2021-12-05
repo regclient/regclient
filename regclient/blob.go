@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/opencontainers/go-digest"
-	"github.com/regclient/regclient/pkg/retryable"
+	"github.com/regclient/regclient/internal/retryable"
 	"github.com/regclient/regclient/regclient/blob"
 	"github.com/regclient/regclient/regclient/types"
 	"github.com/sirupsen/logrus"

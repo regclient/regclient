@@ -16,8 +16,8 @@ import (
 	"os"
 
 	dockercfg "github.com/docker/cli/cli/config"
-	"github.com/regclient/regclient/pkg/auth"
-	"github.com/regclient/regclient/pkg/retryable"
+	"github.com/regclient/regclient/internal/auth"
+	"github.com/regclient/regclient/internal/retryable"
 	"github.com/sirupsen/logrus"
 )
 

@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/opencontainers/go-digest"
-	"github.com/regclient/regclient/pkg/retryable"
+	"github.com/regclient/regclient/internal/retryable"
 )
 
 type httpReq struct {

@@ -6,7 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/regclient/regclient/pkg/wraperr"
+	"github.com/regclient/regclient/internal/wraperr"
 	"github.com/regclient/regclient/regclient/manifest"
 	"github.com/regclient/regclient/regclient/types"
 	"github.com/sirupsen/logrus"
