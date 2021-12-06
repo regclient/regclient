@@ -18,6 +18,7 @@ import (
 	dockercfg "github.com/docker/cli/cli/config"
 	"github.com/regclient/regclient/internal/auth"
 	"github.com/regclient/regclient/internal/retryable"
+	"github.com/regclient/regclient/regclient/config"
 	"github.com/sirupsen/logrus"
 )
 
@@ -31,13 +32,10 @@ const (
 	// DefaultUserAgent sets the header on http requests
 	DefaultUserAgent = "regclient/regclient"
 	// DockerCertDir default location for docker certs
-	DockerCertDir = "/etc/docker/certs.d"
-	// DockerRegistry is the name resolved in docker images on Hub
-	DockerRegistry = "docker.io"
-	// DockerRegistryAuth is the name provided in docker's config for Hub
-	DockerRegistryAuth = "https://index.docker.io/v1/"
-	// DockerRegistryDNS is the host to connect to for Hub
-	DockerRegistryDNS = "registry-1.docker.io"
+	DockerCertDir      = "/etc/docker/certs.d"
+	DockerRegistry     = config.DockerRegistry
+	DockerRegistryAuth = config.DockerRegistryAuth
+	DockerRegistryDNS  = config.DockerRegistryDNS
 )
 
 var (
@@ -68,7 +66,7 @@ type Client struct {
 }
 
 type regClientHost struct {
-	config    *ConfigHost
+	config    *config.Host
 	retryable retryable.Retryable
 }
 
@@ -89,7 +87,7 @@ func NewRegClient(opts ...Opt) *Client {
 	}
 
 	// inject Docker Hub settings
-	rc.hostSet(ConfigHost{
+	rc.hostSet(config.Host{
 		Name:     DockerRegistry,
 		TLS:      TLSEnabled,
 		Hostname: DockerRegistryDNS,
@@ -135,7 +133,7 @@ func WithDockerCreds() Opt {
 }
 
 // WithConfigHosts adds a list of config host settings
-func WithConfigHosts(configHosts []ConfigHost) Opt {
+func WithConfigHosts(configHosts []config.Host) Opt {
 	return func(rc *Client) {
 		if configHosts == nil || len(configHosts) == 0 {
 			return
@@ -177,8 +175,8 @@ func WithConfigHosts(configHosts []ConfigHost) Opt {
 }
 
 // WithConfigHost adds config host settings
-func WithConfigHost(configHost ConfigHost) Opt {
-	return WithConfigHosts([]ConfigHost{configHost})
+func WithConfigHost(configHost config.Host) Opt {
+	return WithConfigHosts([]config.Host{configHost})
 }
 
 // WithBlobSize overrides default blob sizes
@@ -250,7 +248,7 @@ func (rc *Client) loadDockerCreds() error {
 			"pass-set":  cred.Password != "",
 			"token-set": cred.IdentityToken != "",
 		}).Debug("Loading docker cred")
-		err = rc.hostSet(ConfigHost{
+		err = rc.hostSet(config.Host{
 			Name:     name,
 			Hostname: cred.ServerAddress,
 			User:     cred.Username,
@@ -269,36 +267,42 @@ func (rc *Client) loadDockerCreds() error {
 	return nil
 }
 
-func (rc *Client) hostGet(hostname string) *ConfigHost {
+func (rc *Client) hostGet(hostname string) *config.Host {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	if _, ok := rc.hosts[hostname]; !ok {
 		rc.hosts[hostname] = &regClientHost{}
 	}
 	if rc.hosts[hostname].config == nil {
-		rc.hosts[hostname].config = ConfigHostNewName(hostname)
+		rc.hosts[hostname].config = config.HostNewName(hostname)
 	}
 	return rc.hosts[hostname].config
 }
 
-func (rc *Client) hostSet(newHost ConfigHost) error {
+func (rc *Client) hostSet(newHost config.Host) error {
 	name := newHost.Name
 	if _, ok := rc.hosts[name]; !ok {
 		// merge newHost with default host settings
-		mergedHost := rc.mergeConfigHost(*ConfigHostNewName(name), newHost, false)
-		rc.hosts[name] = &regClientHost{config: &mergedHost}
+		curHost := config.HostNewName(name)
+		err := curHost.Merge(newHost, nil)
+		if err != nil {
+			return err
+		}
+		rc.hosts[name] = &regClientHost{config: curHost}
 	} else {
-		mergedHost := rc.mergeConfigHost(*rc.hosts[name].config, newHost, true)
-		rc.hosts[name].config = &mergedHost
+		err := rc.hosts[name].config.Merge(newHost, rc.log)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-func (rc *Client) getRetryable(host *ConfigHost) retryable.Retryable {
+func (rc *Client) getRetryable(host *config.Host) retryable.Retryable {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	if _, ok := rc.hosts[host.Name]; !ok {
-		rc.hosts[host.Name] = &regClientHost{config: ConfigHostNewName(host.Name)}
+		rc.hosts[host.Name] = &regClientHost{config: config.HostNewName(host.Name)}
 	}
 	if rc.hosts[host.Name].retryable == nil {
 		c := &http.Client{}
@@ -312,7 +316,7 @@ func (rc *Client) getRetryable(host *ConfigHost) retryable.Retryable {
 		a := auth.NewAuth(
 			auth.WithLog(rc.log),
 			auth.WithHTTPClient(c),
-			auth.WithCreds(host.authCreds()),
+			auth.WithCreds(host.AuthCreds()),
 			auth.WithClientID(rc.userAgent),
 		)
 		rOpts := []retryable.Opts{
@@ -339,13 +343,7 @@ func (rc *Client) getRetryable(host *ConfigHost) retryable.Retryable {
 	return rc.hosts[host.Name].retryable
 }
 
-func (host *ConfigHost) authCreds() func(h string) auth.Cred {
-	return func(h string) auth.Cred {
-		return auth.Cred{User: host.User, Password: host.Pass, Token: host.Token}
-	}
-}
-
-func (rc *Client) getCerts(host *ConfigHost) []string {
+func (rc *Client) getCerts(host *config.Host) []string {
 	var certs []string
 
 	for _, certPath := range rc.certPaths {

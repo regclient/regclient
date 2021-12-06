@@ -1,19 +1,16 @@
-package regclient
+package config
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"testing"
-
-	"github.com/sirupsen/logrus"
 )
 
 func TestConfig(t *testing.T) {
 	// generate new/blank
-	blankHostP := ConfigHostNew()
+	blankHostP := HostNew()
 
 	// generate new/hostname
-	emptyHostP := ConfigHostNewName("host.example.org")
+	emptyHostP := HostNewName("host.example.org")
 
 	// parse json
 	exJson := `
@@ -44,7 +41,7 @@ func TestConfig(t *testing.T) {
 		"blobMax": 333333
 	}
 	`
-	var exHost, exHost2 ConfigHost
+	var exHost, exHost2 Host
 	err := json.Unmarshal([]byte(exJson), &exHost)
 	if err != nil {
 		t.Errorf("failed unmarshaling exJson: %v", err)
@@ -55,29 +52,27 @@ func TestConfig(t *testing.T) {
 	}
 
 	// merge blank with json
-	var rc = &regClient{
-		certPaths:     []string{},
-		hosts:         map[string]*regClientHost{},
-		retryLimit:    DefaultRetryLimit,
-		userAgent:     DefaultUserAgent,
-		blobChunkSize: DefaultBlobChunk,
-		blobMaxPut:    DefaultBlobMax,
-		// logging is disabled by default
-		log: &logrus.Logger{Out: ioutil.Discard},
+	exMergeBlank := *blankHostP
+	err = (&exMergeBlank).Merge(exHost, nil)
+	if err != nil {
+		t.Errorf("failed to merge blank host with exHost: %v", err)
 	}
-	exMergeBlank := rc.mergeConfigHost(*blankHostP, exHost, false)
-	exMergeHost2 := rc.mergeConfigHost(exHost, exHost2, false)
+	exMergeHost2 := exHost
+	err = (&exMergeHost2).Merge(exHost2, nil)
+	if err != nil {
+		t.Errorf("failed to merge ex host with exHost2: %v", err)
+	}
 
 	// verify fields in each
 	tests := []struct {
 		name       string
-		host       ConfigHost
-		hostExpect ConfigHost
+		host       Host
+		hostExpect Host
 	}{
 		{
 			name: "blank",
 			host: *blankHostP,
-			hostExpect: ConfigHost{
+			hostExpect: Host{
 				TLS:     TLSEnabled,
 				APIOpts: map[string]string{},
 			},
@@ -85,7 +80,7 @@ func TestConfig(t *testing.T) {
 		{
 			name: "empty",
 			host: *emptyHostP,
-			hostExpect: ConfigHost{
+			hostExpect: Host{
 				TLS:      TLSEnabled,
 				Hostname: "host.example.org",
 				APIOpts:  map[string]string{},
@@ -94,7 +89,7 @@ func TestConfig(t *testing.T) {
 		{
 			name: "exHost",
 			host: exHost,
-			hostExpect: ConfigHost{
+			hostExpect: Host{
 				TLS:        TLSEnabled,
 				Hostname:   "host.example.com",
 				User:       "user-ex",
@@ -110,7 +105,7 @@ func TestConfig(t *testing.T) {
 		{
 			name: "exHost2",
 			host: exHost2,
-			hostExpect: ConfigHost{
+			hostExpect: Host{
 				TLS:        TLSDisabled,
 				Hostname:   "host2.example.com",
 				User:       "user-ex3",
@@ -126,7 +121,7 @@ func TestConfig(t *testing.T) {
 		{
 			name: "mergeBlank",
 			host: exMergeBlank,
-			hostExpect: ConfigHost{
+			hostExpect: Host{
 				TLS:        TLSEnabled,
 				Hostname:   "host.example.com",
 				User:       "user-ex",
@@ -142,7 +137,7 @@ func TestConfig(t *testing.T) {
 		{
 			name: "mergeHost2",
 			host: exMergeHost2,
-			hostExpect: ConfigHost{
+			hostExpect: Host{
 				TLS:        TLSDisabled,
 				Hostname:   "host2.example.com",
 				User:       "user-ex3",
