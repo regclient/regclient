@@ -3,7 +3,7 @@ package sandbox
 import (
 	"context"
 
-	"github.com/regclient/regclient/internal/go2lua"
+	"github.com/regclient/regclient/cmd/regbot/internal/go2lua"
 	"github.com/regclient/regclient/regclient"
 	"github.com/sirupsen/logrus"
 	lua "github.com/yuin/gopher-lua"
