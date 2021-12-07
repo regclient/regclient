@@ -680,13 +680,13 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action s
 		}).Info("Saving backup")
 		err = rc.ImageCopy(ctx, tgt, backupRef)
 		if err != nil {
+			// Possible registry corruption with existing image, only warn and continue/overwrite
 			log.WithFields(logrus.Fields{
 				"original": tgt.CommonName(),
 				"template": s.Backup,
 				"backup":   backupRef.CommonName(),
 				"error":    err,
-			}).Error("Failed to backup existing image")
-			return err
+			}).Warn("Failed to backup existing image")
 		}
 	}
 
