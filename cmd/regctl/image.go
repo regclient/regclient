@@ -98,13 +98,22 @@ The other values may be 0 if not provided by the registry.`,
 }
 
 var imageOpts struct {
-	list        bool
-	platform    string
-	requireList bool
-	format      string
+	forceRecursive bool
+	format         string
+	digestTags     bool
+	list           bool
+	platform       string
+	platforms      []string
+	requireList    bool
 }
 
 func init() {
+	imageCopyCmd.Flags().BoolVarP(&imageOpts.forceRecursive, "force-recursive", "", false, "Force recursive copy of image, repairs missing nested blobs and manifests")
+	imageCopyCmd.Flags().StringArrayVarP(&imageOpts.platforms, "platforms", "", []string{}, "Copy only specific platforms, registry validation must be disabled")
+	imageCopyCmd.Flags().BoolVarP(&imageOpts.digestTags, "digest-tags", "", false, "Include digest tags (\"sha256-<digest>.*\") when copying manifests")
+	// platforms should be treated as experimental since it will break many registries
+	imageCopyCmd.Flags().MarkHidden("platforms")
+
 	imageDeleteCmd.Flags().BoolVarP(&manifestOpts.forceTagDeref, "force-tag-dereference", "", false, "Dereference the a tag to a digest, this is unsafe")
 
 	imageDigestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", false, "Do not resolve platform from manifest list (recommended)")
@@ -155,8 +164,20 @@ func runImageCopy(cmd *cobra.Command, args []string) error {
 		"target host": refTgt.Registry,
 		"target repo": refTgt.Repository,
 		"target tag":  refTgt.Tag,
+		"recursive":   imageOpts.forceRecursive,
+		"digest-tags": imageOpts.digestTags,
 	}).Debug("Image copy")
-	return rc.ImageCopy(context.Background(), refSrc, refTgt)
+	opts := []regclient.ImageOpts{}
+	if imageOpts.forceRecursive {
+		opts = append(opts, regclient.ImageWithForceRecursive())
+	}
+	if imageOpts.digestTags {
+		opts = append(opts, regclient.ImageWithDigestTags())
+	}
+	if len(imageOpts.platforms) > 0 {
+		opts = append(opts, regclient.ImageWithPlatforms(imageOpts.platforms))
+	}
+	return rc.ImageCopy(context.Background(), refSrc, refTgt, opts...)
 }
 
 func runImageExport(cmd *cobra.Command, args []string) error {
@@ -213,6 +234,7 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 		"platform": imageOpts.platform,
 	}).Debug("Image inspect")
 
+	manifestOpts.platform = imageOpts.platform
 	m, err := getManifest(rc, ref)
 	if err != nil {
 		return err

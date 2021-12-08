@@ -8,6 +8,7 @@ import (
 
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/pkg/go2lua"
+	"github.com/regclient/regclient/regclient"
 	"github.com/regclient/regclient/regclient/blob"
 	"github.com/regclient/regclient/regclient/manifest"
 	"github.com/regclient/regclient/regclient/types"
@@ -153,20 +154,43 @@ func (s *Sandbox) configJSON(ls *lua.LState) int {
 func (s *Sandbox) imageCopy(ls *lua.LState) int {
 	src := s.checkReference(ls, 1)
 	tgt := s.checkReference(ls, 2)
+	opts := []regclient.ImageOpts{}
+	lOpts := struct {
+		DigestTags     bool     `json:"digestTags"`
+		ForceRecursive bool     `json:"forceRecursive"`
+		Platforms      []string `json:"platforms"`
+	}{}
+	if ls.GetTop() == 3 {
+		err := go2lua.Import(ls, ls.Get(3), &lOpts, lOpts)
+		if err != nil {
+			ls.RaiseError("Failed to parse options: %v", err)
+		}
+		if lOpts.DigestTags {
+			opts = append(opts, regclient.ImageWithDigestTags())
+		}
+		if lOpts.ForceRecursive {
+			opts = append(opts, regclient.ImageWithForceRecursive())
+		}
+		if len(lOpts.Platforms) > 0 {
+			opts = append(opts, regclient.ImageWithPlatforms(lOpts.Platforms))
+		}
+	}
 	if s.sem != nil {
 		s.sem.Acquire(s.ctx, 1)
 		defer s.sem.Release(1)
 	}
 	s.log.WithFields(logrus.Fields{
-		"script":  s.name,
-		"source":  src.ref.CommonName(),
-		"target":  tgt.ref.CommonName(),
-		"dry-run": s.dryRun,
+		"script":         s.name,
+		"source":         src.ref.CommonName(),
+		"target":         tgt.ref.CommonName(),
+		"digestTags":     lOpts.DigestTags,
+		"forceRecursive": lOpts.ForceRecursive,
+		"dry-run":        s.dryRun,
 	}).Info("Copy image")
 	if s.dryRun {
 		return 0
 	}
-	err := s.rc.ImageCopy(s.ctx, src.ref, tgt.ref)
+	err := s.rc.ImageCopy(s.ctx, src.ref, tgt.ref, opts...)
 	if err != nil {
 		ls.RaiseError("Failed copying \"%s\" to \"%s\": %v", src.ref.CommonName(), tgt.ref.CommonName(), err)
 	}

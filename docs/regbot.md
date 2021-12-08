@@ -227,6 +227,9 @@ The following additional functions are available:
 - `image.copy <src-ref> <tgt-ref>`:
   Copies an image.
   This may be retagging within the same repository, copying between repositories, or copying between registries.
+  There's an optional 3rd argument with a table of options:
+  - `{digestTags = true}`: copies digest specific tags in addition to the manifests.
+  - `{forceRecursive = true}`: forces a copy of all manifests and blobs even when the target parent manifest already exists.
 - `image.exportTar <src-ref> <tar-filename>`:
   Exports an image from the registry to a tar file.
 - `image.importTar <tgt-ref> <tar-filename>`:
