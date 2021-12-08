@@ -167,6 +167,8 @@ func WithLog(log *logrus.Logger) Opts {
 }
 
 func (a *auth) AddScope(host, scope string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	success := false
 	for _, at := range a.authTypes {
 		if a.hs[host][at] != nil {
@@ -284,7 +286,10 @@ func (a *auth) UpdateRequest(req *http.Request) error {
 			break
 		}
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (a *auth) addDefaultHandlers() {

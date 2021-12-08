@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/opencontainers/go-digest"
+	"github.com/regclient/regclient/internal/reqresp"
 	"github.com/regclient/regclient/regclient/types"
 	"github.com/sirupsen/logrus"
 )
@@ -31,15 +32,15 @@ func TestBlobGet(t *testing.T) {
 	d2, blob2 := newRandomBlob(blobLen, seed+1)
 	dMissing := digest.FromBytes([]byte("missing"))
 	// define req/resp entries
-	rrs := []ReqResp{
+	rrs := []reqresp.ReqResp{
 		// head
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				Name:   "HEAD for d1",
 				Method: "HEAD",
 				Path:   "/v2" + blobRepo + "/blobs/" + d1.String(),
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusOK,
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", blobLen)},
@@ -50,12 +51,12 @@ func TestBlobGet(t *testing.T) {
 		},
 		// get
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				Name:   "GET for d1",
 				Method: "GET",
 				Path:   "/v2" + blobRepo + "/blobs/" + d1.String(),
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusOK,
 				Body:   blob1,
 				Headers: http.Header{
@@ -67,12 +68,12 @@ func TestBlobGet(t *testing.T) {
 		},
 		// missing
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				Name:   "GET Missing",
 				Method: "GET",
 				Path:   "/v2" + blobRepo + "/blobs/" + dMissing.String(),
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusNotFound,
 			},
 		},
@@ -80,12 +81,12 @@ func TestBlobGet(t *testing.T) {
 		// TODO: test range read
 		// head for d2
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				Name:   "HEAD for d2",
 				Method: "HEAD",
 				Path:   "/v2" + blobRepo + "/blobs/" + d2.String(),
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusOK,
 				Headers: http.Header{
 					"Accept-Ranges":         {"bytes"},
@@ -97,7 +98,7 @@ func TestBlobGet(t *testing.T) {
 		},
 		// get range
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				Name:   "GET for d2, range for second part",
 				Method: "GET",
 				Path:   "/v2" + blobRepo + "/blobs/" + d2.String(),
@@ -105,7 +106,7 @@ func TestBlobGet(t *testing.T) {
 					"Range": {fmt.Sprintf("bytes=512-%d", blobLen)},
 				},
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusOK,
 				Body:   blob2[512:],
 				Headers: http.Header{
@@ -117,12 +118,12 @@ func TestBlobGet(t *testing.T) {
 		},
 		// get that stops early
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				Name:   "GET for d2, short read",
 				Method: "GET",
 				Path:   "/v2" + blobRepo + "/blobs/" + d2.String(),
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusOK,
 				Body:   blob2[0:512],
 				Headers: http.Header{
@@ -134,19 +135,19 @@ func TestBlobGet(t *testing.T) {
 		},
 		// forbidden
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				Name:   "GET Forbidden",
 				Method: "GET",
 				Path:   "/v2" + privateRepo + "/blobs/" + d1.String(),
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusForbidden,
 			},
 		},
 	}
 	rrs = append(rrs, rrBaseEntries...)
 	// create a server
-	ts := httptest.NewServer(NewHandler(t, rrs))
+	ts := httptest.NewServer(reqresp.NewHandler(t, rrs))
 	defer ts.Close()
 	// setup the regclient
 	tsURL, _ := url.Parse(ts.URL)
@@ -277,10 +278,10 @@ func TestBlobPut(t *testing.T) {
 	uuid3 := uuid.New()
 	// dMissing := digest.FromBytes([]byte("missing"))
 	// define req/resp entries
-	rrs := []ReqResp{
+	rrs := []reqresp.ReqResp{
 		// get upload location
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				Name:   "POST for d1",
 				Method: "POST",
 				Path:   "/v2" + blobRepo + "/blobs/uploads/",
@@ -288,7 +289,7 @@ func TestBlobPut(t *testing.T) {
 					"mount": {d1.String()},
 				},
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {"0"},
@@ -299,7 +300,7 @@ func TestBlobPut(t *testing.T) {
 		},
 		// upload blob
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				Name:   "PUT for d1",
 				Method: "PUT",
 				Path:   "/v2" + blobRepo + "/blobs/uploads/" + uuid1.String(),
@@ -312,7 +313,7 @@ func TestBlobPut(t *testing.T) {
 				},
 				Body: blob1,
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusCreated,
 				Headers: http.Header{
 					"Content-Length":        {"0"},
@@ -324,7 +325,7 @@ func TestBlobPut(t *testing.T) {
 
 		// get upload2 location
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				Name:   "POST for d2",
 				Method: "POST",
 				Path:   "/v2" + blobRepo + "/blobs/uploads/",
@@ -332,7 +333,7 @@ func TestBlobPut(t *testing.T) {
 					"mount": {d2.String()},
 				},
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {"0"},
@@ -343,7 +344,7 @@ func TestBlobPut(t *testing.T) {
 		},
 		// upload put for d2
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				DelOnUse: false,
 				Name:     "PUT for patched d2",
 				Method:   "PUT",
@@ -358,7 +359,7 @@ func TestBlobPut(t *testing.T) {
 					"Content-Type":   {"application/octet-stream"},
 				},
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusCreated,
 				Headers: http.Header{
 					"Content-Length":        {"0"},
@@ -369,7 +370,7 @@ func TestBlobPut(t *testing.T) {
 		},
 		// upload patch 2 fail for d2
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				DelOnUse: true,
 				Name:     "PATCH 2 fail for d2",
 				Method:   "PATCH",
@@ -384,7 +385,7 @@ func TestBlobPut(t *testing.T) {
 				},
 				Body: blob2[blobChunk:],
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusGatewayTimeout,
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
@@ -393,7 +394,7 @@ func TestBlobPut(t *testing.T) {
 		},
 		// upload patch 2 for d2
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				DelOnUse: false,
 				Name:     "PATCH 2 for d2",
 				Method:   "PATCH",
@@ -408,7 +409,7 @@ func TestBlobPut(t *testing.T) {
 				},
 				Body: blob2[blobChunk:],
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
@@ -419,7 +420,7 @@ func TestBlobPut(t *testing.T) {
 		},
 		// upload patch 1 for d2
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				DelOnUse: false,
 				Name:     "PATCH 1 for d2",
 				Method:   "PATCH",
@@ -432,7 +433,7 @@ func TestBlobPut(t *testing.T) {
 				},
 				Body: blob2[0:blobChunk],
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
@@ -443,7 +444,7 @@ func TestBlobPut(t *testing.T) {
 		},
 		// upload blob
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				DelOnUse: false,
 				Name:     "PUT for d2",
 				Method:   "PUT",
@@ -457,7 +458,7 @@ func TestBlobPut(t *testing.T) {
 				},
 				Body: blob2,
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusGatewayTimeout,
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
@@ -467,7 +468,7 @@ func TestBlobPut(t *testing.T) {
 
 		// get upload3 location
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				Name:   "POST for d3",
 				Method: "POST",
 				Path:   "/v2" + blobRepo + "/blobs/uploads/",
@@ -475,7 +476,7 @@ func TestBlobPut(t *testing.T) {
 					"mount": {d3.String()},
 				},
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {"0"},
@@ -486,7 +487,7 @@ func TestBlobPut(t *testing.T) {
 		},
 		// upload put for d3
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				DelOnUse: false,
 				Name:     "PUT for patched d3",
 				Method:   "PUT",
@@ -501,7 +502,7 @@ func TestBlobPut(t *testing.T) {
 					"Content-Type":   {"application/octet-stream"},
 				},
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusCreated,
 				Headers: http.Header{
 					"Content-Length":        {"0"},
@@ -512,7 +513,7 @@ func TestBlobPut(t *testing.T) {
 		},
 		// upload patch 2 fail for d3
 		// {
-		// 	ReqEntry: ReqEntry{
+		// 	ReqEntry: reqresp.ReqEntry{
 		// 		DelOnUse: true,
 		// 		Name:     "PATCH 2 fail for d3",
 		// 		Method:   "PATCH",
@@ -527,7 +528,7 @@ func TestBlobPut(t *testing.T) {
 		// 		},
 		// 		Body: blob2[blobChunk:],
 		// 	},
-		// 	RespEntry: RespEntry{
+		// 	RespEntry: reqresp.RespEntry{
 		// 		Status: http.StatusGatewayTimeout,
 		// 		Headers: http.Header{
 		// 			"Content-Length": {fmt.Sprintf("%d", 0)},
@@ -536,7 +537,7 @@ func TestBlobPut(t *testing.T) {
 		// },
 		// upload patch 2 for d3
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				DelOnUse: false,
 				Name:     "PATCH 2 for d3",
 				Method:   "PATCH",
@@ -551,7 +552,7 @@ func TestBlobPut(t *testing.T) {
 				},
 				Body: blob3[blobChunk:],
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
@@ -562,7 +563,7 @@ func TestBlobPut(t *testing.T) {
 		},
 		// upload patch 1 for d3
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				DelOnUse: false,
 				Name:     "PATCH 1 for d3",
 				Method:   "PATCH",
@@ -575,7 +576,7 @@ func TestBlobPut(t *testing.T) {
 				},
 				Body: blob3[0:blobChunk],
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
@@ -586,7 +587,7 @@ func TestBlobPut(t *testing.T) {
 		},
 		// upload blob d3
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				DelOnUse: false,
 				Name:     "PUT for d3",
 				Method:   "PUT",
@@ -600,7 +601,7 @@ func TestBlobPut(t *testing.T) {
 				},
 				Body: blob3,
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusGatewayTimeout,
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
@@ -610,7 +611,7 @@ func TestBlobPut(t *testing.T) {
 	}
 	rrs = append(rrs, rrBaseEntries...)
 	// create a server
-	ts := httptest.NewServer(NewHandler(t, rrs))
+	ts := httptest.NewServer(reqresp.NewHandler(t, rrs))
 	defer ts.Close()
 	// setup the regclient
 	tsURL, _ := url.Parse(ts.URL)

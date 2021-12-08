@@ -14,6 +14,7 @@ import (
 	"github.com/docker/distribution"
 	dockerSchema2 "github.com/docker/distribution/manifest/schema2"
 	"github.com/opencontainers/go-digest"
+	"github.com/regclient/regclient/internal/reqresp"
 	"github.com/regclient/regclient/regclient/types"
 	"github.com/sirupsen/logrus"
 )
@@ -47,14 +48,14 @@ func TestManifest(t *testing.T) {
 	mDigest := digest.FromBytes(mBody)
 	mLen := len(mBody)
 	ctx := context.Background()
-	rrs := []ReqResp{
+	rrs := []reqresp.ReqResp{
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				Name:   "Get",
 				Method: "GET",
 				Path:   "/v2" + repoPath + "/manifests/" + getTag,
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusOK,
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", mLen)},
@@ -65,12 +66,12 @@ func TestManifest(t *testing.T) {
 			},
 		},
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				Name:   "Head",
 				Method: "HEAD",
 				Path:   "/v2" + repoPath + "/manifests/" + headTag,
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusOK,
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", mLen)},
@@ -80,12 +81,12 @@ func TestManifest(t *testing.T) {
 			},
 		},
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				Name:   "Get nohead",
 				Method: "GET",
 				Path:   "/v2" + repoPath + "/manifests/" + noheadTag,
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusOK,
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", mLen)},
@@ -96,19 +97,19 @@ func TestManifest(t *testing.T) {
 			},
 		},
 		{
-			ReqEntry: ReqEntry{
+			ReqEntry: reqresp.ReqEntry{
 				Name:   "Missing",
 				Method: "GET",
 				Path:   "/v2" + repoPath + "/manifests/" + missingTag,
 			},
-			RespEntry: RespEntry{
+			RespEntry: reqresp.RespEntry{
 				Status: http.StatusNotFound,
 			},
 		},
 	}
 	rrs = append(rrs, rrBaseEntries...)
 	// create a server
-	ts := httptest.NewServer(NewHandler(t, rrs))
+	ts := httptest.NewServer(reqresp.NewHandler(t, rrs))
 	defer ts.Close()
 	// setup the regclient
 	tsURL, _ := url.Parse(ts.URL)
