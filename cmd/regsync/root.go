@@ -532,7 +532,11 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action s
 		return err
 	}
 	mTgt, err := rc.ManifestHead(ctx, tgt)
+	tgtMatches := false
 	if err == nil && mSrc.GetDigest().String() == mTgt.GetDigest().String() {
+		tgtMatches = true
+	}
+	if tgtMatches && (s.ForceRecursive == nil || !*s.ForceRecursive) {
 		log.WithFields(logrus.Fields{
 			"source": src.CommonName(),
 			"target": tgt.CommonName(),
@@ -567,6 +571,9 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action s
 		}
 		src.Digest = platDigest.String()
 		if tgtExists && platDigest.String() == mTgt.GetDigest().String() {
+			tgtMatches = true
+		}
+		if tgtMatches && (s.ForceRecursive == nil || !*s.ForceRecursive) {
 			log.WithFields(logrus.Fields{
 				"source":   src.CommonName(),
 				"platform": s.Platform,
@@ -575,10 +582,17 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action s
 			return nil
 		}
 	}
-	log.WithFields(logrus.Fields{
-		"source": src.CommonName(),
-		"target": tgt.CommonName(),
-	}).Info("Image sync needed")
+	if tgtMatches {
+		log.WithFields(logrus.Fields{
+			"source": src.CommonName(),
+			"target": tgt.CommonName(),
+		}).Info("Image sync forced")
+	} else {
+		log.WithFields(logrus.Fields{
+			"source": src.CommonName(),
+			"target": tgt.CommonName(),
+		}).Info("Image sync needed")
+	}
 	if action == "check" {
 		return nil
 	}
@@ -640,7 +654,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action s
 	}
 
 	// run backup
-	if tgtExists && s.Backup != "" {
+	if tgtExists && !tgtMatches && s.Backup != "" {
 		// expand template
 		data := struct {
 			Ref  types.Ref
@@ -690,12 +704,23 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action s
 		}
 	}
 
+	opts := []regclient.ImageOpts{}
+	if s.DigestTags != nil && *s.DigestTags {
+		opts = append(opts, regclient.ImageWithDigestTags())
+	}
+	if s.ForceRecursive != nil && *s.ForceRecursive {
+		opts = append(opts, regclient.ImageWithForceRecursive())
+	}
+	if len(s.Platforms) > 0 {
+		opts = append(opts, regclient.ImageWithPlatforms(s.Platforms))
+	}
+
 	// Copy the image
 	log.WithFields(logrus.Fields{
 		"source": src.CommonName(),
 		"target": tgt.CommonName(),
 	}).Debug("Image sync running")
-	err = rc.ImageCopy(ctx, src, tgt)
+	err = rc.ImageCopy(ctx, src, tgt, opts...)
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"source": src.CommonName(),
