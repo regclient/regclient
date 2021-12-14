@@ -56,9 +56,6 @@ func New(mediaType string, raw []byte, ref types.Ref, header http.Header) (Manif
 		mc.digest, _ = digest.Parse(header.Get("Docker-Content-Digest"))
 		mc.setRateLimit(header)
 	}
-	if len(raw) > 0 {
-		mc.manifSet = true
-	}
 	return fromCommon(mc)
 }
 
@@ -162,16 +159,14 @@ func fromCommon(mc common) (Manifest, error) {
 	var mt string
 	// compute/verify digest
 	if len(mc.rawBody) > 0 {
-		var d digest.Digest
-		if mc.mt == MediaTypeDocker1ManifestSigned {
-			d = digest.FromBytes(m.(*docker1SignedManifest).Canonical)
-		} else {
-			d = digest.FromBytes(mc.rawBody)
-		}
-		if mc.digest == "" {
-			mc.digest = d
-		} else if mc.digest != d {
-			return nil, fmt.Errorf("digest mismatch, expected %s, found %s", mc.digest.String(), d.String())
+		mc.manifSet = true
+		if mc.mt != MediaTypeDocker1ManifestSigned {
+			d := digest.FromBytes(mc.rawBody)
+			if mc.digest == "" {
+				mc.digest = d
+			} else if mc.digest != d {
+				return nil, fmt.Errorf("digest mismatch, expected %s, found %s", mc.digest.String(), d.String())
+			}
 		}
 	}
 	switch mc.mt {
@@ -187,6 +182,12 @@ func fromCommon(mc common) (Manifest, error) {
 		if len(mc.rawBody) > 0 {
 			err = json.Unmarshal(mc.rawBody, &mOrig)
 			mt = mOrig.MediaType
+			d := digest.FromBytes(mOrig.Canonical)
+			if mc.digest == "" {
+				mc.digest = d
+			} else if mc.digest != d {
+				return nil, fmt.Errorf("digest mismatch, expected %s, found %s", mc.digest.String(), d.String())
+			}
 		}
 		m = &docker1SignedManifest{common: mc, SignedManifest: mOrig}
 	case MediaTypeDocker2Manifest:
