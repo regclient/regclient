@@ -158,8 +158,9 @@ func (rc *regClient) TagDelete(ctx context.Context, ref types.Ref) error {
 	case MediaTypeOCI1Manifest, MediaTypeOCI1ManifestList:
 		tempManifest, err = manifest.FromOrig(ociv1.Manifest{
 			Versioned: ociv1Specs.Versioned{
-				SchemaVersion: 1,
+				SchemaVersion: 2,
 			},
+			MediaType: MediaTypeOCI1Manifest,
 			Config: ociv1.Descriptor{
 				MediaType: MediaTypeOCI1ImageConfig,
 				Digest:    confDigest,
