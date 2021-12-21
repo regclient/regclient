@@ -45,14 +45,37 @@ type ConfigHost struct {
 	Mirrors    []string          `json:"mirrors,omitempty"`    // list of other ConfigHost Names to use as mirrors
 	Priority   uint              `json:"priority,omitempty"`   // priority when sorting mirrors, higher priority attempted first
 	API        string            `json:"api,omitempty"`        // registry API to use
-	BlobChunk  int64             `json:"blobChunk,omitempty"`  // size of each blob chunk
-	BlobMax    int64             `json:"blobMax,omitempty"`    // threshold to switch to chunked upload, -1 to disable
+	APIOpts    map[string]string `json:"apiOpts,omitempty"`
+	BlobChunk  int64             `json:"blobChunk,omitempty"` // size of each blob chunk
+	BlobMax    int64             `json:"blobMax,omitempty"`   // threshold to switch to chunked upload, -1 to disable
+}
+
+func configHostToRCHost(name string, c ConfigHost) regclient.ConfigHost {
+	return regclient.ConfigHost{
+		Name:       name,
+		TLS:        c.TLS,
+		RegCert:    c.RegCert,
+		ClientCert: c.ClientCert,
+		ClientKey:  c.ClientKey,
+		Hostname:   c.Hostname,
+		User:       c.User,
+		Pass:       c.Pass,
+		Token:      c.Token,
+		PathPrefix: c.PathPrefix,
+		Mirrors:    c.Mirrors,
+		Priority:   c.Priority,
+		API:        c.API,
+		APIOpts:    c.APIOpts,
+		BlobChunk:  c.BlobChunk,
+		BlobMax:    c.BlobMax,
+	}
 }
 
 // ConfigHostNew creates a default ConfigHost entry
 func ConfigHostNew() *ConfigHost {
 	h := ConfigHost{
-		TLS: regclient.TLSEnabled,
+		TLS:     regclient.TLSEnabled,
+		APIOpts: map[string]string{},
 	}
 	return &h
 }

@@ -33,6 +33,8 @@ var (
 	ErrUnavailable = errors.New("Unavailable")
 	// ErrUnauthorized when authentication fails
 	ErrUnauthorized = errors.New("Unauthorized")
+	// ErrUnsupportedAPI happens when an API is not supported on a registry
+	ErrUnsupportedAPI = errors.New("Unsupported API")
 	// ErrUnsupportedConfigVersion happens when config file version is greater than this command supports
 	ErrUnsupportedConfigVersion = errors.New("Unsupported config version")
 	// ErrUnsupportedMediaType returned when media type is unknown or unsupported

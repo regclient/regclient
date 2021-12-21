@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -75,6 +76,15 @@ func (rc *regClient) httpDo(ctx context.Context, req httpReq) (httpResp, error) 
 		if !ok {
 			err = fmt.Errorf("Failed looking up api \"%s\" for host \"%s\": %w", h.API, h.Name, ErrAPINotFound)
 			continue
+		}
+
+		if api.method == "HEAD" {
+			var disableHead bool
+			disableHead, err = strconv.ParseBool(h.APIOpts["disableHead"])
+			if err == nil && disableHead {
+				err = fmt.Errorf("head requests disabled for host \"%s\": %w", h.Name, ErrUnsupportedAPI)
+				continue
+			}
 		}
 
 		// build the url

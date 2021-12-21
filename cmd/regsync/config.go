@@ -46,6 +46,7 @@ type ConfigCreds struct {
 	Mirrors    []string          `yaml:"mirrors" json:"mirrors"`
 	Priority   uint              `yaml:"priority" json:"priority"`
 	API        string            `yaml:"api" json:"api"`
+	APIOpts    map[string]string `yaml:"apiOpts" json:"apiOpts"`
 	BlobChunk  int64             `yaml:"blobChunk" json:"blobChunk"`
 	BlobMax    int64             `yaml:"blobMax" json:"blobMax"`
 }
@@ -63,6 +64,7 @@ func credsToRCHost(c ConfigCreds) regclient.ConfigHost {
 		Mirrors:    c.Mirrors,
 		Priority:   c.Priority,
 		API:        c.API,
+		APIOpts:    c.APIOpts,
 		BlobChunk:  c.BlobChunk,
 		BlobMax:    c.BlobMax,
 	}

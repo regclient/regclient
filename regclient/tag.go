@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -115,6 +116,9 @@ func (rc *regClient) TagDelete(ctx context.Context, ref types.Ref) error {
 
 	// lookup the current manifest media type
 	curManifest, err := rc.ManifestHead(ctx, ref)
+	if err != nil && errors.Is(err, ErrUnsupportedAPI) {
+		curManifest, err = rc.ManifestGet(ctx, ref)
+	}
 	if err != nil {
 		return err
 	}
