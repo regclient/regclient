@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -524,6 +525,9 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 // process a sync step
 func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action string) error {
 	mSrc, err := rc.ManifestHead(ctx, src)
+	if err != nil && errors.Is(err, regclient.ErrUnsupportedAPI) {
+		mSrc, err = rc.ManifestGet(ctx, src)
+	}
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"source": src.CommonName(),
@@ -607,7 +611,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action s
 			log.WithFields(logrus.Fields{
 				"source": src.CommonName(),
 				"error":  err,
-			}).Error("Failed to lookup source manifest")
+			}).Error("rate limit check failed")
 			return err
 		}
 		// delay if rate limit exceeded
@@ -633,7 +637,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action s
 				log.WithFields(logrus.Fields{
 					"source": src.CommonName(),
 					"error":  err,
-				}).Error("Failed to lookup source manifest")
+				}).Error("rate limit check failed")
 				return err
 			}
 			rlSrc = mSrc.GetRateLimit()

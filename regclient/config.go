@@ -75,29 +75,31 @@ func (t *TLSConf) UnmarshalText(b []byte) error {
 
 // ConfigHost struct contains host specific settings
 type ConfigHost struct {
-	Name       string   `json:"-"`
-	Scheme     string   `json:"scheme,omitempty"` // TODO: deprecate, delete
-	TLS        TLSConf  `json:"tls,omitempty"`
-	RegCert    string   `json:"regcert,omitempty"`
-	ClientCert string   `json:"clientcert,omitempty"`
-	ClientKey  string   `json:"clientkey,omitempty"`
-	DNS        []string `json:"dns,omitempty"`      // TODO: remove slice, single string, or remove entirely?
-	Hostname   string   `json:"hostname,omitempty"` // replaces DNS array with single string
-	User       string   `json:"user,omitempty"`
-	Pass       string   `json:"pass,omitempty"`
-	Token      string   `json:"token,omitempty"`
-	PathPrefix string   `json:"pathPrefix,omitempty"` // used for mirrors defined within a repository namespace
-	Mirrors    []string `json:"mirrors,omitempty"`    // list of other ConfigHost Names to use as mirrors
-	Priority   uint     `json:"priority,omitempty"`   // priority when sorting mirrors, higher priority attempted first
-	API        string   `json:"api,omitempty"`        // registry API to use
-	BlobChunk  int64    `json:"blobChunk,omitempty"`  // size of each blob chunk
-	BlobMax    int64    `json:"blobMax,omitempty"`    // threshold to switch to chunked upload, -1 to disable, 0 for regclient.blobMaxPut
+	Name       string            `json:"-"`
+	Scheme     string            `json:"scheme,omitempty"` // TODO: deprecate, delete
+	TLS        TLSConf           `json:"tls,omitempty"`
+	RegCert    string            `json:"regcert,omitempty"`
+	ClientCert string            `json:"clientcert,omitempty"`
+	ClientKey  string            `json:"clientkey,omitempty"`
+	DNS        []string          `json:"dns,omitempty"`      // TODO: remove slice, single string, or remove entirely?
+	Hostname   string            `json:"hostname,omitempty"` // replaces DNS array with single string
+	User       string            `json:"user,omitempty"`
+	Pass       string            `json:"pass,omitempty"`
+	Token      string            `json:"token,omitempty"`
+	PathPrefix string            `json:"pathPrefix,omitempty"` // used for mirrors defined within a repository namespace
+	Mirrors    []string          `json:"mirrors,omitempty"`    // list of other ConfigHost Names to use as mirrors
+	Priority   uint              `json:"priority,omitempty"`   // priority when sorting mirrors, higher priority attempted first
+	API        string            `json:"api,omitempty"`        // experimental: registry API to use
+	APIOpts    map[string]string `json:"apiOpts,omitempty"`    // options for APIs
+	BlobChunk  int64             `json:"blobChunk,omitempty"`  // size of each blob chunk
+	BlobMax    int64             `json:"blobMax,omitempty"`    // threshold to switch to chunked upload, -1 to disable, 0 for regclient.blobMaxPut
 }
 
 // ConfigHostNew creates a default ConfigHost entry
 func ConfigHostNew() *ConfigHost {
 	h := ConfigHost{
-		TLS: TLSEnabled,
+		TLS:     TLSEnabled,
+		APIOpts: map[string]string{},
 	}
 	return &h
 }
@@ -108,6 +110,7 @@ func ConfigHostNewName(host string) *ConfigHost {
 		Name:     host,
 		TLS:      TLSEnabled,
 		Hostname: host,
+		APIOpts:  map[string]string{},
 	}
 	if host == DockerRegistry || host == DockerRegistryDNS || host == DockerRegistryAuth {
 		h.Name = DockerRegistry
@@ -249,6 +252,26 @@ func (rc *regClient) mergeConfigHost(curHost, newHost ConfigHost, warn bool) Con
 		curHost.API = newHost.API
 	}
 
+	if len(newHost.APIOpts) > 0 {
+		if len(curHost.APIOpts) > 0 {
+			merged := copyMapString(curHost.APIOpts)
+			for k, v := range newHost.APIOpts {
+				if warn && curHost.APIOpts[k] != "" && curHost.APIOpts[k] != v {
+					rc.log.WithFields(logrus.Fields{
+						"orig": curHost.APIOpts[k],
+						"new":  newHost.APIOpts[k],
+						"opt":  k,
+						"host": name,
+					}).Warn("Changing APIOpts setting for registry")
+				}
+				merged[k] = v
+			}
+			curHost.APIOpts = merged
+		} else {
+			curHost.APIOpts = newHost.APIOpts
+		}
+	}
+
 	if newHost.BlobChunk > 0 {
 		if warn && curHost.BlobChunk != 0 && curHost.BlobChunk != newHost.BlobChunk {
 			rc.log.WithFields(logrus.Fields{
@@ -284,4 +307,12 @@ func stringSliceEq(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+func copyMapString(src map[string]string) map[string]string {
+	copy := map[string]string{}
+	for k, v := range src {
+		copy[k] = v
+	}
+	return copy
 }
