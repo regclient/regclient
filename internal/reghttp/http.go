@@ -51,6 +51,7 @@ type Req struct {
 
 type ReqAPI struct {
 	Method     string
+	DirectURL  *url.URL
 	NoPrefix   bool
 	Repository string
 	Path       string
@@ -274,25 +275,30 @@ func (resp *clientResp) Next() error {
 			resp.digest = api.Digest
 
 			// build the url
-			u := url.URL{
-				Host:   h.config.Hostname,
-				Scheme: "https",
-			}
-			path := strings.Builder{}
-			path.WriteString("/v2")
-			if h.config.PathPrefix != "" && !api.NoPrefix {
-				path.WriteString("/" + h.config.PathPrefix)
-			}
-			if api.Repository != "" {
-				path.WriteString("/" + api.Repository)
-			}
-			path.WriteString("/" + api.Path)
-			u.Path = path.String()
-			if h.config.TLS == config.TLSDisabled {
-				u.Scheme = "http"
-			}
-			if api.Query != nil {
-				u.RawQuery = api.Query.Encode()
+			var u url.URL
+			if api.DirectURL != nil {
+				u = *api.DirectURL
+			} else {
+				u = url.URL{
+					Host:   h.config.Hostname,
+					Scheme: "https",
+				}
+				path := strings.Builder{}
+				path.WriteString("/v2")
+				if h.config.PathPrefix != "" && !api.NoPrefix {
+					path.WriteString("/" + h.config.PathPrefix)
+				}
+				if api.Repository != "" {
+					path.WriteString("/" + api.Repository)
+				}
+				path.WriteString("/" + api.Path)
+				u.Path = path.String()
+				if h.config.TLS == config.TLSDisabled {
+					u.Scheme = "http"
+				}
+				if api.Query != nil {
+					u.RawQuery = api.Query.Encode()
+				}
 			}
 			// close previous response
 			if resp.resp != nil && resp.resp.Body != nil {

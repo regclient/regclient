@@ -438,6 +438,40 @@ func TestRegHttp(t *testing.T) {
 			t.Errorf("error closing request: %v", err)
 		}
 	})
+	t.Run("Direct", func(t *testing.T) {
+		u, _ := url.Parse(ts.URL)
+		u.Path = "/v2/project/manifests/tag-get"
+		apiGet := map[string]ReqAPI{
+			"": {
+				Method:    "GET",
+				DirectURL: u,
+				Headers:   headers,
+				Digest:    getDigest,
+			},
+		}
+		getReq := &Req{
+			Host: tsHost,
+			APIs: apiGet,
+		}
+		resp, err := hc.Do(ctx, getReq)
+		if err != nil {
+			t.Errorf("failed to run get: %v", err)
+			return
+		}
+		if resp.HTTPResponse().StatusCode != 200 {
+			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
+		}
+		body, err := io.ReadAll(resp)
+		if err != nil {
+			t.Errorf("body read failure: %v", err)
+		} else if bytes.Compare(body, getBody) != 0 {
+			t.Errorf("body read mismatch, expected %s, received %s", getBody, body)
+		}
+		err = resp.Close()
+		if err != nil {
+			t.Errorf("error closing request: %v", err)
+		}
+	})
 	// test digest validation
 	t.Run("Bad Digest", func(t *testing.T) {
 		apiBadDigest := map[string]ReqAPI{
@@ -454,6 +488,40 @@ func TestRegHttp(t *testing.T) {
 			APIs: apiBadDigest,
 		}
 		resp, err := hc.Do(ctx, badDigestReq)
+		if err != nil {
+			t.Errorf("failed to run get: %v", err)
+			return
+		}
+		if resp.HTTPResponse().StatusCode != 200 {
+			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
+		}
+		body, err := io.ReadAll(resp)
+		if err == nil {
+			t.Errorf("body read unexpectedly succeeded: %s", body)
+		} else if !errors.Is(err, ErrDigestMismatch) {
+			t.Errorf("unexpected error from digest mismatch: %v", err)
+		}
+		err = resp.Close()
+		if err != nil {
+			t.Errorf("error closing request: %v", err)
+		}
+	})
+	t.Run("Direct Digest", func(t *testing.T) {
+		u, _ := url.Parse(ts.URL)
+		u.Path = "/v2/project/manifests/tag-get"
+		apiGet := map[string]ReqAPI{
+			"": {
+				Method:    "GET",
+				DirectURL: u,
+				Headers:   headers,
+				Digest:    digest.FromString("bad digest"),
+			},
+		}
+		getReq := &Req{
+			Host: tsHost,
+			APIs: apiGet,
+		}
+		resp, err := hc.Do(ctx, getReq)
 		if err != nil {
 			t.Errorf("failed to run get: %v", err)
 			return
