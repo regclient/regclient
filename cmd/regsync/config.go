@@ -46,6 +46,7 @@ type ConfigCreds struct {
 	Mirrors    []string          `yaml:"mirrors" json:"mirrors"`
 	Priority   uint              `yaml:"priority" json:"priority"`
 	API        string            `yaml:"api" json:"api"`
+	APIOpts    map[string]string `yaml:"apiOpts" json:"apiOpts"`
 	BlobChunk  int64             `yaml:"blobChunk" json:"blobChunk"`
 	BlobMax    int64             `yaml:"blobMax" json:"blobMax"`
 }
@@ -63,6 +64,7 @@ func credsToRCHost(c ConfigCreds) regclient.ConfigHost {
 		Mirrors:    c.Mirrors,
 		Priority:   c.Priority,
 		API:        c.API,
+		APIOpts:    c.APIOpts,
 		BlobChunk:  c.BlobChunk,
 		BlobMax:    c.BlobMax,
 	}
@@ -75,6 +77,8 @@ type ConfigDefaults struct {
 	Schedule       string          `yaml:"schedule" json:"schedule"`
 	RateLimit      ConfigRateLimit `yaml:"ratelimit" json:"ratelimit"`
 	Parallel       int             `yaml:"parallel" json:"parallel"`
+	DigestTags     *bool           `yaml:"digestTags" json:"digestTags"`
+	ForceRecursive *bool           `yaml:"forceRecursive" json:"forceRecursive"`
 	MediaTypes     []string        `yaml:"mediaTypes" json:"mediaTypes"`
 	SkipDockerConf bool            `yaml:"skipDockerConfig" json:"skipDockerConfig"`
 	Hooks          ConfigHooks     `yaml:"hooks" json:"hooks"`
@@ -88,17 +92,20 @@ type ConfigRateLimit struct {
 
 // ConfigSync defines a source/target repository to sync
 type ConfigSync struct {
-	Source     string          `yaml:"source" json:"source"`
-	Target     string          `yaml:"target" json:"target"`
-	Type       string          `yaml:"type" json:"type"`
-	Tags       ConfigTags      `yaml:"tags" json:"tags"`
-	Platform   string          `yaml:"platform" json:"platform"`
-	Backup     string          `yaml:"backup" json:"backup"`
-	Interval   time.Duration   `yaml:"interval" json:"interval"`
-	Schedule   string          `yaml:"schedule" json:"schedule"`
-	RateLimit  ConfigRateLimit `yaml:"ratelimit" json:"ratelimit"`
-	MediaTypes []string        `yaml:"mediaTypes" json:"mediaTypes"`
-	Hooks      ConfigHooks     `yaml:"hooks" json:"hooks"`
+	Source         string          `yaml:"source" json:"source"`
+	Target         string          `yaml:"target" json:"target"`
+	Type           string          `yaml:"type" json:"type"`
+	Tags           ConfigTags      `yaml:"tags" json:"tags"`
+	DigestTags     *bool           `yaml:"digestTags" json:"digestTags"`
+	Platform       string          `yaml:"platform" json:"platform"`
+	Platforms      []string        `yaml:"platforms" json:"platforms"`
+	ForceRecursive *bool           `yaml:"forceRecursive" json:"forceRecursive"`
+	Backup         string          `yaml:"backup" json:"backup"`
+	Interval       time.Duration   `yaml:"interval" json:"interval"`
+	Schedule       string          `yaml:"schedule" json:"schedule"`
+	RateLimit      ConfigRateLimit `yaml:"ratelimit" json:"ratelimit"`
+	MediaTypes     []string        `yaml:"mediaTypes" json:"mediaTypes"`
+	Hooks          ConfigHooks     `yaml:"hooks" json:"hooks"`
 }
 
 // ConfigTags is an allow and deny list of tag regex strings
@@ -236,6 +243,14 @@ func syncSetDefaults(s *ConfigSync, d ConfigDefaults) {
 		} else {
 			s.MediaTypes = defaultMediaTypes
 		}
+	}
+	if s.DigestTags == nil {
+		b := (d.DigestTags != nil && *d.DigestTags == true)
+		s.DigestTags = &b
+	}
+	if s.ForceRecursive == nil {
+		b := (d.ForceRecursive != nil && *d.ForceRecursive == true)
+		s.ForceRecursive = &b
 	}
 	if s.Hooks.Pre == nil && d.Hooks.Pre != nil {
 		s.Hooks.Pre = d.Hooks.Pre

@@ -9,9 +9,11 @@ import (
 	"io"
 	"io/ioutil"
 	"path/filepath"
+	"strings"
 	"time"
 
 	// "github.com/docker/docker/pkg/archive"
+	"github.com/containerd/containerd/platforms"
 	"github.com/docker/distribution"
 	dockerSchema2 "github.com/docker/distribution/manifest/schema2"
 	digest "github.com/opencontainers/go-digest"
@@ -32,7 +34,7 @@ const (
 
 // ImageClient provides registry client requests to images
 type ImageClient interface {
-	ImageCopy(ctx context.Context, refSrc types.Ref, refTgt types.Ref) error
+	ImageCopy(ctx context.Context, refSrc types.Ref, refTgt types.Ref, opts ...ImageOpts) error
 	ImageExport(ctx context.Context, ref types.Ref, outStream io.Writer) error
 	ImageImport(ctx context.Context, ref types.Ref, rs io.ReadSeeker) error
 }
@@ -70,10 +72,52 @@ type tarWriteData struct {
 	timestamp time.Time
 }
 
-func (rc *regClient) ImageCopy(ctx context.Context, refSrc types.Ref, refTgt types.Ref) error {
+type imageOpt struct {
+	forceRecursive bool
+	digestTags     bool
+	platforms      []string
+	tagList        []string
+}
+type ImageOpts func(*imageOpt)
+
+// ImageWithForceRecursive attemtps to copy every manifest and blob even if parent manifests already exist.
+func ImageWithForceRecursive() ImageOpts {
+	return func(opts *imageOpt) {
+		opts.forceRecursive = true
+	}
+}
+
+// ImageWithDigestTags looks for "sha-<digest>.*" tags in the repo to copy with any manifest.
+// These are used by some artifact systems like sigstore/cosign.
+func ImageWithDigestTags() ImageOpts {
+	return func(opts *imageOpt) {
+		opts.digestTags = true
+	}
+}
+
+// ImageWithPlatforms only copies specific platforms from a manifest list.
+// This will result in a failure on many registries that validate manifests.
+// Use the empty string to indicate images without a platform definition should be copied.
+func ImageWithPlatforms(p []string) ImageOpts {
+	return func(opts *imageOpt) {
+		opts.platforms = p
+	}
+}
+
+func (rc *regClient) ImageCopy(ctx context.Context, refSrc types.Ref, refTgt types.Ref, opts ...ImageOpts) error {
+	var opt imageOpt
+	for _, optFn := range opts {
+		optFn(&opt)
+	}
+	return rc.imageCopyOpt(ctx, refSrc, refTgt, &opt)
+}
+
+func (rc *regClient) imageCopyOpt(ctx context.Context, refSrc types.Ref, refTgt types.Ref, opt *imageOpt) error {
 	// check if source and destination already match
 	mdh, errD := rc.ManifestHead(ctx, refTgt)
-	if errD == nil && refTgt.Digest != "" && digest.Digest(refTgt.Digest) == mdh.GetDigest() {
+	if opt.forceRecursive {
+		// copy forced, unable to run below skips
+	} else if errD == nil && refTgt.Digest != "" && digest.Digest(refTgt.Digest) == mdh.GetDigest() {
 		rc.log.WithFields(logrus.Fields{
 			"target": refTgt.Reference,
 			"digest": mdh.GetDigest().String(),
@@ -110,6 +154,19 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc types.Ref, refTgt typ
 				return err
 			}
 			for _, entry := range pd {
+				// skip copy of platforms not specifically included
+				if len(opt.platforms) > 0 {
+					match, err := imagePlatformInList(entry.Platform, opt.platforms)
+					if err != nil {
+						return err
+					}
+					if !match {
+						rc.log.WithFields(logrus.Fields{
+							"platform": entry.Platform,
+						}).Debug("Platform excluded from copy")
+						continue
+					}
+				}
 				entrySrc := refSrc
 				entryTgt := refTgt
 				entrySrc.Tag = ""
@@ -121,7 +178,7 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc types.Ref, refTgt typ
 					MediaTypeDocker2Manifest, MediaTypeDocker2ManifestList,
 					MediaTypeOCI1Manifest, MediaTypeOCI1ManifestList:
 					// known manifest media type
-					err = rc.ImageCopy(ctx, entrySrc, entryTgt)
+					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, opt)
 				case MediaTypeDocker2ImageConfig, MediaTypeOCI1ImageConfig,
 					MediaTypeDocker2Layer, MediaTypeOCI1Layer, MediaTypeOCI1LayerGzip,
 					MediaTypeBuildkitCacheConfig:
@@ -129,7 +186,7 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc types.Ref, refTgt typ
 					err = rc.BlobCopy(ctx, entrySrc, entryTgt, entry.Digest)
 				default:
 					// unknown media type, first try an image copy
-					err = rc.ImageCopy(ctx, entrySrc, entryTgt)
+					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, opt)
 					if err != nil {
 						// fall back to trying to copy a blob
 						err = rc.BlobCopy(ctx, entrySrc, entryTgt, entry.Digest)
@@ -145,7 +202,7 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc types.Ref, refTgt typ
 			cd, err := m.GetConfigDigest()
 			if err != nil {
 				// docker schema v1 does not have a config object, ignore if it's missing
-				if !errors.Is(err, ErrUnsupportedMediaType) {
+				if !errors.Is(err, manifest.ErrUnsupportedMediaType) {
 					rc.log.WithFields(logrus.Fields{
 						"ref": refSrc.Reference,
 						"err": err,
@@ -210,6 +267,49 @@ func (rc *regClient) ImageCopy(ctx context.Context, refSrc types.Ref, refTgt typ
 			"err":    err,
 		}).Warn("Failed to push manifest")
 		return err
+	}
+
+	// lookup digest tags to include artifacts with image
+	if opt.digestTags {
+		if len(opt.tagList) == 0 {
+			tl, err := rc.TagList(ctx, refSrc)
+			if err != nil {
+				rc.log.WithFields(logrus.Fields{
+					"source": refSrc.Reference,
+					"err":    err,
+				}).Warn("Failed to list tags for digest-tag copy")
+				return err
+			}
+			tags, err := tl.GetTags()
+			if err != nil {
+				rc.log.WithFields(logrus.Fields{
+					"source": refSrc.Reference,
+					"err":    err,
+				}).Warn("Failed to list tags for digest-tag copy")
+				return err
+			}
+			opt.tagList = tags
+		}
+		prefix := fmt.Sprintf("%s-%s", m.GetDigest().Algorithm(), m.GetDigest().Encoded())
+		for _, tag := range opt.tagList {
+			if strings.HasPrefix(tag, prefix) {
+				refTagSrc := refSrc
+				refTagSrc.Tag = tag
+				refTagSrc.Digest = ""
+				refTagTgt := refTgt
+				refTagTgt.Tag = tag
+				refTagTgt.Digest = ""
+				err = rc.imageCopyOpt(ctx, refTagSrc, refTagTgt, opt)
+				if err != nil {
+					rc.log.WithFields(logrus.Fields{
+						"tag": tag,
+						"src": refTagSrc.CommonName(),
+						"tgt": refTagTgt.CommonName(),
+					}).Warn("Failed to copy digest-tag")
+					return err
+				}
+			}
+		}
 	}
 
 	return nil
@@ -769,6 +869,32 @@ func (rc *regClient) imageImportOCIPushManifests(ctx context.Context, ref types.
 		}
 	}
 	return nil
+}
+
+func imagePlatformInList(target *ociv1.Platform, list []string) (bool, error) {
+	// special case for an unset platform
+	if target == nil || target.OS == "" {
+		for _, entry := range list {
+			if entry == "" {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+	matcher := platforms.NewMatcher(*target)
+	for _, entry := range list {
+		if entry == "" {
+			continue
+		}
+		plat, err := platforms.Parse(entry)
+		if err != nil {
+			return false, err
+		}
+		if matcher.Match(plat) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func oci2DDesc(od ociv1.Descriptor) distribution.Descriptor {

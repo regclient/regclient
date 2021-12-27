@@ -160,6 +160,8 @@ sync:
     Number of concurrent image copies to run.
     All sync steps may be started concurrently to check if a mirror is needed, but will wait on this limit when a copy is needed.
     Defaults to 1.
+  - `digestTags`: (bool) copies digest specific tags in addition to the manifests.
+  - `forceRecursive`: (bool) forces a copy of all manifests and blobs even when the target parent manifest already exists.
   - `mediaTypes`:
     Array of media types to include.
     These must also be supported by regclient.
@@ -180,15 +182,15 @@ sync:
   - `tags`:
     Implements filters on tags for "registry" and "repository" types, regex values are automatically bound to the beginning and ending of each string (`^` and `$`).
     - `allow`:
-      Array of regex strings to allow specific tags.
+      (array of strings) regex to allow specific tags.
     - `deny`:
-      Array of regex strings to deny specific tags.
+      (array of strings) regex to deny specific tags.
   - `platform`:
     Single platform to pull from a multi-platform image, e.g. `linux/amd64`.
     By default all platforms are copied along with the original upstream manifest list.
     Note that looking up the platform from a multi-platform image counts against the Docker Hub rate limit, and that rate limits are not checked prior to resolving the platform.
     When run with "server", the platform is only resolved once for each multi-platform digest seen.
-  - `backup`, `interval`, `schedule`, `ratelimit`, and `mediaTypes`:
+  - `backup`, `interval`, `schedule`, `ratelimit`, `digestTags`, `forceRecursive`, and `mediaTypes`:
     See description under `defaults`.
 
 - `x-*`:

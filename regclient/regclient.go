@@ -10,14 +10,12 @@ import (
 	// crypto libraries included for go-digest
 	_ "crypto/sha256"
 	_ "crypto/sha512"
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"os"
 
 	dockercfg "github.com/docker/cli/cli/config"
-	dockerManifestList "github.com/docker/distribution/manifest/manifestlist"
-	dockerSchema2 "github.com/docker/distribution/manifest/schema2"
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/pkg/auth"
 	"github.com/regclient/regclient/pkg/retryable"
 	"github.com/sirupsen/logrus"
@@ -40,30 +38,6 @@ const (
 	DockerRegistryAuth = "https://index.docker.io/v1/"
 	// DockerRegistryDNS is the host to connect to for Hub
 	DockerRegistryDNS = "registry-1.docker.io"
-	// MediaTypeDocker1Manifest deprecated media type for docker schema1 manifests
-	MediaTypeDocker1Manifest = "application/vnd.docker.distribution.manifest.v1+json"
-	// MediaTypeDocker1ManifestSigned is a deprecated schema1 manifest with jws signing
-	MediaTypeDocker1ManifestSigned = "application/vnd.docker.distribution.manifest.v1+prettyjws"
-	// MediaTypeDocker2Manifest is the media type when pulling manifests from a v2 registry
-	MediaTypeDocker2Manifest = dockerSchema2.MediaTypeManifest
-	// MediaTypeDocker2ManifestList is the media type when pulling a manifest list from a v2 registry
-	MediaTypeDocker2ManifestList = dockerManifestList.MediaTypeManifestList
-	// MediaTypeDocker2ImageConfig is for the configuration json object media type
-	MediaTypeDocker2ImageConfig = dockerSchema2.MediaTypeImageConfig
-	// MediaTypeOCI1Manifest OCI v1 manifest media type
-	MediaTypeOCI1Manifest = ociv1.MediaTypeImageManifest
-	// MediaTypeOCI1ManifestList OCI v1 manifest list media type
-	MediaTypeOCI1ManifestList = ociv1.MediaTypeImageIndex
-	// MediaTypeOCI1ImageConfig OCI v1 configuration json object media type
-	MediaTypeOCI1ImageConfig = ociv1.MediaTypeImageConfig
-	// MediaTypeDocker2Layer is the default compressed layer for docker schema2
-	MediaTypeDocker2Layer = dockerSchema2.MediaTypeLayer
-	// MediaTypeOCI1Layer is the uncompressed layer for OCIv1
-	MediaTypeOCI1Layer = ociv1.MediaTypeImageLayer
-	// MediaTypeOCI1LayerGzip is the gzip compressed layer for OCI v1
-	MediaTypeOCI1LayerGzip = ociv1.MediaTypeImageLayerGzip
-	// MediaTypeBuildkitCacheConfig is used by buildkit cache images
-	MediaTypeBuildkitCacheConfig = "application/vnd.buildkit.cacheconfig.v0"
 )
 
 var (
@@ -168,6 +142,7 @@ func WithConfigHosts(configHosts []ConfigHost) Opt {
 		}
 		for _, configHost := range configHosts {
 			if configHost.Name == "" {
+				// TODO: should this error or warn?
 				continue
 			}
 			if configHost.Name == DockerRegistry || configHost.Name == DockerRegistryDNS || configHost.Name == DockerRegistryAuth {
@@ -327,6 +302,13 @@ func (rc *regClient) getRetryable(host *ConfigHost) retryable.Retryable {
 	}
 	if rc.hosts[host.Name].retryable == nil {
 		c := &http.Client{}
+		if host.TLS == TLSInsecure {
+			c.Transport = &http.Transport{
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: true,
+				},
+			}
+		}
 		a := auth.NewAuth(
 			auth.WithLog(rc.log),
 			auth.WithHTTPClient(c),

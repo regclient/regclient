@@ -60,6 +60,7 @@ var registryOpts struct {
 	mirrors              []string
 	priority             uint
 	blobChunk, blobMax   int64
+	apiOpts              []string
 	scheme               string   // TODO: remove
 	dns                  []string // TODO: remove
 }
@@ -78,6 +79,7 @@ func init() {
 	registrySetCmd.Flags().UintVarP(&registryOpts.priority, "priority", "", 0, "Priority (for sorting mirrors)")
 	registrySetCmd.Flags().Int64VarP(&registryOpts.blobChunk, "blob-chunk", "", 0, "Blob chunk size")
 	registrySetCmd.Flags().Int64VarP(&registryOpts.blobMax, "blob-max", "", 0, "Blob size before switching to chunked push, -1 to disable")
+	registrySetCmd.Flags().StringArrayVarP(&registryOpts.apiOpts, "api-opts", "", nil, "List of options (key=value))")
 	registrySetCmd.RegisterFlagCompletionFunc("cacert", completeArgNone)
 	registrySetCmd.RegisterFlagCompletionFunc("tls", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{
@@ -306,6 +308,21 @@ func runRegistrySet(cmd *cobra.Command, args []string) error {
 	}
 	if registryOpts.blobMax != 0 {
 		h.BlobMax = registryOpts.blobMax
+	}
+	if len(registryOpts.apiOpts) > 0 {
+		if h.APIOpts == nil {
+			h.APIOpts = map[string]string{}
+		}
+		for _, kv := range registryOpts.apiOpts {
+			kvArr := strings.SplitN(kv, "=", 2)
+			if len(kvArr) == 2 && kvArr[1] != "" {
+				// set a value
+				h.APIOpts[kvArr[0]] = kvArr[1]
+			} else if h.APIOpts[kvArr[0]] != "" {
+				// unset a value by not giving the key a value
+				delete(h.APIOpts, kvArr[0])
+			}
+		}
 	}
 
 	err = c.ConfigSave()
