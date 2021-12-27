@@ -17,6 +17,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/internal/auth"
 	"github.com/regclient/regclient/regclient/config"
+	"github.com/regclient/regclient/regclient/types"
 	"github.com/sirupsen/logrus"
 )
 
@@ -236,7 +237,7 @@ func (resp *clientResp) Next() error {
 			if err != nil {
 				return err
 			}
-			return ErrAllRequestsFailed
+			return types.ErrAllRequestsFailed
 		}
 		if curHost >= len(hosts) {
 			curHost = 0
@@ -260,14 +261,14 @@ func (resp *clientResp) Next() error {
 			var err error
 			if !okAPI {
 				dropHost = true
-				return fmt.Errorf("failed looking up api \"%s\" for host \"%s\": %w", h.config.API, h.config.Name, ErrAPINotFound)
+				return fmt.Errorf("failed looking up api \"%s\" for host \"%s\": %w", h.config.API, h.config.Name, types.ErrAPINotFound)
 			}
 			if api.Method == "HEAD" && h.config.APIOpts != nil {
 				var disableHead bool
 				disableHead, err = strconv.ParseBool(h.config.APIOpts["disableHead"])
 				if err == nil && disableHead {
 					dropHost = true
-					return fmt.Errorf("head requests disabled for host \"%s\": %w", h.config.Name, ErrUnsupportedAPI)
+					return fmt.Errorf("head requests disabled for host \"%s\": %w", h.config.Name, types.ErrUnsupportedAPI)
 				}
 			}
 
@@ -313,7 +314,7 @@ func (resp *clientResp) Next() error {
 				}).Warn("Sleeping for backoff")
 				select {
 				case <-resp.ctx.Done():
-					return ErrCanceled
+					return types.ErrCanceled
 				case <-time.After(sleepTime):
 				}
 			}
@@ -466,7 +467,7 @@ func (resp *clientResp) Read(b []byte) (int, error) {
 		return 0, io.EOF
 	}
 	if resp.resp == nil {
-		return 0, ErrNotFound
+		return 0, types.ErrNotFound
 	}
 	// perform the read
 	i, err := resp.reader.Read(b)
@@ -501,7 +502,7 @@ func (resp *clientResp) Read(b []byte) (int, error) {
 				"computed": resp.digester.Digest(),
 			}).Warn("Digest mismatch")
 			resp.done = true
-			return i, fmt.Errorf("%w, expected %s, computed %s", ErrDigestMismatch,
+			return i, fmt.Errorf("%w, expected %s, computed %s", types.ErrDigestMismatch,
 				resp.digest.String(), resp.digester.Digest().String())
 		}
 	}
@@ -514,7 +515,7 @@ func (resp *clientResp) Read(b []byte) (int, error) {
 
 func (resp *clientResp) Close() error {
 	if resp.resp == nil {
-		return ErrNotFound
+		return types.ErrNotFound
 	}
 	resp.done = true
 	return resp.resp.Body.Close()
@@ -562,7 +563,7 @@ func (resp *clientResp) backoffSet() error {
 	ch.backoffUntil = time.Now().Add(sleepTime)
 
 	if ch.backoffCur == c.limit {
-		return fmt.Errorf("%w: backoffs %d", ErrBackoffLimit, ch.backoffCur)
+		return fmt.Errorf("%w: backoffs %d", types.ErrBackoffLimit, ch.backoffCur)
 	}
 
 	return nil
@@ -603,15 +604,15 @@ func (ch *clientHost) AuthCreds() func(h string) auth.Cred {
 func HttpError(statusCode int) error {
 	switch statusCode {
 	case 401:
-		return fmt.Errorf("%w [http %d]", ErrUnauthorized, statusCode)
+		return fmt.Errorf("%w [http %d]", types.ErrUnauthorized, statusCode)
 	case 403:
-		return fmt.Errorf("%w [http %d]", ErrUnauthorized, statusCode)
+		return fmt.Errorf("%w [http %d]", types.ErrUnauthorized, statusCode)
 	case 404:
-		return fmt.Errorf("%w [http %d]", ErrNotFound, statusCode)
+		return fmt.Errorf("%w [http %d]", types.ErrNotFound, statusCode)
 	case 429:
-		return fmt.Errorf("%w [http %d]", ErrRateLimit, statusCode)
+		return fmt.Errorf("%w [http %d]", types.ErrRateLimit, statusCode)
 	default:
-		return fmt.Errorf("%w: %s [http %d]", ErrHttpStatus, http.StatusText(statusCode), statusCode)
+		return fmt.Errorf("%w: %s [http %d]", types.ErrHttpStatus, http.StatusText(statusCode), statusCode)
 	}
 }
 

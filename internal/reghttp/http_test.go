@@ -17,6 +17,7 @@ import (
 	"github.com/regclient/regclient/internal/auth"
 	"github.com/regclient/regclient/internal/reqresp"
 	"github.com/regclient/regclient/regclient/config"
+	"github.com/regclient/regclient/regclient/types"
 )
 
 // TODO: test for race conditions
@@ -498,7 +499,7 @@ func TestRegHttp(t *testing.T) {
 		body, err := io.ReadAll(resp)
 		if err == nil {
 			t.Errorf("body read unexpectedly succeeded: %s", body)
-		} else if !errors.Is(err, ErrDigestMismatch) {
+		} else if !errors.Is(err, types.ErrDigestMismatch) {
 			t.Errorf("unexpected error from digest mismatch: %v", err)
 		}
 		err = resp.Close()
@@ -532,7 +533,7 @@ func TestRegHttp(t *testing.T) {
 		body, err := io.ReadAll(resp)
 		if err == nil {
 			t.Errorf("body read unexpectedly succeeded: %s", body)
-		} else if !errors.Is(err, ErrDigestMismatch) {
+		} else if !errors.Is(err, types.ErrDigestMismatch) {
 			t.Errorf("unexpected error from digest mismatch: %v", err)
 		}
 		err = resp.Close()
@@ -833,8 +834,8 @@ func TestRegHttp(t *testing.T) {
 			t.Errorf("unexpected success on get for missing manifest")
 			resp.Close()
 			return
-		} else if !errors.Is(err, ErrNotFound) {
-			t.Errorf("unexpected error, expected %v, received %v", ErrNotFound, err)
+		} else if !errors.Is(err, types.ErrNotFound) {
+			t.Errorf("unexpected error, expected %v, received %v", types.ErrNotFound, err)
 		}
 	})
 	t.Run("Forbidden", func(t *testing.T) {
@@ -856,8 +857,8 @@ func TestRegHttp(t *testing.T) {
 			t.Errorf("unexpected success on get for missing manifest")
 			resp.Close()
 			return
-		} else if !errors.Is(err, ErrUnauthorized) {
-			t.Errorf("unexpected error, expected %v, received %v", ErrUnauthorized, err)
+		} else if !errors.Is(err, types.ErrUnauthorized) {
+			t.Errorf("unexpected error, expected %v, received %v", types.ErrUnauthorized, err)
 		}
 	})
 	t.Run("Bad GW", func(t *testing.T) {
@@ -879,8 +880,8 @@ func TestRegHttp(t *testing.T) {
 			t.Errorf("unexpected success on get for missing manifest")
 			resp.Close()
 			return
-		} else if !errors.Is(err, ErrHttpStatus) {
-			t.Errorf("unexpected error, expected %v, received %v", ErrHttpStatus, err)
+		} else if !errors.Is(err, types.ErrHttpStatus) {
+			t.Errorf("unexpected error, expected %v, received %v", types.ErrHttpStatus, err)
 		}
 	})
 	t.Run("GW Timeout", func(t *testing.T) {
@@ -902,8 +903,8 @@ func TestRegHttp(t *testing.T) {
 			t.Errorf("unexpected success on get for missing manifest")
 			resp.Close()
 			return
-		} else if !errors.Is(err, ErrHttpStatus) {
-			t.Errorf("unexpected error, expected %v, received %v", ErrHttpStatus, err)
+		} else if !errors.Is(err, types.ErrHttpStatus) {
+			t.Errorf("unexpected error, expected %v, received %v", types.ErrHttpStatus, err)
 		}
 	})
 	t.Run("Server error", func(t *testing.T) {
@@ -925,8 +926,8 @@ func TestRegHttp(t *testing.T) {
 			t.Errorf("unexpected success on get for missing manifest")
 			resp.Close()
 			return
-		} else if !errors.Is(err, ErrHttpStatus) {
-			t.Errorf("unexpected error, expected %v, received %v", ErrHttpStatus, err)
+		} else if !errors.Is(err, types.ErrHttpStatus) {
+			t.Errorf("unexpected error, expected %v, received %v", types.ErrHttpStatus, err)
 		}
 	})
 	// test context expire during retries
