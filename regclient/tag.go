@@ -39,13 +39,7 @@ type ociTagAPI interface {
 // }
 
 // TagList interface is used for listing tags
-type TagList interface {
-	GetOrig() interface{}
-	MarshalJSON() ([]byte, error)
-	RawBody() ([]byte, error)
-	RawHeaders() (http.Header, error)
-	GetTags() ([]string, error)
-}
+type TagList = types.TagList
 
 type tagCommon struct {
 	ref       types.Ref
