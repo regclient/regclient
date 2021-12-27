@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"testing"
+
+	"github.com/opencontainers/go-digest"
 )
 
 type ReqResp struct {
@@ -120,4 +123,32 @@ func (r *rrHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	rw.WriteHeader(http.StatusInternalServerError)
 	rw.Write([]byte("Unsupported request"))
 	return
+}
+
+// BaseEntries initial entries for a generic docker registry
+var BaseEntries = []ReqResp{
+	{
+		ReqEntry: ReqEntry{
+			Method: "GET",
+			Path:   "/v2/",
+		},
+		RespEntry: RespEntry{
+			Status: http.StatusOK,
+			Headers: http.Header(map[string][]string{
+				"Docker-Distribution-API-Version": {"registry/2.0"},
+			}),
+		},
+	},
+}
+
+// NewRandomBlob outputs a reproducible random blob (based on the seed) for testing
+func NewRandomBlob(size int, seed int64) (digest.Digest, []byte) {
+	r := rand.New(rand.NewSource(seed))
+	b := make([]byte, size)
+	if n, err := r.Read(b); err != nil {
+		panic(err)
+	} else if n != size {
+		panic("unable to read enough bytes")
+	}
+	return digest.FromBytes(b), b
 }

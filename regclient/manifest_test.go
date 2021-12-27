@@ -107,7 +107,7 @@ func TestManifest(t *testing.T) {
 			},
 		},
 	}
-	rrs = append(rrs, rrBaseEntries...)
+	rrs = append(rrs, reqresp.BaseEntries...)
 	// create a server
 	ts := httptest.NewServer(reqresp.NewHandler(t, rrs))
 	defer ts.Close()

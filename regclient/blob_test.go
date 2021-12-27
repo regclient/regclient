@@ -28,8 +28,8 @@ func TestBlobGet(t *testing.T) {
 	seed := time.Now().UTC().Unix()
 	t.Logf("Using seed %d", seed)
 	blobLen := 1024 // must be greater than 512 for retry test
-	d1, blob1 := newRandomBlob(blobLen, seed)
-	d2, blob2 := newRandomBlob(blobLen, seed+1)
+	d1, blob1 := reqresp.NewRandomBlob(blobLen, seed)
+	d2, blob2 := reqresp.NewRandomBlob(blobLen, seed+1)
 	dMissing := digest.FromBytes([]byte("missing"))
 	// define req/resp entries
 	rrs := []reqresp.ReqResp{
@@ -145,7 +145,7 @@ func TestBlobGet(t *testing.T) {
 			},
 		},
 	}
-	rrs = append(rrs, rrBaseEntries...)
+	rrs = append(rrs, reqresp.BaseEntries...)
 	// create a server
 	ts := httptest.NewServer(reqresp.NewHandler(t, rrs))
 	defer ts.Close()
@@ -270,11 +270,11 @@ func TestBlobPut(t *testing.T) {
 	blobChunk := 512
 	blobLen := 1024  // must be blobChunk < blobLen <= blobChunk * 2
 	blobLen3 := 1000 // blob without a full final chunk
-	d1, blob1 := newRandomBlob(blobLen, seed)
+	d1, blob1 := reqresp.NewRandomBlob(blobLen, seed)
 	uuid1 := uuid.New()
-	d2, blob2 := newRandomBlob(blobLen, seed+1)
+	d2, blob2 := reqresp.NewRandomBlob(blobLen, seed+1)
 	uuid2 := uuid.New()
-	d3, blob3 := newRandomBlob(blobLen3, seed+2)
+	d3, blob3 := reqresp.NewRandomBlob(blobLen3, seed+2)
 	uuid3 := uuid.New()
 	// dMissing := digest.FromBytes([]byte("missing"))
 	// define req/resp entries
@@ -609,7 +609,7 @@ func TestBlobPut(t *testing.T) {
 			},
 		},
 	}
-	rrs = append(rrs, rrBaseEntries...)
+	rrs = append(rrs, reqresp.BaseEntries...)
 	// create a server
 	ts := httptest.NewServer(reqresp.NewHandler(t, rrs))
 	defer ts.Close()
