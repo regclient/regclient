@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"regexp"
 	"testing"
 
 	"github.com/opencontainers/go-digest"
@@ -21,6 +22,7 @@ type ReqEntry struct {
 	DelOnUse bool
 	Method   string
 	Path     string
+	PathRE   *regexp.Regexp
 	Query    map[string][]string
 	Headers  http.Header
 	Body     []byte
@@ -94,10 +96,11 @@ func (r *rrHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	for i, rr := range r.rrs {
 		reqMatch := rr.ReqEntry
 		if reqMatch.Method != req.Method ||
-			reqMatch.Path != req.URL.Path ||
+			(reqMatch.PathRE != nil && !reqMatch.PathRE.MatchString(req.URL.Path)) ||
+			(reqMatch.Path != "" && reqMatch.Path != req.URL.Path) ||
 			!strMapMatch(reqMatch.Query, req.URL.Query()) ||
 			!strMapMatch(reqMatch.Headers, req.Header) ||
-			bytes.Compare(reqMatch.Body, reqBody) != 0 {
+			(len(reqMatch.Body) > 0 && bytes.Compare(reqMatch.Body, reqBody) != 0) {
 			// skip if any field does not match
 			continue
 		}
