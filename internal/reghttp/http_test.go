@@ -14,10 +14,10 @@ import (
 	"time"
 
 	"github.com/opencontainers/go-digest"
+	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/auth"
 	"github.com/regclient/regclient/internal/reqresp"
-	"github.com/regclient/regclient/regclient/config"
-	"github.com/regclient/regclient/regclient/types"
+	"github.com/regclient/regclient/types"
 )
 
 // TODO: test for race conditions
@@ -1022,4 +1022,5 @@ func TestRegHttp(t *testing.T) {
 			t.Errorf("error closing request: %v", err)
 		}
 	})
+	// TODO: test various TLS configs (custom root for all hosts, custom root for one host, insecure)
 }

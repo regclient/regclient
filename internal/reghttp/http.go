@@ -3,11 +3,15 @@ package reghttp
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,21 +19,25 @@ import (
 	"time"
 
 	"github.com/opencontainers/go-digest"
+	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/auth"
-	"github.com/regclient/regclient/regclient/config"
-	"github.com/regclient/regclient/regclient/types"
+	"github.com/regclient/regclient/types"
 	"github.com/sirupsen/logrus"
 )
 
 var defaultDelayInit, _ = time.ParseDuration("1s")
 var defaultDelayMax, _ = time.ParseDuration("30s")
-var defaultLimit = 3
+
+const (
+	DefaultRetryLimit = 3
+)
 
 type Client struct {
 	host       map[string]*clientHost
 	httpClient *http.Client
 	rootCAPool [][]byte
-	limit      int
+	rootCADirs []string
+	retryLimit int
 	delayInit  time.Duration
 	delayMax   time.Duration
 	log        *logrus.Logger
@@ -92,11 +100,12 @@ func NewClient(opts ...Opts) *Client {
 	c := Client{
 		httpClient: &http.Client{},
 		host:       map[string]*clientHost{},
-		limit:      defaultLimit,
+		retryLimit: DefaultRetryLimit,
 		delayInit:  defaultDelayInit,
 		delayMax:   defaultDelayMax,
 		log:        &logrus.Logger{Out: io.Discard},
 		rootCAPool: [][]byte{},
+		rootCADirs: []string{},
 	}
 	for _, opt := range opts {
 		opt(&c)
@@ -110,6 +119,13 @@ func WithCerts(certs [][]byte) Opts {
 		for _, cert := range certs {
 			c.rootCAPool = append(c.rootCAPool, cert)
 		}
+	}
+}
+
+// WithCertDirs adds directories to check for host specific certs
+func WithCertDirs(dirs []string) Opts {
+	return func(c *Client) {
+		c.rootCADirs = append(c.rootCADirs, dirs...)
 	}
 }
 
@@ -169,11 +185,11 @@ func WithHTTPClient(hc *http.Client) Opts {
 	}
 }
 
-// WithLimit restricts the number of retries (defaults to 5)
-func WithLimit(l int) Opts {
+// WithRetryLimit restricts the number of retries (defaults to 5)
+func WithRetryLimit(rl int) Opts {
 	return func(c *Client) {
-		if l > 0 {
-			c.limit = l
+		if rl > 0 {
+			c.retryLimit = rl
 		}
 	}
 }
@@ -369,8 +385,40 @@ func (resp *clientResp) Next() error {
 					return err
 				}
 			}
+
+			// update http client for insecure requests and root certs
+			httpClient := *c.httpClient
+			if h.config.TLS == config.TLSInsecure || len(c.rootCAPool) > 0 || len(c.rootCADirs) > 0 {
+				if httpClient.Transport == nil {
+					httpClient.Transport = &http.Transport{}
+				}
+				t, ok := httpClient.Transport.(*http.Transport)
+				if ok {
+					var tlsc *tls.Config
+					if t.TLSClientConfig != nil {
+						tlsc = t.TLSClientConfig.Clone()
+					} else {
+						tlsc = &tls.Config{}
+					}
+					if h.config.TLS == config.TLSInsecure {
+						tlsc.InsecureSkipVerify = true
+					} else {
+						rootPool, err := makeRootPool(c.rootCAPool, c.rootCADirs, h.config.Hostname)
+						if err != nil {
+							c.log.WithFields(logrus.Fields{
+								"err": err,
+							}).Warn("failed to setup CA pool")
+						} else {
+							tlsc.RootCAs = rootPool
+						}
+					}
+					t.TLSClientConfig = tlsc
+					httpClient.Transport = t
+				}
+			}
+
 			// send request
-			resp.resp, err = c.httpClient.Do(httpReq)
+			resp.resp, err = httpClient.Do(httpReq)
 
 			if err != nil {
 				backoff = true
@@ -526,8 +574,8 @@ func (resp *clientResp) backoffClear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	ch := c.host[resp.mirror]
-	if ch.backoffCur > c.limit {
-		ch.backoffCur = c.limit
+	if ch.backoffCur > c.retryLimit {
+		ch.backoffCur = c.retryLimit
 	}
 	if ch.backoffCur > 0 {
 		ch.backoffCur--
@@ -562,7 +610,7 @@ func (resp *clientResp) backoffSet() error {
 
 	ch.backoffUntil = time.Now().Add(sleepTime)
 
-	if ch.backoffCur == c.limit {
+	if ch.backoffCur == c.retryLimit {
 		return fmt.Errorf("%w: backoffs %d", types.ErrBackoffLimit, ch.backoffCur)
 	}
 
@@ -614,6 +662,44 @@ func HttpError(statusCode int) error {
 	default:
 		return fmt.Errorf("%w: %s [http %d]", types.ErrHttpStatus, http.StatusText(statusCode), statusCode)
 	}
+}
+
+func makeRootPool(rootCAPool [][]byte, rootCADirs []string, hostname string) (*x509.CertPool, error) {
+	pool, err := x509.SystemCertPool()
+	if err != nil {
+		return nil, err
+	}
+	for _, ca := range rootCAPool {
+		if ok := pool.AppendCertsFromPEM(ca); !ok {
+			return nil, fmt.Errorf("failed to load ca: %s", ca)
+		}
+	}
+	for _, dir := range rootCADirs {
+		hostDir := filepath.Join(dir, hostname)
+		files, err := os.ReadDir(hostDir)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				return nil, fmt.Errorf("failed to read directory %s: %v", hostDir, err)
+			}
+			continue
+		}
+		for _, f := range files {
+			if f.IsDir() {
+				continue
+			}
+			if strings.HasSuffix(f.Name(), ".crt") {
+				f := filepath.Join(hostDir, f.Name())
+				cert, err := os.ReadFile(f)
+				if err != nil {
+					return nil, fmt.Errorf("failed to read %s: %v", f, err)
+				}
+				if ok := pool.AppendCertsFromPEM(cert); !ok {
+					return nil, fmt.Errorf("failed to import cert from %s", f)
+				}
+			}
+		}
+	}
+	return pool, nil
 }
 
 // sortHostCmp to sort host list of mirrors
