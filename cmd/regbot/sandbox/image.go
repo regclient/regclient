@@ -7,18 +7,18 @@ import (
 	"time"
 
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/cmd/regbot/internal/go2lua"
-	"github.com/regclient/regclient/regclient"
-	"github.com/regclient/regclient/regclient/blob"
-	"github.com/regclient/regclient/regclient/manifest"
-	"github.com/regclient/regclient/regclient/types"
+	"github.com/regclient/regclient/types/blob"
+	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/ref"
 	"github.com/sirupsen/logrus"
 	lua "github.com/yuin/gopher-lua"
 )
 
 type config struct {
 	m    manifest.Manifest
-	ref  types.Ref
+	r    ref.Ref
 	conf blob.OCIConfig
 }
 
@@ -78,20 +78,20 @@ func (s *Sandbox) configGet(ls *lua.LState) int {
 	}
 	s.log.WithFields(logrus.Fields{
 		"script": s.name,
-		"image":  m.ref.CommonName(),
+		"image":  m.r.CommonName(),
 	}).Debug("Retrieve image config")
 	confDigest, err := m.m.GetConfigDigest()
 	if err != nil {
-		ls.RaiseError("Failed looking up \"%s\" config digest: %v", m.ref.CommonName(), err)
+		ls.RaiseError("Failed looking up \"%s\" config digest: %v", m.r.CommonName(), err)
 	}
 
-	confBlob, err := s.rc.BlobGetOCIConfig(s.ctx, m.ref, confDigest)
+	confBlob, err := s.rc.BlobGetOCIConfig(s.ctx, m.r, confDigest)
 	if err != nil {
-		ls.RaiseError("Failed retrieving \"%s\" config: %v", m.ref.CommonName(), err)
+		ls.RaiseError("Failed retrieving \"%s\" config: %v", m.r.CommonName(), err)
 	}
-	ud, err := wrapUserData(ls, &config{conf: confBlob, m: m.m, ref: m.ref}, confBlob.GetConfig(), luaImageConfigName)
+	ud, err := wrapUserData(ls, &config{conf: confBlob, m: m.m, r: m.r}, confBlob.GetConfig(), luaImageConfigName)
 	if err != nil {
-		ls.RaiseError("Failed packaging \"%s\" config: %v", m.ref.CommonName(), err)
+		ls.RaiseError("Failed packaging \"%s\" config: %v", m.r.CommonName(), err)
 	}
 	ls.Push(ud)
 	return 1
@@ -127,7 +127,7 @@ func (s *Sandbox) configExport(ls *lua.LState) int {
 		newC = &config{
 			conf: bc,
 			m:    origC.m,
-			ref:  origC.ref,
+			r:    origC.r,
 		}
 	default:
 		ls.ArgError(i, "Config expected")
@@ -181,8 +181,8 @@ func (s *Sandbox) imageCopy(ls *lua.LState) int {
 	}
 	s.log.WithFields(logrus.Fields{
 		"script":         s.name,
-		"source":         src.ref.CommonName(),
-		"target":         tgt.ref.CommonName(),
+		"source":         src.r.CommonName(),
+		"target":         tgt.r.CommonName(),
 		"digestTags":     lOpts.DigestTags,
 		"forceRecursive": lOpts.ForceRecursive,
 		"dry-run":        s.dryRun,
@@ -190,9 +190,9 @@ func (s *Sandbox) imageCopy(ls *lua.LState) int {
 	if s.dryRun {
 		return 0
 	}
-	err := s.rc.ImageCopy(s.ctx, src.ref, tgt.ref, opts...)
+	err := s.rc.ImageCopy(s.ctx, src.r, tgt.r, opts...)
 	if err != nil {
-		ls.RaiseError("Failed copying \"%s\" to \"%s\": %v", src.ref.CommonName(), tgt.ref.CommonName(), err)
+		ls.RaiseError("Failed copying \"%s\" to \"%s\": %v", src.r.CommonName(), tgt.r.CommonName(), err)
 	}
 	return 0
 }
@@ -208,9 +208,9 @@ func (s *Sandbox) imageExportTar(ls *lua.LState) int {
 	if err != nil {
 		ls.RaiseError("Failed to open \"%s\": %v", file, err)
 	}
-	err = s.rc.ImageExport(s.ctx, src.ref, fh)
+	err = s.rc.ImageExport(s.ctx, src.r, fh)
 	if err != nil {
-		ls.RaiseError("Failed to export image \"%s\" to \"%s\": %v", src.ref.CommonName(), file, err)
+		ls.RaiseError("Failed to export image \"%s\" to \"%s\": %v", src.r.CommonName(), file, err)
 	}
 	return 0
 }
@@ -226,9 +226,9 @@ func (s *Sandbox) imageImportTar(ls *lua.LState) int {
 	if err != nil {
 		ls.RaiseError("Failed to read from \"%s\": %v", file, err)
 	}
-	err = s.rc.ImageImport(s.ctx, tgt.ref, rs)
+	err = s.rc.ImageImport(s.ctx, tgt.r, rs)
 	if err != nil {
-		ls.RaiseError("Failed to import image \"%s\" from \"%s\": %v", tgt.ref.CommonName(), file, err)
+		ls.RaiseError("Failed to import image \"%s\" from \"%s\": %v", tgt.r.CommonName(), file, err)
 	}
 	return 0
 }
@@ -242,7 +242,7 @@ func (s *Sandbox) imageRateLimit(ls *lua.LState) int {
 
 // imageRateLimitWait takes a ref, limit, poll freq, timeout, returns a bool for success
 func (s *Sandbox) imageRateLimitWait(ls *lua.LState) int {
-	ref := s.checkReference(ls, 1)
+	r := s.checkReference(ls, 1)
 	limit := ls.CheckInt(2)
 	top := ls.GetTop()
 	var freq time.Duration
@@ -273,9 +273,9 @@ func (s *Sandbox) imageRateLimitWait(ls *lua.LState) int {
 	defer cancel()
 	for {
 		// check the current manifest head
-		mh, err := s.rc.ManifestHead(ctx, ref.ref)
+		mh, err := s.rc.ManifestHead(ctx, r.r)
 		if err != nil {
-			ls.RaiseError("Failed checking \"%s\" manifest: %v", ref.ref.CommonName(), err)
+			ls.RaiseError("Failed checking \"%s\" manifest: %v", r.r.CommonName(), err)
 			return 0
 		}
 		// success if rate limit not set or remaining is above our limit
@@ -287,7 +287,7 @@ func (s *Sandbox) imageRateLimitWait(ls *lua.LState) int {
 		// delay for freq (until timeout reached), and then retry
 		s.log.WithFields(logrus.Fields{
 			"script":  s.name,
-			"image":   ref.ref.CommonName(),
+			"image":   r.r.CommonName(),
 			"current": rl.Remain,
 			"target":  limit,
 			"delay":   freq.String(),

@@ -3,8 +3,8 @@ package sandbox
 import (
 	"context"
 
+	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/cmd/regbot/internal/go2lua"
-	"github.com/regclient/regclient/regclient"
 	"github.com/sirupsen/logrus"
 	lua "github.com/yuin/gopher-lua"
 	"golang.org/x/sync/semaphore"
@@ -26,7 +26,7 @@ type Sandbox struct {
 	ctx    context.Context
 	log    *logrus.Logger
 	ls     *lua.LState
-	rc     regclient.RegClient
+	rc     *regclient.RegClient
 	sem    *semaphore.Weighted
 	dryRun bool
 }
@@ -67,7 +67,7 @@ func New(name string, opts ...Opt) *Sandbox {
 		s.log = &logrus.Logger{}
 	}
 	if s.rc == nil {
-		s.rc = regclient.NewRegClient()
+		s.rc = regclient.New()
 	}
 
 	// setup modules for the sandbox
@@ -104,7 +104,7 @@ func WithLog(log *logrus.Logger) Opt {
 }
 
 // WithRegClient specifies a regclient interface
-func WithRegClient(rc regclient.RegClient) Opt {
+func WithRegClient(rc *regclient.RegClient) Opt {
 	return func(s *Sandbox) {
 		s.rc = rc
 	}

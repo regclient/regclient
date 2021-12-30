@@ -7,15 +7,15 @@ import (
 	"github.com/containerd/containerd/platforms"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/cmd/regbot/internal/go2lua"
-	"github.com/regclient/regclient/regclient/manifest"
-	"github.com/regclient/regclient/regclient/types"
+	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/ref"
 	"github.com/sirupsen/logrus"
 	lua "github.com/yuin/gopher-lua"
 )
 
 type sbManifest struct {
-	m   manifest.Manifest
-	ref types.Ref
+	m manifest.Manifest
+	r ref.Ref
 }
 
 func setupManifest(s *Sandbox) {
@@ -47,22 +47,22 @@ func (s *Sandbox) checkManifest(ls *lua.LState, i int, list bool, head bool) *sb
 	var m *sbManifest
 	switch ls.Get(i).Type() {
 	case lua.LTString:
-		ref, err := types.NewRef(ls.CheckString(1))
+		r, err := ref.New(ls.CheckString(1))
 		if err != nil {
 			ls.RaiseError("reference parsing failed: %v", err)
 		}
 		if head {
-			rcM, err := s.rc.ManifestHead(s.ctx, ref)
+			rcM, err := s.rc.ManifestHead(s.ctx, r)
 			if err != nil {
-				ls.RaiseError("Failed retrieving \"%s\" manifest: %v", ref.CommonName(), err)
+				ls.RaiseError("Failed retrieving \"%s\" manifest: %v", r.CommonName(), err)
 			}
-			m = &sbManifest{m: rcM, ref: ref}
+			m = &sbManifest{m: rcM, r: r}
 		} else {
-			rcM, err := s.rcManifestGet(ref, list, "")
+			rcM, err := s.rcManifestGet(r, list, "")
 			if err != nil {
 				ls.RaiseError("manifest pull failed: %v", err)
 			}
-			m = &sbManifest{m: rcM, ref: ref}
+			m = &sbManifest{m: rcM, r: r}
 		}
 	case lua.LTUserData:
 		ud := ls.CheckUserData(i)
@@ -71,21 +71,21 @@ func (s *Sandbox) checkManifest(ls *lua.LState, i int, list bool, head bool) *sb
 			m = ud.Value.(*sbManifest)
 		case *config:
 			c := ud.Value.(*config)
-			m = &sbManifest{ref: c.ref, m: c.m}
+			m = &sbManifest{r: c.r, m: c.m}
 		case *reference:
 			r := ud.Value.(*reference)
 			if head {
-				rcM, err := s.rc.ManifestHead(s.ctx, r.ref)
+				rcM, err := s.rc.ManifestHead(s.ctx, r.r)
 				if err != nil {
-					ls.RaiseError("Failed retrieving \"%s\" manifest: %v", r.ref.CommonName(), err)
+					ls.RaiseError("Failed retrieving \"%s\" manifest: %v", r.r.CommonName(), err)
 				}
-				m = &sbManifest{m: rcM, ref: r.ref}
+				m = &sbManifest{m: rcM, r: r.r}
 			} else {
-				rcM, err := s.rcManifestGet(r.ref, list, "")
+				rcM, err := s.rcManifestGet(r.r, list, "")
 				if err != nil {
 					ls.RaiseError("manifest pull failed: %v", err)
 				}
-				m = &sbManifest{m: rcM, ref: r.ref}
+				m = &sbManifest{m: rcM, r: r.r}
 			}
 		default:
 			ls.ArgError(i, "manifest expected")
@@ -98,22 +98,22 @@ func (s *Sandbox) checkManifest(ls *lua.LState, i int, list bool, head bool) *sb
 
 func (s *Sandbox) manifestDelete(ls *lua.LState) int {
 	m := s.checkManifest(ls, 1, true, true)
-	ref := m.ref
-	if ref.Digest == "" {
+	r := m.r
+	if r.Digest == "" {
 		d := m.m.GetDigest()
-		ref.Digest = d.String()
+		r.Digest = d.String()
 	}
 	s.log.WithFields(logrus.Fields{
 		"script":  s.name,
-		"image":   ref.CommonName(),
+		"image":   r.CommonName(),
 		"dry-run": s.dryRun,
 	}).Info("Delete manifest")
 	if s.dryRun {
 		return 0
 	}
-	err := s.rc.ManifestDelete(s.ctx, ref)
+	err := s.rc.ManifestDelete(s.ctx, r)
 	if err != nil {
-		ls.RaiseError("Failed deleting \"%s\": %v", ref.CommonName(), err)
+		ls.RaiseError("Failed deleting \"%s\": %v", r.CommonName(), err)
 	}
 	return 0
 }
@@ -151,8 +151,8 @@ func (s *Sandbox) manifestExport(ls *lua.LState) int {
 			ls.RaiseError("Failed exporting manifest (from orig): %v", err)
 		}
 		newM = &sbManifest{
-			m:   rcM,
-			ref: origM.ref,
+			m: rcM,
+			r: origM.r,
 		}
 	default:
 		ls.ArgError(i, "Manifest expected")
@@ -175,46 +175,46 @@ func (s *Sandbox) manifestGetList(ls *lua.LState) int {
 }
 
 func (s *Sandbox) manifestGetWithOpts(ls *lua.LState, list bool) int {
-	ref := s.checkReference(ls, 1)
+	r := s.checkReference(ls, 1)
 	plat := ""
 	if !list && ls.GetTop() == 2 {
 		plat = ls.CheckString(2)
 	}
 	s.log.WithFields(logrus.Fields{
 		"script":   s.name,
-		"image":    ref.ref.CommonName(),
+		"image":    r.r.CommonName(),
 		"list":     list,
 		"platform": plat,
 	}).Debug("Retrieve manifest")
-	m, err := s.rcManifestGet(ref.ref, list, plat)
+	m, err := s.rcManifestGet(r.r, list, plat)
 	if err != nil {
-		ls.RaiseError("Failed retrieving \"%s\" manifest: %v", ref.ref.CommonName(), err)
+		ls.RaiseError("Failed retrieving \"%s\" manifest: %v", r.r.CommonName(), err)
 	}
 
-	ud, err := wrapUserData(ls, &sbManifest{m: m, ref: ref.ref}, m.GetOrigManifest(), luaManifestName)
+	ud, err := wrapUserData(ls, &sbManifest{m: m, r: r.r}, m.GetOrigManifest(), luaManifestName)
 	if err != nil {
-		ls.RaiseError("Failed packaging \"%s\" manifest: %v", ref.ref.CommonName(), err)
+		ls.RaiseError("Failed packaging \"%s\" manifest: %v", r.r.CommonName(), err)
 	}
 	ls.Push(ud)
 	return 1
 }
 
 func (s *Sandbox) manifestHead(ls *lua.LState) int {
-	ref := s.checkReference(ls, 1)
+	r := s.checkReference(ls, 1)
 
 	s.log.WithFields(logrus.Fields{
 		"script": s.name,
-		"image":  ref.ref.CommonName(),
+		"image":  r.r.CommonName(),
 	}).Debug("Retrieve manifest with head")
 
-	m, err := s.rc.ManifestHead(s.ctx, ref.ref)
+	m, err := s.rc.ManifestHead(s.ctx, r.r)
 	if err != nil {
-		ls.RaiseError("Failed retrieving \"%s\" manifest: %v", ref.ref.CommonName(), err)
+		ls.RaiseError("Failed retrieving \"%s\" manifest: %v", r.r.CommonName(), err)
 	}
 
-	ud, err := wrapUserData(ls, &sbManifest{m: m, ref: ref.ref}, m, luaManifestName)
+	ud, err := wrapUserData(ls, &sbManifest{m: m, r: r.r}, m, luaManifestName)
 	if err != nil {
-		ls.RaiseError("Failed packaging \"%s\" manifest: %v", ref.ref.CommonName(), err)
+		ls.RaiseError("Failed packaging \"%s\" manifest: %v", r.r.CommonName(), err)
 	}
 	ls.Push(ud)
 	return 1
@@ -232,10 +232,10 @@ func (s *Sandbox) manifestJSON(ls *lua.LState) int {
 
 func (s *Sandbox) manifestPut(ls *lua.LState) int {
 	sbm := s.checkManifest(ls, 1, true, false)
-	ref := s.checkReference(ls, 2)
+	r := s.checkReference(ls, 2)
 	s.log.WithFields(logrus.Fields{
 		"script": s.name,
-		"image":  ref.ref.CommonName(),
+		"image":  r.r.CommonName(),
 	}).Debug("Put manifest")
 
 	m, err := manifest.FromOrig(sbm.m.GetOrigManifest())
@@ -243,7 +243,7 @@ func (s *Sandbox) manifestPut(ls *lua.LState) int {
 		ls.RaiseError("Failed to put manifest: %v", err)
 	}
 
-	err = s.rc.ManifestPut(s.ctx, ref.ref, m)
+	err = s.rc.ManifestPut(s.ctx, r.r, m)
 	if err != nil {
 		ls.RaiseError("Failed to put manifest: %v", err)
 	}
@@ -251,8 +251,8 @@ func (s *Sandbox) manifestPut(ls *lua.LState) int {
 	return 0
 }
 
-func (s *Sandbox) rcManifestGet(ref types.Ref, list bool, platform string) (manifest.Manifest, error) {
-	m, err := s.rc.ManifestGet(s.ctx, ref)
+func (s *Sandbox) rcManifestGet(r ref.Ref, list bool, platform string) (manifest.Manifest, error) {
+	m, err := s.rc.ManifestGet(s.ctx, r)
 	if err != nil {
 		return m, err
 	}
@@ -275,8 +275,8 @@ func (s *Sandbox) rcManifestGet(ref types.Ref, list bool, platform string) (mani
 		if err != nil {
 			return m, err
 		}
-		ref.Digest = desc.Digest.String()
-		m, err = s.rc.ManifestGet(s.ctx, ref)
+		r.Digest = desc.Digest.String()
+		m, err = s.rc.ManifestGet(s.ctx, r)
 		if err != nil {
 			return m, err
 		}
