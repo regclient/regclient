@@ -11,9 +11,10 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/cmd/regbot/sandbox"
+	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/regclient"
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -43,9 +44,9 @@ var (
 	// These are used to version the UserAgent header
 	VCSRef = ""
 	VCSTag = ""
-	config *Config
+	conf   *Config
 	log    *logrus.Logger
-	rc     regclient.RegClient
+	rc     *regclient.RegClient
 	sem    *semaphore.Weighted
 )
 
@@ -149,9 +150,9 @@ func runOnce(cmd *cobra.Command, args []string) error {
 	}()
 	var wg sync.WaitGroup
 	var mainErr error
-	for _, s := range config.Scripts {
+	for _, s := range conf.Scripts {
 		s := s
-		if config.Defaults.Parallel > 0 {
+		if conf.Defaults.Parallel > 0 {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -188,7 +189,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	c := cron.New(cron.WithChain(
 		cron.SkipIfStillRunning(cron.DefaultLogger),
 	))
-	for _, s := range config.Scripts {
+	for _, s := range conf.Scripts {
 		s := s
 		sched := s.Schedule
 		if sched == "" && s.Interval != 0 {
@@ -233,7 +234,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 func loadConf() error {
 	var err error
 	if rootOpts.confFile == "-" {
-		config, err = ConfigLoadReader(os.Stdin)
+		conf, err = ConfigLoadReader(os.Stdin)
 		if err != nil {
 			return err
 		}
@@ -243,7 +244,7 @@ func loadConf() error {
 			return err
 		}
 		defer r.Close()
-		config, err = ConfigLoadReader(r)
+		conf, err = ConfigLoadReader(r)
 		if err != nil {
 			return err
 		}
@@ -251,7 +252,7 @@ func loadConf() error {
 		return ErrMissingInput
 	}
 	// use a semaphore to control parallelism
-	concurrent := int64(config.Defaults.Parallel)
+	concurrent := int64(conf.Defaults.Parallel)
 	if concurrent <= 0 {
 		concurrent = 1
 	}
@@ -270,11 +271,11 @@ func loadConf() error {
 	} else {
 		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" (unknown)"))
 	}
-	if !config.Defaults.SkipDockerConf {
+	if !conf.Defaults.SkipDockerConf {
 		rcOpts = append(rcOpts, regclient.WithDockerCreds(), regclient.WithDockerCerts())
 	}
-	rcHosts := []regclient.ConfigHost{}
-	for _, host := range config.Creds {
+	rcHosts := []config.Host{}
+	for _, host := range conf.Creds {
 		if host.Scheme != "" {
 			log.WithFields(logrus.Fields{
 				"name": host.Registry,
@@ -285,7 +286,7 @@ func loadConf() error {
 	if len(rcHosts) > 0 {
 		rcOpts = append(rcOpts, regclient.WithConfigHosts(rcHosts))
 	}
-	rc = regclient.NewRegClient(rcOpts...)
+	rc = regclient.New(rcOpts...)
 	return nil
 }
 
