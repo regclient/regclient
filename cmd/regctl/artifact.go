@@ -13,8 +13,8 @@ import (
 	"github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/pkg/archive"
-	"github.com/regclient/regclient/regclient/manifest"
-	"github.com/regclient/regclient/regclient/types"
+	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/ref"
 	"github.com/spf13/cobra"
 )
 
@@ -115,12 +115,12 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 	}
 
 	// pull the manifest
-	ref, err := types.NewRef(args[0])
+	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
 	rc := newRegClient()
-	mm, err := rc.ManifestGet(ctx, ref)
+	mm, err := rc.ManifestGet(ctx, r)
 	if err != nil {
 		return err
 	}
@@ -131,7 +131,7 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		rdr, err := rc.BlobGet(ctx, ref, d)
+		rdr, err := rc.BlobGet(ctx, r, d)
 		if err != nil {
 			return err
 		}
@@ -195,7 +195,7 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 			// wrap in a closure to trigger defer on each step, avoiding open file handles
 			err = func() error {
 				// perform blob get
-				rdr, err := rc.BlobGet(ctx, ref, l.Digest)
+				rdr, err := rc.BlobGet(ctx, r, l.Digest)
 				if err != nil {
 					return err
 				}
@@ -262,7 +262,7 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("more than one matching layer found, add filters or specify output dir")
 		}
 		// pull blob, write to stdout
-		rdr, err := rc.BlobGet(ctx, ref, layers[0].Digest)
+		rdr, err := rc.BlobGet(ctx, r, layers[0].Digest)
 		if err != nil {
 			return err
 		}
@@ -277,7 +277,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	ctx := context.Background()
 
 	// validate inputs
-	ref, err := types.NewRef(args[0])
+	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
@@ -324,7 +324,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	}
 	configDigest := digest.FromBytes(configBytes)
 	// push config to registry
-	_, _, err = rc.BlobPut(ctx, ref, configDigest, bytes.NewReader(configBytes), int64(len(configBytes)))
+	_, _, err = rc.BlobPut(ctx, r, configDigest, bytes.NewReader(configBytes), int64(len(configBytes)))
 	if err != nil {
 		return err
 	}
@@ -396,7 +396,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 					},
 				})
 				// if blob already exists, skip Put
-				bRdr, err := rc.BlobHead(ctx, ref, d)
+				bRdr, err := rc.BlobHead(ctx, r, d)
 				if err == nil {
 					bRdr.Close()
 					return nil
@@ -406,7 +406,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 				if err != nil {
 					return err
 				}
-				_, _, err = rc.BlobPut(ctx, ref, d, rdr, l)
+				_, _, err = rc.BlobPut(ctx, r, d, rdr, l)
 				if err != nil {
 					return err
 				}
@@ -422,7 +422,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 		if len(artifactOpts.artifactMT) > 0 {
 			mt = artifactOpts.artifactMT[0]
 		}
-		d, l, err := rc.BlobPut(ctx, ref, "", os.Stdin, 0)
+		d, l, err := rc.BlobPut(ctx, r, "", os.Stdin, 0)
 		if err != nil {
 			return err
 		}
@@ -440,7 +440,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	}
 
 	// push manifest
-	err = rc.ManifestPut(ctx, ref, mm)
+	err = rc.ManifestPut(ctx, r, mm)
 	if err != nil {
 		return err
 	}

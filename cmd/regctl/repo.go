@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/regclient"
+	"github.com/regclient/regclient/scheme"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -60,12 +60,12 @@ func runRepoLs(cmd *cobra.Command, args []string) error {
 		"last":  repoOpts.last,
 		"limit": repoOpts.limit,
 	}).Debug("Listing repositories")
-	opts := []regclient.RepoOpts{}
+	opts := []scheme.RepoOpts{}
 	if repoOpts.last != "" {
-		opts = append(opts, regclient.WithRepoLast(repoOpts.last))
+		opts = append(opts, scheme.WithRepoLast(repoOpts.last))
 	}
 	if repoOpts.limit != 0 {
-		opts = append(opts, regclient.WithRepoLimit(repoOpts.limit))
+		opts = append(opts, scheme.WithRepoLimit(repoOpts.limit))
 	}
 	rl, err := rc.RepoList(context.Background(), host, opts...)
 	if err != nil {
@@ -79,5 +79,5 @@ func runRepoLs(cmd *cobra.Command, args []string) error {
 	case "rawHeaders", "raw-headers", "headers":
 		repoOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
-	return template.Writer(os.Stdout, repoOpts.format, rl, template.WithFuncs(regclient.TemplateFuncs))
+	return template.Writer(os.Stdout, repoOpts.format, rl)
 }

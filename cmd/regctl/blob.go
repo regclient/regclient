@@ -7,8 +7,7 @@ import (
 
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/regclient"
-	"github.com/regclient/regclient/regclient/types"
+	"github.com/regclient/regclient/types/ref"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -73,7 +72,7 @@ func init() {
 }
 
 func runBlobGet(cmd *cobra.Command, args []string) error {
-	ref, err := types.NewRef(args[0])
+	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
@@ -85,15 +84,15 @@ func runBlobGet(cmd *cobra.Command, args []string) error {
 	}
 
 	log.WithFields(logrus.Fields{
-		"host":       ref.Registry,
-		"repository": ref.Repository,
+		"host":       r.Registry,
+		"repository": r.Repository,
 		"digest":     args[1],
 	}).Debug("Pulling blob")
 	d, err := digest.Parse(args[1])
 	if err != nil {
 		return err
 	}
-	blob, err := rc.BlobGet(context.Background(), ref, d)
+	blob, err := rc.BlobGet(context.Background(), r, d)
 	if err != nil {
 		return err
 	}
@@ -111,11 +110,11 @@ func runBlobGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	return template.Writer(os.Stdout, blobOpts.format, blob, template.WithFuncs(regclient.TemplateFuncs))
+	return template.Writer(os.Stdout, blobOpts.format, blob)
 }
 
 func runBlobPut(cmd *cobra.Command, args []string) error {
-	ref, err := types.NewRef(args[0])
+	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
@@ -128,11 +127,11 @@ func runBlobPut(cmd *cobra.Command, args []string) error {
 	}
 
 	log.WithFields(logrus.Fields{
-		"host":       ref.Registry,
-		"repository": ref.Repository,
+		"host":       r.Registry,
+		"repository": r.Repository,
 		"digest":     blobOpts.digest,
 	}).Debug("Pushing blob")
-	dOut, size, err := rc.BlobPut(context.Background(), ref, digest.Digest(blobOpts.digest), os.Stdin, 0)
+	dOut, size, err := rc.BlobPut(context.Background(), r, digest.Digest(blobOpts.digest), os.Stdin, 0)
 	if err != nil {
 		return err
 	}
@@ -145,5 +144,5 @@ func runBlobPut(cmd *cobra.Command, args []string) error {
 		Size:   size,
 	}
 
-	return template.Writer(os.Stdout, blobOpts.format, result, template.WithFuncs(regclient.TemplateFuncs))
+	return template.Writer(os.Stdout, blobOpts.format, result)
 }

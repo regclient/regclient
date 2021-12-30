@@ -7,8 +7,9 @@ import (
 	"io/fs"
 	"os"
 
+	"github.com/regclient/regclient"
+	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/regclient"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -98,11 +99,11 @@ func runVersion(cmd *cobra.Command, args []string) error {
 		VCSRef: VCSRef,
 		VCSTag: VCSTag,
 	}
-	return template.Writer(os.Stdout, rootOpts.format, ver, template.WithFuncs(regclient.TemplateFuncs))
+	return template.Writer(os.Stdout, rootOpts.format, ver)
 }
 
-func newRegClient() regclient.RegClient {
-	config, err := ConfigLoadDefault()
+func newRegClient() *regclient.RegClient {
+	conf, err := ConfigLoadDefault()
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"err": err,
@@ -119,22 +120,22 @@ func newRegClient() regclient.RegClient {
 	} else {
 		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" (unknown)"))
 	}
-	if config.IncDockerCred == nil || *config.IncDockerCred {
+	if conf.IncDockerCred == nil || *conf.IncDockerCred {
 		rcOpts = append(rcOpts, regclient.WithDockerCreds())
 	}
-	if config.IncDockerCert == nil || *config.IncDockerCert {
+	if conf.IncDockerCert == nil || *conf.IncDockerCert {
 		rcOpts = append(rcOpts, regclient.WithDockerCerts())
 	}
 
-	rcHosts := []regclient.ConfigHost{}
-	for name, host := range config.Hosts {
+	rcHosts := []config.Host{}
+	for name, host := range conf.Hosts {
 		rcHosts = append(rcHosts, configHostToRCHost(name, *host))
 	}
 	if len(rcHosts) > 0 {
 		rcOpts = append(rcOpts, regclient.WithConfigHosts(rcHosts))
 	}
 
-	return regclient.NewRegClient(rcOpts...)
+	return regclient.New(rcOpts...)
 }
 
 func setupVCSVars() {
