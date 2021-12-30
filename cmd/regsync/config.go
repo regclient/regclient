@@ -6,18 +6,19 @@ import (
 	"os"
 	"time"
 
+	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/regclient"
+	"github.com/regclient/regclient/types"
 	"gopkg.in/yaml.v2"
 )
 
 // delay checking for at least 5 minutes when rate limit is exceeded
 var rateLimitRetryMin time.Duration
 var defaultMediaTypes = []string{
-	regclient.MediaTypeDocker2Manifest,
-	regclient.MediaTypeDocker2ManifestList,
-	regclient.MediaTypeOCI1Manifest,
-	regclient.MediaTypeOCI1ManifestList,
+	types.MediaTypeDocker2Manifest,
+	types.MediaTypeDocker2ManifestList,
+	types.MediaTypeOCI1Manifest,
+	types.MediaTypeOCI1ManifestList,
 }
 
 func init() {
@@ -39,7 +40,7 @@ type ConfigCreds struct {
 	User       string            `yaml:"user" json:"user"`
 	Pass       string            `yaml:"pass" json:"pass"`
 	Token      string            `yaml:"token" json:"token"`
-	TLS        regclient.TLSConf `yaml:"tls" json:"tls"`
+	TLS        config.TLSConf    `yaml:"tls" json:"tls"`
 	Scheme     string            `yaml:"scheme" json:"scheme"` // TODO: eventually delete
 	RegCert    string            `yaml:"regcert" json:"regcert"`
 	PathPrefix string            `yaml:"pathPrefix" json:"pathPrefix"`
@@ -51,8 +52,8 @@ type ConfigCreds struct {
 	BlobMax    int64             `yaml:"blobMax" json:"blobMax"`
 }
 
-func credsToRCHost(c ConfigCreds) regclient.ConfigHost {
-	return regclient.ConfigHost{
+func credsToRCHost(c ConfigCreds) config.Host {
+	return config.Host{
 		Name:       c.Registry,
 		Hostname:   c.Hostname,
 		User:       c.User,
