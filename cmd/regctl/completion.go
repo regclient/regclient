@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/regclient/regclient/regclient"
-	"github.com/regclient/regclient/regclient/types"
+	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/ref"
 	"github.com/spf13/cobra"
 )
 
@@ -94,12 +94,12 @@ func completeArgPlatform(cmd *cobra.Command, args []string, toComplete string) (
 
 func completeArgMediaTypeManifest(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	return []string{
-		regclient.MediaTypeDocker2Manifest,
-		regclient.MediaTypeDocker2ManifestList,
-		regclient.MediaTypeOCI1Manifest,
-		regclient.MediaTypeOCI1ManifestList,
-		regclient.MediaTypeDocker1Manifest,
-		regclient.MediaTypeDocker1ManifestSigned,
+		types.MediaTypeDocker2Manifest,
+		types.MediaTypeDocker2ManifestList,
+		types.MediaTypeOCI1Manifest,
+		types.MediaTypeOCI1ManifestList,
+		types.MediaTypeDocker1Manifest,
+		types.MediaTypeDocker1ManifestSigned,
 	}, cobra.ShellCompDirectiveNoFileComp
 }
 
@@ -118,12 +118,12 @@ func completeArgTag(cmd *cobra.Command, args []string, toComplete string) ([]str
 	result := []string{}
 	// TODO: is it possible to expand registry, then repo, then tag?
 	input := strings.TrimRight(toComplete, ":")
-	ref, err := types.NewRef(input)
-	if err != nil || ref.Digest != "" {
+	r, err := ref.New(input)
+	if err != nil || r.Digest != "" {
 		return result, cobra.ShellCompDirectiveNoFileComp
 	}
 	rc := newRegClient()
-	tl, err := rc.TagList(context.Background(), ref)
+	tl, err := rc.TagList(context.Background(), r)
 	if err != nil {
 		return result, cobra.ShellCompDirectiveNoFileComp
 	}
@@ -132,7 +132,7 @@ func completeArgTag(cmd *cobra.Command, args []string, toComplete string) ([]str
 		return result, cobra.ShellCompDirectiveNoFileComp
 	}
 	for _, tag := range tags {
-		resultRef, _ := types.NewRef(input)
+		resultRef, _ := ref.New(input)
 		resultRef.Tag = tag
 		resultCN := resultRef.CommonName()
 		if strings.HasPrefix(resultCN, toComplete) {

@@ -9,7 +9,7 @@ import (
 	"os/user"
 	"path/filepath"
 
-	"github.com/regclient/regclient/regclient"
+	"github.com/regclient/regclient/config"
 )
 
 var (
@@ -23,17 +23,17 @@ var (
 
 // Config struct contains contents loaded from / saved to a config file
 type Config struct {
-	Filename      string                 `json:"-"`                 // filename that was loaded
-	Version       int                    `json:"version,omitempty"` // version the file in case the config file syntax changes in the future
-	Hosts         map[string]*ConfigHost `json:"hosts"`
-	IncDockerCred *bool                  `json:"incDockerCred,omitempty"`
-	IncDockerCert *bool                  `json:"incDockerCert,omitempty"`
+	Filename      string                  `json:"-"`                 // filename that was loaded
+	Version       int                     `json:"version,omitempty"` // version the file in case the config file syntax changes in the future
+	Hosts         map[string]*config.Host `json:"hosts"`
+	IncDockerCred *bool                   `json:"incDockerCred,omitempty"`
+	IncDockerCert *bool                   `json:"incDockerCert,omitempty"`
 }
 
 // ConfigHost struct contains host specific settings
 type ConfigHost struct {
 	Name       string            `json:"-"`
-	TLS        regclient.TLSConf `json:"tls,omitempty"`
+	TLS        config.TLSConf    `json:"tls,omitempty"`
 	RegCert    string            `json:"regcert,omitempty"`
 	ClientCert string            `json:"clientcert,omitempty"`
 	ClientKey  string            `json:"clientkey,omitempty"`
@@ -42,7 +42,7 @@ type ConfigHost struct {
 	Pass       string            `json:"pass,omitempty"`
 	Token      string            `json:"token,omitempty"`
 	PathPrefix string            `json:"pathPrefix,omitempty"` // used for mirrors defined within a repository namespace
-	Mirrors    []string          `json:"mirrors,omitempty"`    // list of other ConfigHost Names to use as mirrors
+	Mirrors    []string          `json:"mirrors,omitempty"`    // list of other Host names to use as mirrors
 	Priority   uint              `json:"priority,omitempty"`   // priority when sorting mirrors, higher priority attempted first
 	API        string            `json:"api,omitempty"`        // registry API to use
 	APIOpts    map[string]string `json:"apiOpts,omitempty"`
@@ -50,8 +50,8 @@ type ConfigHost struct {
 	BlobMax    int64             `json:"blobMax,omitempty"`   // threshold to switch to chunked upload, -1 to disable
 }
 
-func configHostToRCHost(name string, c ConfigHost) regclient.ConfigHost {
-	return regclient.ConfigHost{
+func configHostToRCHost(name string, c config.Host) config.Host {
+	return config.Host{
 		Name:       name,
 		TLS:        c.TLS,
 		RegCert:    c.RegCert,
@@ -71,10 +71,10 @@ func configHostToRCHost(name string, c ConfigHost) regclient.ConfigHost {
 	}
 }
 
-// ConfigHostNew creates a default ConfigHost entry
-func ConfigHostNew() *ConfigHost {
-	h := ConfigHost{
-		TLS:     regclient.TLSEnabled,
+// ConfigHostNew creates a default Host entry
+func ConfigHostNew() *config.Host {
+	h := config.Host{
+		TLS:     config.TLSEnabled,
 		APIOpts: map[string]string{},
 	}
 	return &h
@@ -102,7 +102,7 @@ func getHomeDir() string {
 // ConfigNew creates an empty configuration
 func ConfigNew() *Config {
 	c := Config{
-		Hosts: map[string]*ConfigHost{},
+		Hosts: map[string]*config.Host{},
 	}
 	return &c
 }
@@ -124,13 +124,13 @@ func ConfigLoadReader(r io.Reader) (*Config, error) {
 		if c.Hosts[h].Hostname == "" {
 			c.Hosts[h].Hostname = h
 		}
-		if c.Hosts[h].TLS == regclient.TLSUndefined {
-			c.Hosts[h].TLS = regclient.TLSEnabled
+		if c.Hosts[h].TLS == config.TLSUndefined {
+			c.Hosts[h].TLS = config.TLSEnabled
 		}
-		if h == regclient.DockerRegistryDNS || h == regclient.DockerRegistry {
-			c.Hosts[h].Name = regclient.DockerRegistry
+		if h == config.DockerRegistryDNS || h == config.DockerRegistry {
+			c.Hosts[h].Name = config.DockerRegistry
 			if c.Hosts[h].Hostname == h {
-				c.Hosts[h].Hostname = regclient.DockerRegistryDNS
+				c.Hosts[h].Hostname = config.DockerRegistryDNS
 			}
 		}
 		if c.Hosts[h].Name != h {

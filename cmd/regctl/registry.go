@@ -8,7 +8,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/regclient/regclient/regclient"
+	"github.com/regclient/regclient"
+	"github.com/regclient/regclient/config"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -167,7 +168,7 @@ func runRegistryLogin(cmd *cobra.Command, args []string) error {
 	}
 	h, ok := c.Hosts[args[0]]
 	if !ok {
-		h = &ConfigHost{}
+		h = &config.Host{}
 		c.Hosts[args[0]] = h
 	}
 	if registryOpts.user != "" {
@@ -266,7 +267,7 @@ func runRegistrySet(cmd *cobra.Command, args []string) error {
 	}
 	h, ok := c.Hosts[name]
 	if !ok {
-		h = ConfigHostNew()
+		h = config.HostNew()
 		h.Hostname = name
 		c.Hosts[name] = h
 	}

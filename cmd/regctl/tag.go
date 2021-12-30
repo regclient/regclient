@@ -5,8 +5,8 @@ import (
 	"os"
 
 	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/regclient"
-	"github.com/regclient/regclient/regclient/types"
+	"github.com/regclient/regclient/scheme"
+	"github.com/regclient/regclient/types/ref"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -56,17 +56,17 @@ func init() {
 }
 
 func runTagDelete(cmd *cobra.Command, args []string) error {
-	ref, err := types.NewRef(args[0])
+	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
 	rc := newRegClient()
 	log.WithFields(logrus.Fields{
-		"host":       ref.Registry,
-		"repository": ref.Repository,
-		"tag":        ref.Tag,
+		"host":       r.Registry,
+		"repository": r.Repository,
+		"tag":        r.Tag,
 	}).Debug("Delete tag")
-	err = rc.TagDelete(context.Background(), ref)
+	err = rc.TagDelete(context.Background(), r)
 	if err != nil {
 		return err
 	}
@@ -74,16 +74,23 @@ func runTagDelete(cmd *cobra.Command, args []string) error {
 }
 
 func runTagLs(cmd *cobra.Command, args []string) error {
-	ref, err := types.NewRef(args[0])
+	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
 	rc := newRegClient()
 	log.WithFields(logrus.Fields{
-		"host":       ref.Registry,
-		"repository": ref.Repository,
+		"host":       r.Registry,
+		"repository": r.Repository,
 	}).Debug("Listing tags")
-	tl, err := rc.TagList(context.Background(), ref, regclient.TagOptLimit(tagOpts.Limit), regclient.TagOptLast(tagOpts.Last))
+	opts := []scheme.TagOpts{}
+	if tagOpts.Limit != 0 {
+		opts = append(opts, scheme.WithTagLimit(tagOpts.Limit))
+	}
+	if tagOpts.Last != "" {
+		opts = append(opts, scheme.WithTagLast(tagOpts.Last))
+	}
+	tl, err := rc.TagList(context.Background(), r, opts...)
 	if err != nil {
 		return err
 	}
@@ -95,5 +102,5 @@ func runTagLs(cmd *cobra.Command, args []string) error {
 	case "rawHeaders", "raw-headers", "headers":
 		tagOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
-	return template.Writer(os.Stdout, tagOpts.format, tl, template.WithFuncs(regclient.TemplateFuncs))
+	return template.Writer(os.Stdout, tagOpts.format, tl)
 }
