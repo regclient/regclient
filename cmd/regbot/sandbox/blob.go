@@ -54,7 +54,7 @@ func (s *Sandbox) checkBlob(ls *lua.LState, i int, head bool) *sbBlob {
 			}
 			b = &sbBlob{b: rcB, ref: ref, d: digest.Digest(ref.Digest)}
 		} else {
-			rcB, err := s.rc.BlobGet(s.ctx, ref, digest.Digest(ref.Digest), nil)
+			rcB, err := s.rc.BlobGet(s.ctx, ref, digest.Digest(ref.Digest))
 			if err != nil {
 				ls.RaiseError("Blob pull failed: %v", err)
 			}
@@ -77,7 +77,7 @@ func (s *Sandbox) checkBlob(ls *lua.LState, i int, head bool) *sbBlob {
 				}
 				b = &sbBlob{b: rcB, ref: ref, d: digest.Digest(ref.Digest)}
 			} else {
-				rcB, err := s.rc.BlobGet(s.ctx, ref, digest.Digest(ref.Digest), nil)
+				rcB, err := s.rc.BlobGet(s.ctx, ref, digest.Digest(ref.Digest))
 				if err != nil {
 					ls.RaiseError("Blob pull failed: %v", err)
 				}
@@ -103,7 +103,7 @@ func (s *Sandbox) blobGet(ls *lua.LState) int {
 		"ref":    ref.ref.CommonName(),
 		"digest": d,
 	}).Debug("Retrieve blob")
-	b, err := s.rc.BlobGet(s.ctx, ref.ref, digest.Digest(d), nil)
+	b, err := s.rc.BlobGet(s.ctx, ref.ref, digest.Digest(d))
 	if err != nil {
 		ls.RaiseError("Failed retrieving \"%s\" blob \"%s\": %v", ref.ref.CommonName(), d, err)
 	}
@@ -172,7 +172,7 @@ func (s *Sandbox) blobPut(ls *lua.LState) int {
 		ls.ArgError(2, "blob content expected")
 	}
 
-	d, size, err := s.rc.BlobPut(s.ctx, ref.ref, "", rdr, "", 0)
+	d, size, err := s.rc.BlobPut(s.ctx, ref.ref, "", rdr, 0)
 	if err != nil {
 		ls.RaiseError("Failed to put blob: %v", err)
 	}

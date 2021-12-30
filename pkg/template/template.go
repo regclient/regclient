@@ -44,11 +44,12 @@ var tmplFuncs = gotemplate.FuncMap{
 		enc.Encode(v)
 		return buf.String()
 	},
-	"lower": strings.ToLower,
-	"split": strings.Split,
-	"time":  func() *TimeFuncs { return &TimeFuncs{} },
-	"title": strings.Title,
-	"upper": strings.ToUpper,
+	"printPretty": printPretty,
+	"lower":       strings.ToLower,
+	"split":       strings.Split,
+	"time":        func() *TimeFuncs { return &TimeFuncs{} },
+	"title":       strings.Title,
+	"upper":       strings.ToUpper,
 }
 
 // Opt allows options to be passed to templating functions

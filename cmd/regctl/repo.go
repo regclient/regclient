@@ -27,13 +27,14 @@ Note: Docker Hub does not support this API request.`,
 }
 
 var repoOpts struct {
-	regclient.RepoOpts
+	last   string
+	limit  int
 	format string
 }
 
 func init() {
-	repoLsCmd.Flags().StringVarP(&repoOpts.Last, "last", "", "", "Specify the last repo from a previous request for pagination")
-	repoLsCmd.Flags().IntVarP(&repoOpts.Limit, "limit", "", 0, "Specify the number of repos to retrieve")
+	repoLsCmd.Flags().StringVarP(&repoOpts.last, "last", "", "", "Specify the last repo from a previous request for pagination")
+	repoLsCmd.Flags().IntVarP(&repoOpts.limit, "limit", "", 0, "Specify the number of repos to retrieve")
 	repoLsCmd.Flags().StringVarP(&repoOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	repoLsCmd.RegisterFlagCompletionFunc("last", completeArgNone)
 	repoLsCmd.RegisterFlagCompletionFunc("limit", completeArgNone)
@@ -56,10 +57,17 @@ func runRepoLs(cmd *cobra.Command, args []string) error {
 	rc := newRegClient()
 	log.WithFields(logrus.Fields{
 		"host":  host,
-		"last":  repoOpts.Last,
-		"limit": repoOpts.Limit,
+		"last":  repoOpts.last,
+		"limit": repoOpts.limit,
 	}).Debug("Listing repositories")
-	rl, err := rc.RepoListWithOpts(context.Background(), host, repoOpts.RepoOpts)
+	opts := []regclient.RepoOpts{}
+	if repoOpts.last != "" {
+		opts = append(opts, regclient.WithRepoLast(repoOpts.last))
+	}
+	if repoOpts.limit != 0 {
+		opts = append(opts, regclient.WithRepoLimit(repoOpts.limit))
+	}
+	rl, err := rc.RepoList(context.Background(), host, opts...)
 	if err != nil {
 		return err
 	}

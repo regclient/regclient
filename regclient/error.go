@@ -1,42 +1,31 @@
+//go:build !nolegacy
+// +build !nolegacy
+
+// Legacy package, this has been moved to the types/error.go package
+
 package regclient
 
-import "errors"
+import (
+	"github.com/regclient/regclient/types"
+)
 
 var (
-	// ErrAPINotFound if an api is not available for the host
-	ErrAPINotFound = errors.New("API not found")
-	// ErrCanceled if the context was canceled
-	ErrCanceled = errors.New("Context was canceled")
-	// ErrHttpStatus if the http status code was unexpected
-	ErrHttpStatus = errors.New("Unexpected http status code")
-	// ErrMissingDigest returned when image reference does not include a digest
-	ErrMissingDigest = errors.New("Digest missing from image reference")
-	// ErrMissingLocation returned when the location header is missing
-	ErrMissingLocation = errors.New("Location header missing")
-	// ErrMissingName returned when name missing for host
-	ErrMissingName = errors.New("Name missing")
-	// ErrMissingTag returned when image reference does not include a tag
-	ErrMissingTag = errors.New("Tag missing from image reference")
-	// ErrMissingTagOrDigest returned when image reference does not include a tag or digest
-	ErrMissingTagOrDigest = errors.New("Tag or Digest missing from image reference")
-	// ErrMountReturnedLocation when a blob mount fails but a location header is received
-	ErrMountReturnedLocation = errors.New("Blob mount returned a location to upload")
-	// ErrNotFound isn't there, search for your value elsewhere
-	ErrNotFound = errors.New("Not found")
-	// ErrNotImplemented returned when method has not been implemented yet
-	ErrNotImplemented = errors.New("Not implemented")
-	// ErrParsingFailed when a string cannot be parsed
-	ErrParsingFailed = errors.New("Parsing failed")
-	// ErrRateLimit when requests exceed server rate limit
-	ErrRateLimit = errors.New("Rate limit exceeded")
-	// ErrUnavailable when a requested value is not available
-	ErrUnavailable = errors.New("Unavailable")
-	// ErrUnauthorized when authentication fails
-	ErrUnauthorized = errors.New("Unauthorized")
-	// ErrUnsupportedAPI happens when an API is not supported on a registry
-	ErrUnsupportedAPI = errors.New("Unsupported API")
-	// ErrUnsupportedConfigVersion happens when config file version is greater than this command supports
-	ErrUnsupportedConfigVersion = errors.New("Unsupported config version")
-	// ErrUnsupportedMediaType returned when media type is unknown or unsupported
-	ErrUnsupportedMediaType = errors.New("Unsupported media type")
+	ErrAPINotFound              = types.ErrAPINotFound
+	ErrCanceled                 = types.ErrCanceled
+	ErrHttpStatus               = types.ErrHttpStatus
+	ErrMissingDigest            = types.ErrMissingDigest
+	ErrMissingLocation          = types.ErrMissingLocation
+	ErrMissingName              = types.ErrMissingName
+	ErrMissingTag               = types.ErrMissingTag
+	ErrMissingTagOrDigest       = types.ErrMissingTagOrDigest
+	ErrMountReturnedLocation    = types.ErrMountReturnedLocation
+	ErrNotFound                 = types.ErrNotFound
+	ErrNotImplemented           = types.ErrNotImplemented
+	ErrParsingFailed            = types.ErrParsingFailed
+	ErrRateLimit                = types.ErrRateLimit
+	ErrUnavailable              = types.ErrUnavailable
+	ErrUnauthorized             = types.ErrUnauthorized
+	ErrUnsupportedAPI           = types.ErrUnsupportedAPI
+	ErrUnsupportedConfigVersion = types.ErrUnsupportedConfigVersion
+	ErrUnsupportedMediaType     = types.ErrUnsupportedMediaType
 )

@@ -83,7 +83,7 @@ func runTagLs(cmd *cobra.Command, args []string) error {
 		"host":       ref.Registry,
 		"repository": ref.Repository,
 	}).Debug("Listing tags")
-	tl, err := rc.TagListWithOpts(context.Background(), ref, regclient.TagOpts{Limit: tagOpts.Limit, Last: tagOpts.Last})
+	tl, err := rc.TagList(context.Background(), ref, regclient.TagOptLimit(tagOpts.Limit), regclient.TagOptLast(tagOpts.Last))
 	if err != nil {
 		return err
 	}
