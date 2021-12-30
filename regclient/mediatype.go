@@ -1,9 +1,11 @@
+//go:build !nolegacy
+// +build !nolegacy
+
+// Legacy package, this has been moved to the top level types/mediatype.go package
+
 package regclient
 
-import "github.com/regclient/regclient/regclient/types"
-
-// Media types have been moved to types/mediatype.go
-// This file is retained for backwards compatibility
+import "github.com/regclient/regclient/types"
 
 var (
 	MediaTypeDocker1Manifest       = types.MediaTypeDocker1Manifest

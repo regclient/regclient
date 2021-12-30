@@ -1,11 +1,13 @@
+//go:build !nolegacy
+// +build !nolegacy
+
+// Legacy package, this has been moved to the types/error.go package
+
 package regclient
 
 import (
-	"github.com/regclient/regclient/regclient/types"
+	"github.com/regclient/regclient/types"
 )
-
-// Errors have been moved to types/error.go
-// this file is retained for backwards compatibility
 
 var (
 	ErrAPINotFound              = types.ErrAPINotFound
