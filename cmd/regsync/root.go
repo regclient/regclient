@@ -17,10 +17,12 @@ import (
 
 	"github.com/containerd/containerd/platforms"
 	"github.com/opencontainers/go-digest"
+	"github.com/regclient/regclient"
+	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/regclient"
-	"github.com/regclient/regclient/regclient/manifest"
-	"github.com/regclient/regclient/regclient/types"
+	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/ref"
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -49,9 +51,9 @@ var (
 	// These are used to version the UserAgent header
 	VCSRef = ""
 	VCSTag = ""
-	config *Config
+	conf   *Config
 	log    *logrus.Logger
-	rc     regclient.RegClient
+	rc     *regclient.RegClient
 	sem    *semaphore.Weighted
 )
 
@@ -170,9 +172,9 @@ func runOnce(cmd *cobra.Command, args []string) error {
 	}()
 	var wg sync.WaitGroup
 	var mainErr error
-	for _, s := range config.Sync {
+	for _, s := range conf.Sync {
 		s := s
-		if config.Defaults.Parallel > 0 {
+		if conf.Defaults.Parallel > 0 {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -209,7 +211,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	c := cron.New(cron.WithChain(
 		cron.SkipIfStillRunning(cron.DefaultLogger),
 	))
-	for _, s := range config.Sync {
+	for _, s := range conf.Sync {
 		s := s
 		sched := s.Schedule
 		if sched == "" && s.Interval != 0 {
@@ -265,7 +267,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	}
 	var mainErr error
 	ctx := context.Background()
-	for _, s := range config.Sync {
+	for _, s := range conf.Sync {
 		err := s.process(ctx, "check")
 		if err != nil {
 			if mainErr == nil {
@@ -279,7 +281,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 func loadConf() error {
 	var err error
 	if rootOpts.confFile == "-" {
-		config, err = ConfigLoadReader(os.Stdin)
+		conf, err = ConfigLoadReader(os.Stdin)
 		if err != nil {
 			return err
 		}
@@ -289,7 +291,7 @@ func loadConf() error {
 			return err
 		}
 		defer r.Close()
-		config, err = ConfigLoadReader(r)
+		conf, err = ConfigLoadReader(r)
 		if err != nil {
 			return err
 		}
@@ -297,7 +299,7 @@ func loadConf() error {
 		return ErrMissingInput
 	}
 	// use a semaphore to control parallelism
-	concurrent := int64(config.Defaults.Parallel)
+	concurrent := int64(conf.Defaults.Parallel)
 	if concurrent <= 0 {
 		concurrent = 1
 	}
@@ -316,11 +318,11 @@ func loadConf() error {
 	} else {
 		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" (unknown)"))
 	}
-	if !config.Defaults.SkipDockerConf {
+	if !conf.Defaults.SkipDockerConf {
 		rcOpts = append(rcOpts, regclient.WithDockerCreds(), regclient.WithDockerCerts())
 	}
-	rcHosts := []regclient.ConfigHost{}
-	for _, host := range config.Creds {
+	rcHosts := []config.Host{}
+	for _, host := range conf.Creds {
 		if host.Scheme != "" {
 			log.WithFields(logrus.Fields{
 				"name": host.Registry,
@@ -331,7 +333,7 @@ func loadConf() error {
 	if len(rcHosts) > 0 {
 		rcOpts = append(rcOpts, regclient.WithConfigHosts(rcHosts))
 	}
-	rc = regclient.NewRegClient(rcOpts...)
+	rc = regclient.New(rcOpts...)
 	return nil
 }
 
@@ -357,7 +359,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 			return err
 		}
 		for _, repo := range sRepoList {
-			sRepoRef, err := types.NewRef(fmt.Sprintf("%s/%s", s.Source, repo))
+			sRepoRef, err := ref.New(fmt.Sprintf("%s/%s", s.Source, repo))
 			if err != nil {
 				log.WithFields(logrus.Fields{
 					"source": s.Source,
@@ -405,7 +407,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 				retErr = err
 				continue
 			}
-			tRepoRef, err := types.NewRef(fmt.Sprintf("%s/%s", s.Target, repo))
+			tRepoRef, err := ref.New(fmt.Sprintf("%s/%s", s.Target, repo))
 			if err != nil {
 				log.WithFields(logrus.Fields{
 					"target": s.Target,
@@ -431,7 +433,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 			}
 		}
 	case "repository":
-		sRepoRef, err := types.NewRef(s.Source)
+		sRepoRef, err := ref.New(s.Source)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"source": s.Source,
@@ -474,7 +476,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 			}).Warn("No matching tags found")
 			return nil
 		}
-		tRepoRef, err := types.NewRef(s.Target)
+		tRepoRef, err := ref.New(s.Target)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"target": s.Target,
@@ -499,7 +501,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 		}
 
 	case "image":
-		sRef, err := types.NewRef(s.Source)
+		sRef, err := ref.New(s.Source)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"source": s.Source,
@@ -507,7 +509,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 			}).Error("Failed parsing source")
 			return err
 		}
-		tRef, err := types.NewRef(s.Target)
+		tRef, err := ref.New(s.Target)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"target": s.Target,
@@ -536,9 +538,9 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 }
 
 // process a sync step
-func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action string) error {
+func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action string) error {
 	mSrc, err := rc.ManifestHead(ctx, src)
-	if err != nil && errors.Is(err, regclient.ErrUnsupportedAPI) {
+	if err != nil && errors.Is(err, types.ErrUnsupportedAPI) {
 		mSrc, err = rc.ManifestGet(ctx, src)
 	}
 	if err != nil {
@@ -674,7 +676,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action s
 	if tgtExists && !tgtMatches && s.Backup != "" {
 		// expand template
 		data := struct {
-			Ref  types.Ref
+			Ref  ref.Ref
 			Step ConfigSync
 		}{Ref: tgt, Step: s}
 		backupStr, err := template.String(s.Backup, data)
@@ -690,7 +692,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action s
 		backupRef := tgt
 		if strings.ContainsAny(backupStr, ":/") {
 			// if the : or / are in the string, parse it as a full reference
-			backupRef, err = types.NewRef(backupStr)
+			backupRef, err = ref.New(backupStr)
 			if err != nil {
 				log.WithFields(logrus.Fields{
 					"original": tgt.CommonName(),
@@ -807,7 +809,7 @@ func init() {
 
 // getPlatformDigest resolves a manifest list to a specific platform's digest
 // This uses the above cache to only call ManifestGet when a new manifest list digest is seen
-func getPlatformDigest(ctx context.Context, ref types.Ref, platStr string, origMan manifest.Manifest) (digest.Digest, error) {
+func getPlatformDigest(ctx context.Context, r ref.Ref, platStr string, origMan manifest.Manifest) (digest.Digest, error) {
 	plat, err := platforms.Parse(platStr)
 	if err != nil {
 		log.WithFields(logrus.Fields{
@@ -820,10 +822,10 @@ func getPlatformDigest(ctx context.Context, ref types.Ref, platStr string, origM
 	manifestCache.mu.Lock()
 	getMan, ok := manifestCache.manifests[origMan.GetDigest().String()]
 	if !ok {
-		getMan, err = rc.ManifestGet(ctx, ref)
+		getMan, err = rc.ManifestGet(ctx, r)
 		if err != nil {
 			log.WithFields(logrus.Fields{
-				"source": ref.CommonName(),
+				"source": r.CommonName(),
 				"error":  err,
 			}).Error("Failed to get source manifest")
 			manifestCache.mu.Unlock()
