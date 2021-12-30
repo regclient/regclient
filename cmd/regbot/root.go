@@ -2,6 +2,10 @@ package main
 
 import (
 	"context"
+	"embed"
+	"encoding/json"
+	"errors"
+	"io/fs"
 	"os"
 	"os/signal"
 	"sync"
@@ -31,15 +35,18 @@ var rootOpts struct {
 	format    string // for Go template formatting of various commands
 }
 
+//go:embed embed/*
+var embedFS embed.FS
+
 var (
+	// VCSRef and VCSTag are populated from an embed at build time
+	// These are used to version the UserAgent header
+	VCSRef = ""
+	VCSTag = ""
 	config *Config
 	log    *logrus.Logger
 	rc     regclient.RegClient
 	sem    *semaphore.Weighted
-	// VCSRef is injected from a build flag, used to version the UserAgent header
-	VCSRef = "unknown"
-	// VCSTag is injected from a build flag
-	VCSTag = "unknown"
 )
 
 var rootCmd = &cobra.Command{
@@ -80,6 +87,7 @@ func init() {
 		Hooks:     make(logrus.LevelHooks),
 		Level:     logrus.InfoLevel,
 	}
+	setupVCSVars()
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.confFile, "config", "c", "", "Config file")
 	rootCmd.PersistentFlags().BoolVarP(&rootOpts.dryRun, "dry-run", "", false, "Dry Run, skip all external actions")
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.InfoLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
@@ -254,7 +262,13 @@ func loadConf() error {
 	// set the regclient, loading docker creds unless disabled, and inject logins from config file
 	rcOpts := []regclient.Opt{
 		regclient.WithLog(log),
-		regclient.WithUserAgent(UserAgent + " (" + VCSRef + ")"),
+	}
+	if VCSTag != "" {
+		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+VCSTag+")"))
+	} else if VCSRef != "" {
+		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+VCSRef+")"))
+	} else {
+		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" (unknown)"))
 	}
 	if !config.Defaults.SkipDockerConf {
 		rcOpts = append(rcOpts, regclient.WithDockerCreds(), regclient.WithDockerCerts())
@@ -310,4 +324,30 @@ func (s ConfigScript) process(ctx context.Context) error {
 	}).Debug("Finished script")
 
 	return nil
+}
+
+func setupVCSVars() {
+	verS := struct {
+		VCSRef string
+		VCSTag string
+	}{}
+
+	verB, err := embedFS.ReadFile("embed/version.json")
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return
+	}
+
+	if len(verB) > 0 {
+		err = json.Unmarshal(verB, &verS)
+		if err != nil {
+			return
+		}
+	}
+
+	if verS.VCSRef != "" {
+		VCSRef = verS.VCSRef
+	}
+	if verS.VCSTag != "" {
+		VCSTag = verS.VCSTag
+	}
 }

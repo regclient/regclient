@@ -5,10 +5,11 @@ ARTIFACT_PLATFORMS=linux-amd64 linux-arm64 linux-ppc64le linux-s390x darwin-amd6
 ARTIFACTS=$(foreach cmd,$(addprefix artifacts/,$(COMMANDS)),$(addprefix $(cmd)-,$(ARTIFACT_PLATFORMS)))
 TEST_PLATFORMS=linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x
 VCS_REF:=$(shell git rev-list -1 HEAD)
-VCS_TAG:=$(shell git describe --tags --abbrev=0 2>/dev/null || echo "none")
-LD_FLAGS=-X \"github.com/regclient/regclient/regclient.VCSRef=$(VCS_REF)\" \
-         -X \"main.VCSRef=$(VCS_REF)\" -X \"main.VCSTag=$(VCS_TAG)\" \
-				 -s -w -extldflags -static
+ifneq ($(shell git status --porcelain 2>/dev/null),)
+  VCS_REF := $(VCS_REF)-dirty
+endif
+VCS_TAG:=$(shell git describe --tags --abbrev=0 2>/dev/null || true)
+LD_FLAGS=-s -w -extldflags -static
 GO_BUILD_FLAGS=-ldflags "$(LD_FLAGS)"
 DOCKERFILE_EXT:=$(shell if docker build --help 2>/dev/null | grep -q -- '--progress'; then echo ".buildkit"; fi)
 DOCKER_ARGS=--build-arg "VCS_REF=$(VCS_REF)"
@@ -31,9 +32,13 @@ test:
 vendor:
 	go mod vendor
 
-binaries: vendor $(BINARIES)
+embed/version.json: .FORCE
+	echo "{\"VCSRef\": \"$(VCS_REF)\", \"VCSTag\": \"$(VCS_TAG)\"}" >embed/version.json
+
+binaries: vendor embed/version.json $(BINARIES)
 
 bin/%: .FORCE
+	if [ -f embed/version.json -a -d "cmd/$*/embed" ]; then cp embed/version.json "cmd/$*/embed/"; fi
 	CGO_ENABLED=0 go build ${GO_BUILD_FLAGS} -o bin/$* ./cmd/$*
 
 docker: $(IMAGES)

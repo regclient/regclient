@@ -1,6 +1,10 @@
 package regclient
 
 import (
+	"embed"
+	"encoding/json"
+	"errors"
+	"io/fs"
 	"io/ioutil"
 	"sync"
 	"time"
@@ -29,11 +33,19 @@ const (
 	DockerRegistryDNS  = config.DockerRegistryDNS
 )
 
+//go:embed embed/*
+var embedFS embed.FS
+
 var (
-	// TODO: move VCSRef to be from a file created at build time
-	// VCSRef is injected from a build flag, used to version the UserAgent header
-	VCSRef = "unknown"
+	// VCSRef and VCSTag are populated from an embed at build time
+	// These are used to version the UserAgent header
+	VCSRef = ""
+	VCSTag = ""
 )
+
+func init() {
+	setupVCSVars()
+}
 
 type RegClient struct {
 	certPaths []string
@@ -58,6 +70,11 @@ func New(opts ...Opt) *RegClient {
 		log:     &logrus.Logger{Out: ioutil.Discard},
 		regOpts: []reg.Opts{},
 		schemes: map[string]scheme.SchemeAPI{},
+	}
+	if VCSTag != "" {
+		rc.userAgent = fmt.Sprintf("%s (%s)", rc.userAgent, VCSTag)
+	} else if VCSRef != "" {
+		rc.userAgent = fmt.Sprintf("%s (%s)", rc.userAgent, VCSRef)
 	}
 
 	// inject Docker Hub settings
@@ -260,25 +277,46 @@ func (rc *RegClient) getScheme(scheme string) (scheme.SchemeAPI, error) {
 	return s, nil
 }
 
-// TODO: delete?
-func (rc *RegClient) hostGet(hostname string) *config.Host {
-	rc.mu.Lock()
-	defer rc.mu.Unlock()
-	if _, ok := rc.hosts[hostname]; !ok {
-		rc.hosts[hostname] = config.HostNewName(hostname)
-	}
-	return rc.hosts[hostname]
-}
-
 func (rc *RegClient) hostSet(newHost config.Host) error {
 	name := newHost.Name
+	var err error
 	if _, ok := rc.hosts[name]; !ok {
+		// merge newHost with default host settings
 		rc.hosts[name] = config.HostNewName(name)
+		err = rc.hosts[name].Merge(newHost, nil)
+	} else {
+		// merge newHost with existing settings
+		err = rc.hosts[name].Merge(newHost, rc.log)
 	}
-	// merge newHost with default host settings
-	err := rc.hosts[name].Merge(newHost, rc.log)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func setupVCSVars() {
+	verS := struct {
+		VCSRef string
+		VCSTag string
+	}{}
+
+	// regclient only looks for releases, individual binaries will look at their local directories
+	verB, err := embedFS.ReadFile("embed/release.json")
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return
+	}
+
+	if len(verB) > 0 {
+		err = json.Unmarshal(verB, &verS)
+		if err != nil {
+			return
+		}
+	}
+
+	if verS.VCSRef != "" {
+		VCSRef = verS.VCSRef
+	}
+	if verS.VCSTag != "" {
+		VCSTag = verS.VCSTag
+	}
 }
