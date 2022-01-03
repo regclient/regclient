@@ -20,7 +20,7 @@ type SchemeAPI interface {
 	BlobHead(ctx context.Context, r ref.Ref, d digest.Digest) (blob.Reader, error)
 	// BlobMount attempts to perform a server side copy of the blob
 	BlobMount(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d digest.Digest) error
-	// BlobPut sends a blob to the repository
+	// BlobPut sends a blob to the repository, returns the digest and size when successful
 	BlobPut(ctx context.Context, r ref.Ref, d digest.Digest, rdr io.Reader, cl int64) (digest.Digest, int64, error)
 
 	// ManifestDelete removes a manifest, including all tags that point to that manifest

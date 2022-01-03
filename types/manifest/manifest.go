@@ -110,6 +110,7 @@ func WithRef(r ref.Ref) Opts {
 func fromOrig(c common, orig interface{}) (Manifest, error) {
 	var mt string
 	var m Manifest
+	origDigest := c.desc.Digest
 
 	mj, err := json.Marshal(orig)
 	if err != nil {
@@ -119,7 +120,7 @@ func fromOrig(c common, orig interface{}) (Manifest, error) {
 	if len(c.rawBody) == 0 {
 		c.rawBody = mj
 	}
-	if _, ok := orig.(dockerSchema1.SignedManifest); !ok && c.desc.Digest == "" {
+	if _, ok := orig.(dockerSchema1.SignedManifest); !ok {
 		c.desc.Digest = digest.FromBytes(mj)
 	}
 	if c.desc.Size == 0 {
@@ -140,9 +141,7 @@ func fromOrig(c common, orig interface{}) (Manifest, error) {
 		mt = mOrig.MediaType
 		c.desc.MediaType = types.MediaTypeDocker1ManifestSigned
 		// recompute digest on the canonical data
-		if c.desc.Digest == "" {
-			c.desc.Digest = digest.FromBytes(mOrig.Canonical)
-		}
+		c.desc.Digest = digest.FromBytes(mOrig.Canonical)
 		m = &docker1SignedManifest{
 			common:         c,
 			SignedManifest: mOrig,
@@ -187,6 +186,10 @@ func fromOrig(c common, orig interface{}) (Manifest, error) {
 	if err != nil {
 		return nil, err
 	}
+	// verify digest didn't change
+	if origDigest != "" && origDigest != c.desc.Digest {
+		return nil, fmt.Errorf("manifest digest mismatch, expected %s, computed %s", origDigest, c.desc.Digest)
+	}
 	return m, nil
 }
 
@@ -194,16 +197,13 @@ func fromCommon(c common) (Manifest, error) {
 	var err error
 	var m Manifest
 	var mt string
+	origDigest := c.desc.Digest
 	// compute/verify digest
 	if len(c.rawBody) > 0 {
 		c.manifSet = true
 		if c.desc.MediaType != MediaTypeDocker1ManifestSigned {
 			d := digest.FromBytes(c.rawBody)
-			if c.desc.Digest == "" {
-				c.desc.Digest = d
-			} else if c.desc.Digest != d {
-				return nil, fmt.Errorf("digest mismatch, expected %s, found %s", c.desc.Digest.String(), d.String())
-			}
+			c.desc.Digest = d
 		}
 	}
 	switch c.desc.MediaType {
@@ -220,11 +220,7 @@ func fromCommon(c common) (Manifest, error) {
 			err = json.Unmarshal(c.rawBody, &mOrig)
 			mt = mOrig.MediaType
 			d := digest.FromBytes(mOrig.Canonical)
-			if c.desc.Digest == "" {
-				c.desc.Digest = d
-			} else if c.desc.Digest != d {
-				return nil, fmt.Errorf("digest mismatch, expected %s, found %s", c.desc.Digest.String(), d.String())
-			}
+			c.desc.Digest = d
 		}
 		m = &docker1SignedManifest{common: c, SignedManifest: mOrig}
 	case MediaTypeDocker2Manifest:
@@ -265,6 +261,10 @@ func fromCommon(c common) (Manifest, error) {
 	err = verifyMT(c.desc.MediaType, mt)
 	if err != nil {
 		return nil, err
+	}
+	// verify digest didn't change
+	if origDigest != "" && origDigest != c.desc.Digest {
+		return nil, fmt.Errorf("manifest digest mismatch, expected %s, computed %s", origDigest, c.desc.Digest)
 	}
 	return m, nil
 }

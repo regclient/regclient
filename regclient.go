@@ -18,7 +18,9 @@ import (
 
 	dockercfg "github.com/docker/cli/cli/config"
 	"github.com/regclient/regclient/config"
+	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/scheme"
+	"github.com/regclient/regclient/scheme/ocidir"
 	"github.com/regclient/regclient/scheme/reg"
 	"github.com/regclient/regclient/types"
 	"github.com/sirupsen/logrus"
@@ -105,6 +107,10 @@ func New(opts ...Opt) *RegClient {
 
 	// setup scheme's
 	rc.schemes["reg"] = reg.New(rc.regOpts...)
+	rc.schemes["ocidir"] = ocidir.New(
+		ocidir.WithLog(rc.log),
+		ocidir.WithFS(rwfs.OSNew("")),
+	)
 
 	rc.log.Debug("regclient initialized")
 
@@ -289,7 +295,7 @@ func (rc *RegClient) loadDockerCreds() error {
 func (rc *RegClient) getScheme(scheme string) (scheme.SchemeAPI, error) {
 	s, ok := rc.schemes[scheme]
 	if !ok {
-		return nil, fmt.Errorf("%w: scheme %s", types.ErrNotImplemented, scheme)
+		return nil, fmt.Errorf("%w: unknown scheme \"%s\"", types.ErrNotImplemented, scheme)
 	}
 	return s, nil
 }
