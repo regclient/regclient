@@ -2,6 +2,7 @@ package manifest
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	dockerSchema2 "github.com/docker/distribution/manifest/schema2"
 	"github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -279,167 +281,19 @@ var (
 `)
 )
 
-var ()
-
-func TestNewManifest(t *testing.T) {
+func TestNew(t *testing.T) {
+	r, _ := ref.New("localhost:5000/test:latest")
+	digestDockerSchema2 := digest.FromBytes(rawDockerSchema2)
 	digestML := digest.FromBytes(rawDockerSchema2List)
 	digestInvalid := digest.FromString("invalid")
-	r, _ := ref.New("localhost:5000/test:latest")
-	var tests = []struct {
-		name   string
-		mt     string
-		raw    []byte
-		r      ref.Ref
-		header http.Header
-		wantE  error
-	}{
-		{
-			name:  "Docker Schema 2 Manifest",
-			mt:    MediaTypeDocker2Manifest,
-			raw:   rawDockerSchema2,
-			r:     r,
-			wantE: nil,
-		},
-		{
-			name: "Docker Schema 2 List from Http",
-			header: http.Header{
-				"Content-Type":          []string{MediaTypeDocker2ManifestList},
-				"Docker-Content-Digest": []string{digestML.String()},
-			},
-			raw:   rawDockerSchema2List,
-			r:     r,
-			wantE: nil,
-		},
-		{
-			name:  "Docker Schema 1 Signed",
-			mt:    MediaTypeDocker1ManifestSigned,
-			raw:   rawDockerSchema1Signed,
-			r:     r,
-			wantE: nil,
-		},
-		{
-			name: "Invalid Http Digest",
-			header: http.Header{
-				"Content-Type":          []string{MediaTypeDocker2ManifestList},
-				"Docker-Content-Digest": []string{digestInvalid.String()},
-			},
-			raw:   rawDockerSchema2List,
-			r:     r,
-			wantE: fmt.Errorf("digest mismatch, expected %s, found %s", digestInvalid, digestML),
-		},
-		{
-			name:  "Ambiguous OCI Image",
-			mt:    MediaTypeOCI1Manifest,
-			raw:   rawAmbiguousOCI,
-			r:     r,
-			wantE: nil,
-		},
-		{
-			name:  "Ambiguous OCI Index",
-			mt:    MediaTypeOCI1ManifestList,
-			raw:   rawAmbiguousOCI,
-			r:     r,
-			wantE: nil,
-		},
-		{
-			name:  "Invalid OCI Index",
-			mt:    MediaTypeOCI1ManifestList,
-			raw:   rawOCIImage,
-			r:     r,
-			wantE: fmt.Errorf("manifest contains an unexpected media type: expected %s, received %s", MediaTypeOCI1ManifestList, MediaTypeOCI1Manifest),
-		},
-		{
-			name:  "Invalid OCI Image",
-			mt:    MediaTypeOCI1Manifest,
-			raw:   rawOCIIndex,
-			r:     r,
-			wantE: fmt.Errorf("manifest contains an unexpected media type: expected %s, received %s", MediaTypeOCI1Manifest, MediaTypeOCI1ManifestList),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := New(tt.mt, tt.raw, tt.r, tt.header)
-			if tt.wantE == nil && err != nil {
-				t.Errorf("failed creating manifest, err: %v", err)
-			} else if tt.wantE != nil && (err == nil || (tt.wantE != err && tt.wantE.Error() != err.Error())) {
-				t.Errorf("expected error not received, expected %v, received %v", tt.wantE, err)
-			}
-		})
-	}
-}
-
-func TestFromDescriptor(t *testing.T) {
-	digestInvalid := digest.FromString("invalid")
-	digestDockerSchema2 := digest.FromBytes(rawDockerSchema2)
 	digestDockerSchema1Signed, err := digest.Parse("sha256:f3ef067962554c3352dc0c659ca563f73cc396fe0dea2a2c23a7964c6290f782")
 	if err != nil {
 		t.Fatalf("failed to parse docker schema1 signed digest string: %v", err)
 	}
 	digestOCIImage := digest.FromBytes(rawOCIImage)
-	var tests = []struct {
-		name  string
-		desc  ociv1.Descriptor
-		raw   []byte
-		wantE error
-	}{
-		{
-			name: "Docker Schema 2 Manifest",
-			desc: ociv1.Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
-				Digest:    digestDockerSchema2,
-				Size:      int64(len(rawDockerSchema2)),
-			},
-			raw:   rawDockerSchema2,
-			wantE: nil,
-		},
-		{
-			name: "Docker Schema 1 Signed Manifest",
-			desc: ociv1.Descriptor{
-				MediaType: MediaTypeDocker1ManifestSigned,
-				Digest:    digestDockerSchema1Signed,
-				Size:      int64(len(rawDockerSchema1Signed)),
-			},
-			raw:   rawDockerSchema1Signed,
-			wantE: nil,
-		},
-		{
-			name: "Invalid digest",
-			desc: ociv1.Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
-				Digest:    digestInvalid,
-				Size:      int64(len(rawDockerSchema2)),
-			},
-			raw:   rawDockerSchema2,
-			wantE: fmt.Errorf("digest mismatch, expected %s, found %s", digestInvalid, digestDockerSchema2),
-		},
-		{
-			name: "Invalid Media Type",
-			desc: ociv1.Descriptor{
-				MediaType: MediaTypeOCI1ManifestList,
-				Digest:    digestOCIImage,
-				Size:      int64(len(rawOCIImage)),
-			},
-			raw:   rawOCIImage,
-			wantE: fmt.Errorf("manifest contains an unexpected media type: expected %s, received %s", MediaTypeOCI1ManifestList, MediaTypeOCI1Manifest),
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := FromDescriptor(tt.desc, tt.raw)
-			if tt.wantE == nil && err != nil {
-				t.Errorf("failed creating manifest, err: %v", err)
-			} else if tt.wantE != nil && (err == nil || (tt.wantE != err && tt.wantE.Error() != err.Error())) {
-				t.Errorf("expected error not received, expected %v, received %v", tt.wantE, err)
-			}
-		})
-	}
-}
-
-func TestFromOrig(t *testing.T) {
 	var manifestDockerSchema2, manifestInvalid dockerSchema2.Manifest
 	var manifestDockerSchema1Signed dockerSchema1.SignedManifest
-	err := json.Unmarshal(rawDockerSchema2, &manifestDockerSchema2)
+	err = json.Unmarshal(rawDockerSchema2, &manifestDockerSchema2)
 	if err != nil {
 		t.Fatalf("failed to unmarshal docker schema2 json: %v", err)
 	}
@@ -447,42 +301,228 @@ func TestFromOrig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to unmarshal docker schema2 json: %v", err)
 	}
-	manifestInvalid.MediaType = MediaTypeOCI1Manifest
+	manifestInvalid.MediaType = types.MediaTypeOCI1Manifest
 	err = json.Unmarshal(rawDockerSchema1Signed, &manifestDockerSchema1Signed)
+	if err != nil {
+		t.Fatalf("failed to unmarshal docker schema1 signed json: %v", err)
+	}
 	var tests = []struct {
-		name  string
-		orig  interface{}
-		wantE error
+		name     string
+		opts     []Opts
+		wantR    ref.Ref
+		wantDesc ociv1.Descriptor
+		wantE    error
 	}{
 		{
-			name:  "Nil interface",
-			orig:  nil,
-			wantE: fmt.Errorf("Unsupported type to convert to a manifest: %v", nil),
+			name:  "empty",
+			wantE: fmt.Errorf("%w: \"%s\"", types.ErrUnsupportedMediaType, ""),
 		},
 		{
-			name:  "Docker Schema2",
-			orig:  manifestDockerSchema2,
+			name: "Docker Schema 2 Manifest",
+			opts: []Opts{
+				WithRef(r),
+				WithDesc(ociv1.Descriptor{
+					MediaType: types.MediaTypeDocker2Manifest,
+				}),
+				WithRaw(rawDockerSchema2),
+			},
+			wantR: r,
+			wantDesc: ociv1.Descriptor{
+				MediaType: types.MediaTypeDocker2Manifest,
+				Size:      int64(len(rawDockerSchema2)),
+				Digest:    digestDockerSchema2,
+			},
 			wantE: nil,
 		},
 		{
-			name:  "Docker Schema1 Signed",
-			orig:  manifestDockerSchema1Signed,
+			name: "Docker Schema 2 Manifest full desc",
+			opts: []Opts{
+				WithDesc(ociv1.Descriptor{
+					MediaType: types.MediaTypeDocker2Manifest,
+					Digest:    digestDockerSchema2,
+					Size:      int64(len(rawDockerSchema2)),
+				}),
+				WithRaw(rawDockerSchema2),
+			},
+			wantDesc: ociv1.Descriptor{
+				MediaType: types.MediaTypeDocker2Manifest,
+				Size:      int64(len(rawDockerSchema2)),
+				Digest:    digestDockerSchema2,
+			},
 			wantE: nil,
 		},
 		{
-			name:  "Invalid Media Type",
-			orig:  manifestInvalid,
-			wantE: fmt.Errorf("manifest contains an unexpected media type: expected %s, received %s", MediaTypeDocker2Manifest, MediaTypeOCI1Manifest),
+			name: "Docker Schema 2 List from Http",
+			opts: []Opts{
+				WithRef(r),
+				WithRaw(rawDockerSchema2List),
+				WithHeader(http.Header{
+					"Content-Type":          []string{MediaTypeDocker2ManifestList},
+					"Docker-Content-Digest": []string{digestML.String()},
+				}),
+			},
+			wantE: nil,
 		},
+		{
+			name: "Docker Schema 1 Signed",
+			opts: []Opts{
+				WithRef(r),
+				WithRaw(rawDockerSchema1Signed),
+				WithDesc(ociv1.Descriptor{
+					MediaType: types.MediaTypeDocker1ManifestSigned,
+				}),
+			},
+			wantE: nil,
+		},
+		{
+			name: "Docker Schema 1 Signed Manifest",
+			opts: []Opts{
+				WithRaw(rawDockerSchema1Signed),
+				WithDesc(ociv1.Descriptor{
+					MediaType: types.MediaTypeDocker1ManifestSigned,
+					Digest:    digestDockerSchema1Signed,
+					Size:      int64(len(rawDockerSchema1Signed)),
+				}),
+			},
+			wantE: nil,
+		},
+		{
+			name: "Invalid Http Digest",
+			opts: []Opts{
+				WithRef(r),
+				WithRaw(rawDockerSchema2List),
+				WithHeader(http.Header{
+					"Content-Type":          []string{MediaTypeDocker2ManifestList},
+					"Docker-Content-Digest": []string{digestInvalid.String()},
+				}),
+			},
+			wantE: fmt.Errorf("digest mismatch, expected %s, found %s", digestInvalid, digestML),
+		},
+		{
+			name: "Ambiguous OCI Image",
+			opts: []Opts{
+				WithRef(r),
+				WithRaw(rawAmbiguousOCI),
+				WithDesc(ociv1.Descriptor{
+					MediaType: types.MediaTypeOCI1Manifest,
+				}),
+			},
+			wantE: nil,
+		},
+		{
+			name: "Ambiguous OCI Index",
+			opts: []Opts{
+				WithRef(r),
+				WithRaw(rawAmbiguousOCI),
+				WithDesc(ociv1.Descriptor{
+					MediaType: types.MediaTypeOCI1ManifestList,
+				}),
+			},
+			wantE: nil,
+		},
+		{
+			name: "Invalid OCI Index",
+			opts: []Opts{
+				WithRef(r),
+				WithRaw(rawOCIImage),
+				WithDesc(ociv1.Descriptor{
+					MediaType: types.MediaTypeOCI1ManifestList,
+				}),
+			},
+			wantE: fmt.Errorf("manifest contains an unexpected media type: expected %s, received %s", types.MediaTypeOCI1ManifestList, types.MediaTypeOCI1Manifest),
+		},
+		{
+			name: "Invalid OCI Image",
+			opts: []Opts{
+				WithRef(r),
+				WithRaw(rawOCIIndex),
+				WithDesc(ociv1.Descriptor{
+					MediaType: types.MediaTypeOCI1Manifest,
+				}),
+			},
+			wantE: fmt.Errorf("manifest contains an unexpected media type: expected %s, received %s", types.MediaTypeOCI1Manifest, types.MediaTypeOCI1ManifestList),
+		},
+		{
+			name: "Invalid digest",
+			opts: []Opts{
+				WithRef(r),
+				WithRaw(rawDockerSchema2),
+				WithDesc(ociv1.Descriptor{
+					MediaType: types.MediaTypeDocker2Manifest,
+					Digest:    digestInvalid,
+					Size:      int64(len(rawDockerSchema2)),
+				}),
+			},
+			wantE: fmt.Errorf("digest mismatch, expected %s, found %s", digestInvalid, digestDockerSchema2),
+		},
+		{
+			name: "Invalid Media Type",
+			opts: []Opts{
+				WithRef(r),
+				WithRaw(rawOCIImage),
+				WithDesc(ociv1.Descriptor{
+					MediaType: types.MediaTypeOCI1ManifestList,
+					Digest:    digestOCIImage,
+					Size:      int64(len(rawOCIImage)),
+				}),
+			},
+			wantE: fmt.Errorf("manifest contains an unexpected media type: expected %s, received %s", types.MediaTypeOCI1ManifestList, types.MediaTypeOCI1Manifest),
+		},
+		{
+			name: "Docker Schema2 Orig",
+			opts: []Opts{
+				WithOrig(manifestDockerSchema2),
+			},
+			wantE: nil,
+		},
+		{
+			name: "Docker Schema1 Signed Orig",
+			opts: []Opts{
+				WithOrig(manifestDockerSchema1Signed),
+			},
+			wantE: nil,
+		},
+		{
+			name: "Invalid Media Type",
+			opts: []Opts{
+				WithOrig(manifestInvalid),
+			},
+			wantE: fmt.Errorf("manifest contains an unexpected media type: expected %s, received %s", types.MediaTypeDocker2Manifest, types.MediaTypeOCI1Manifest),
+		},
+
+		// TODO: add more tests to improve coverage
+		// - test rate limit
+		// - test retrieving descriptor lists from manifest lists
+		// - test retrieving layers from images
+		// - test retrieving config descriptor from image
+		// - test if manifest is set
+		// - test raw body
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := FromOrig(tt.orig)
-			if tt.wantE == nil && err != nil {
-				t.Errorf("failed creating manifest, err: %v", err)
-			} else if tt.wantE != nil && (err == nil || (tt.wantE != err && tt.wantE.Error() != err.Error())) {
-				t.Errorf("expected error not received, expected %v, received %v", tt.wantE, err)
+			m, err := New(tt.opts...)
+			if tt.wantE != nil {
+				if err == nil {
+					t.Errorf("did not receive expected error %v", tt.wantE)
+				} else if !errors.Is(err, tt.wantE) && err.Error() != tt.wantE.Error() {
+					t.Errorf("expected error not received, expected %v, received %v", tt.wantE, err)
+				}
+				return
 			}
+			if err != nil {
+				t.Errorf("failed running New: %v", err)
+				return
+			}
+			if tt.wantR.Scheme != "" && m.GetRef().CommonName() != tt.wantR.CommonName() {
+				t.Errorf("ref mismatch, expected %s, received %s", tt.wantR.CommonName(), m.GetRef().CommonName())
+			}
+			if tt.wantDesc.Digest != "" && m.GetDigest() != tt.wantDesc.Digest {
+				t.Errorf("digest mismatch, expected %s, received %s", tt.wantDesc.Digest, m.GetDigest())
+			}
+			if tt.wantDesc.MediaType != "" && m.GetMediaType() != tt.wantDesc.MediaType {
+				t.Errorf("media type mismatch, expected %s, received %s", tt.wantDesc.MediaType, m.GetMediaType())
+			}
+
 		})
 	}
 }

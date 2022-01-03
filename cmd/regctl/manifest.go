@@ -138,7 +138,7 @@ func getPlatformDesc(rc *regclient.RegClient, m manifest.Manifest) (*ociv1.Descr
 	if !m.IsSet() {
 		m, err = rc.ManifestGet(context.Background(), m.GetRef())
 		if err != nil {
-			return desc, err
+			return desc, fmt.Errorf("unable to retrieve manifest list: %w", err)
 		}
 	}
 
@@ -239,6 +239,9 @@ func runManifestDigest(cmd *cobra.Command, args []string) error {
 	// retrieve the specified platform from the manifest list
 	for m.IsList() && !manifestOpts.list && !manifestOpts.requireList {
 		desc, err := getPlatformDesc(rc, m)
+		if err != nil {
+			return fmt.Errorf("Failed retrieving platform specific digest: %w", err)
+		}
 		r.Digest = desc.Digest.String()
 		m, err = rc.ManifestHead(context.Background(), r)
 		if err != nil {
@@ -283,7 +286,13 @@ func runManifestPut(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	rcM, err := manifest.New(manifestOpts.contentType, raw, r, nil)
+	rcM, err := manifest.New(
+		manifest.WithRef(r),
+		manifest.WithRaw(raw),
+		manifest.WithDesc(ociv1.Descriptor{
+			MediaType: manifestOpts.contentType,
+		}),
+	)
 	if err != nil {
 		return err
 	}

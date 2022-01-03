@@ -434,7 +434,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	}
 
 	// generate manifest
-	mm, err := manifest.FromOrig(m)
+	mm, err := manifest.New(manifest.WithOrig(m))
 	if err != nil {
 		return err
 	}

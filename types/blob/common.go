@@ -2,9 +2,9 @@ package blob
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/opencontainers/go-digest"
+	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -15,15 +15,11 @@ type Common interface {
 	MediaType() string
 	Response() *http.Response
 	RawHeaders() http.Header
-	SetMeta(r ref.Ref, d digest.Digest, cl int64)
-	SetResp(resp *http.Response)
 }
 
 type common struct {
 	r         ref.Ref
-	digest    digest.Digest
-	cl        int64
-	mt        string
+	desc      ociv1.Descriptor
 	blobSet   bool
 	rawHeader http.Header
 	resp      *http.Response
@@ -31,17 +27,17 @@ type common struct {
 
 // Digest returns the provided or calculated digest of the blob
 func (b *common) Digest() digest.Digest {
-	return b.digest
+	return b.desc.Digest
 }
 
 // Length returns the provided or calculated length of the blob
 func (b *common) Length() int64 {
-	return b.cl
+	return b.desc.Size
 }
 
 // MediaType returns the Content-Type header received from the registry
 func (b *common) MediaType() string {
-	return b.mt
+	return b.desc.MediaType
 }
 
 // RawHeaders returns the headers received from the registry
@@ -52,23 +48,4 @@ func (b *common) RawHeaders() http.Header {
 // Response returns the response associated with the blob
 func (b *common) Response() *http.Response {
 	return b.resp
-}
-
-// SetMeta sets the various blob metadata (reference, digest, and content length)
-func (b *common) SetMeta(ref ref.Ref, d digest.Digest, cl int64) {
-	b.r = ref
-	b.digest = d
-	b.cl = cl
-}
-
-// SetResp sets the response header data when pulling from a registry
-func (b *common) SetResp(resp *http.Response) {
-	if resp == nil {
-		return
-	}
-	b.resp = resp
-	b.rawHeader = resp.Header
-	cl, _ := strconv.Atoi(resp.Header.Get("Content-Length"))
-	b.cl = int64(cl)
-	b.mt = resp.Header.Get("Content-Type")
 }

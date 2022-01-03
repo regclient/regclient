@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/opencontainers/go-digest"
+	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/internal/reghttp"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
@@ -62,9 +63,14 @@ func (reg *Reg) BlobGet(ctx context.Context, r ref.Ref, d digest.Digest) (blob.R
 		return nil, fmt.Errorf("Failed to get blob, digest %s, ref %s: %w", d, r.CommonName(), reghttp.HttpError(resp.HTTPResponse().StatusCode))
 	}
 
-	b := blob.NewReader(resp)
-	b.SetMeta(r, d, 0)
-	b.SetResp(resp.HTTPResponse())
+	b := blob.NewReader(
+		blob.WithRef(r),
+		blob.WithReadCloser(resp),
+		blob.WithDesc(ociv1.Descriptor{
+			Digest: d,
+		}),
+		blob.WithResp(resp.HTTPResponse()),
+	)
 	return b, nil
 }
 
@@ -90,9 +96,13 @@ func (reg *Reg) BlobHead(ctx context.Context, r ref.Ref, d digest.Digest) (blob.
 		return nil, fmt.Errorf("Failed to request blob head, digest %s, ref %s: %w", d, r.CommonName(), reghttp.HttpError(resp.HTTPResponse().StatusCode))
 	}
 
-	b := blob.NewReader(nil)
-	b.SetMeta(r, d, 0)
-	b.SetResp(resp.HTTPResponse())
+	b := blob.NewReader(
+		blob.WithRef(r),
+		blob.WithDesc(ociv1.Descriptor{
+			Digest: d,
+		}),
+		blob.WithResp(resp.HTTPResponse()),
+	)
 	return b, nil
 }
 

@@ -123,7 +123,10 @@ func (s *Sandbox) configExport(ls *lua.LState) int {
 			ls.RaiseError("Failed exporting config (go2lua): %v", err)
 		}
 		// save image to a new config
-		bc := blob.NewOCIConfig(ociImage)
+		bc := blob.NewOCIConfig(
+			blob.WithRef(origC.r),
+			blob.WithImage(ociImage),
+		)
 		newC = &config{
 			conf: bc,
 			m:    origC.m,

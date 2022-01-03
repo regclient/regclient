@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"strconv"
 
 	"github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/regclient/regclient/types/ref"
 )
 
 // Reader is an unprocessed Blob with an available ReadCloser for reading the Blob
@@ -25,24 +25,41 @@ type reader struct {
 	reader    io.Reader
 	origRdr   io.ReadCloser
 	digester  digest.Digester
-	// io.ReadCloser
 }
 
 // NewReader creates a new reader
-func NewReader(rdr io.ReadCloser) Reader {
-	digester := digest.Canonical.Digester()
-	digestRdr := io.TeeReader(rdr, digester.Hash())
-	bc := common{
-		r: ref.Ref{},
+func NewReader(opts ...Opts) Reader {
+	bc := BlobConfig{}
+	for _, opt := range opts {
+		opt(&bc)
 	}
-	if rdr != nil {
-		bc.blobSet = true
+	if bc.resp != nil {
+		// extract headers and reader if other fields not passed
+		if bc.desc.MediaType == "" {
+			bc.desc.MediaType = bc.resp.Header.Get("Content-Type")
+		}
+		if bc.desc.Size == 0 {
+			cl, _ := strconv.Atoi(bc.resp.Header.Get("Content-Length"))
+			bc.desc.Size = int64(cl)
+		}
+		if bc.desc.Digest == "" {
+			bc.desc.Digest = digest.FromString(bc.resp.Header.Get("Docker-Content-Digest"))
+		}
+	}
+	c := common{
+		r:         bc.r,
+		desc:      bc.desc,
+		rawHeader: bc.header,
+		resp:      bc.resp,
 	}
 	br := reader{
-		common:   bc,
-		reader:   digestRdr,
-		origRdr:  rdr,
-		digester: digester,
+		common:  c,
+		origRdr: bc.rc,
+	}
+	if bc.rc != nil {
+		br.blobSet = true
+		br.digester = digest.Canonical.Digester()
+		br.reader = io.TeeReader(bc.rc, br.digester.Hash())
 	}
 	return &br
 }
@@ -65,16 +82,16 @@ func (b *reader) Read(p []byte) (int, error) {
 	b.readBytes = b.readBytes + int64(size)
 	if err == io.EOF {
 		// check/save size
-		if b.cl == 0 {
-			b.cl = b.readBytes
-		} else if b.readBytes != b.cl {
-			err = fmt.Errorf("Expected size mismatch [expected %d, received %d]: %w", b.cl, b.readBytes, err)
+		if b.desc.Size == 0 {
+			b.desc.Size = b.readBytes
+		} else if b.readBytes != b.desc.Size {
+			err = fmt.Errorf("Expected size mismatch [expected %d, received %d]: %w", b.desc.Size, b.readBytes, err)
 		}
 		// check/save digest
-		if b.digest == "" {
-			b.digest = b.digester.Digest()
-		} else if b.digest != b.digester.Digest() {
-			err = fmt.Errorf("Expected digest mismatch [expected %s, calculated %s]: %w", b.digest.String(), b.digester.Digest().String(), err)
+		if b.desc.Digest == "" {
+			b.desc.Digest = b.digester.Digest()
+		} else if b.desc.Digest != b.digester.Digest() {
+			err = fmt.Errorf("Expected digest mismatch [expected %s, calculated %s]: %w", b.desc.Digest.String(), b.digester.Digest().String(), err)
 		}
 	}
 	return size, err

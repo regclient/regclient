@@ -145,7 +145,7 @@ func (s *Sandbox) manifestExport(ls *lua.LState) int {
 			ls.RaiseError("Failed exporting manifest (go2lua): %v", err)
 		}
 		// save image to a new manifest
-		rcM, err := manifest.FromOrig(reflect.ValueOf(newMMP).Elem().Interface()) // reflect is needed again to deref the pointer now
+		rcM, err := manifest.New(manifest.WithOrig(reflect.ValueOf(newMMP).Elem().Interface())) // reflect is needed again to deref the pointer now
 		// rcM, err := manifest.FromOrig(newMM)
 		if err != nil {
 			ls.RaiseError("Failed exporting manifest (from orig): %v", err)
@@ -238,7 +238,7 @@ func (s *Sandbox) manifestPut(ls *lua.LState) int {
 		"image":  r.r.CommonName(),
 	}).Debug("Put manifest")
 
-	m, err := manifest.FromOrig(sbm.m.GetOrigManifest())
+	m, err := manifest.New(manifest.WithOrig(sbm.m.GetOrigManifest()))
 	if err != nil {
 		ls.RaiseError("Failed to put manifest: %v", err)
 	}

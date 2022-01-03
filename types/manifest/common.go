@@ -6,14 +6,14 @@ import (
 	"strings"
 
 	digest "github.com/opencontainers/go-digest"
+	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/ref"
 )
 
 type common struct {
 	r         ref.Ref
-	digest    digest.Digest
-	mt        string
+	desc      ociv1.Descriptor
 	manifSet  bool
 	ratelimit types.RateLimit
 	rawHeader http.Header
@@ -22,12 +22,12 @@ type common struct {
 
 // GetDigest returns the digest
 func (m *common) GetDigest() digest.Digest {
-	return m.digest
+	return m.desc.Digest
 }
 
 // GetMediaType returns the media type
 func (m *common) GetMediaType() string {
-	return m.mt
+	return m.desc.MediaType
 }
 
 // GetRateLimit returns the rate limit when the manifest was pulled from a registry.
@@ -48,7 +48,7 @@ func (m *common) HasRateLimit() bool {
 
 // IsList indicates if the manifest is a docker Manifest List or OCI Index
 func (m *common) IsList() bool {
-	switch m.mt {
+	switch m.desc.MediaType {
 	case MediaTypeDocker2ManifestList, MediaTypeOCI1ManifestList:
 		return true
 	default:
@@ -65,7 +65,7 @@ func (m *common) IsSet() bool {
 // RawBody returns the raw body from the manifest if available.
 func (m *common) RawBody() ([]byte, error) {
 	if len(m.rawBody) == 0 {
-		return m.rawBody, ErrUnavailable
+		return m.rawBody, types.ErrUnavailable
 	}
 	return m.rawBody, nil
 }

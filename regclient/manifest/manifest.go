@@ -6,8 +6,12 @@
 package manifest
 
 import (
+	"net/http"
+
+	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	topTypes "github.com/regclient/regclient/types"
 	topManifest "github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/ref"
 )
 
 const (
@@ -28,12 +32,30 @@ const (
 type Manifest = topManifest.Manifest
 
 var (
-	New            = topManifest.New
-	FromDescriptor = topManifest.FromDescriptor
-	FromOrig       = topManifest.FromOrig
-
 	ErrNotFound             = topTypes.ErrNotFound
 	ErrNotImplemented       = topTypes.ErrNotImplemented
 	ErrUnavailable          = topTypes.ErrUnavailable
 	ErrUnsupportedMediaType = topTypes.ErrUnsupported
 )
+
+func New(mediaType string, raw []byte, r ref.Ref, header http.Header) (Manifest, error) {
+	return topManifest.New(
+		topManifest.WithDesc(ociv1.Descriptor{
+			MediaType: mediaType,
+		}),
+		topManifest.WithRef(r),
+		topManifest.WithRaw(raw),
+		topManifest.WithHeader(header),
+	)
+}
+
+func FromDescriptor(desc ociv1.Descriptor, mBytes []byte) (Manifest, error) {
+	return topManifest.New(
+		topManifest.WithDesc(desc),
+		topManifest.WithRaw(mBytes),
+	)
+}
+
+func FromOrig(orig interface{}) (Manifest, error) {
+	return topManifest.New(topManifest.WithOrig(orig))
+}
