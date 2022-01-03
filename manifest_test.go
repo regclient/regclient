@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/docker/distribution"
 	dockerSchema2 "github.com/docker/distribution/manifest/schema2"
@@ -142,7 +143,13 @@ func TestManifest(t *testing.T) {
 		Hooks:     make(logrus.LevelHooks),
 		Level:     logrus.WarnLevel,
 	}
-	rc := New(WithConfigHosts(rcHosts), WithLog(log))
+	delayInit, _ := time.ParseDuration("0.05s")
+	delayMax, _ := time.ParseDuration("0.10s")
+	rc := New(
+		WithConfigHosts(rcHosts),
+		WithLog(log),
+		WithRetryDelay(delayInit, delayMax),
+	)
 	t.Run("Get", func(t *testing.T) {
 		getRef, err := ref.New(tsURL.Host + repoPath + ":" + getTag)
 		if err != nil {

@@ -106,7 +106,7 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 	// create manifest with config, matching the original tag manifest type
 	switch curManifest.GetMediaType() {
 	case types.MediaTypeOCI1Manifest, types.MediaTypeOCI1ManifestList:
-		tempManifest, err = manifest.FromOrig(ociv1.Manifest{
+		tempManifest, err = manifest.New(manifest.WithOrig(ociv1.Manifest{
 			Versioned: ociv1Specs.Versioned{
 				SchemaVersion: 2,
 			},
@@ -117,12 +117,12 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 				Size:      int64(len(confB)),
 			},
 			Layers: []ociv1.Descriptor{},
-		})
+		}))
 		if err != nil {
 			return err
 		}
 	default: // default to the docker v2 schema
-		tempManifest, err = manifest.FromOrig(dockerSchema2.Manifest{
+		tempManifest, err = manifest.New(manifest.WithOrig(dockerSchema2.Manifest{
 			Versioned: dockerManifest.Versioned{
 				SchemaVersion: 2,
 				MediaType:     types.MediaTypeDocker2Manifest,
@@ -133,7 +133,7 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 				Size:      int64(len(confB)),
 			},
 			Layers: []dockerDistribution.Descriptor{},
-		})
+		}))
 		if err != nil {
 			return err
 		}

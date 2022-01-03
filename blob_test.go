@@ -168,8 +168,13 @@ func TestBlobGet(t *testing.T) {
 		Hooks:     make(logrus.LevelHooks),
 		Level:     logrus.WarnLevel,
 	}
-	rc := New(WithConfigHosts(rcHosts), WithLog(log))
-
+	delayInit, _ := time.ParseDuration("0.05s")
+	delayMax, _ := time.ParseDuration("0.10s")
+	rc := New(
+		WithConfigHosts(rcHosts),
+		WithLog(log),
+		WithRetryDelay(delayInit, delayMax),
+	)
 	// Test successful blob
 	t.Run("Get", func(t *testing.T) {
 		ref, err := ref.New(tsURL.Host + blobRepo)

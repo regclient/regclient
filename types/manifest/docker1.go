@@ -9,6 +9,7 @@ import (
 	digest "github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/internal/wraperr"
+	"github.com/regclient/regclient/types"
 )
 
 const (
@@ -28,23 +29,23 @@ type docker1SignedManifest struct {
 }
 
 func (m *docker1Manifest) GetConfigDescriptor() (ociv1.Descriptor, error) {
-	return ociv1.Descriptor{}, wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.mt), ErrUnsupportedMediaType)
+	return ociv1.Descriptor{}, wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 func (m *docker1Manifest) GetConfigDigest() (digest.Digest, error) {
-	return "", wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.mt), ErrUnsupportedMediaType)
+	return "", wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 func (m *docker1SignedManifest) GetConfigDescriptor() (ociv1.Descriptor, error) {
-	return ociv1.Descriptor{}, wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.mt), ErrUnsupportedMediaType)
+	return ociv1.Descriptor{}, wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 func (m *docker1SignedManifest) GetConfigDigest() (digest.Digest, error) {
-	return "", wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.mt), ErrUnsupportedMediaType)
+	return "", wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 
 func (m *docker1Manifest) GetDescriptorList() ([]ociv1.Descriptor, error) {
-	return []ociv1.Descriptor{}, wraperr.New(fmt.Errorf("Platform descriptor list not available for media type %s", m.mt), ErrUnsupportedMediaType)
+	return []ociv1.Descriptor{}, wraperr.New(fmt.Errorf("Platform descriptor list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 func (m *docker1SignedManifest) GetDescriptorList() ([]ociv1.Descriptor, error) {
-	return []ociv1.Descriptor{}, wraperr.New(fmt.Errorf("Platform descriptor list not available for media type %s", m.mt), ErrUnsupportedMediaType)
+	return []ociv1.Descriptor{}, wraperr.New(fmt.Errorf("Platform descriptor list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 
 func (m *docker1Manifest) GetLayers() ([]ociv1.Descriptor, error) {
@@ -74,22 +75,22 @@ func (m *docker1SignedManifest) GetOrigManifest() interface{} {
 }
 
 func (m *docker1Manifest) GetPlatformDesc(p *ociv1.Platform) (*ociv1.Descriptor, error) {
-	return nil, wraperr.New(fmt.Errorf("Platform lookup not available for media type %s", m.mt), ErrUnsupportedMediaType)
+	return nil, wraperr.New(fmt.Errorf("Platform lookup not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 func (m *docker1SignedManifest) GetPlatformDesc(p *ociv1.Platform) (*ociv1.Descriptor, error) {
-	return nil, wraperr.New(fmt.Errorf("Platform lookup not available for media type %s", m.mt), ErrUnsupportedMediaType)
+	return nil, wraperr.New(fmt.Errorf("Platform lookup not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 
 func (m *docker1Manifest) GetPlatformList() ([]*ociv1.Platform, error) {
-	return nil, wraperr.New(fmt.Errorf("Platform list not available for media type %s", m.mt), ErrUnsupportedMediaType)
+	return nil, wraperr.New(fmt.Errorf("Platform list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 func (m *docker1SignedManifest) GetPlatformList() ([]*ociv1.Platform, error) {
-	return nil, wraperr.New(fmt.Errorf("Platform list not available for media type %s", m.mt), ErrUnsupportedMediaType)
+	return nil, wraperr.New(fmt.Errorf("Platform list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 
 func (m *docker1Manifest) MarshalJSON() ([]byte, error) {
 	if !m.manifSet {
-		return []byte{}, wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), ErrUnavailable)
+		return []byte{}, wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
 	}
 
 	if len(m.rawBody) > 0 {

@@ -196,7 +196,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 			cd, err := m.GetConfigDigest()
 			if err != nil {
 				// docker schema v1 does not have a config object, ignore if it's missing
-				if !errors.Is(err, manifest.ErrUnsupportedMediaType) {
+				if !errors.Is(err, types.ErrUnsupportedMediaType) {
 					rc.log.WithFields(logrus.Fields{
 						"ref": refSrc.Reference,
 						"err": err,
@@ -449,7 +449,7 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 		// add config
 		confD, err := m.GetConfigDescriptor()
 		// ignore unsupported media type errors
-		if err != nil && !errors.Is(err, manifest.ErrUnsupportedMediaType) {
+		if err != nil && !errors.Is(err, types.ErrUnsupportedMediaType) {
 			return err
 		}
 		if err == nil {
@@ -462,7 +462,7 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 		// loop over layers
 		layerDL, err := m.GetLayers()
 		// ignore unsupported media type errors
-		if err != nil && !errors.Is(err, manifest.ErrUnsupportedMediaType) {
+		if err != nil && !errors.Is(err, types.ErrUnsupportedMediaType) {
 			return err
 		}
 		if err == nil {
@@ -558,7 +558,7 @@ func (rc *RegClient) ImageImport(ctx context.Context, ref ref.Ref, rs io.ReadSee
 			return fmt.Errorf("Failed to import layers from docker tar: %w", err)
 		}
 		// push docker manifest
-		m, err := manifest.FromOrig(trd.dockerManifest)
+		m, err := manifest.New(manifest.WithOrig(trd.dockerManifest))
 		if err != nil {
 			return err
 		}
@@ -677,7 +677,7 @@ func (rc *RegClient) imageImportOCIAddHandler(ctx context.Context, ref ref.Ref, 
 		// no need to process docker manifest.json when OCI layout is available
 		delete(trd.handlers, dockerManifestFilename)
 		// create a manifest from the index
-		trd.ociManifest, err = manifest.FromOrig(trd.ociIndex)
+		trd.ociManifest, err = manifest.New(manifest.WithOrig(trd.ociIndex))
 		if err != nil {
 			return err
 		}
@@ -745,7 +745,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 					types.MediaTypeDocker2Manifest, types.MediaTypeDocker2ManifestList,
 					types.MediaTypeOCI1Manifest, types.MediaTypeOCI1ManifestList:
 					// known manifest media types
-					md, err := manifest.FromDescriptor(d, b)
+					md, err := manifest.New(manifest.WithDesc(d), manifest.WithRaw(b))
 					if err != nil {
 						return err
 					}
@@ -757,7 +757,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 					return rc.imageImportBlob(ctx, ref, d, trd)
 				default:
 					// attempt manifest import, fall back to blob import
-					md, err := manifest.FromDescriptor(d, b)
+					md, err := manifest.New(manifest.WithDesc(d), manifest.WithRaw(b))
 					if err == nil {
 						return rc.imageImportOCIHandleManifest(ctx, ref, md, trd, true)
 					}

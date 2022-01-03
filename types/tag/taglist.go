@@ -43,6 +43,7 @@ type tagConfig struct {
 	mt     string
 	raw    []byte
 	header http.Header
+	tags   []string
 }
 
 type Opts func(*tagConfig)
@@ -61,6 +62,9 @@ func New(opts ...Opts) (*TagList, error) {
 		rawHeader: conf.header,
 		rawBody:   conf.raw,
 	}
+	if len(conf.tags) > 0 {
+		tl.Tags = conf.tags
+	}
 	mt := strings.Split(conf.mt, ";")[0] // "application/json; charset=utf-8" -> "application/json"
 	switch mt {
 	case "application/json", "text/plain":
@@ -68,6 +72,8 @@ func New(opts ...Opts) (*TagList, error) {
 		if err != nil {
 			return nil, err
 		}
+	case types.MediaTypeOCI1ManifestList:
+		// noop
 	default:
 		return nil, fmt.Errorf("%w: media type: %s, reference: %s", types.ErrUnsupportedMediaType, conf.mt, conf.ref.CommonName())
 	}
@@ -94,6 +100,11 @@ func WithRaw(raw []byte) Opts {
 func WithRef(ref ref.Ref) Opts {
 	return func(tConf *tagConfig) {
 		tConf.ref = ref
+	}
+}
+func WithTags(tags []string) Opts {
+	return func(tConf *tagConfig) {
+		tConf.tags = tags
 	}
 }
 

@@ -22,13 +22,21 @@ type ociConfig struct {
 }
 
 // NewOCIConfig creates a new BlobOCIConfig from an OCI Image
-func NewOCIConfig(ociImage ociv1.Image) OCIConfig {
-	bc := common{
-		blobSet: true,
+func NewOCIConfig(opts ...Opts) OCIConfig {
+	bc := BlobConfig{}
+	for _, opt := range opts {
+		opt(&bc)
+	}
+	c := common{
+		blobSet:   true,
+		desc:      bc.desc,
+		r:         bc.r,
+		rawHeader: bc.header,
+		resp:      bc.resp,
 	}
 	b := ociConfig{
-		common: bc,
-		Image:  ociImage,
+		common: c,
+		Image:  bc.image,
 	}
 	return &b
 }

@@ -93,10 +93,11 @@ func (reg *Reg) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest, 
 		return nil, fmt.Errorf("Error reading manifest for %s: %w", r.CommonName(), err)
 	}
 
-	// parse body into variable according to media type
-	mt := resp.HTTPResponse().Header.Get("Content-Type")
-
-	return manifest.New(mt, rawBody, r, resp.HTTPResponse().Header)
+	return manifest.New(
+		manifest.WithRef(r),
+		manifest.WithHeader(resp.HTTPResponse().Header),
+		manifest.WithRaw(rawBody),
+	)
 }
 
 // ManifestHead returns metadata on the manifest from the registry
@@ -142,10 +143,10 @@ func (reg *Reg) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest,
 		return nil, fmt.Errorf("Failed to request manifest head %s: %w", r.CommonName(), reghttp.HttpError(resp.HTTPResponse().StatusCode))
 	}
 
-	// extract header data
-	mt := resp.HTTPResponse().Header.Get("Content-Type")
-
-	return manifest.New(mt, []byte{}, r, resp.HTTPResponse().Header)
+	return manifest.New(
+		manifest.WithRef(r),
+		manifest.WithHeader(resp.HTTPResponse().Header),
+	)
 }
 
 // ManifestPut uploads a manifest to a registry
