@@ -86,17 +86,27 @@ func New(ref string) (Ref, error) {
 // CommonName outputs a parsable name from a reference
 func (r Ref) CommonName() string {
 	cn := ""
-	if r.Registry != "" {
-		cn = r.Registry + "/"
-	}
-	if r.Repository == "" {
-		return ""
-	}
-	cn = cn + r.Repository
-	if r.Digest != "" {
-		cn = cn + "@" + r.Digest
-	} else if r.Tag != "" {
-		cn = cn + ":" + r.Tag
+	switch r.Scheme {
+	case "reg":
+		if r.Registry != "" {
+			cn = r.Registry + "/"
+		}
+		if r.Repository == "" {
+			return ""
+		}
+		cn = cn + r.Repository
+		if r.Digest != "" {
+			cn = cn + "@" + r.Digest
+		} else if r.Tag != "" {
+			cn = cn + ":" + r.Tag
+		}
+	case "ocidir":
+		cn = fmt.Sprintf("ocidir://%s", r.Path)
+		if r.Digest != "" {
+			cn = cn + "@" + r.Digest
+		} else if r.Tag != "" {
+			cn = cn + ":" + r.Tag
+		}
 	}
 	return cn
 }
