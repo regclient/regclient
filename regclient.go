@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io/fs"
 	"io/ioutil"
+	"strings"
 	"sync"
 	"time"
 
@@ -231,21 +232,36 @@ func (rc *RegClient) loadDockerCreds() error {
 	for name, cred := range creds {
 		if (cred.Username == "" || cred.Password == "") && cred.IdentityToken == "" {
 			rc.log.WithFields(logrus.Fields{
-				"host": cred.ServerAddress,
+				"name": name,
 			}).Debug("Docker cred: Skipping empty pass and token")
 			continue
-		}
-		if cred.ServerAddress == "" {
-			cred.ServerAddress = name
 		}
 		// Docker Hub is a special case
 		if name == DockerRegistryAuth {
 			name = DockerRegistry
 			cred.ServerAddress = DockerRegistryDNS
 		}
+		// handle names with a scheme included (https://registry.example.com)
+		tls := config.TLSEnabled
+		i := strings.Index(name, "://")
+		if i > 0 {
+			scheme := name[:i]
+			if name == cred.ServerAddress {
+				cred.ServerAddress = name[i+3:]
+			}
+			name = name[i+3:]
+			if scheme == "http" {
+				tls = config.TLSDisabled
+			}
+		}
+		if cred.ServerAddress == "" {
+			cred.ServerAddress = name
+		}
+		tlsB, _ := tls.MarshalText()
 		rc.log.WithFields(logrus.Fields{
 			"name":      name,
 			"host":      cred.ServerAddress,
+			"tls":       string(tlsB),
 			"user":      cred.Username,
 			"pass-set":  cred.Password != "",
 			"token-set": cred.IdentityToken != "",
@@ -253,6 +269,7 @@ func (rc *RegClient) loadDockerCreds() error {
 		err = rc.hostSet(config.Host{
 			Name:     name,
 			Hostname: cred.ServerAddress,
+			TLS:      tls,
 			User:     cred.Username,
 			Pass:     cred.Password,
 			Token:    cred.IdentityToken, // TODO: verify token can be used
