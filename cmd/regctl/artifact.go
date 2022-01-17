@@ -220,7 +220,7 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 					dest := filepath.Join(artifactOpts.outputDir, filepath.Join(dirs...))
 					fi, err := os.Stat(dest)
 					if os.IsNotExist(err) {
-						err = os.MkdirAll(dest, 0755)
+						err = os.MkdirAll(dest, 0777)
 						if err != nil {
 							return err
 						}
