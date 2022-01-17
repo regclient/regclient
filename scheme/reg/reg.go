@@ -7,6 +7,7 @@ import (
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/reghttp"
+	"github.com/regclient/regclient/scheme"
 	"github.com/sirupsen/logrus"
 )
 
@@ -43,6 +44,10 @@ func New(opts ...Opts) *Reg {
 	}
 	r.reghttp = reghttp.NewClient(r.reghttpOpts...)
 	return &r
+}
+
+func (reg *Reg) Info() scheme.Info {
+	return scheme.Info{}
 }
 
 func (reg *Reg) hostGet(hostname string) *config.Host {

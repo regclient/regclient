@@ -65,7 +65,7 @@ func (reg *Reg) BlobGet(ctx context.Context, r ref.Ref, d digest.Digest) (blob.R
 
 	b := blob.NewReader(
 		blob.WithRef(r),
-		blob.WithReadCloser(resp),
+		blob.WithReader(resp),
 		blob.WithDesc(ociv1.Descriptor{
 			Digest: d,
 		}),
