@@ -15,7 +15,7 @@ import (
 // 2. Push that manifest to the tag.
 // 3. Delete the digest for that new manifest that is only used by that tag.
 func (rc *RegClient) TagDelete(ctx context.Context, r ref.Ref) error {
-	schemeAPI, err := rc.getScheme(r.Scheme)
+	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
 		return err
 	}
@@ -23,7 +23,7 @@ func (rc *RegClient) TagDelete(ctx context.Context, r ref.Ref) error {
 }
 
 func (rc *RegClient) TagList(ctx context.Context, r ref.Ref, opts ...scheme.TagOpts) (*tag.TagList, error) {
-	schemeAPI, err := rc.getScheme(r.Scheme)
+	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
 		return nil, err
 	}
