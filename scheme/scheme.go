@@ -12,6 +12,8 @@ import (
 )
 
 type SchemeAPI interface {
+	Info() Info
+
 	// BlobDelete removes a blob from the repository
 	BlobDelete(ctx context.Context, r ref.Ref, d digest.Digest) error
 	// BlobGet retrieves a blob, returning a reader
@@ -36,6 +38,10 @@ type SchemeAPI interface {
 	TagDelete(ctx context.Context, r ref.Ref) error
 	// TagList returns a list of tags from the repository
 	TagList(ctx context.Context, r ref.Ref, opts ...TagOpts) (*tag.TagList, error)
+}
+
+type Info struct {
+	ManifestPushFirst bool
 }
 
 // RepoConfig is used for options to the repo functions
