@@ -13,7 +13,7 @@ type repoLister interface {
 }
 
 func (rc *RegClient) RepoList(ctx context.Context, hostname string, opts ...scheme.RepoOpts) (*repo.RepoList, error) {
-	schemeAPI, err := rc.getScheme("reg")
+	schemeAPI, err := rc.schemeGet("reg")
 	if err != nil {
 		return nil, err
 	}

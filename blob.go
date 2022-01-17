@@ -68,7 +68,7 @@ func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Re
 }
 
 func (rc *RegClient) BlobDelete(ctx context.Context, r ref.Ref, d digest.Digest) error {
-	schemeAPI, err := rc.getScheme(r.Scheme)
+	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
 		return err
 	}
@@ -76,7 +76,7 @@ func (rc *RegClient) BlobDelete(ctx context.Context, r ref.Ref, d digest.Digest)
 }
 
 func (rc *RegClient) BlobGet(ctx context.Context, r ref.Ref, d digest.Digest) (blob.Reader, error) {
-	schemeAPI, err := rc.getScheme(r.Scheme)
+	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +93,7 @@ func (rc *RegClient) BlobGetOCIConfig(ctx context.Context, ref ref.Ref, d digest
 
 // BlobHead is used to verify if a blob exists and is accessible
 func (rc *RegClient) BlobHead(ctx context.Context, r ref.Ref, d digest.Digest) (blob.Reader, error) {
-	schemeAPI, err := rc.getScheme(r.Scheme)
+	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +102,7 @@ func (rc *RegClient) BlobHead(ctx context.Context, r ref.Ref, d digest.Digest) (
 
 // BlobMount attempts to perform a server side copy/mount of the blob between repositories
 func (rc *RegClient) BlobMount(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d digest.Digest) error {
-	schemeAPI, err := rc.getScheme(refSrc.Scheme)
+	schemeAPI, err := rc.schemeGet(refSrc.Scheme)
 	if err != nil {
 		return err
 	}
@@ -114,7 +114,7 @@ func (rc *RegClient) BlobMount(ctx context.Context, refSrc ref.Ref, refTgt ref.R
 // It will then try doing a full put of the blob without chunking (most widely supported).
 // If the full put fails, it will fall back to a chunked upload (useful for flaky networks).
 func (rc *RegClient) BlobPut(ctx context.Context, ref ref.Ref, d digest.Digest, rdr io.Reader, cl int64) (digest.Digest, int64, error) {
-	schemeAPI, err := rc.getScheme(ref.Scheme)
+	schemeAPI, err := rc.schemeGet(ref.Scheme)
 	if err != nil {
 		return "", 0, err
 	}

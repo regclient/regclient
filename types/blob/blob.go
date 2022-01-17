@@ -19,7 +19,7 @@ type BlobConfig struct {
 	header http.Header
 	image  ociv1.Image
 	r      ref.Ref
-	rc     io.ReadCloser
+	rdr    io.Reader
 	resp   *http.Response
 }
 
@@ -41,9 +41,9 @@ func WithImage(image ociv1.Image) Opts {
 		bc.image = image
 	}
 }
-func WithReadCloser(rc io.ReadCloser) Opts {
+func WithReader(rc io.Reader) Opts {
 	return func(bc *BlobConfig) {
-		bc.rc = rc
+		bc.rdr = rc
 	}
 }
 func WithRef(r ref.Ref) Opts {

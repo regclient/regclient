@@ -396,7 +396,7 @@ func TestNew(t *testing.T) {
 					"Docker-Content-Digest": []string{digestInvalid.String()},
 				}),
 			},
-			wantE: fmt.Errorf("digest mismatch, expected %s, found %s", digestInvalid, digestML),
+			wantE: fmt.Errorf("manifest digest mismatch, expected %s, computed %s", digestInvalid, digestML),
 		},
 		{
 			name: "Ambiguous OCI Image",
@@ -453,7 +453,7 @@ func TestNew(t *testing.T) {
 					Size:      int64(len(rawDockerSchema2)),
 				}),
 			},
-			wantE: fmt.Errorf("digest mismatch, expected %s, found %s", digestInvalid, digestDockerSchema2),
+			wantE: fmt.Errorf("manifest digest mismatch, expected %s, computed %s", digestInvalid, digestDockerSchema2),
 		},
 		{
 			name: "Invalid Media Type",

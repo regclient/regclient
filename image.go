@@ -107,6 +107,15 @@ func (rc *RegClient) ImageCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.R
 }
 
 func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, opt *imageOpt) error {
+	// check if scheme/refTgt prefers parent manifests pushed first
+	// if so, this should automatically set forceRecursive
+	tgtSI, err := rc.schemeInfo(refTgt)
+	if err != nil {
+		return fmt.Errorf("failed looking up scheme for %s: %v", refTgt.CommonName(), err)
+	}
+	if tgtSI.ManifestPushFirst {
+		opt.forceRecursive = true
+	}
 	// check if source and destination already match
 	mdh, errD := rc.ManifestHead(ctx, refTgt)
 	if opt.forceRecursive {
@@ -137,6 +146,18 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 			"err": err,
 		}).Warn("Failed to get source manifest")
 		return err
+	}
+
+	if tgtSI.ManifestPushFirst {
+		// push manifest to target
+		err = rc.ManifestPut(ctx, refTgt, m)
+		if err != nil {
+			rc.log.WithFields(logrus.Fields{
+				"target": refTgt.Reference,
+				"err":    err,
+			}).Warn("Failed to push manifest")
+			return err
+		}
 	}
 
 	if refSrc.Registry != refTgt.Registry || refSrc.Repository != refTgt.Repository {
@@ -254,13 +275,16 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 		}
 	}
 
-	// push manifest to target
-	if err := rc.ManifestPut(ctx, refTgt, m); err != nil {
-		rc.log.WithFields(logrus.Fields{
-			"target": refTgt.Reference,
-			"err":    err,
-		}).Warn("Failed to push manifest")
-		return err
+	if !tgtSI.ManifestPushFirst {
+		// push manifest to target
+		err = rc.ManifestPut(ctx, refTgt, m)
+		if err != nil {
+			rc.log.WithFields(logrus.Fields{
+				"target": refTgt.Reference,
+				"err":    err,
+			}).Warn("Failed to push manifest")
+			return err
+		}
 	}
 
 	// lookup digest tags to include artifacts with image

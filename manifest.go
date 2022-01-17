@@ -8,7 +8,7 @@ import (
 )
 
 func (rc *RegClient) ManifestDelete(ctx context.Context, r ref.Ref) error {
-	schemeAPI, err := rc.getScheme(r.Scheme)
+	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
 		return err
 	}
@@ -16,7 +16,7 @@ func (rc *RegClient) ManifestDelete(ctx context.Context, r ref.Ref) error {
 }
 
 func (rc *RegClient) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest, error) {
-	schemeAPI, err := rc.getScheme(r.Scheme)
+	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
 		return nil, err
 	}
@@ -24,7 +24,7 @@ func (rc *RegClient) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manif
 }
 
 func (rc *RegClient) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest, error) {
-	schemeAPI, err := rc.getScheme(r.Scheme)
+	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
 		return nil, err
 	}
@@ -32,7 +32,7 @@ func (rc *RegClient) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Mani
 }
 
 func (rc *RegClient) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest) error {
-	schemeAPI, err := rc.getScheme(r.Scheme)
+	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
 		return err
 	}

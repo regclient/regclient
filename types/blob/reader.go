@@ -23,7 +23,7 @@ type reader struct {
 	common
 	readBytes int64
 	reader    io.Reader
-	origRdr   io.ReadCloser
+	origRdr   io.Reader
 	digester  digest.Digester
 }
 
@@ -35,15 +35,24 @@ func NewReader(opts ...Opts) Reader {
 	}
 	if bc.resp != nil {
 		// extract headers and reader if other fields not passed
+		if bc.header == nil {
+			bc.header = bc.resp.Header
+		}
+		if bc.rdr == nil {
+			bc.rdr = bc.resp.Body
+		}
+	}
+	if bc.header != nil {
+		// extract fields from header if descriptor not passed
 		if bc.desc.MediaType == "" {
-			bc.desc.MediaType = bc.resp.Header.Get("Content-Type")
+			bc.desc.MediaType = bc.header.Get("Content-Type")
 		}
 		if bc.desc.Size == 0 {
-			cl, _ := strconv.Atoi(bc.resp.Header.Get("Content-Length"))
+			cl, _ := strconv.Atoi(bc.header.Get("Content-Length"))
 			bc.desc.Size = int64(cl)
 		}
 		if bc.desc.Digest == "" {
-			bc.desc.Digest = digest.FromString(bc.resp.Header.Get("Docker-Content-Digest"))
+			bc.desc.Digest, _ = digest.Parse(bc.header.Get("Docker-Content-Digest"))
 		}
 	}
 	c := common{
@@ -54,12 +63,12 @@ func NewReader(opts ...Opts) Reader {
 	}
 	br := reader{
 		common:  c,
-		origRdr: bc.rc,
+		origRdr: bc.rdr,
 	}
-	if bc.rc != nil {
+	if bc.rdr != nil {
 		br.blobSet = true
 		br.digester = digest.Canonical.Digester()
-		br.reader = io.TeeReader(bc.rc, br.digester.Hash())
+		br.reader = io.TeeReader(bc.rdr, br.digester.Hash())
 	}
 	return &br
 }
@@ -68,7 +77,12 @@ func (b *reader) Close() error {
 	if b.origRdr == nil {
 		return nil
 	}
-	return b.origRdr.Close()
+	// attempt to close if available in original reader
+	bc, ok := b.origRdr.(io.Closer)
+	if !ok {
+		return nil
+	}
+	return bc.Close()
 }
 
 // RawBody returns the original body from the request
@@ -78,6 +92,9 @@ func (b *reader) RawBody() ([]byte, error) {
 
 // Read passes through the read operation while computing the digest and tracking the size
 func (b *reader) Read(p []byte) (int, error) {
+	if b.reader == nil {
+		return 0, fmt.Errorf("blob has no reader: %w", io.ErrUnexpectedEOF)
+	}
 	size, err := b.reader.Read(p)
 	b.readBytes = b.readBytes + int64(size)
 	if err == io.EOF {
