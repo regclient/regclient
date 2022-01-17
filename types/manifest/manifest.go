@@ -206,6 +206,14 @@ func fromCommon(c common) (Manifest, error) {
 			c.desc.Digest = d
 		}
 	}
+	// extract media type from body if needed
+	if c.desc.MediaType == "" && len(c.rawBody) > 0 {
+		mt := struct {
+			MediaType string `json:"mediaType,omitempty"`
+		}{}
+		err = json.Unmarshal(c.rawBody, &mt)
+		c.desc.MediaType = mt.MediaType
+	}
 	switch c.desc.MediaType {
 	case MediaTypeDocker1Manifest:
 		var mOrig dockerSchema1.Manifest
