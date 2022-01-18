@@ -33,7 +33,10 @@ vendor:
 	go mod vendor
 
 embed/version.json: .FORCE
-	echo "{\"VCSRef\": \"$(VCS_REF)\", \"VCSTag\": \"$(VCS_TAG)\"}" >embed/version.json
+	# docker builds will not have the .dockerignore inside the container
+	if [ -f ".dockerignore" -o ! -f "embed/version.json" ]; then \
+		echo "{\"VCSRef\": \"$(VCS_REF)\", \"VCSTag\": \"$(VCS_TAG)\"}" >embed/version.json; \
+	fi
 
 binaries: vendor $(BINARIES)
 
@@ -43,7 +46,7 @@ bin/%: embed/version.json .FORCE
 
 docker: $(IMAGES)
 
-docker-%: .FORCE
+docker-%: embed/version.json .FORCE
 	docker build -t regclient/$* -f build/Dockerfile.$*$(DOCKERFILE_EXT) $(DOCKER_ARGS) .
 	docker build -t regclient/$*:alpine -f build/Dockerfile.$*$(DOCKERFILE_EXT) --target release-alpine $(DOCKER_ARGS) .
 
