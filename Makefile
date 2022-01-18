@@ -35,9 +35,9 @@ vendor:
 embed/version.json: .FORCE
 	echo "{\"VCSRef\": \"$(VCS_REF)\", \"VCSTag\": \"$(VCS_TAG)\"}" >embed/version.json
 
-binaries: vendor embed/version.json $(BINARIES)
+binaries: vendor $(BINARIES)
 
-bin/%: .FORCE
+bin/%: embed/version.json .FORCE
 	if [ -f embed/version.json -a -d "cmd/$*/embed" ]; then cp embed/version.json "cmd/$*/embed/"; fi
 	CGO_ENABLED=0 go build ${GO_BUILD_FLAGS} -o bin/$* ./cmd/$*
 
@@ -58,7 +58,7 @@ artifacts: $(ARTIFACTS)
 artifact-pre:
 	mkdir -p artifacts
 
-artifacts/%: artifact-pre .FORCE
+artifacts/%: artifact-pre embed/version.json .FORCE
 	@target="$*"; \
 	command="$${target%%-*}"; \
 	platform_ext="$${target#*-}"; \
@@ -68,6 +68,7 @@ artifacts/%: artifact-pre .FORCE
 	echo export GOOS=$${GOOS}; \
 	echo export GOARCH=$${GOARCH}; \
 	echo go build ${GO_BUILD_FLAGS} -o "$@" ./cmd/$${command}/; \
+	if [ -f embed/version.json -a -d "cmd/$${command}/embed" ]; then cp embed/version.json "cmd/$${command}/embed/"; fi; \
 	CGO_ENABLED=0 go build ${GO_BUILD_FLAGS} -o "$@" ./cmd/$${command}/
 
 plugin-user:
