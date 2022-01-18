@@ -79,6 +79,9 @@ jobs:
     - name: Check out code
       uses: actions/checkout@v2
 
+    - name: Set embed/version.json
+      run: make embed/version.json
+
     # - name: Set up QEMU
     #   uses: docker/setup-qemu-action@v1
 
