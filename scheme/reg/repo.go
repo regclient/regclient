@@ -71,7 +71,7 @@ func (reg *Reg) RepoList(ctx context.Context, hostname string, opts ...scheme.Re
 	if err != nil {
 		reg.log.WithFields(logrus.Fields{
 			"err":  err,
-			"body": respBody,
+			"body": string(respBody),
 			"host": hostname,
 		}).Warn("Failed to unmarshal repo list")
 		return nil, fmt.Errorf("Failed to parse repo list for %s: %w", hostname, err)
