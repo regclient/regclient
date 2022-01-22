@@ -81,7 +81,7 @@ func TestCommon(t *testing.T) {
 		},
 		{
 			name:    "reader",
-			opts:    []Opts{WithReader(io.NopCloser(bytes.NewReader(exBlob)))},
+			opts:    []Opts{WithReader(bytes.NewReader(exBlob))},
 			eBytes:  exBlob,
 			eDigest: exDigest,
 			eLen:    exLen,
@@ -89,7 +89,7 @@ func TestCommon(t *testing.T) {
 		{
 			name: "descriptor",
 			opts: []Opts{
-				WithReader(io.NopCloser(bytes.NewReader(exBlob))),
+				WithReader(bytes.NewReader(exBlob)),
 				WithDesc(ociv1.Descriptor{
 					MediaType: exMT,
 					Digest:    exDigest,
@@ -105,7 +105,7 @@ func TestCommon(t *testing.T) {
 		{
 			name: "headers",
 			opts: []Opts{
-				WithReader(io.NopCloser(bytes.NewReader(exBlob))),
+				WithReader(bytes.NewReader(exBlob)),
 				WithHeader(exHeaders),
 				WithRef(exRef),
 			},
@@ -229,7 +229,7 @@ func TestReader(t *testing.T) {
 	t.Run("ociconfig", func(t *testing.T) {
 		// create blob
 		b := NewReader(
-			WithReader(io.NopCloser(bytes.NewReader(exBlob))),
+			WithReader(bytes.NewReader(exBlob)),
 			WithDesc(ociv1.Descriptor{
 				MediaType: exMT,
 				Digest:    exDigest,
@@ -259,7 +259,7 @@ func TestReader(t *testing.T) {
 	t.Run("rawbytes", func(t *testing.T) {
 		// create blob
 		b := NewReader(
-			WithReader(io.NopCloser(bytes.NewReader(exBlob))),
+			WithReader(bytes.NewReader(exBlob)),
 		)
 		// test RawBytes on blob 3
 		bb, err := b.RawBody()

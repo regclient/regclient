@@ -365,6 +365,7 @@ func (resp *clientResp) Next() error {
 				if httpReq.Header.Get("Range") == "" {
 					httpReq.Header.Add("Range", fmt.Sprintf("bytes=%d-%d", resp.readCur, resp.readMax))
 				} else {
+					dropHost = true
 					return fmt.Errorf("unable to resume a connection within a range request")
 				}
 			}
@@ -418,6 +419,11 @@ func (resp *clientResp) Next() error {
 			}
 
 			// send request
+			resp.client.log.WithFields(logrus.Fields{
+				"url":      httpReq.URL.String(),
+				"method":   httpReq.Method,
+				"withAuth": (len(httpReq.Header.Values("Authorization")) > 0),
+			}).Debug("http req")
 			resp.resp, err = httpClient.Do(httpReq)
 
 			if err != nil {
@@ -610,7 +616,7 @@ func (resp *clientResp) backoffSet() error {
 
 	ch.backoffUntil = time.Now().Add(sleepTime)
 
-	if ch.backoffCur == c.retryLimit {
+	if ch.backoffCur >= c.retryLimit {
 		return fmt.Errorf("%w: backoffs %d", types.ErrBackoffLimit, ch.backoffCur)
 	}
 

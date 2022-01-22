@@ -3,6 +3,7 @@ package reg
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -286,28 +287,11 @@ func TestBlobPut(t *testing.T) {
 	d3, blob3 := reqresp.NewRandomBlob(blobLen3, seed+2)
 	uuid3 := uuid.New()
 	// dMissing := digest.FromBytes([]byte("missing"))
-	// define req/resp entries
-	rrs := []reqresp.ReqResp{
-		// get upload location
-		{
-			ReqEntry: reqresp.ReqEntry{
-				Name:   "POST for d1",
-				Method: "POST",
-				Path:   "/v2" + blobRepo + "/blobs/uploads/",
-				Query: map[string][]string{
-					"mount": {d1.String()},
-				},
-			},
-			RespEntry: reqresp.RespEntry{
-				Status: http.StatusAccepted,
-				Headers: http.Header{
-					"Content-Length": {"0"},
-					"Range":          {"bytes=0-0"},
-					"Location":       {uuid1.String()},
-				},
-			},
-		},
-		// upload blob
+	user := "testing"
+	pass := "password"
+
+	// create an external blob server (e.g. S3 storage)
+	blobRRS := []reqresp.ReqResp{
 		{
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "PUT for d1",
@@ -319,6 +303,7 @@ func TestBlobPut(t *testing.T) {
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", len(blob1))},
 					"Content-Type":   {"application/octet-stream"},
+					"Authorization":  {fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(user+":"+pass)))},
 				},
 				Body: blob1,
 			},
@@ -331,7 +316,74 @@ func TestBlobPut(t *testing.T) {
 				},
 			},
 		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "PUT for d1 unauth",
+				Method: "PUT",
+				Path:   "/v2" + blobRepo + "/blobs/uploads/" + uuid1.String(),
+				Query: map[string][]string{
+					"digest": {d1.String()},
+				},
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", len(blob1))},
+					"Content-Type":   {"application/octet-stream"},
+				},
+				Body: blob1,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusUnauthorized,
+				Headers: http.Header{
+					"WWW-Authenticate": {fmt.Sprintf("Basic realm=\"testing\"")},
+				},
+			},
+		},
+	}
+	blobTS := httptest.NewServer(reqresp.NewHandler(t, blobRRS))
+	defer blobTS.Close()
+	blobURL, _ := url.Parse(blobTS.URL)
+	blobHost := blobURL.Host
 
+	// define req/resp entries
+	rrs := []reqresp.ReqResp{
+		// get upload location
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "POST for d1",
+				Method: "POST",
+				Path:   "/v2" + blobRepo + "/blobs/uploads/",
+				Query: map[string][]string{
+					"mount": {d1.String()},
+				},
+				Headers: http.Header{
+					"Authorization": {fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(user+":"+pass)))},
+				},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusAccepted,
+				Headers: http.Header{
+					"Content-Length": {"0"},
+					"Range":          {"bytes=0-0"},
+					"Location":       {fmt.Sprintf("http://%s/v2%s/blobs/uploads/%s", blobHost, blobRepo, uuid1.String())},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "POST for d1 unauth",
+				Method: "POST",
+				Path:   "/v2" + blobRepo + "/blobs/uploads/",
+				Query: map[string][]string{
+					"mount": {d1.String()},
+				},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusUnauthorized,
+				Headers: http.Header{
+					"Content-Length":   {"0"},
+					"WWW-Authenticate": {fmt.Sprintf("Basic realm=\"testing\"")},
+				},
+			},
+		},
 		// get upload2 location
 		{
 			ReqEntry: reqresp.ReqEntry{
@@ -632,6 +684,8 @@ func TestBlobPut(t *testing.T) {
 			TLS:       config.TLSDisabled,
 			BlobChunk: int64(blobChunk),
 			BlobMax:   int64(-1),
+			User:      user,
+			Pass:      pass,
 		},
 		{
 			Name:      "retry." + tsHost,
