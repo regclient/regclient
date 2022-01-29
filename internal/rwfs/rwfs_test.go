@@ -12,8 +12,8 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 	exRootFile := "root.txt"
 	exRootTxt := []byte("hello root")
 	exSubDir := "new-dir"
-	exSubFile := path.Join(exSubDir, "file.txt")
-	exSubTxt := []byte("hello sub")
+	exSubFile1 := path.Join(exSubDir, "file1.txt")
+	exSubTxt1 := []byte("hello sub 1")
 	exSubFile2 := path.Join(exSubDir, "file2.txt")
 	exSubTxt2 := []byte("hello sub 2")
 	exSubFile3 := path.Join(exSubDir, "file3.txt")
@@ -92,21 +92,21 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		}
 
 		// create a file one level down
-		fh, err = rwfs.Create(exSubFile)
+		fh, err = rwfs.Create(exSubFile1)
 		if err != nil {
-			t.Errorf("create %s: %v", exSubFile, err)
+			t.Errorf("create %s: %v", exSubFile1, err)
 			return
 		}
-		i, err = fh.Write(exSubTxt)
+		i, err = fh.Write(exSubTxt1)
 		if err != nil {
-			t.Errorf("write %s: %v", exSubFile, err)
+			t.Errorf("write %s: %v", exSubFile1, err)
 		}
-		if i != len(exSubTxt) {
-			t.Errorf("write %s len, expected %d, received %d", exSubFile, len(exSubTxt), i)
+		if i != len(exSubTxt1) {
+			t.Errorf("write %s len, expected %d, received %d", exSubFile1, len(exSubTxt1), i)
 		}
 		err = fh.Close()
 		if err != nil {
-			t.Errorf("close %s: %v", exSubFile, err)
+			t.Errorf("close %s: %v", exSubFile1, err)
 		}
 
 		// create a file more than one level down
@@ -177,7 +177,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 			t.Errorf("readall %s: %v", exRootFile, err)
 			return
 		}
-		if bytes.Compare(exRootTxt, b) != 0 {
+		if !bytes.Equal(exRootTxt, b) {
 			t.Errorf("contents mismatch %s, expected %s, received %s", exRootFile, string(exRootTxt), string(b))
 		}
 		err = fh.Close()
@@ -191,27 +191,27 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 			t.Errorf("readfile %s: %v", exNestedFile, err)
 			return
 		}
-		if bytes.Compare(exNestedTxt2, b) != 0 {
+		if !bytes.Equal(exNestedTxt2, b) {
 			t.Errorf("contents mismatch %s, expected %s, received %s", exNestedFile, string(exNestedTxt2), string(b))
 		}
 
 		// verify open with a subdir
-		fh, err = rwfs.Open(exSubFile)
+		fh, err = rwfs.Open(exSubFile1)
 		if err != nil {
-			t.Errorf("open %s: %v", exSubFile, err)
+			t.Errorf("open %s: %v", exSubFile1, err)
 			return
 		}
 		b, err = io.ReadAll(fh)
 		if err != nil {
-			t.Errorf("readall %s: %v", exSubFile, err)
+			t.Errorf("readall %s: %v", exSubFile1, err)
 			return
 		}
-		if bytes.Compare(exSubTxt, b) != 0 {
-			t.Errorf("contents mismatch %s, expected %s, received %s", exSubFile, string(exSubTxt), string(b))
+		if !bytes.Equal(exSubTxt1, b) {
+			t.Errorf("contents mismatch %s, expected %s, received %s", exSubFile1, string(exSubTxt1), string(b))
 		}
 		err = fh.Close()
 		if err != nil {
-			t.Errorf("close %s: %v", exSubFile, err)
+			t.Errorf("close %s: %v", exSubFile1, err)
 		}
 
 	})
@@ -271,7 +271,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		if err != nil {
 			t.Errorf("readall %s: %v", exSubFile2, err)
 		}
-		if bytes.Compare(b, exSubTxt2) != 0 {
+		if !bytes.Equal(b, exSubTxt2) {
 			t.Errorf("readall %s: expected %s, received %s", exSubFile2, string(exSubTxt2), string(b))
 		}
 		fh.Close()
@@ -285,7 +285,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		if err != nil {
 			t.Errorf("readall %s: %v", exSubFile2, err)
 		}
-		if bytes.Compare(b, exSubTxt2) != 0 {
+		if !bytes.Equal(b, exSubTxt2) {
 			t.Errorf("contents after append, expect %s, received %s", string(exSubTxt2), string(b))
 		}
 		_, err = fh.Write([]byte("append string"))
@@ -298,7 +298,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 			t.Errorf("readfile %s: %v", exSubFile2, err)
 		}
 		exB := append(exSubTxt2, []byte("append string")...)
-		if bytes.Compare(b, exB) != 0 {
+		if !bytes.Equal(b, exB) {
 			t.Errorf("contents after append, expect %s, received %s", string(exB), string(b))
 		}
 
@@ -317,7 +317,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 			t.Errorf("readfile %s: %v", exSubFile2, err)
 		}
 		copy(exB, []byte("replace string"))
-		if bytes.Compare(b, exB) != 0 {
+		if !bytes.Equal(b, exB) {
 			t.Errorf("contents after replace, expect %s, received %s", string(exB), string(b))
 		}
 
@@ -336,7 +336,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 			t.Errorf("readfile %s: %v", exSubFile2, err)
 		}
 		exB = append(exB, []byte("append again string")...)
-		if bytes.Compare(b, exB) != 0 {
+		if !bytes.Equal(b, exB) {
 			t.Errorf("contents after append, expect %s, received %s", string(exB), string(b))
 		}
 
@@ -354,7 +354,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		if err != nil {
 			t.Errorf("readfile %s: %v", exSubFile2, err)
 		}
-		if bytes.Compare(b, exSubTxt2) != 0 {
+		if !bytes.Equal(b, exSubTxt2) {
 			t.Errorf("contents after truncate, expect %s, received %s", string(exSubTxt2), string(b))
 		}
 
@@ -381,7 +381,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		}
 		exB = append([]byte{}, exSubTxt2...)
 		copy(exB, []byte("replace"))
-		if bytes.Compare(b, exB) != 0 {
+		if !bytes.Equal(b, exB) {
 			t.Errorf("contents after create, expect %s, received %s", string(exB), string(b))
 		}
 
@@ -400,7 +400,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 			t.Errorf("readfile %s: %v", exSubFile2, err)
 		}
 		exB = append(exB, []byte("append string")...)
-		if bytes.Compare(b, exB) != 0 {
+		if !bytes.Equal(b, exB) {
 			t.Errorf("contents after append, expect %s, received %s", string(exB), string(b))
 		}
 
@@ -418,7 +418,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		if err != nil {
 			t.Errorf("readfile %s: %v", exSubFile2, err)
 		}
-		if bytes.Compare(b, exSubTxt2) != 0 {
+		if !bytes.Equal(b, exSubTxt2) {
 			t.Errorf("contents after truncate, expect %s, received %s", string(exSubTxt2), string(b))
 		}
 
@@ -532,6 +532,33 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 				t.Errorf("fileinfo %s: %v", exDir, err)
 			}
 		}
+	})
 
+	t.Run("remove", func(t *testing.T) {
+		err := rwfs.Remove(".")
+		if err == nil {
+			t.Errorf("did not fail deleting \".\"")
+		}
+		err = rwfs.Remove(exNestedDir)
+		if err == nil {
+			t.Errorf("did not fail deleting %s before deleting children", exNestedDir)
+		}
+		err = rwfs.Remove(exNestedFile)
+		if err != nil {
+			t.Errorf("failed deleting %s: %v", exNestedFile, err)
+		}
+		err = rwfs.Remove(exNestedChildDir)
+		if err != nil {
+			t.Errorf("failed deleting %s: %v", exNestedChildDir, err)
+		}
+		err = rwfs.Remove(exNestedDir)
+		if err != nil {
+			t.Errorf("failed deleting %s: %v", exNestedDir, err)
+		}
+		fh, err := rwfs.Open(exNestedDir)
+		if err == nil {
+			t.Errorf("open succeeded after deleting %s", exNestedDir)
+			fh.Close()
+		}
 	})
 }

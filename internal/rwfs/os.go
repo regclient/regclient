@@ -81,6 +81,21 @@ func (o *OSFS) Open(name string) (fs.File, error) {
 	}, nil
 }
 
+func (o *OSFS) Remove(name string) error {
+	if name == "." {
+		return &fs.PathError{
+			Op:   "remove",
+			Path: name,
+			Err:  fs.ErrInvalid,
+		}
+	}
+	full, err := o.join("remove", name)
+	if err != nil {
+		return err
+	}
+	return os.Remove(full)
+}
+
 func (o *OSFS) Sub(name string) (*OSFS, error) {
 	if name == "." {
 		return o, nil

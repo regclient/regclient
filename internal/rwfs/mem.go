@@ -1,6 +1,7 @@
 package rwfs
 
 import (
+	"fmt"
 	"io"
 	"io/fs"
 	"path"
@@ -148,6 +149,56 @@ func (o *MemFS) OpenFile(name string, flags int, perm fs.FileMode) (RWFile, erro
 
 func (o *MemFS) Open(name string) (fs.File, error) {
 	return o.OpenFile(name, O_RDONLY, 0)
+}
+
+func (o *MemFS) Remove(name string) error {
+	if name == "." {
+		return &fs.PathError{
+			Op:   "remove",
+			Path: name,
+			Err:  fs.ErrInvalid,
+		}
+	}
+	dir, file := path.Split(name)
+	memDir, err := o.getDir(dir)
+	if err != nil {
+		return &fs.PathError{
+			Op:   "remove",
+			Path: name,
+			Err:  err,
+		}
+	}
+	if child, ok := memDir.child[file]; ok {
+		switch v := child.(type) {
+		case *MemFile:
+			// delete file
+			delete(memDir.child, file)
+			return nil
+		case *MemDir:
+			// check for contents of directory
+			if len(v.child) > 0 {
+				return &fs.PathError{
+					Op:   "remove",
+					Path: name,
+					Err:  fmt.Errorf("directory not empty"),
+				}
+			}
+			delete(memDir.child, file)
+			return nil
+		default:
+			return &fs.PathError{
+				Op:   "remove",
+				Path: name,
+				Err:  fs.ErrInvalid,
+			}
+		}
+	} else {
+		return &fs.PathError{
+			Op:   "remove",
+			Path: name,
+			Err:  fs.ErrNotExist,
+		}
+	}
 }
 
 func (o *MemFS) Sub(name string) (*MemFS, error) {
