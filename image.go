@@ -19,6 +19,7 @@ import (
 	digest "github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/pkg/archive"
+	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
@@ -103,10 +104,14 @@ func (rc *RegClient) ImageCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.R
 	for _, optFn := range opts {
 		optFn(&opt)
 	}
-	return rc.imageCopyOpt(ctx, refSrc, refTgt, &opt)
+	return rc.imageCopyOpt(ctx, refSrc, refTgt, false, &opt)
 }
 
-func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, opt *imageOpt) error {
+func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, child bool, opt *imageOpt) error {
+	mOpts := []scheme.ManifestOpts{}
+	if child {
+		mOpts = append(mOpts, scheme.WithManifestChild())
+	}
 	// check if scheme/refTgt prefers parent manifests pushed first
 	// if so, this should automatically set forceRecursive
 	tgtSI, err := rc.schemeInfo(refTgt)
@@ -150,7 +155,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 
 	if tgtSI.ManifestPushFirst {
 		// push manifest to target
-		err = rc.ManifestPut(ctx, refTgt, m)
+		err = rc.ManifestPut(ctx, refTgt, m, mOpts...)
 		if err != nil {
 			rc.log.WithFields(logrus.Fields{
 				"target": refTgt.Reference,
@@ -193,7 +198,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					types.MediaTypeDocker2Manifest, types.MediaTypeDocker2ManifestList,
 					types.MediaTypeOCI1Manifest, types.MediaTypeOCI1ManifestList:
 					// known manifest media type
-					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, opt)
+					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, true, opt)
 				case types.MediaTypeDocker2ImageConfig, types.MediaTypeOCI1ImageConfig,
 					types.MediaTypeDocker2Layer, types.MediaTypeOCI1Layer, types.MediaTypeOCI1LayerGzip,
 					types.MediaTypeBuildkitCacheConfig:
@@ -201,7 +206,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					err = rc.BlobCopy(ctx, entrySrc, entryTgt, entry.Digest)
 				default:
 					// unknown media type, first try an image copy
-					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, opt)
+					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, true, opt)
 					if err != nil {
 						// fall back to trying to copy a blob
 						err = rc.BlobCopy(ctx, entrySrc, entryTgt, entry.Digest)
@@ -277,7 +282,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 
 	if !tgtSI.ManifestPushFirst {
 		// push manifest to target
-		err = rc.ManifestPut(ctx, refTgt, m)
+		err = rc.ManifestPut(ctx, refTgt, m, mOpts...)
 		if err != nil {
 			rc.log.WithFields(logrus.Fields{
 				"target": refTgt.Reference,
@@ -317,7 +322,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 				refTagTgt := refTgt
 				refTagTgt.Tag = tag
 				refTagTgt.Digest = ""
-				err = rc.imageCopyOpt(ctx, refTagSrc, refTagTgt, opt)
+				err = rc.imageCopyOpt(ctx, refTagSrc, refTagTgt, false, opt)
 				if err != nil {
 					rc.log.WithFields(logrus.Fields{
 						"tag": tag,

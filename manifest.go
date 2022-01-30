@@ -3,6 +3,7 @@ package regclient
 import (
 	"context"
 
+	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
 )
@@ -31,10 +32,10 @@ func (rc *RegClient) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Mani
 	return schemeAPI.ManifestHead(ctx, r)
 }
 
-func (rc *RegClient) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest) error {
+func (rc *RegClient) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest, opts ...scheme.ManifestOpts) error {
 	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
 		return err
 	}
-	return schemeAPI.ManifestPut(ctx, r, m)
+	return schemeAPI.ManifestPut(ctx, r, m, opts...)
 }

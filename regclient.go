@@ -22,8 +22,6 @@ import (
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/scheme/ocidir"
 	"github.com/regclient/regclient/scheme/reg"
-	"github.com/regclient/regclient/types"
-	"github.com/regclient/regclient/types/ref"
 	"github.com/sirupsen/logrus"
 )
 
@@ -291,22 +289,6 @@ func (rc *RegClient) loadDockerCreds() error {
 		}
 	}
 	return nil
-}
-
-func (rc *RegClient) schemeGet(scheme string) (scheme.SchemeAPI, error) {
-	s, ok := rc.schemes[scheme]
-	if !ok {
-		return nil, fmt.Errorf("%w: unknown scheme \"%s\"", types.ErrNotImplemented, scheme)
-	}
-	return s, nil
-}
-
-func (rc *RegClient) schemeInfo(r ref.Ref) (scheme.Info, error) {
-	schemeAPI, err := rc.schemeGet(r.Scheme)
-	if err != nil {
-		return scheme.Info{}, err
-	}
-	return schemeAPI.Info(), nil
 }
 
 func (rc *RegClient) hostSet(newHost config.Host) error {
