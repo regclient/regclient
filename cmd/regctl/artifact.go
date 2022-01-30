@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"os"
@@ -100,7 +99,7 @@ func init() {
 }
 
 func runArtifactGet(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
+	ctx := cmd.Context()
 
 	// validate inputs
 	// if output dir defined, ensure it exists
@@ -120,6 +119,7 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	rc := newRegClient()
+	defer rc.Close(ctx, r)
 	mm, err := rc.ManifestGet(ctx, r)
 	if err != nil {
 		return err
@@ -274,7 +274,7 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 }
 
 func runArtifactPut(cmd *cobra.Command, args []string) error {
-	ctx := context.Background()
+	ctx := cmd.Context()
 
 	// validate inputs
 	r, err := ref.New(args[0])
@@ -312,6 +312,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 
 	// setup regclient
 	rc := newRegClient()
+	defer rc.Close(ctx, r)
 
 	// read config, or initialize to an empty json config
 	configBytes := []byte("{}")

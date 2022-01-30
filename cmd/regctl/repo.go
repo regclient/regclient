@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"os"
 	"strings"
 
@@ -45,6 +44,7 @@ func init() {
 }
 
 func runRepoLs(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 	host := args[0]
 	// TODO: use regex to validate hostname + port
 	i := strings.IndexRune(host, '/')
@@ -67,7 +67,7 @@ func runRepoLs(cmd *cobra.Command, args []string) error {
 	if repoOpts.limit != 0 {
 		opts = append(opts, scheme.WithRepoLimit(repoOpts.limit))
 	}
-	rl, err := rc.RepoList(context.Background(), host, opts...)
+	rl, err := rc.RepoList(ctx, host, opts...)
 	if err != nil {
 		return err
 	}

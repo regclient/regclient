@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"os"
 
 	"github.com/regclient/regclient/pkg/template"
@@ -56,17 +55,19 @@ func init() {
 }
 
 func runTagDelete(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
 	rc := newRegClient()
+	defer rc.Close(ctx, r)
 	log.WithFields(logrus.Fields{
 		"host":       r.Registry,
 		"repository": r.Repository,
 		"tag":        r.Tag,
 	}).Debug("Delete tag")
-	err = rc.TagDelete(context.Background(), r)
+	err = rc.TagDelete(ctx, r)
 	if err != nil {
 		return err
 	}
@@ -74,11 +75,13 @@ func runTagDelete(cmd *cobra.Command, args []string) error {
 }
 
 func runTagLs(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
 	rc := newRegClient()
+	defer rc.Close(ctx, r)
 	log.WithFields(logrus.Fields{
 		"host":       r.Registry,
 		"repository": r.Repository,
@@ -90,7 +93,7 @@ func runTagLs(cmd *cobra.Command, args []string) error {
 	if tagOpts.Last != "" {
 		opts = append(opts, scheme.WithTagLast(tagOpts.Last))
 	}
-	tl, err := rc.TagList(context.Background(), r, opts...)
+	tl, err := rc.TagList(ctx, r, opts...)
 	if err != nil {
 		return err
 	}

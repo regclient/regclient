@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"io"
 	"os"
 
@@ -72,11 +71,13 @@ func init() {
 }
 
 func runBlobGet(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
 	rc := newRegClient()
+	defer rc.Close(ctx, r)
 	if blobOpts.mt != "" {
 		log.WithFields(logrus.Fields{
 			"mt": blobOpts.mt,
@@ -92,7 +93,7 @@ func runBlobGet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	blob, err := rc.BlobGet(context.Background(), r, d)
+	blob, err := rc.BlobGet(ctx, r, d)
 	if err != nil {
 		return err
 	}
@@ -114,11 +115,13 @@ func runBlobGet(cmd *cobra.Command, args []string) error {
 }
 
 func runBlobPut(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
 	rc := newRegClient()
+	defer rc.Close(ctx, r)
 
 	if blobOpts.mt != "" {
 		log.WithFields(logrus.Fields{
@@ -131,7 +134,7 @@ func runBlobPut(cmd *cobra.Command, args []string) error {
 		"repository": r.Repository,
 		"digest":     blobOpts.digest,
 	}).Debug("Pushing blob")
-	dOut, size, err := rc.BlobPut(context.Background(), r, digest.Digest(blobOpts.digest), os.Stdin, 0)
+	dOut, size, err := rc.BlobPut(ctx, r, digest.Digest(blobOpts.digest), os.Stdin, 0)
 	if err != nil {
 		return err
 	}
