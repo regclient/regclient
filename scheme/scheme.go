@@ -32,7 +32,7 @@ type SchemeAPI interface {
 	// ManifestHead gets metadata about the manifest (existence, digest, mediatype, size)
 	ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest, error)
 	// ManifestPut sends a manifest to the repository
-	ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest) error
+	ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest, opts ...ManifestOpts) error
 
 	// TagDelete removes a tag from the repository
 	TagDelete(ctx context.Context, r ref.Ref) error
@@ -40,11 +40,26 @@ type SchemeAPI interface {
 	TagList(ctx context.Context, r ref.Ref, opts ...TagOpts) (*tag.TagList, error)
 }
 
+type Closer interface {
+	Close(ctx context.Context, r ref.Ref) error
+}
+
 type Info struct {
 	ManifestPushFirst bool
 }
 
-// RepoConfig is used for options to the repo functions
+// Configs and options to set configs for various api's
+type ManifestConfig struct {
+	Child bool // used when pushing a child of a manifest list, skips indexing in ocidir
+}
+type ManifestOpts func(*ManifestConfig)
+
+func WithManifestChild() ManifestOpts {
+	return func(config *ManifestConfig) {
+		config.Child = true
+	}
+}
+
 type RepoConfig struct {
 	Limit int
 	Last  string

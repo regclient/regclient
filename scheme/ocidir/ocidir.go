@@ -38,6 +38,7 @@ type Opts func(*Config)
 func New(opts ...Opts) *OCIDir {
 	conf := Config{
 		log: &logrus.Logger{Out: ioutil.Discard},
+		gc:  true,
 	}
 	for _, opt := range opts {
 		opt(&conf)
@@ -98,6 +99,9 @@ func (o *OCIDir) writeIndex(r ref.Ref, i ociv1.Index) error {
 		Version: "1.0.0",
 	}
 	lb, err := json.Marshal(layout)
+	if err != nil {
+		return fmt.Errorf("cannot marshal layout: %w", err)
+	}
 	lfh, err := o.fs.Create(path.Join(r.Path, ociv1.ImageLayoutFile))
 	if err != nil {
 		return fmt.Errorf("cannot create %s: %w", ociv1.ImageLayoutFile, err)

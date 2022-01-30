@@ -82,7 +82,10 @@ func TestBlob(t *testing.T) {
 		t.Errorf("blob get close: %v", err)
 	}
 	bFS, err := os.ReadFile(fmt.Sprintf("testdata/regctl/blobs/%s/%s", cd.Algorithm().String(), cd.Encoded()))
-	if bytes.Compare(bBytes, bFS) != 0 {
+	if err != nil {
+		t.Errorf("blob read file: %v", err)
+	}
+	if !bytes.Equal(bBytes, bFS) {
 		t.Errorf("blob read mismatch, expected %s, received %s", string(bBytes), string(bFS))
 	}
 
@@ -124,7 +127,7 @@ func TestBlob(t *testing.T) {
 	if err != nil {
 		t.Errorf("blob put readall: %v", err)
 	}
-	if bytes.Compare(fBytes, bBytes) != 0 {
+	if !bytes.Equal(fBytes, bBytes) {
 		t.Errorf("blob put bytes, expected %s, saw %s", string(bBytes), string(fBytes))
 	}
 }

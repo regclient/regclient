@@ -8,6 +8,7 @@ import (
 
 	"github.com/regclient/regclient/internal/reghttp"
 	"github.com/regclient/regclient/internal/wraperr"
+	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
@@ -150,7 +151,7 @@ func (reg *Reg) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest,
 }
 
 // ManifestPut uploads a manifest to a registry
-func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest) error {
+func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest, opts ...scheme.ManifestOpts) error {
 	var tagOrDigest string
 	if r.Digest != "" {
 		tagOrDigest = r.Digest
