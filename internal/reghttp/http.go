@@ -1,3 +1,4 @@
+// Package reghttp is used for HTTP requests to a registry
 package reghttp
 
 import (
@@ -32,6 +33,8 @@ const (
 	DefaultRetryLimit = 3
 )
 
+// Client is an HTTP client wrapper
+// It handles features like authentication, retries, backoff delays, TLS settings
 type Client struct {
 	host       map[string]*clientHost
 	httpClient *http.Client
@@ -52,12 +55,14 @@ type clientHost struct {
 	auth         auth.Auth
 }
 
+// Req is a request to send to a registry
 type Req struct {
 	Host      string
 	NoMirrors bool
 	APIs      map[string]ReqAPI // allow different types of registries (registry/2.0, OCI, default to empty string)
 }
 
+// ReqAPI handles API specific settings in a request
 type ReqAPI struct {
 	Method     string
 	DirectURL  *url.URL
@@ -73,7 +78,7 @@ type ReqAPI struct {
 	IgnoreErr  bool
 }
 
-// Response is used to handle the result of a request
+// Resp is used to handle the result of a request
 type Resp interface {
 	io.ReadCloser
 	HTTPResponse() *http.Response
@@ -116,9 +121,7 @@ func NewClient(opts ...Opts) *Client {
 // WithCerts adds certificates
 func WithCerts(certs [][]byte) Opts {
 	return func(c *Client) {
-		for _, cert := range certs {
-			c.rootCAPool = append(c.rootCAPool, cert)
-		}
+		c.rootCAPool = append(c.rootCAPool, certs...)
 	}
 }
 
@@ -463,10 +466,10 @@ func (resp *clientResp) Next() error {
 					"URL":    u.String(),
 					"Status": http.StatusText(statusCode),
 				}).Debug("Request failed")
-				errHttp := HttpError(resp.resp.StatusCode)
+				errHTTP := HTTPError(resp.resp.StatusCode)
 				errBody, _ := ioutil.ReadAll(resp.resp.Body)
 				resp.resp.Body.Close()
-				return fmt.Errorf("request failed: %w: %s", errHttp, errBody)
+				return fmt.Errorf("request failed: %w: %s", errHTTP, errBody)
 			}
 
 			// update digester
@@ -654,8 +657,8 @@ func (ch *clientHost) AuthCreds() func(h string) auth.Cred {
 	}
 }
 
-// HttpError returns an error based on the status code
-func HttpError(statusCode int) error {
+// HTTPError returns an error based on the status code
+func HTTPError(statusCode int) error {
 	switch statusCode {
 	case 401:
 		return fmt.Errorf("%w [http %d]", types.ErrUnauthorized, statusCode)
@@ -666,7 +669,7 @@ func HttpError(statusCode int) error {
 	case 429:
 		return fmt.Errorf("%w [http %d]", types.ErrRateLimit, statusCode)
 	default:
-		return fmt.Errorf("%w: %s [http %d]", types.ErrHttpStatus, http.StatusText(statusCode), statusCode)
+		return fmt.Errorf("%w: %s [http %d]", types.ErrHTTPStatus, http.StatusText(statusCode), statusCode)
 	}
 }
 
