@@ -21,6 +21,10 @@ func setupTag(s *Sandbox) {
 }
 
 func (s *Sandbox) tagDelete(ls *lua.LState) int {
+	err := s.ctx.Err()
+	if err != nil {
+		ls.RaiseError("Context error: %v", err)
+	}
 	r := s.checkReference(ls, 1)
 	s.log.WithFields(logrus.Fields{
 		"script":  s.name,
@@ -30,14 +34,22 @@ func (s *Sandbox) tagDelete(ls *lua.LState) int {
 	if s.dryRun {
 		return 0
 	}
-	err := s.rc.TagDelete(s.ctx, r.r)
+	err = s.rc.TagDelete(s.ctx, r.r)
 	if err != nil {
 		ls.RaiseError("Failed deleting \"%s\": %v", r.r.CommonName(), err)
+	}
+	err = s.rc.Close(s.ctx, r.r)
+	if err != nil {
+		ls.RaiseError("Failed closing reference \"%s\": %v", r.r.CommonName(), err)
 	}
 	return 0
 }
 
 func (s *Sandbox) tagLs(ls *lua.LState) int {
+	err := s.ctx.Err()
+	if err != nil {
+		ls.RaiseError("Context error: %v", err)
+	}
 	r := s.checkReference(ls, 1)
 	s.log.WithFields(logrus.Fields{
 		"script": s.name,

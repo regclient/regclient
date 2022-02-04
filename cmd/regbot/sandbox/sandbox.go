@@ -1,3 +1,4 @@
+// Package sandbox defines the Lua sandbox used to run user scripts
 package sandbox
 
 import (

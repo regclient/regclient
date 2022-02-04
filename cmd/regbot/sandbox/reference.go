@@ -10,10 +10,12 @@ func setupReference(s *Sandbox) {
 		luaReferenceName,
 		map[string]lua.LGFunction{
 			"new":        s.newReference,
+			"close":      s.closeReference,
 			"__tostring": s.referenceString,
 		},
 		map[string]map[string]lua.LGFunction{
 			"__index": {
+				"close":  s.closeReference,
 				"digest": s.referenceGetSetDigest,
 				"tag":    s.referenceGetSetTag,
 			},
@@ -28,12 +30,29 @@ type reference struct {
 
 // newReference creates a reference
 func (s *Sandbox) newReference(ls *lua.LState) int {
+	err := s.ctx.Err()
+	if err != nil {
+		ls.RaiseError("Context error: %v", err)
+	}
 	r := s.checkReference(ls, 1)
 	ud := ls.NewUserData()
 	ud.Value = &reference{r: r.r}
 	ls.SetMetatable(ud, ls.GetTypeMetatable(luaReferenceName))
 	ls.Push(ud)
 	return 1
+}
+
+func (s *Sandbox) closeReference(ls *lua.LState) int {
+	err := s.ctx.Err()
+	if err != nil {
+		ls.RaiseError("Context error: %v", err)
+	}
+	r := s.checkReference(ls, 1)
+	err = s.rc.Close(s.ctx, r.r)
+	if err != nil {
+		ls.ArgError(1, "reference close failed: "+err.Error())
+	}
+	return 0
 }
 
 func (s *Sandbox) checkReference(ls *lua.LState, i int) *reference {
@@ -65,16 +84,16 @@ func (s *Sandbox) checkReference(ls *lua.LState, i int) *reference {
 	return r
 }
 
-func isReference(ls *lua.LState, i int) bool {
-	if ls.Get(i).Type() != lua.LTUserData {
-		return false
-	}
-	ud := ls.CheckUserData(i)
-	if _, ok := ud.Value.(*reference); ok {
-		return true
-	}
-	return false
-}
+// func isReference(ls *lua.LState, i int) bool {
+// 	if ls.Get(i).Type() != lua.LTUserData {
+// 		return false
+// 	}
+// 	ud := ls.CheckUserData(i)
+// 	if _, ok := ud.Value.(*reference); ok {
+// 		return true
+// 	}
+// 	return false
+// }
 
 // referenceString converts a reference back to a common name
 func (s *Sandbox) referenceString(ls *lua.LState) int {
