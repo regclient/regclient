@@ -145,13 +145,13 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 	// push config
 	_, _, err = reg.BlobPut(ctx, r, confDigest, bytes.NewReader(confB), int64(len(confB)))
 	if err != nil {
-		return fmt.Errorf("Failed sending dummy config to delete %s: %w", r.CommonName(), err)
+		return fmt.Errorf("failed sending dummy config to delete %s: %w", r.CommonName(), err)
 	}
 
 	// push manifest to tag
 	err = reg.ManifestPut(ctx, r, tempManifest)
 	if err != nil {
-		return fmt.Errorf("Failed sending dummy manifest to delete %s: %w", r.CommonName(), err)
+		return fmt.Errorf("failed sending dummy manifest to delete %s: %w", r.CommonName(), err)
 	}
 
 	r.Digest = tempManifest.GetDigest().String()
@@ -163,14 +163,14 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 	}).Debug("Deleting dummy manifest")
 	err = reg.ManifestDelete(ctx, r)
 	if err != nil {
-		return fmt.Errorf("Failed deleting dummy manifest for %s: %w", r.CommonName(), err)
+		return fmt.Errorf("failed deleting dummy manifest for %s: %w", r.CommonName(), err)
 	}
 
 	return nil
 }
 
 // TagList returns a listing to tags from the repository
-func (reg *Reg) TagList(ctx context.Context, r ref.Ref, opts ...scheme.TagOpts) (*tag.TagList, error) {
+func (reg *Reg) TagList(ctx context.Context, r ref.Ref, opts ...scheme.TagOpts) (*tag.List, error) {
 	var config scheme.TagConfig
 	for _, opt := range opts {
 		opt(&config)
@@ -200,11 +200,11 @@ func (reg *Reg) TagList(ctx context.Context, r ref.Ref, opts ...scheme.TagOpts) 
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to list tags for %s: %w", r.CommonName(), err)
+		return nil, fmt.Errorf("failed to list tags for %s: %w", r.CommonName(), err)
 	}
 	defer resp.Close()
 	if resp.HTTPResponse().StatusCode != 200 {
-		return nil, fmt.Errorf("Failed to list tags for %s: %w", r.CommonName(), reghttp.HttpError(resp.HTTPResponse().StatusCode))
+		return nil, fmt.Errorf("failed to list tags for %s: %w", r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 	}
 	respBody, err := ioutil.ReadAll(resp)
 	if err != nil {
@@ -212,7 +212,7 @@ func (reg *Reg) TagList(ctx context.Context, r ref.Ref, opts ...scheme.TagOpts) 
 			"err": err,
 			"ref": r.CommonName(),
 		}).Warn("Failed to read tag list")
-		return nil, fmt.Errorf("Failed to read tags for %s: %w", r.CommonName(), err)
+		return nil, fmt.Errorf("failed to read tags for %s: %w", r.CommonName(), err)
 	}
 	mt := resp.HTTPResponse().Header.Get("Content-Type")
 	tl, err := tag.New(
@@ -227,7 +227,7 @@ func (reg *Reg) TagList(ctx context.Context, r ref.Ref, opts ...scheme.TagOpts) 
 			"body": respBody,
 			"ref":  r.CommonName(),
 		}).Warn("Failed to unmarshal tag list")
-		return tl, fmt.Errorf("Failed to unmarshal tag list for %s: %w", r.CommonName(), err)
+		return tl, fmt.Errorf("failed to unmarshal tag list for %s: %w", r.CommonName(), err)
 	}
 
 	return tl, nil

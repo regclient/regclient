@@ -229,8 +229,8 @@ func TestRepo(t *testing.T) {
 		_, err := reg.RepoList(ctx, host)
 		if err == nil {
 			t.Errorf("unexpected success listing repos on disabled registry")
-		} else if !errors.Is(err, types.ErrHttpStatus) {
-			t.Errorf("unexpected error: expected %v, received %v", types.ErrHttpStatus, err)
+		} else if !errors.Is(err, types.ErrHTTPStatus) {
+			t.Errorf("unexpected error: expected %v, received %v", types.ErrHTTPStatus, err)
 		}
 	})
 	// test with unknown media-type header
