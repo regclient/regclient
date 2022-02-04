@@ -194,7 +194,7 @@ func TestBlobGet(t *testing.T) {
 			t.Errorf("Failed reading blob: %v", err)
 			return
 		}
-		if bytes.Compare(blob1, brBlob) != 0 {
+		if !bytes.Equal(blob1, brBlob) {
 			t.Errorf("Blob does not match")
 		}
 	})
@@ -247,7 +247,7 @@ func TestBlobGet(t *testing.T) {
 			t.Errorf("Failed reading blob: %v", err)
 			return
 		}
-		if bytes.Compare(blob2, brBlob) != 0 {
+		if !bytes.Equal(blob2, brBlob) {
 			t.Errorf("Blob does not match")
 		}
 	})
@@ -333,7 +333,7 @@ func TestBlobPut(t *testing.T) {
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusUnauthorized,
 				Headers: http.Header{
-					"WWW-Authenticate": {fmt.Sprintf("Basic realm=\"testing\"")},
+					"WWW-Authenticate": {"Basic realm=\"testing\""},
 				},
 			},
 		},
@@ -380,7 +380,7 @@ func TestBlobPut(t *testing.T) {
 				Status: http.StatusUnauthorized,
 				Headers: http.Header{
 					"Content-Length":   {"0"},
-					"WWW-Authenticate": {fmt.Sprintf("Basic realm=\"testing\"")},
+					"WWW-Authenticate": {"Basic realm=\"testing\""},
 				},
 			},
 		},

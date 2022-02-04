@@ -14,6 +14,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// RepoList returns a list of repositories on a registry
+// Note the underlying "_catalog" API is not supported on many cloud registries
 func (reg *Reg) RepoList(ctx context.Context, hostname string, opts ...scheme.RepoOpts) (*repo.RepoList, error) {
 	config := scheme.RepoConfig{}
 	for _, opt := range opts {
@@ -46,11 +48,11 @@ func (reg *Reg) RepoList(ctx context.Context, hostname string, opts ...scheme.Re
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to list repositories for %s: %w", hostname, err)
+		return nil, fmt.Errorf("failed to list repositories for %s: %w", hostname, err)
 	}
 	defer resp.Close()
 	if resp.HTTPResponse().StatusCode != 200 {
-		return nil, fmt.Errorf("Failed to list repositories for %s: %w", hostname, reghttp.HttpError(resp.HTTPResponse().StatusCode))
+		return nil, fmt.Errorf("failed to list repositories for %s: %w", hostname, reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 	}
 
 	respBody, err := ioutil.ReadAll(resp)
@@ -59,7 +61,7 @@ func (reg *Reg) RepoList(ctx context.Context, hostname string, opts ...scheme.Re
 			"err":  err,
 			"host": hostname,
 		}).Warn("Failed to read repo list")
-		return nil, fmt.Errorf("Failed to read repo list for %s: %w", hostname, err)
+		return nil, fmt.Errorf("failed to read repo list for %s: %w", hostname, err)
 	}
 	mt := resp.HTTPResponse().Header.Get("Content-Type")
 	rl, err := repo.New(
@@ -74,7 +76,7 @@ func (reg *Reg) RepoList(ctx context.Context, hostname string, opts ...scheme.Re
 			"body": string(respBody),
 			"host": hostname,
 		}).Warn("Failed to unmarshal repo list")
-		return nil, fmt.Errorf("Failed to parse repo list for %s: %w", hostname, err)
+		return nil, fmt.Errorf("failed to parse repo list for %s: %w", hostname, err)
 	}
 	return rl, nil
 }

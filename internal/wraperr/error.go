@@ -1,3 +1,5 @@
+// Package wraperr packages an error with another wrapped error
+// This allows errors.Is to work without directly injecting the string of the wrapped error
 package wraperr
 
 // WrapErr wraps an underlying error with another error

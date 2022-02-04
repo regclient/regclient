@@ -13,7 +13,7 @@ type OSFS struct {
 	dir string
 }
 
-// at present, this is just a pass through
+// OSFile is a wrapper around os.* to implement RWFS
 type OSFile struct {
 	*os.File
 }
@@ -81,6 +81,21 @@ func (o *OSFS) Open(name string) (fs.File, error) {
 	}, nil
 }
 
+func (o *OSFS) Remove(name string) error {
+	if name == "." {
+		return &fs.PathError{
+			Op:   "remove",
+			Path: name,
+			Err:  fs.ErrInvalid,
+		}
+	}
+	full, err := o.join("remove", name)
+	if err != nil {
+		return err
+	}
+	return os.Remove(full)
+}
+
 func (o *OSFS) Sub(name string) (*OSFS, error) {
 	if name == "." {
 		return o, nil
@@ -101,18 +116,21 @@ func (o *OSFS) join(op, name string) (string, error) {
 		}
 		return ".", nil
 	}
-	if !fs.ValidPath(name) {
+	if (name[:1] == "/" && !fs.ValidPath(name[1:])) || (name[:1] != "/" && !fs.ValidPath(name)) {
 		return "", &fs.PathError{
 			Op:   op,
 			Path: name,
 			Err:  fs.ErrInvalid,
 		}
 	}
+	// relative paths allowed when o.dir is not set
+	if o.dir == "" {
+		return path.Clean(name), nil
+	}
+	// clean path to prevent traversing outside of o.dir
 	if name[:1] == "/" {
 		name = path.Clean(name)
 	} else {
-		// for relative paths, clean with a preceding "/" to strip all leading ".."
-		// and then turn back into a relative path
 		name = path.Clean("/" + name)
 		name = name[1:]
 	}

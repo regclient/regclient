@@ -11,8 +11,9 @@ import (
 )
 
 type testStructNest struct {
-	I8      int8
-	BP      *bool
+	I8 int8
+	BP *bool
+	//lint:ignore U1000 intentional test of an unexported field
 	private string
 }
 
@@ -21,17 +22,18 @@ type AnonType struct {
 }
 type testStruct struct {
 	AnonType
-	I       int `json:"i,omitempty"`
-	F       float64
-	S       string
-	B       bool
-	SP      *testStructNest
-	SL      []uint
-	MS      map[string]string
-	UI      uint
-	NP      *bool
-	TD      time.Duration
-	TN      *time.Time
+	I  int `json:"i,omitempty"`
+	F  float64
+	S  string
+	B  bool
+	SP *testStructNest
+	SL []uint
+	MS map[string]string
+	UI uint
+	NP *bool
+	TD time.Duration
+	TN *time.Time
+	//lint:ignore U1000 intentional test of an unexported field
 	private string
 }
 
@@ -80,7 +82,7 @@ func TestExportImport(t *testing.T) {
 		t.Errorf("Failed to marshal test struct out: %v", err)
 	}
 
-	if bytes.Compare(jsonIn, jsonOut) != 0 {
+	if !bytes.Equal(jsonIn, jsonOut) {
 		t.Errorf("Test structs do not match: %s != %s", jsonIn, jsonOut)
 	}
 

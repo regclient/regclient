@@ -1,3 +1,4 @@
+// Package auth is used for HTTP authentication
 package auth
 
 import (
@@ -251,7 +252,7 @@ func (a *auth) HandleResponse(resp *http.Response) error {
 			return err
 		}
 	}
-	if goodChallenge == false {
+	if !goodChallenge {
 		return ErrUnauthorized
 	}
 
@@ -319,7 +320,7 @@ func ParseAuthHeaders(ahl []string) ([]Challenge, error) {
 	for _, ah := range ahl {
 		c, err := ParseAuthHeader(ah)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to parse challenge header: %s", ah)
+			return nil, fmt.Errorf("failed to parse challenge header: %s", ah)
 		}
 		cl = append(cl, c...)
 	}
@@ -718,7 +719,7 @@ func (b *BearerHandler) validateResponse(resp *http.Response) error {
 	return nil
 }
 
-// JWTHandler supports JWT auth type requests
+// JWTHubHandler supports JWT auth type requests
 type JWTHubHandler struct {
 	client   *http.Client
 	clientID string

@@ -1,3 +1,4 @@
+// Package reg implements the OCI registry scheme used by most images (host:port/repo:tag)
 package reg
 
 import (
@@ -29,6 +30,7 @@ type Reg struct {
 	mu            sync.Mutex
 }
 
+// Opts provides options to access registries
 type Opts func(*Reg)
 
 // New returns a Reg pointer with any provided options
@@ -46,6 +48,7 @@ func New(opts ...Opts) *Reg {
 	return &r
 }
 
+// Info is experimental and may be removed in the future
 func (reg *Reg) Info() scheme.Info {
 	return scheme.Info{}
 }

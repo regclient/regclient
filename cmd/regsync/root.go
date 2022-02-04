@@ -160,7 +160,7 @@ func runOnce(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(cmd.Context())
 	// handle interrupt signal
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
@@ -205,7 +205,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(cmd.Context())
 	var wg sync.WaitGroup
 	var mainErr error
 	c := cron.New(cron.WithChain(
@@ -266,7 +266,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	var mainErr error
-	ctx := context.Background()
+	ctx := cmd.Context()
 	for _, s := range conf.Sync {
 		err := s.process(ctx, "check")
 		if err != nil {
@@ -430,6 +430,13 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 					}).Error("Failed to sync")
 					retErr = err
 				}
+				err = rc.Close(ctx, tRef)
+				if err != nil {
+					log.WithFields(logrus.Fields{
+						"ref":   tRef.CommonName(),
+						"error": err,
+					}).Error("Error closing ref")
+				}
 			}
 		}
 	case "repository":
@@ -498,6 +505,13 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 				}).Error("Failed to sync")
 				retErr = err
 			}
+			err = rc.Close(ctx, tRef)
+			if err != nil {
+				log.WithFields(logrus.Fields{
+					"ref":   tRef.CommonName(),
+					"error": err,
+				}).Error("Error closing ref")
+			}
 		}
 
 	case "image":
@@ -525,6 +539,13 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 				"error":  err,
 			}).Error("Failed to sync")
 			retErr = err
+		}
+		err = rc.Close(ctx, tRef)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"ref":   tRef.CommonName(),
+				"error": err,
+			}).Error("Error closing ref")
 		}
 
 	default:
@@ -706,6 +727,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 			// else parse backup string as just a tag
 			backupRef.Tag = backupStr
 		}
+		defer rc.Close(ctx, backupRef)
 		// run copy from tgt ref to backup ref
 		log.WithFields(logrus.Fields{
 			"original": tgt.CommonName(),

@@ -15,6 +15,7 @@ import (
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
 	"github.com/regclient/regclient/types/ref"
+	"github.com/sirupsen/logrus"
 )
 
 // BlobDelete removes a blob from the repository
@@ -42,6 +43,10 @@ func (o *OCIDir) BlobGet(ctx context.Context, r ref.Ref, d digest.Digest) (blob.
 			Size:   fi.Size(),
 		}),
 	)
+	o.log.WithFields(logrus.Fields{
+		"ref":  r.CommonName(),
+		"file": file,
+	}).Debug("retrieved blob")
 	return br, nil
 }
 
@@ -111,5 +116,10 @@ func (o *OCIDir) BlobPut(ctx context.Context, r ref.Ref, d digest.Digest, rdr io
 		return "", 0, fmt.Errorf("unexpected blob length, expected %d, received %d", cl, i)
 	}
 	cl = i
+	o.log.WithFields(logrus.Fields{
+		"ref":  r.CommonName(),
+		"file": file,
+	}).Debug("pushed blob")
+	o.refMod(r)
 	return d, cl, nil
 }

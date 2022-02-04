@@ -71,6 +71,10 @@ func (s *Sandbox) checkConfig(ls *lua.LState, i int) *config {
 }
 
 func (s *Sandbox) configGet(ls *lua.LState) int {
+	err := s.ctx.Err()
+	if err != nil {
+		ls.RaiseError("Context error: %v", err)
+	}
 	m := s.checkManifest(ls, 1, false, false)
 	if s.sem != nil {
 		s.sem.Acquire(s.ctx, 1)
@@ -99,6 +103,10 @@ func (s *Sandbox) configGet(ls *lua.LState) int {
 
 // configExport recreates a new config object based on any user changes to the lua object
 func (s *Sandbox) configExport(ls *lua.LState) int {
+	err := s.ctx.Err()
+	if err != nil {
+		ls.RaiseError("Context error: %v", err)
+	}
 	var newC *config
 	i := 1
 	switch ls.Get(i).Type() {
@@ -155,6 +163,10 @@ func (s *Sandbox) configJSON(ls *lua.LState) int {
 }
 
 func (s *Sandbox) imageCopy(ls *lua.LState) int {
+	err := s.ctx.Err()
+	if err != nil {
+		ls.RaiseError("Context error: %v", err)
+	}
 	src := s.checkReference(ls, 1)
 	tgt := s.checkReference(ls, 2)
 	opts := []regclient.ImageOpts{}
@@ -193,14 +205,22 @@ func (s *Sandbox) imageCopy(ls *lua.LState) int {
 	if s.dryRun {
 		return 0
 	}
-	err := s.rc.ImageCopy(s.ctx, src.r, tgt.r, opts...)
+	err = s.rc.ImageCopy(s.ctx, src.r, tgt.r, opts...)
 	if err != nil {
 		ls.RaiseError("Failed copying \"%s\" to \"%s\": %v", src.r.CommonName(), tgt.r.CommonName(), err)
+	}
+	err = s.rc.Close(s.ctx, tgt.r)
+	if err != nil {
+		ls.RaiseError("Failed closing reference \"%s\": %v", tgt.r.CommonName(), err)
 	}
 	return 0
 }
 
 func (s *Sandbox) imageExportTar(ls *lua.LState) int {
+	err := s.ctx.Err()
+	if err != nil {
+		ls.RaiseError("Context error: %v", err)
+	}
 	src := s.checkReference(ls, 1)
 	file := ls.CheckString(2)
 	if s.sem != nil {
@@ -219,6 +239,10 @@ func (s *Sandbox) imageExportTar(ls *lua.LState) int {
 }
 
 func (s *Sandbox) imageImportTar(ls *lua.LState) int {
+	err := s.ctx.Err()
+	if err != nil {
+		ls.RaiseError("Context error: %v", err)
+	}
 	tgt := s.checkReference(ls, 1)
 	file := ls.CheckString(2)
 	if s.sem != nil {
@@ -237,6 +261,10 @@ func (s *Sandbox) imageImportTar(ls *lua.LState) int {
 }
 
 func (s *Sandbox) imageRateLimit(ls *lua.LState) int {
+	err := s.ctx.Err()
+	if err != nil {
+		ls.RaiseError("Context error: %v", err)
+	}
 	m := s.checkManifest(ls, 1, false, true)
 	rl := go2lua.Export(ls, m.m.GetRateLimit())
 	ls.Push(rl)

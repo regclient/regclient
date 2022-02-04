@@ -1,3 +1,7 @@
+//go:build !nolegacy
+// +build !nolegacy
+
+// Package retryable is a legacy package, functionality has been moved to reghttp
 package retryable
 
 import (
@@ -128,9 +132,7 @@ func WithAuth(auth Auth) Opts {
 // WithCerts adds certificates
 func WithCerts(certs [][]byte) Opts {
 	return func(r *retryable) {
-		for _, c := range certs {
-			r.rootCAPool = append(r.rootCAPool, c)
-		}
+		r.rootCAPool = append(r.rootCAPool, certs...)
 	}
 }
 

@@ -13,7 +13,7 @@ func TestConfig(t *testing.T) {
 	emptyHostP := HostNewName("host.example.org")
 
 	// parse json
-	exJson := `
+	exJSON := `
 	{
 	  "tls": "enabled",
 		"hostname": "host.example.com",
@@ -27,7 +27,7 @@ func TestConfig(t *testing.T) {
 		"blobMax": 999999
 	}
 	`
-	exJson2 := `
+	exJSON2 := `
 	{
 	  "tls": "disabled",
 		"hostname": "host2.example.com",
@@ -42,11 +42,11 @@ func TestConfig(t *testing.T) {
 	}
 	`
 	var exHost, exHost2 Host
-	err := json.Unmarshal([]byte(exJson), &exHost)
+	err := json.Unmarshal([]byte(exJSON), &exHost)
 	if err != nil {
 		t.Errorf("failed unmarshaling exJson: %v", err)
 	}
-	err = json.Unmarshal([]byte(exJson2), &exHost2)
+	err = json.Unmarshal([]byte(exJSON2), &exHost2)
 	if err != nil {
 		t.Errorf("failed unmarshaling exJson2: %v", err)
 	}

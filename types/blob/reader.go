@@ -29,7 +29,7 @@ type reader struct {
 
 // NewReader creates a new reader
 func NewReader(opts ...Opts) Reader {
-	bc := BlobConfig{}
+	bc := blobConfig{}
 	for _, opt := range opts {
 		opt(&bc)
 	}
@@ -102,13 +102,13 @@ func (b *reader) Read(p []byte) (int, error) {
 		if b.desc.Size == 0 {
 			b.desc.Size = b.readBytes
 		} else if b.readBytes != b.desc.Size {
-			err = fmt.Errorf("Expected size mismatch [expected %d, received %d]: %w", b.desc.Size, b.readBytes, err)
+			err = fmt.Errorf("expected size mismatch [expected %d, received %d]: %w", b.desc.Size, b.readBytes, err)
 		}
 		// check/save digest
 		if b.desc.Digest == "" {
 			b.desc.Digest = b.digester.Digest()
 		} else if b.desc.Digest != b.digester.Digest() {
-			err = fmt.Errorf("Expected digest mismatch [expected %s, calculated %s]: %w", b.desc.Digest.String(), b.digester.Digest().String(), err)
+			err = fmt.Errorf("expected digest mismatch [expected %s, calculated %s]: %w", b.desc.Digest.String(), b.digester.Digest().String(), err)
 		}
 	}
 	return size, err
@@ -121,7 +121,7 @@ func (b *reader) Seek(offset int64, whence int) (int64, error) {
 	}
 	// cannot do an arbitrary seek and still digest without a lot more complication
 	if offset != 0 || whence != io.SeekStart {
-		return b.readBytes, fmt.Errorf("Unable to seek to arbitrary position")
+		return b.readBytes, fmt.Errorf("unable to seek to arbitrary position")
 	}
 	rdrSeek, ok := b.origRdr.(io.Seeker)
 	if !ok {
@@ -144,19 +144,19 @@ func (b *reader) Seek(offset int64, whence int) (int64, error) {
 // ToOCIConfig converts a blobReader to a BlobOCIConfig
 func (b *reader) ToOCIConfig() (OCIConfig, error) {
 	if !b.blobSet {
-		return nil, fmt.Errorf("Blob is not defined")
+		return nil, fmt.Errorf("blob is not defined")
 	}
 	if b.readBytes != 0 {
-		return nil, fmt.Errorf("Unable to convert after read has been performed")
+		return nil, fmt.Errorf("unable to convert after read has been performed")
 	}
 	blobBody, err := ioutil.ReadAll(b)
 	if err != nil {
-		return nil, fmt.Errorf("Error reading image config for %s: %w", b.r.CommonName(), err)
+		return nil, fmt.Errorf("error reading image config for %s: %w", b.r.CommonName(), err)
 	}
 	var ociImage ociv1.Image
 	err = json.Unmarshal(blobBody, &ociImage)
 	if err != nil {
-		return nil, fmt.Errorf("Error parsing image config for %s: %w", b.r.CommonName(), err)
+		return nil, fmt.Errorf("error parsing image config for %s: %w", b.r.CommonName(), err)
 	}
 	// return the resulting blobOCIConfig, reuse blobCommon, setting rawBody read above, and the unmarshaled OCI image config
 	return &ociConfig{common: b.common, rawBody: blobBody, Image: ociImage}, nil

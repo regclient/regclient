@@ -3,6 +3,7 @@ package ocidir
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -14,12 +15,31 @@ import (
 
 // TagDelete removes a tag from the repository
 func (o *OCIDir) TagDelete(ctx context.Context, r ref.Ref) error {
-
-	return types.ErrNotImplemented
+	if r.Tag == "" {
+		return types.ErrMissingTag
+	}
+	// get index
+	index, err := o.readIndex(r)
+	if err != nil {
+		return fmt.Errorf("failed to read index: %w", err)
+	}
+	for i, desc := range index.Manifests {
+		if t, ok := desc.Annotations[aRefName]; ok && t == r.Tag {
+			// remove matching entry from index
+			index.Manifests = append(index.Manifests[:i], index.Manifests[i+1:]...)
+			o.refMod(r)
+		}
+	}
+	// push manifest back out
+	err = o.writeIndex(r, index)
+	if err != nil {
+		return fmt.Errorf("failed to write index: %w", err)
+	}
+	return nil
 }
 
 // TagList returns a list of tags from the repository
-func (o *OCIDir) TagList(ctx context.Context, r ref.Ref, opts ...scheme.TagOpts) (*tag.TagList, error) {
+func (o *OCIDir) TagList(ctx context.Context, r ref.Ref, opts ...scheme.TagOpts) (*tag.List, error) {
 	// get index
 	index, err := o.readIndex(r)
 	if err != nil {

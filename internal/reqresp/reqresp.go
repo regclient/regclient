@@ -1,3 +1,4 @@
+// Package reqresp is used to create mock web servers for testing
 package reqresp
 
 import (
@@ -32,21 +33,6 @@ type RespEntry struct {
 	Status  int
 	Headers http.Header
 	Body    []byte
-}
-
-var rrBaseEntries = []ReqResp{
-	{
-		ReqEntry: ReqEntry{
-			Method: "GET",
-			Path:   "/v2/",
-		},
-		RespEntry: RespEntry{
-			Status: http.StatusOK,
-			Headers: http.Header(map[string][]string{
-				"Docker-Distribution-API-Version": {"registry/2.0"},
-			}),
-		},
-	},
 }
 
 func NewHandler(t *testing.T, rrs []ReqResp) http.Handler {
@@ -100,7 +86,7 @@ func (r *rrHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 			(reqMatch.Path != "" && reqMatch.Path != req.URL.Path) ||
 			!strMapMatch(reqMatch.Query, req.URL.Query()) ||
 			!strMapMatch(reqMatch.Headers, req.Header) ||
-			(len(reqMatch.Body) > 0 && bytes.Compare(reqMatch.Body, reqBody) != 0) {
+			(len(reqMatch.Body) > 0 && !bytes.Equal(reqMatch.Body, reqBody)) {
 			// skip if any field does not match
 			continue
 		}
@@ -125,7 +111,6 @@ func (r *rrHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	r.t.Errorf("Unhandled request: %v", req)
 	rw.WriteHeader(http.StatusInternalServerError)
 	rw.Write([]byte("Unsupported request"))
-	return
 }
 
 // BaseEntries initial entries for a generic docker registry

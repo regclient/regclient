@@ -431,7 +431,7 @@ func TestRegHttp(t *testing.T) {
 		body, err := io.ReadAll(resp)
 		if err != nil {
 			t.Errorf("body read failure: %v", err)
-		} else if bytes.Compare(body, getBody) != 0 {
+		} else if !bytes.Equal(body, getBody) {
 			t.Errorf("body read mismatch, expected %s, received %s", getBody, body)
 		}
 		err = resp.Close()
@@ -465,7 +465,7 @@ func TestRegHttp(t *testing.T) {
 		body, err := io.ReadAll(resp)
 		if err != nil {
 			t.Errorf("body read failure: %v", err)
-		} else if bytes.Compare(body, getBody) != 0 {
+		} else if !bytes.Equal(body, getBody) {
 			t.Errorf("body read mismatch, expected %s, received %s", getBody, body)
 		}
 		err = resp.Close()
@@ -649,7 +649,7 @@ func TestRegHttp(t *testing.T) {
 		body, err := io.ReadAll(resp)
 		if err != nil {
 			t.Errorf("body read failure: %v", err)
-		} else if bytes.Compare(body, getBody) != 0 {
+		} else if !bytes.Equal(body, getBody) {
 			t.Errorf("body read mismatch, expected %s, received %s", getBody, body)
 		}
 		err = resp.Close()
@@ -806,7 +806,7 @@ func TestRegHttp(t *testing.T) {
 		body, err := io.ReadAll(resp)
 		if err != nil {
 			t.Errorf("body read failure: %v", err)
-		} else if bytes.Compare(body, getBody) != 0 {
+		} else if !bytes.Equal(body, getBody) {
 			t.Errorf("body read mismatch, expected %s, received %s", getBody, body)
 		}
 		err = resp.Close()
@@ -880,8 +880,8 @@ func TestRegHttp(t *testing.T) {
 			t.Errorf("unexpected success on get for missing manifest")
 			resp.Close()
 			return
-		} else if !errors.Is(err, types.ErrHttpStatus) {
-			t.Errorf("unexpected error, expected %v, received %v", types.ErrHttpStatus, err)
+		} else if !errors.Is(err, types.ErrHTTPStatus) {
+			t.Errorf("unexpected error, expected %v, received %v", types.ErrHTTPStatus, err)
 		}
 	})
 	t.Run("GW Timeout", func(t *testing.T) {
@@ -903,8 +903,8 @@ func TestRegHttp(t *testing.T) {
 			t.Errorf("unexpected success on get for missing manifest")
 			resp.Close()
 			return
-		} else if !errors.Is(err, types.ErrHttpStatus) {
-			t.Errorf("unexpected error, expected %v, received %v", types.ErrHttpStatus, err)
+		} else if !errors.Is(err, types.ErrHTTPStatus) {
+			t.Errorf("unexpected error, expected %v, received %v", types.ErrHTTPStatus, err)
 		}
 	})
 	t.Run("Server error", func(t *testing.T) {
@@ -926,8 +926,8 @@ func TestRegHttp(t *testing.T) {
 			t.Errorf("unexpected success on get for missing manifest")
 			resp.Close()
 			return
-		} else if !errors.Is(err, types.ErrHttpStatus) {
-			t.Errorf("unexpected error, expected %v, received %v", types.ErrHttpStatus, err)
+		} else if !errors.Is(err, types.ErrHTTPStatus) {
+			t.Errorf("unexpected error, expected %v, received %v", types.ErrHTTPStatus, err)
 		}
 	})
 	// test context expire during retries
@@ -1014,7 +1014,7 @@ func TestRegHttp(t *testing.T) {
 		body, err := io.ReadAll(resp)
 		if err != nil {
 			t.Errorf("body read failure: %v", err)
-		} else if bytes.Compare(body, retryBody) != 0 {
+		} else if !bytes.Equal(body, retryBody) {
 			t.Errorf("body read mismatch, expected %s, received %s", retryBody, body)
 		}
 		err = resp.Close()

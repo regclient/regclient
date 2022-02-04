@@ -97,6 +97,10 @@ func (s *Sandbox) checkManifest(ls *lua.LState, i int, list bool, head bool) *sb
 }
 
 func (s *Sandbox) manifestDelete(ls *lua.LState) int {
+	err := s.ctx.Err()
+	if err != nil {
+		ls.RaiseError("Context error: %v", err)
+	}
 	m := s.checkManifest(ls, 1, true, true)
 	r := m.r
 	if r.Digest == "" {
@@ -111,9 +115,13 @@ func (s *Sandbox) manifestDelete(ls *lua.LState) int {
 	if s.dryRun {
 		return 0
 	}
-	err := s.rc.ManifestDelete(s.ctx, r)
+	err = s.rc.ManifestDelete(s.ctx, r)
 	if err != nil {
 		ls.RaiseError("Failed deleting \"%s\": %v", r.CommonName(), err)
+	}
+	err = s.rc.Close(s.ctx, r)
+	if err != nil {
+		ls.RaiseError("Failed closing reference \"%s\": %v", r.CommonName(), err)
 	}
 	return 0
 }
@@ -175,6 +183,10 @@ func (s *Sandbox) manifestGetList(ls *lua.LState) int {
 }
 
 func (s *Sandbox) manifestGetWithOpts(ls *lua.LState, list bool) int {
+	err := s.ctx.Err()
+	if err != nil {
+		ls.RaiseError("Context error: %v", err)
+	}
 	r := s.checkReference(ls, 1)
 	plat := ""
 	if !list && ls.GetTop() == 2 {
@@ -200,6 +212,10 @@ func (s *Sandbox) manifestGetWithOpts(ls *lua.LState, list bool) int {
 }
 
 func (s *Sandbox) manifestHead(ls *lua.LState) int {
+	err := s.ctx.Err()
+	if err != nil {
+		ls.RaiseError("Context error: %v", err)
+	}
 	r := s.checkReference(ls, 1)
 
 	s.log.WithFields(logrus.Fields{
@@ -246,6 +262,10 @@ func (s *Sandbox) manifestPut(ls *lua.LState) int {
 	err = s.rc.ManifestPut(s.ctx, r.r, m)
 	if err != nil {
 		ls.RaiseError("Failed to put manifest: %v", err)
+	}
+	err = s.rc.Close(s.ctx, r.r)
+	if err != nil {
+		ls.RaiseError("Failed closing reference \"%s\": %v", r.r.CommonName(), err)
 	}
 
 	return 0

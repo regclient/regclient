@@ -19,6 +19,7 @@ import (
 	digest "github.com/opencontainers/go-digest"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/pkg/archive"
+	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
@@ -58,10 +59,10 @@ type tarReadData struct {
 	dockerManifest      dockerSchema2.Manifest
 }
 type tarWriteData struct {
-	tw        *tar.Writer
-	dirs      map[string]bool
-	files     map[string]bool
-	uid, gid  int
+	tw    *tar.Writer
+	dirs  map[string]bool
+	files map[string]bool
+	// uid, gid  int
 	mode      int64
 	timestamp time.Time
 }
@@ -72,6 +73,8 @@ type imageOpt struct {
 	platforms      []string
 	tagList        []string
 }
+
+// ImageOpts define options for the Image* commands
 type ImageOpts func(*imageOpt)
 
 // ImageWithForceRecursive attemtps to copy every manifest and blob even if parent manifests already exist.
@@ -98,15 +101,23 @@ func ImageWithPlatforms(p []string) ImageOpts {
 	}
 }
 
+// ImageCopy copies an image
+// This will retag an image in the same repository, only pushing and pulling the top level manifest
+// On the same registry, it will attempt to use cross-repository blob mounts to avoid pulling blobs
+// Blobs are only pulled when they don't exist on the target and a blob mount fails
 func (rc *RegClient) ImageCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, opts ...ImageOpts) error {
 	var opt imageOpt
 	for _, optFn := range opts {
 		optFn(&opt)
 	}
-	return rc.imageCopyOpt(ctx, refSrc, refTgt, &opt)
+	return rc.imageCopyOpt(ctx, refSrc, refTgt, false, &opt)
 }
 
-func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, opt *imageOpt) error {
+func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, child bool, opt *imageOpt) error {
+	mOpts := []scheme.ManifestOpts{}
+	if child {
+		mOpts = append(mOpts, scheme.WithManifestChild())
+	}
 	// check if scheme/refTgt prefers parent manifests pushed first
 	// if so, this should automatically set forceRecursive
 	tgtSI, err := rc.schemeInfo(refTgt)
@@ -150,7 +161,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 
 	if tgtSI.ManifestPushFirst {
 		// push manifest to target
-		err = rc.ManifestPut(ctx, refTgt, m)
+		err = rc.ManifestPut(ctx, refTgt, m, mOpts...)
 		if err != nil {
 			rc.log.WithFields(logrus.Fields{
 				"target": refTgt.Reference,
@@ -160,7 +171,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 		}
 	}
 
-	if refSrc.Registry != refTgt.Registry || refSrc.Repository != refTgt.Repository {
+	if !ref.EqualRepository(refSrc, refTgt) {
 		// copy components of the image if the repository is different
 		if m.IsList() {
 			// manifest lists need to recursively copy nested images by digest
@@ -182,6 +193,10 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 						continue
 					}
 				}
+				rc.log.WithFields(logrus.Fields{
+					"platform": entry.Platform,
+					"digest":   entry.Digest.String(),
+				}).Debug("Copy platform")
 				entrySrc := refSrc
 				entryTgt := refTgt
 				entrySrc.Tag = ""
@@ -193,7 +208,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					types.MediaTypeDocker2Manifest, types.MediaTypeDocker2ManifestList,
 					types.MediaTypeOCI1Manifest, types.MediaTypeOCI1ManifestList:
 					// known manifest media type
-					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, opt)
+					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, true, opt)
 				case types.MediaTypeDocker2ImageConfig, types.MediaTypeOCI1ImageConfig,
 					types.MediaTypeDocker2Layer, types.MediaTypeOCI1Layer, types.MediaTypeOCI1LayerGzip,
 					types.MediaTypeBuildkitCacheConfig:
@@ -201,7 +216,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					err = rc.BlobCopy(ctx, entrySrc, entryTgt, entry.Digest)
 				default:
 					// unknown media type, first try an image copy
-					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, opt)
+					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, true, opt)
 					if err != nil {
 						// fall back to trying to copy a blob
 						err = rc.BlobCopy(ctx, entrySrc, entryTgt, entry.Digest)
@@ -222,7 +237,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 						"ref": refSrc.Reference,
 						"err": err,
 					}).Warn("Failed to get config digest from manifest")
-					return fmt.Errorf("Failed to get config digest for %s: %w", refSrc.CommonName(), err)
+					return fmt.Errorf("failed to get config digest for %s: %w", refSrc.CommonName(), err)
 				}
 			} else {
 				rc.log.WithFields(logrus.Fields{
@@ -277,7 +292,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 
 	if !tgtSI.ManifestPushFirst {
 		// push manifest to target
-		err = rc.ManifestPut(ctx, refTgt, m)
+		err = rc.ManifestPut(ctx, refTgt, m, mOpts...)
 		if err != nil {
 			rc.log.WithFields(logrus.Fields{
 				"target": refTgt.Reference,
@@ -317,7 +332,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 				refTagTgt := refTgt
 				refTagTgt.Tag = tag
 				refTagTgt.Digest = ""
-				err = rc.imageCopyOpt(ctx, refTagSrc, refTagTgt, opt)
+				err = rc.imageCopyOpt(ctx, refTagSrc, refTagTgt, false, opt)
 				if err != nil {
 					rc.log.WithFields(logrus.Fields{
 						"tag": tag,
@@ -546,10 +561,10 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 		}
 		size, err := io.Copy(twd.tw, blobR)
 		if err != nil {
-			return fmt.Errorf("Failed to export blob %s: %w", desc.Digest.String(), err)
+			return fmt.Errorf("failed to export blob %s: %w", desc.Digest.String(), err)
 		}
 		if size != desc.Size {
-			return fmt.Errorf("Blob size mismatch, descriptor %d, received %d", desc.Size, size)
+			return fmt.Errorf("blob size mismatch, descriptor %d, received %d", desc.Size, size)
 		}
 	}
 
@@ -579,7 +594,7 @@ func (rc *RegClient) ImageImport(ctx context.Context, ref ref.Ref, rs io.ReadSee
 		// reprocess the tar looking for manifest.json files
 		err = trd.tarReadAll(rs)
 		if err != nil {
-			return fmt.Errorf("Failed to import layers from docker tar: %w", err)
+			return fmt.Errorf("failed to import layers from docker tar: %w", err)
 		}
 		// push docker manifest
 		m, err := manifest.New(manifest.WithOrig(trd.dockerManifest))
@@ -965,11 +980,7 @@ func (trd *tarReadData) tarReadAll(rs io.ReadSeeker) error {
 		}
 		// if entire file read without adding a new handler, fail
 		if !trd.handleAdded {
-			files := []string{}
-			for file := range trd.handlers {
-				files = append(files, file)
-			}
-			return fmt.Errorf("Unable to export all files from tar: %w", types.ErrNotFound)
+			return fmt.Errorf("unable to export all files from tar: %w", types.ErrNotFound)
 		}
 	}
 }
@@ -987,7 +998,7 @@ func (trd *tarReadData) tarReadFileJSON(data interface{}) error {
 	return nil
 }
 
-var errTarFileExists = errors.New("Tar file already exists")
+var errTarFileExists = errors.New("tar file already exists")
 
 func (td *tarWriteData) tarWriteHeader(filename string, size int64) error {
 	dirname := filepath.Dir(filename)
@@ -1026,15 +1037,15 @@ func (td *tarWriteData) tarWriteHeader(filename string, size int64) error {
 }
 
 func (td *tarWriteData) tarWriteFileJSON(filename string, data interface{}) error {
-	dataJson, err := json.Marshal(data)
+	dataJSON, err := json.Marshal(data)
 	if err != nil {
 		return err
 	}
-	err = td.tarWriteHeader(filename, int64(len(dataJson)))
+	err = td.tarWriteHeader(filename, int64(len(dataJSON)))
 	if err != nil {
 		return err
 	}
-	_, err = td.tw.Write(dataJson)
+	_, err = td.tw.Write(dataJSON)
 	if err != nil {
 		return err
 	}

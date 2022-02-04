@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"io"
 	"os"
 
@@ -148,6 +147,7 @@ func init() {
 }
 
 func runImageCopy(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 	rSrc, err := ref.New(args[0])
 	if err != nil {
 		return err
@@ -157,13 +157,12 @@ func runImageCopy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	rc := newRegClient()
+	defer rc.Close(ctx, rSrc)
+	defer rc.Close(ctx, rTgt)
+
 	log.WithFields(logrus.Fields{
-		"source host": rSrc.Registry,
-		"source repo": rSrc.Repository,
-		"source tag":  rSrc.Tag,
-		"target host": rTgt.Registry,
-		"target repo": rTgt.Repository,
-		"target tag":  rTgt.Tag,
+		"source":      rSrc.CommonName(),
+		"target":      rTgt.CommonName(),
 		"recursive":   imageOpts.forceRecursive,
 		"digest-tags": imageOpts.digestTags,
 	}).Debug("Image copy")
@@ -177,10 +176,11 @@ func runImageCopy(cmd *cobra.Command, args []string) error {
 	if len(imageOpts.platforms) > 0 {
 		opts = append(opts, regclient.ImageWithPlatforms(imageOpts.platforms))
 	}
-	return rc.ImageCopy(context.Background(), rSrc, rTgt, opts...)
+	return rc.ImageCopy(ctx, rSrc, rTgt, opts...)
 }
 
 func runImageExport(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
@@ -195,13 +195,15 @@ func runImageExport(cmd *cobra.Command, args []string) error {
 		w = os.Stdout
 	}
 	rc := newRegClient()
+	defer rc.Close(ctx, r)
 	log.WithFields(logrus.Fields{
 		"ref": r.CommonName(),
 	}).Debug("Image export")
-	return rc.ImageExport(context.Background(), r, w)
+	return rc.ImageExport(ctx, r, w)
 }
 
 func runImageImport(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
@@ -212,20 +214,23 @@ func runImageImport(cmd *cobra.Command, args []string) error {
 	}
 	defer rs.Close()
 	rc := newRegClient()
+	defer rc.Close(ctx, r)
 	log.WithFields(logrus.Fields{
 		"ref":  r.CommonName(),
 		"file": args[1],
 	}).Debug("Image import")
 
-	return rc.ImageImport(context.Background(), r, rs)
+	return rc.ImageImport(ctx, r, rs)
 }
 
 func runImageInspect(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
 	rc := newRegClient()
+	defer rc.Close(ctx, r)
 
 	log.WithFields(logrus.Fields{
 		"host":     r.Registry,
@@ -244,7 +249,7 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	blobConfig, err := rc.BlobGetOCIConfig(context.Background(), r, cd)
+	blobConfig, err := rc.BlobGetOCIConfig(ctx, r, cd)
 	if err != nil {
 		return err
 	}
@@ -260,6 +265,7 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 }
 
 func runImageRateLimit(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
@@ -273,7 +279,7 @@ func runImageRateLimit(cmd *cobra.Command, args []string) error {
 	}).Debug("Image rate limit")
 
 	// request only the headers, avoids adding to Docker Hub rate limits
-	m, err := rc.ManifestHead(context.Background(), r)
+	m, err := rc.ManifestHead(ctx, r)
 	if err != nil {
 		return err
 	}

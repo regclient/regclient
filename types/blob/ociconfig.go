@@ -23,7 +23,7 @@ type ociConfig struct {
 
 // NewOCIConfig creates a new BlobOCIConfig from an OCI Image
 func NewOCIConfig(opts ...Opts) OCIConfig {
-	bc := BlobConfig{}
+	bc := blobConfig{}
 	for _, opt := range opts {
 		opt(&bc)
 	}

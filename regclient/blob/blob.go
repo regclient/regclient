@@ -1,8 +1,7 @@
 //go:build !nolegacy
 // +build !nolegacy
 
-// Legacy package, this has been moved to the types/blob package
-
+// Package blob is a legacy package, this has been moved to the types/blob package
 package blob
 
 import (

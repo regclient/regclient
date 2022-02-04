@@ -12,10 +12,13 @@ import (
 	"github.com/regclient/regclient/types/ref"
 )
 
-type TagList struct {
+// List contains a tag list
+// Currently this is a struct but the underlying type could be changed to an interface in the future
+// Using methods is recommended over directly accessing fields
+type List struct {
 	tagCommon
-	TagDockerList
-	TagGCRList
+	DockerList
+	GCRList
 }
 
 type tagCommon struct {
@@ -26,14 +29,14 @@ type tagCommon struct {
 	rawBody   []byte
 }
 
-// TagDockerList is returned from registry/2.0 API's
-type TagDockerList struct {
+// DockerList is returned from registry/2.0 API's
+type DockerList struct {
 	Name string   `json:"name"`
 	Tags []string `json:"tags"`
 }
 
-// TagGCRList fields are from gcr.io
-type TagGCRList struct {
+// GCRList fields are from gcr.io
+type GCRList struct {
 	Children  []string                   `json:"child,omitempty"`
 	Manifests map[string]GCRManifestInfo `json:"manifest,omitempty"`
 }
@@ -46,16 +49,19 @@ type tagConfig struct {
 	tags   []string
 }
 
+// Opts defines options for creating a new tag
 type Opts func(*tagConfig)
 
-func New(opts ...Opts) (*TagList, error) {
+// New creates a tag list from options
+// Tags may be provided directly, or they will be parsed from the raw input based on the media type
+func New(opts ...Opts) (*List, error) {
 	conf := tagConfig{
 		mt: "application/json",
 	}
 	for _, opt := range opts {
 		opt(&conf)
 	}
-	tl := TagList{}
+	tl := List{}
 	tc := tagCommon{
 		r:         conf.ref,
 		mt:        conf.mt,
@@ -82,36 +88,47 @@ func New(opts ...Opts) (*TagList, error) {
 	return &tl, nil
 }
 
+// WithHeaders includes data from http headers when creating tag list
 func WithHeaders(header http.Header) Opts {
 	return func(tConf *tagConfig) {
 		tConf.header = header
 	}
 }
+
+// WithMT sets the returned media type on the tag list
 func WithMT(mt string) Opts {
 	return func(tConf *tagConfig) {
 		tConf.mt = mt
 	}
 }
+
+// WithRaw defines the raw response from the tag list request
 func WithRaw(raw []byte) Opts {
 	return func(tConf *tagConfig) {
 		tConf.raw = raw
 	}
 }
+
+// WithRef specifies the reference (repository) associated with the tag list
 func WithRef(ref ref.Ref) Opts {
 	return func(tConf *tagConfig) {
 		tConf.ref = ref
 	}
 }
+
+// WithTags provides the parsed tags for the tag list
 func WithTags(tags []string) Opts {
 	return func(tConf *tagConfig) {
 		tConf.tags = tags
 	}
 }
 
+// GetOrig returns the underlying tag data structure if defined
 func (t tagCommon) GetOrig() interface{} {
 	return t.orig
 }
 
+// MarshalJSON returns the tag list in json
 func (t tagCommon) MarshalJSON() ([]byte, error) {
 	if len(t.rawBody) > 0 {
 		return t.rawBody, nil
@@ -120,29 +137,28 @@ func (t tagCommon) MarshalJSON() ([]byte, error) {
 	if t.orig != nil {
 		return json.Marshal((t.orig))
 	}
-	return []byte{}, fmt.Errorf("Json marshalling failed: %w", types.ErrNotFound)
+	return []byte{}, fmt.Errorf("JSON marshalling failed: %w", types.ErrNotFound)
 }
 
+// RawBody returns the original tag list response
 func (t tagCommon) RawBody() ([]byte, error) {
 	return t.rawBody, nil
 }
 
+// RawHeaders returns the received http headers
 func (t tagCommon) RawHeaders() (http.Header, error) {
 	return t.rawHeader, nil
 }
 
 // GetTags returns the tags from a list
-func (tl TagDockerList) GetTags() ([]string, error) {
+func (tl DockerList) GetTags() ([]string, error) {
 	return tl.Tags, nil
 }
 
 // MarshalPretty is used for printPretty template formatting
-func (tl TagDockerList) MarshalPretty() ([]byte, error) {
+func (tl DockerList) MarshalPretty() ([]byte, error) {
 	sort.Slice(tl.Tags, func(i, j int) bool {
-		if strings.Compare(tl.Tags[i], tl.Tags[j]) < 0 {
-			return true
-		}
-		return false
+		return strings.Compare(tl.Tags[i], tl.Tags[j]) < 0
 	})
 	buf := &bytes.Buffer{}
 	for _, tag := range tl.Tags {

@@ -73,11 +73,17 @@ func TestNew(t *testing.T) {
 				return
 			}
 			raw, err := rl.RawBody()
-			if bytes.Compare(tt.raw, raw) != 0 {
+			if err != nil {
+				t.Errorf("error from RawBody: %v", err)
+				return
+			}
+			if !bytes.Equal(tt.raw, raw) {
 				t.Errorf("unexpected raw body: expected %s, received %s", tt.raw, raw)
 			}
 			repos, err := rl.GetRepos()
-			if cmpSliceString(tt.repos, repos) == false {
+			if err != nil {
+				t.Errorf("error from GetRepos: %v", err)
+			} else if cmpSliceString(tt.repos, repos) == false {
 				t.Errorf("unexpected repo list: expected %v, received %v", tt.repos, repos)
 			}
 		})

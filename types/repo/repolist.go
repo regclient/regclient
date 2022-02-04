@@ -1,3 +1,4 @@
+// Package repo handles a list of repositories from a registry
 package repo
 
 import (
@@ -45,6 +46,7 @@ func New(opts ...Opts) (*RepoList, error) {
 		mt:        conf.mt,
 		rawHeader: conf.header,
 		rawBody:   conf.raw,
+		host:      conf.host,
 	}
 
 	mt := strings.Split(conf.mt, ";")[0] // "application/json; charset=utf-8" -> "application/json"
@@ -100,7 +102,7 @@ func (r repoCommon) MarshalJSON() ([]byte, error) {
 	if r.orig != nil {
 		return json.Marshal((r.orig))
 	}
-	return []byte{}, fmt.Errorf("Json marshalling failed: %w", types.ErrNotFound)
+	return []byte{}, fmt.Errorf("JSON marshalling failed: %w", types.ErrNotFound)
 }
 
 func (r repoCommon) RawBody() ([]byte, error) {
@@ -119,10 +121,7 @@ func (rl RepoRegistryList) GetRepos() ([]string, error) {
 // MarshalPretty is used for printPretty template formatting
 func (rl RepoRegistryList) MarshalPretty() ([]byte, error) {
 	sort.Slice(rl.Repositories, func(i, j int) bool {
-		if strings.Compare(rl.Repositories[i], rl.Repositories[j]) < 0 {
-			return true
-		}
-		return false
+		return strings.Compare(rl.Repositories[i], rl.Repositories[j]) < 0
 	})
 	buf := &bytes.Buffer{}
 	for _, tag := range rl.Repositories {

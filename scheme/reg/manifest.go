@@ -8,6 +8,7 @@ import (
 
 	"github.com/regclient/regclient/internal/reghttp"
 	"github.com/regclient/regclient/internal/wraperr"
+	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
@@ -18,7 +19,7 @@ import (
 // This will implicitly delete all tags pointing to that manifest.
 func (reg *Reg) ManifestDelete(ctx context.Context, r ref.Ref) error {
 	if r.Digest == "" {
-		return wraperr.New(fmt.Errorf("Digest required to delete manifest, reference %s", r.CommonName()), types.ErrMissingDigest)
+		return wraperr.New(fmt.Errorf("digest required to delete manifest, reference %s", r.CommonName()), types.ErrMissingDigest)
 	}
 
 	// build/send request
@@ -35,11 +36,11 @@ func (reg *Reg) ManifestDelete(ctx context.Context, r ref.Ref) error {
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
-		return fmt.Errorf("Failed to delete manifest %s: %w", r.CommonName(), err)
+		return fmt.Errorf("failed to delete manifest %s: %w", r.CommonName(), err)
 	}
 	defer resp.Close()
 	if resp.HTTPResponse().StatusCode != 202 {
-		return fmt.Errorf("Failed to delete manifest %s: %w", r.CommonName(), reghttp.HttpError(resp.HTTPResponse().StatusCode))
+		return fmt.Errorf("failed to delete manifest %s: %w", r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 	}
 
 	return nil
@@ -53,7 +54,7 @@ func (reg *Reg) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest, 
 	} else if r.Tag != "" {
 		tagOrDigest = r.Tag
 	} else {
-		return nil, wraperr.New(fmt.Errorf("Reference missing tag and digest: %s", r.CommonName()), types.ErrMissingTagOrDigest)
+		return nil, wraperr.New(fmt.Errorf("reference missing tag and digest: %s", r.CommonName()), types.ErrMissingTagOrDigest)
 	}
 
 	// build/send request
@@ -80,17 +81,17 @@ func (reg *Reg) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest, 
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get manifest %s: %w", r.CommonName(), err)
+		return nil, fmt.Errorf("failed to get manifest %s: %w", r.CommonName(), err)
 	}
 	defer resp.Close()
 	if resp.HTTPResponse().StatusCode != 200 {
-		return nil, fmt.Errorf("Failed to get manifest %s: %w", r.CommonName(), reghttp.HttpError(resp.HTTPResponse().StatusCode))
+		return nil, fmt.Errorf("failed to get manifest %s: %w", r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 	}
 
 	// read manifest
 	rawBody, err := io.ReadAll(resp)
 	if err != nil {
-		return nil, fmt.Errorf("Error reading manifest for %s: %w", r.CommonName(), err)
+		return nil, fmt.Errorf("error reading manifest for %s: %w", r.CommonName(), err)
 	}
 
 	return manifest.New(
@@ -109,7 +110,7 @@ func (reg *Reg) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest,
 	} else if r.Tag != "" {
 		tagOrDigest = r.Tag
 	} else {
-		return nil, wraperr.New(fmt.Errorf("Reference missing tag and digest: %s", r.CommonName()), types.ErrMissingTagOrDigest)
+		return nil, wraperr.New(fmt.Errorf("reference missing tag and digest: %s", r.CommonName()), types.ErrMissingTagOrDigest)
 	}
 
 	// build/send request
@@ -136,11 +137,11 @@ func (reg *Reg) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest,
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to request manifest head %s: %w", r.CommonName(), err)
+		return nil, fmt.Errorf("failed to request manifest head %s: %w", r.CommonName(), err)
 	}
 	defer resp.Close()
 	if resp.HTTPResponse().StatusCode != 200 {
-		return nil, fmt.Errorf("Failed to request manifest head %s: %w", r.CommonName(), reghttp.HttpError(resp.HTTPResponse().StatusCode))
+		return nil, fmt.Errorf("failed to request manifest head %s: %w", r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 	}
 
 	return manifest.New(
@@ -150,7 +151,7 @@ func (reg *Reg) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest,
 }
 
 // ManifestPut uploads a manifest to a registry
-func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest) error {
+func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest, opts ...scheme.ManifestOpts) error {
 	var tagOrDigest string
 	if r.Digest != "" {
 		tagOrDigest = r.Digest
@@ -170,7 +171,7 @@ func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest)
 			"ref": r.Reference,
 			"err": err,
 		}).Warn("Error marshaling manifest")
-		return fmt.Errorf("Error marshalling manifest for %s: %w", r.CommonName(), err)
+		return fmt.Errorf("error marshalling manifest for %s: %w", r.CommonName(), err)
 	}
 
 	// build/send request
@@ -193,11 +194,11 @@ func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest)
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
-		return fmt.Errorf("Failed to put manifest %s: %w", r.CommonName(), err)
+		return fmt.Errorf("failed to put manifest %s: %w", r.CommonName(), err)
 	}
 	defer resp.Close()
 	if resp.HTTPResponse().StatusCode != 201 {
-		return fmt.Errorf("Failed to put manifest %s: %w", r.CommonName(), reghttp.HttpError(resp.HTTPResponse().StatusCode))
+		return fmt.Errorf("failed to put manifest %s: %w", r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 	}
 
 	return nil

@@ -1,13 +1,16 @@
+// Package rwfs implements a read-write filesystem, extending fs.FS
 package rwfs
 
 import (
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 	"path"
 	"strings"
 )
 
+//lint:file-ignore ST1003 names are uppercase to remain compatible with os names
 const (
 	// exactly one of these must be used
 	O_RDONLY = os.O_RDONLY // read-only
@@ -37,6 +40,8 @@ type WriteFS interface {
 	Mkdir(string, fs.FileMode) error
 	// OpenFile generalized file open with options for a flag and permissions
 	OpenFile(string, int, fs.FileMode) (RWFile, error)
+	// Remove removes the named file or (empty) directory.
+	Remove(string) error
 }
 
 type WFile interface {
@@ -49,11 +54,70 @@ type WFile interface {
 	Write(b []byte) (n int, err error)
 }
 
+// Copy will copy a file to a new name, and even a different rwfs
+func Copy(srcFS fs.FS, srcName string, destFS RWFS, destName string) error {
+	rfh, err := srcFS.Open(srcName)
+	if err != nil {
+		return err
+	}
+	defer rfh.Close()
+	wfh, err := destFS.Create(destName)
+	if err != nil {
+		return err
+	}
+	defer wfh.Close()
+	_, err = io.Copy(wfh, rfh)
+	return err
+}
+
+// CopyRecursive will recursively copy a directory tree to the destination
+func CopyRecursive(srcFS fs.FS, srcName string, destFS RWFS, destName string) error {
+	sfh, err := srcFS.Open(srcName)
+	if err != nil {
+		return err
+	}
+	sfi, err := sfh.Stat()
+	sfh.Close()
+	if err != nil {
+		return err
+	}
+	if !sfi.IsDir() {
+		return Copy(srcFS, srcName, destFS, destName)
+	}
+
+	sdReadDir, err := fs.ReadDir(srcFS, srcName)
+	if err != nil {
+		return err
+	}
+	err = destFS.Mkdir(destName, 0777)
+	if err != nil && !errors.Is(err, fs.ErrExist) {
+		return err
+	}
+	for _, de := range sdReadDir {
+		srcNew := path.Join(srcName, de.Name())
+		destNew := path.Join(destName, de.Name())
+		err = CopyRecursive(srcFS, srcNew, destFS, destNew)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// TODO: add MakeTemp func
+
 func MkdirAll(rwfs RWFS, name string, perm fs.FileMode) error {
 	parts := strings.Split(name, "/")
+	prefix := ""
+	if strings.HasPrefix(name, "/") {
+		prefix = "/"
+	}
 	for i := range parts {
 		// assemble directory up to this point
-		cur := path.Join(parts[:i+1]...)
+		cur := prefix + path.Join(parts[:i+1]...)
+		if cur == "" || cur == "." || cur == "/" {
+			continue
+		}
 		fi, err := Stat(rwfs, cur)
 		if errors.Is(err, fs.ErrNotExist) {
 			// missing, create
@@ -84,6 +148,8 @@ func MkdirAll(rwfs RWFS, name string, perm fs.FileMode) error {
 	}
 	return nil
 }
+
+// TODO: add Rename func
 
 func Stat(rfs fs.FS, name string) (fs.FileInfo, error) {
 	fh, err := rfs.Open(name)

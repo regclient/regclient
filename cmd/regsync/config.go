@@ -246,11 +246,11 @@ func syncSetDefaults(s *ConfigSync, d ConfigDefaults) {
 		}
 	}
 	if s.DigestTags == nil {
-		b := (d.DigestTags != nil && *d.DigestTags == true)
+		b := (d.DigestTags != nil && *d.DigestTags)
 		s.DigestTags = &b
 	}
 	if s.ForceRecursive == nil {
-		b := (d.ForceRecursive != nil && *d.ForceRecursive == true)
+		b := (d.ForceRecursive != nil && *d.ForceRecursive)
 		s.ForceRecursive = &b
 	}
 	if s.Hooks.Pre == nil && d.Hooks.Pre != nil {

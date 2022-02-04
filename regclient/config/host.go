@@ -1,8 +1,7 @@
 //go:build !nolegacy
 // +build !nolegacy
 
-// Legacy package, this has been moved to the config package
-
+// Package config is a legacy package, this has been moved to the config package
 package config
 
 import (

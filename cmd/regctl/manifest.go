@@ -118,12 +118,12 @@ func getManifest(rc *regclient.RegClient, r ref.Ref) (manifest.Manifest, error) 
 	if m.IsList() && !manifestOpts.list && !manifestOpts.requireList {
 		desc, err := getPlatformDesc(rc, m)
 		if err != nil {
-			return m, fmt.Errorf("Failed to lookup platform specific digest: %w", err)
+			return m, fmt.Errorf("failed to lookup platform specific digest: %w", err)
 		}
 		r.Digest = desc.Digest.String()
 		m, err = rc.ManifestGet(context.Background(), r)
 		if err != nil {
-			return m, fmt.Errorf("Failed to pull platform specific digest: %w", err)
+			return m, fmt.Errorf("failed to pull platform specific digest: %w", err)
 		}
 	}
 	return m, nil
@@ -177,14 +177,16 @@ func getPlatformDesc(rc *regclient.RegClient, m manifest.Manifest) (*ociv1.Descr
 }
 
 func runManifestDelete(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
 	rc := newRegClient()
+	defer rc.Close(ctx, r)
 
 	if r.Digest == "" && manifestOpts.forceTagDeref {
-		m, err := rc.ManifestHead(context.Background(), r)
+		m, err := rc.ManifestHead(ctx, r)
 		if err != nil {
 			return err
 		}
@@ -201,7 +203,7 @@ func runManifestDelete(cmd *cobra.Command, args []string) error {
 		"digest": r.Digest,
 	}).Debug("Manifest delete")
 
-	err = rc.ManifestDelete(context.Background(), r)
+	err = rc.ManifestDelete(ctx, r)
 	if err != nil {
 		return err
 	}
@@ -240,12 +242,12 @@ func runManifestDigest(cmd *cobra.Command, args []string) error {
 	for m.IsList() && !manifestOpts.list && !manifestOpts.requireList {
 		desc, err := getPlatformDesc(rc, m)
 		if err != nil {
-			return fmt.Errorf("Failed retrieving platform specific digest: %w", err)
+			return fmt.Errorf("failed retrieving platform specific digest: %w", err)
 		}
 		r.Digest = desc.Digest.String()
 		m, err = rc.ManifestHead(context.Background(), r)
 		if err != nil {
-			return fmt.Errorf("Failed retrieving platform specific digest: %w", err)
+			return fmt.Errorf("failed retrieving platform specific digest: %w", err)
 		}
 	}
 
@@ -254,11 +256,13 @@ func runManifestDigest(cmd *cobra.Command, args []string) error {
 }
 
 func runManifestGet(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
 	rc := newRegClient()
+	defer rc.Close(ctx, r)
 
 	m, err := getManifest(rc, r)
 	if err != nil {
@@ -277,11 +281,14 @@ func runManifestGet(cmd *cobra.Command, args []string) error {
 }
 
 func runManifestPut(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
 	rc := newRegClient()
+	defer rc.Close(ctx, r)
+
 	raw, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
 		return err
@@ -297,5 +304,5 @@ func runManifestPut(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	return rc.ManifestPut(context.Background(), r, rcM)
+	return rc.ManifestPut(ctx, r, rcM)
 }

@@ -137,7 +137,7 @@ func TestCommon(t *testing.T) {
 					t.Errorf("rawbody: %v", err)
 					return
 				}
-				if bytes.Compare(bb, tt.eBytes) != 0 {
+				if !bytes.Equal(bb, tt.eBytes) {
 					t.Errorf("rawbody, expected %s, received %s", string(tt.eBytes), string(bb))
 				}
 			}
@@ -213,7 +213,7 @@ func TestReader(t *testing.T) {
 		if pos != 0 {
 			t.Errorf("seek pos, expected 0, received %d", pos)
 		}
-		bb, err = io.ReadAll(b)
+		_, err = io.ReadAll(b)
 		if err != nil {
 			t.Errorf("readall: %v", err)
 			return
@@ -251,7 +251,7 @@ func TestReader(t *testing.T) {
 			t.Errorf("config rawbody: %v", err)
 			return
 		}
-		if bytes.Compare(exBlob, ocb) != 0 {
+		if !bytes.Equal(exBlob, ocb) {
 			t.Errorf("config bytes, expected %s, received %s", string(exBlob), string(ocb))
 		}
 	})
@@ -267,7 +267,7 @@ func TestReader(t *testing.T) {
 			t.Errorf("rawbody: %v", err)
 			return
 		}
-		if bytes.Compare(exBlob, bb) != 0 {
+		if !bytes.Equal(exBlob, bb) {
 			t.Errorf("config bytes, expected %s, received %s", string(exBlob), string(bb))
 		}
 	})

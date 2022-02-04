@@ -1,3 +1,5 @@
+// Package manifest abstracts the various types of supported manifests.
+// Supported types include OCI index and image, and Docker manifest list and manifest.
 package manifest
 
 import (
@@ -18,7 +20,8 @@ import (
 	"github.com/regclient/regclient/types/ref"
 )
 
-// Manifest abstracts the various types of manifests that are supported
+// Manifest interface is implemented by all supported manifests but
+// many calls are only supported by certain underlying media types.
 type Manifest interface {
 	GetConfigDescriptor() (ociv1.Descriptor, error)
 	GetConfigDigest() (digest.Digest, error)
@@ -39,18 +42,18 @@ type Manifest interface {
 	RawHeaders() (http.Header, error)
 }
 
-type ManifestConfig struct {
+type manifestConfig struct {
 	r      ref.Ref
 	desc   ociv1.Descriptor
 	raw    []byte
 	orig   interface{}
 	header http.Header
 }
-type Opts func(*ManifestConfig)
+type Opts func(*manifestConfig)
 
 // New creates a new manifest based on provided options
 func New(opts ...Opts) (Manifest, error) {
-	mc := ManifestConfig{}
+	mc := manifestConfig{}
 	for _, opt := range opts {
 		opt(&mc)
 	}
@@ -80,27 +83,27 @@ func New(opts ...Opts) (Manifest, error) {
 	return fromCommon(c)
 }
 func WithDesc(desc ociv1.Descriptor) Opts {
-	return func(mc *ManifestConfig) {
+	return func(mc *manifestConfig) {
 		mc.desc = desc
 	}
 }
 func WithHeader(header http.Header) Opts {
-	return func(mc *ManifestConfig) {
+	return func(mc *manifestConfig) {
 		mc.header = header
 	}
 }
 func WithOrig(orig interface{}) Opts {
-	return func(mc *ManifestConfig) {
+	return func(mc *manifestConfig) {
 		mc.orig = orig
 	}
 }
 func WithRaw(raw []byte) Opts {
-	return func(mc *ManifestConfig) {
+	return func(mc *manifestConfig) {
 		mc.raw = raw
 	}
 }
 func WithRef(r ref.Ref) Opts {
-	return func(mc *ManifestConfig) {
+	return func(mc *manifestConfig) {
 		mc.r = r
 	}
 }
@@ -127,9 +130,8 @@ func fromOrig(c common, orig interface{}) (Manifest, error) {
 		c.desc.Size = int64(len(mj))
 	}
 	// create manifest based on type
-	switch orig.(type) {
+	switch mOrig := orig.(type) {
 	case dockerSchema1.Manifest:
-		mOrig := orig.(dockerSchema1.Manifest)
 		mt = mOrig.MediaType
 		c.desc.MediaType = types.MediaTypeDocker1Manifest
 		m = &docker1Manifest{
@@ -137,7 +139,6 @@ func fromOrig(c common, orig interface{}) (Manifest, error) {
 			Manifest: mOrig,
 		}
 	case dockerSchema1.SignedManifest:
-		mOrig := orig.(dockerSchema1.SignedManifest)
 		mt = mOrig.MediaType
 		c.desc.MediaType = types.MediaTypeDocker1ManifestSigned
 		// recompute digest on the canonical data
@@ -147,7 +148,6 @@ func fromOrig(c common, orig interface{}) (Manifest, error) {
 			SignedManifest: mOrig,
 		}
 	case dockerSchema2.Manifest:
-		mOrig := orig.(dockerSchema2.Manifest)
 		mt = mOrig.MediaType
 		c.desc.MediaType = types.MediaTypeDocker2Manifest
 		m = &docker2Manifest{
@@ -155,7 +155,6 @@ func fromOrig(c common, orig interface{}) (Manifest, error) {
 			Manifest: mOrig,
 		}
 	case dockerManifestList.ManifestList:
-		mOrig := orig.(dockerManifestList.ManifestList)
 		mt = mOrig.MediaType
 		c.desc.MediaType = types.MediaTypeDocker2ManifestList
 		m = &docker2ManifestList{
@@ -163,7 +162,6 @@ func fromOrig(c common, orig interface{}) (Manifest, error) {
 			ManifestList: mOrig,
 		}
 	case ociv1.Manifest:
-		mOrig := orig.(ociv1.Manifest)
 		mt = mOrig.MediaType
 		c.desc.MediaType = types.MediaTypeOCI1Manifest
 		m = &oci1Manifest{
@@ -171,7 +169,6 @@ func fromOrig(c common, orig interface{}) (Manifest, error) {
 			Manifest: mOrig,
 		}
 	case ociv1.Index:
-		mOrig := orig.(ociv1.Index)
 		mt = mOrig.MediaType
 		c.desc.MediaType = types.MediaTypeOCI1ManifestList
 		m = &oci1Index{
@@ -179,7 +176,7 @@ func fromOrig(c common, orig interface{}) (Manifest, error) {
 			Index:  orig.(ociv1.Index),
 		}
 	default:
-		return nil, fmt.Errorf("Unsupported type to convert to a manifest: %T", orig)
+		return nil, fmt.Errorf("unsupported type to convert to a manifest: %T", orig)
 	}
 	// verify media type
 	err = verifyMT(c.desc.MediaType, mt)
@@ -291,7 +288,7 @@ func getPlatformDesc(p *ociv1.Platform, dl []ociv1.Descriptor) (*ociv1.Descripto
 			return &d, nil
 		}
 	}
-	return nil, wraperr.New(fmt.Errorf("Platform not found: %s", platforms.Format(*p)), types.ErrNotFound)
+	return nil, wraperr.New(fmt.Errorf("platform not found: %s", platforms.Format(*p)), types.ErrNotFound)
 }
 
 func getPlatformList(dl []ociv1.Descriptor) ([]*ociv1.Platform, error) {
