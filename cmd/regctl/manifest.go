@@ -118,12 +118,12 @@ func getManifest(rc *regclient.RegClient, r ref.Ref) (manifest.Manifest, error) 
 	if m.IsList() && !manifestOpts.list && !manifestOpts.requireList {
 		desc, err := getPlatformDesc(rc, m)
 		if err != nil {
-			return m, fmt.Errorf("Failed to lookup platform specific digest: %w", err)
+			return m, fmt.Errorf("failed to lookup platform specific digest: %w", err)
 		}
 		r.Digest = desc.Digest.String()
 		m, err = rc.ManifestGet(context.Background(), r)
 		if err != nil {
-			return m, fmt.Errorf("Failed to pull platform specific digest: %w", err)
+			return m, fmt.Errorf("failed to pull platform specific digest: %w", err)
 		}
 	}
 	return m, nil
@@ -242,12 +242,12 @@ func runManifestDigest(cmd *cobra.Command, args []string) error {
 	for m.IsList() && !manifestOpts.list && !manifestOpts.requireList {
 		desc, err := getPlatformDesc(rc, m)
 		if err != nil {
-			return fmt.Errorf("Failed retrieving platform specific digest: %w", err)
+			return fmt.Errorf("failed retrieving platform specific digest: %w", err)
 		}
 		r.Digest = desc.Digest.String()
 		m, err = rc.ManifestHead(context.Background(), r)
 		if err != nil {
-			return fmt.Errorf("Failed retrieving platform specific digest: %w", err)
+			return fmt.Errorf("failed retrieving platform specific digest: %w", err)
 		}
 	}
 

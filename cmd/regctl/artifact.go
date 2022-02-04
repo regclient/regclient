@@ -89,7 +89,7 @@ func init() {
 	artifactPutCmd.Flags().StringVarP(&artifactOpts.configFile, "config-file", "", "", "Config filename")
 	artifactPutCmd.Flags().StringVarP(&artifactOpts.configMT, "config-media-type", "", "", "Config media-type")
 	artifactPutCmd.RegisterFlagCompletionFunc("config-media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return artifactKnownTypes, cobra.ShellCompDirectiveNoFileComp
+		return configKnownTypes, cobra.ShellCompDirectiveNoFileComp
 	})
 	artifactPutCmd.Flags().BoolVarP(&artifactOpts.stripDirs, "strip-dirs", "", false, "Strip directories from filenames in artifact")
 

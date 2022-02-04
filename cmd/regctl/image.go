@@ -161,12 +161,8 @@ func runImageCopy(cmd *cobra.Command, args []string) error {
 	defer rc.Close(ctx, rTgt)
 
 	log.WithFields(logrus.Fields{
-		"source host": rSrc.Registry,
-		"source repo": rSrc.Repository,
-		"source tag":  rSrc.Tag,
-		"target host": rTgt.Registry,
-		"target repo": rTgt.Repository,
-		"target tag":  rTgt.Tag,
+		"source":      rSrc.CommonName(),
+		"target":      rTgt.CommonName(),
 		"recursive":   imageOpts.forceRecursive,
 		"digest-tags": imageOpts.digestTags,
 	}).Debug("Image copy")
