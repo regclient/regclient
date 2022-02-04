@@ -22,7 +22,8 @@ func (rc *RegClient) TagDelete(ctx context.Context, r ref.Ref) error {
 	return schemeAPI.TagDelete(ctx, r)
 }
 
-func (rc *RegClient) TagList(ctx context.Context, r ref.Ref, opts ...scheme.TagOpts) (*tag.TagList, error) {
+// TagList returns a tag list from a repository
+func (rc *RegClient) TagList(ctx context.Context, r ref.Ref, opts ...scheme.TagOpts) (*tag.List, error) {
 	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
 		return nil, err

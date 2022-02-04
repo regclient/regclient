@@ -10,9 +10,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// BlobCopy copies a blob between two locations
+// If the blob already exists in the target, the copy is skipped
+// A server side cross repository blob mount is attempted
 func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d digest.Digest) error {
 	// for the same repository, there's nothing to copy
-	if refSrc.Registry == refTgt.Registry && refSrc.Repository == refTgt.Repository {
+	if ref.EqualRepository(refSrc, refTgt) {
 		rc.log.WithFields(logrus.Fields{
 			"src":    refTgt.Reference,
 			"tgt":    refTgt.Reference,
@@ -29,7 +32,7 @@ func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Re
 		return nil
 	}
 	// try mounting blob from the source repo is the registry is the same
-	if refSrc.Registry == refTgt.Registry {
+	if ref.EqualRegistry(refSrc, refTgt) {
 		err := rc.BlobMount(ctx, refSrc, refTgt, d)
 		if err == nil {
 			rc.log.WithFields(logrus.Fields{
@@ -56,7 +59,7 @@ func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Re
 		return err
 	}
 	defer blobIO.Close()
-	if _, _, err := rc.BlobPut(ctx, refTgt, d, blobIO, blobIO.Response().ContentLength); err != nil {
+	if _, _, err := rc.BlobPut(ctx, refTgt, d, blobIO, blobIO.Length()); err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"err": err,
 			"src": refSrc.Reference,
@@ -67,6 +70,9 @@ func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Re
 	return nil
 }
 
+// BlobDelete removes a blob from the registry
+// This method should only be used to repair a damaged registry
+// Typically a server side garbage collection should be used to purge unused blobs
 func (rc *RegClient) BlobDelete(ctx context.Context, r ref.Ref, d digest.Digest) error {
 	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
@@ -75,6 +81,7 @@ func (rc *RegClient) BlobDelete(ctx context.Context, r ref.Ref, d digest.Digest)
 	return schemeAPI.BlobDelete(ctx, r, d)
 }
 
+// BlobGet retrieves a blob, returning a reader
 func (rc *RegClient) BlobGet(ctx context.Context, r ref.Ref, d digest.Digest) (blob.Reader, error) {
 	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
@@ -83,6 +90,7 @@ func (rc *RegClient) BlobGet(ctx context.Context, r ref.Ref, d digest.Digest) (b
 	return schemeAPI.BlobGet(ctx, r, d)
 }
 
+// BlobGetOCIConfig retrieves an OCI config from a blob, automatically extracting the JSON
 func (rc *RegClient) BlobGetOCIConfig(ctx context.Context, ref ref.Ref, d digest.Digest) (blob.OCIConfig, error) {
 	b, err := rc.BlobGet(ctx, ref, d)
 	if err != nil {

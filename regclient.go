@@ -1,3 +1,4 @@
+// Package regclient is used to access OCI registries
 package regclient
 
 import (
@@ -7,7 +8,6 @@ import (
 	"io/fs"
 	"io/ioutil"
 	"strings"
-	"sync"
 	"time"
 
 	// crypto libraries included for go-digest
@@ -29,19 +29,22 @@ const (
 	// DefaultUserAgent sets the header on http requests
 	DefaultUserAgent = "regclient/regclient"
 	// DockerCertDir default location for docker certs
-	DockerCertDir      = "/etc/docker/certs.d"
-	DockerRegistry     = config.DockerRegistry
+	DockerCertDir = "/etc/docker/certs.d"
+	// DockerRegistry is the well known name of Docker Hub, "docker.io"
+	DockerRegistry = config.DockerRegistry
+	// DockerRegistryAuth is the name of Docker Hub seen in docker's config.json
 	DockerRegistryAuth = config.DockerRegistryAuth
-	DockerRegistryDNS  = config.DockerRegistryDNS
+	// DockerRegistryDNS is the actual registry DNS name for Docker Hub
+	DockerRegistryDNS = config.DockerRegistryDNS
 )
 
 //go:embed embed/*
 var embedFS embed.FS
 
 var (
-	// VCSRef and VCSTag are populated from an embed at build time
-	// These are used to version the UserAgent header
+	// VCSRef is populated from an embed at build time to the git reference
 	VCSRef = ""
+	// VCSTag is populated from an embed at build time to the git tag if defined
 	VCSTag = ""
 )
 
@@ -49,14 +52,16 @@ func init() {
 	setupVCSVars()
 }
 
+// RegClient is used to access OCI distribution-spec registries
 type RegClient struct {
 	certPaths []string
 	hosts     map[string]*config.Host
 	log       *logrus.Logger
-	mu        sync.Mutex
+	// mu        sync.Mutex
 	regOpts   []reg.Opts
-	schemes   map[string]scheme.SchemeAPI
+	schemes   map[string]scheme.API
 	userAgent string
+	fs        rwfs.RWFS
 }
 
 // Opt functions are used to configure NewRegClient
@@ -71,7 +76,8 @@ func New(opts ...Opt) *RegClient {
 		// logging is disabled by default
 		log:     &logrus.Logger{Out: ioutil.Discard},
 		regOpts: []reg.Opts{},
-		schemes: map[string]scheme.SchemeAPI{},
+		schemes: map[string]scheme.API{},
+		fs:      rwfs.OSNew(""),
 	}
 	if VCSTag != "" {
 		rc.userAgent = fmt.Sprintf("%s (%s)", rc.userAgent, VCSTag)
@@ -108,7 +114,7 @@ func New(opts ...Opt) *RegClient {
 	rc.schemes["reg"] = reg.New(rc.regOpts...)
 	rc.schemes["ocidir"] = ocidir.New(
 		ocidir.WithLog(rc.log),
-		ocidir.WithFS(rwfs.OSNew("")),
+		ocidir.WithFS(rc.fs),
 	)
 
 	rc.log.Debug("regclient initialized")
@@ -120,7 +126,6 @@ func New(opts ...Opt) *RegClient {
 func WithCertDir(path ...string) Opt {
 	return func(rc *RegClient) {
 		rc.regOpts = append(rc.regOpts, reg.WithCertDirs(path))
-		return
 	}
 }
 
@@ -128,7 +133,6 @@ func WithCertDir(path ...string) Opt {
 func WithDockerCerts() Opt {
 	return func(rc *RegClient) {
 		rc.certPaths = append(rc.certPaths, DockerCertDir)
-		return
 	}
 }
 
@@ -142,14 +146,13 @@ func WithDockerCreds() Opt {
 				"err": err,
 			}).Warn("Failed to load docker creds")
 		}
-		return
 	}
 }
 
 // WithConfigHosts adds a list of config host settings
 func WithConfigHosts(configHosts []config.Host) Opt {
 	return func(rc *RegClient) {
-		if configHosts == nil || len(configHosts) == 0 {
+		if len(configHosts) == 0 {
 			return
 		}
 		for _, configHost := range configHosts {
@@ -184,7 +187,6 @@ func WithConfigHosts(configHosts []config.Host) Opt {
 				}).Warn("Failed to update host config")
 			}
 		}
-		return
 	}
 }
 
@@ -197,6 +199,13 @@ func WithConfigHost(configHost config.Host) Opt {
 func WithBlobSize(chunk, max int64) Opt {
 	return func(rc *RegClient) {
 		rc.regOpts = append(rc.regOpts, reg.WithBlobSize(chunk, max))
+	}
+}
+
+// WithFS overrides the backing filesystem (used by ocidir)
+func WithFS(fs rwfs.RWFS) Opt {
+	return func(rc *RegClient) {
+		rc.fs = fs
 	}
 }
 
@@ -232,7 +241,7 @@ func (rc *RegClient) loadDockerCreds() error {
 	conffile := dockercfg.LoadDefaultConfigFile(os.Stderr)
 	creds, err := conffile.GetAllCredentials()
 	if err != nil {
-		return fmt.Errorf("Failed to load docker creds %s", err)
+		return fmt.Errorf("failed to load docker creds %s", err)
 	}
 	for name, cred := range creds {
 		if (cred.Username == "" || cred.Password == "") && cred.IdentityToken == "" {
@@ -294,6 +303,9 @@ func (rc *RegClient) loadDockerCreds() error {
 func (rc *RegClient) hostSet(newHost config.Host) error {
 	name := newHost.Name
 	var err error
+	// hostSet should only run on New, which single threaded
+	// rc.mu.Lock()
+	// defer rc.mu.Unlock()
 	if _, ok := rc.hosts[name]; !ok {
 		// merge newHost with default host settings
 		rc.hosts[name] = config.HostNewName(name)
