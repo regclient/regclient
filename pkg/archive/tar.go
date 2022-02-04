@@ -17,19 +17,17 @@ type TarOpts func(*tarOpts)
 
 // TODO: add support for compressed files with bzip
 type tarOpts struct {
-	allowRelative bool // allow relative paths outside of target folder
-	compress      string
+	// allowRelative bool // allow relative paths outside of target folder
+	compress string
 }
 
 // TarCompressGzip option to use gzip compression on tar files
 func TarCompressGzip(to *tarOpts) {
 	to.compress = "gzip"
-	return
 }
 
 // TarUncompressed option to tar (noop)
 func TarUncompressed(to *tarOpts) {
-	return
 }
 
 // TODO: add option for full path or to adjust the relative path

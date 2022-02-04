@@ -58,7 +58,7 @@ func compressGzip(src io.Reader) (io.Reader, error) {
 		defer pipeW.Close()
 		gzipW := gzip.NewWriter(pipeW)
 		defer gzipW.Close()
-		io.Copy(gzipW, src)
+		_, _ = io.Copy(gzipW, src)
 	}()
 	return pipeR, nil
 }
