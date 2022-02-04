@@ -1,8 +1,7 @@
 //go:build !nolegacy
 // +build !nolegacy
 
-// Legacy package, this has been moved to the top level regclient package
-
+// Package regclient is a legacy package, this has been moved to the top level regclient package
 package regclient
 
 import (
@@ -38,8 +37,8 @@ type ImageOpts = rcTop.ImageOpts
 type RepoList = *repo.RepoList
 type RepoDockerList = repo.RepoRegistryList
 type RepoOpts = scheme.RepoOpts // RepoOpts is a breaking change (struct to func opts)
-type TagList = *tag.TagList
-type TagDockerList = tag.TagDockerList
+type TagList = *tag.List
+type TagDockerList = tag.DockerList
 type TagOpts = scheme.TagOpts
 
 var (

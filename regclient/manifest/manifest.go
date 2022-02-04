@@ -1,8 +1,7 @@
 //go:build !nolegacy
 // +build !nolegacy
 
-// Legacy package, this has been moved to the types/manifest package
-
+// Package manifest is a legacy package, this has been moved to the types/manifest package
 package manifest
 
 import (

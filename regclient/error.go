@@ -10,9 +10,10 @@ import (
 )
 
 var (
-	ErrAPINotFound              = types.ErrAPINotFound
-	ErrCanceled                 = types.ErrCanceled
-	ErrHttpStatus               = types.ErrHttpStatus
+	ErrAPINotFound = types.ErrAPINotFound
+	ErrCanceled    = types.ErrCanceled
+	//lint:ignore ST1003 exported field cannot be changed for legacy reasons
+	ErrHttpStatus               = types.ErrHTTPStatus
 	ErrMissingDigest            = types.ErrMissingDigest
 	ErrMissingLocation          = types.ErrMissingLocation
 	ErrMissingName              = types.ErrMissingName

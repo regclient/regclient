@@ -10,13 +10,14 @@ import (
 )
 
 var (
-	ErrAllRequestsFailed        = topTypes.ErrAllRequestsFailed
-	ErrAPINotFound              = topTypes.ErrAPINotFound
-	ErrBackoffLimit             = topTypes.ErrBackoffLimit
-	ErrCanceled                 = topTypes.ErrCanceled
-	ErrDigestMismatch           = topTypes.ErrDigestMismatch
-	ErrEmptyChallenge           = topTypes.ErrEmptyChallenge
-	ErrHttpStatus               = topTypes.ErrHttpStatus
+	ErrAllRequestsFailed = topTypes.ErrAllRequestsFailed
+	ErrAPINotFound       = topTypes.ErrAPINotFound
+	ErrBackoffLimit      = topTypes.ErrBackoffLimit
+	ErrCanceled          = topTypes.ErrCanceled
+	ErrDigestMismatch    = topTypes.ErrDigestMismatch
+	ErrEmptyChallenge    = topTypes.ErrEmptyChallenge
+	//lint:ignore ST1003 exported field cannot be changed for legacy reasons
+	ErrHttpStatus               = topTypes.ErrHTTPStatus
 	ErrInvalidChallenge         = topTypes.ErrInvalidChallenge
 	ErrMissingDigest            = topTypes.ErrMissingDigest
 	ErrMissingLocation          = topTypes.ErrMissingLocation
