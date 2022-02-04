@@ -1,3 +1,6 @@
+// Package ref is used to define references
+// References default to remote registry references (registry:port/repo:tag)
+// Schemes can be included in front of the reference for different reference types
 package ref
 
 import (
@@ -37,7 +40,7 @@ func New(ref string) (Ref, error) {
 	scheme := ""
 	path := ref
 	matchScheme := schemeRE.FindStringSubmatch(ref)
-	if matchScheme != nil && len(matchScheme) == 3 {
+	if len(matchScheme) == 3 {
 		scheme = matchScheme[1]
 		path = matchScheme[2]
 	}
@@ -109,4 +112,34 @@ func (r Ref) CommonName() string {
 		}
 	}
 	return cn
+}
+
+// EqualRegistry compares the registry between two references
+func EqualRegistry(a, b Ref) bool {
+	if a.Scheme != b.Scheme {
+		return false
+	}
+	switch a.Scheme {
+	case "reg":
+		return a.Registry == b.Registry
+	case "ocidir":
+		return a.Path == b.Path
+	default:
+		return false
+	}
+}
+
+// EqualRepository compares the repository between two references
+func EqualRepository(a, b Ref) bool {
+	if a.Scheme != b.Scheme {
+		return false
+	}
+	switch a.Scheme {
+	case "reg":
+		return a.Registry == b.Registry && a.Repository == b.Repository
+	case "ocidir":
+		return a.Path == b.Path
+	default:
+		return false
+	}
 }
