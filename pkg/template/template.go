@@ -1,3 +1,4 @@
+// Package template wraps a common set of templates around text/template
 package template
 
 import (
