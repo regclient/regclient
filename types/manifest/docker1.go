@@ -29,23 +29,23 @@ type docker1SignedManifest struct {
 }
 
 func (m *docker1Manifest) GetConfigDescriptor() (ociv1.Descriptor, error) {
-	return ociv1.Descriptor{}, wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return ociv1.Descriptor{}, wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 func (m *docker1Manifest) GetConfigDigest() (digest.Digest, error) {
-	return "", wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return "", wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 func (m *docker1SignedManifest) GetConfigDescriptor() (ociv1.Descriptor, error) {
-	return ociv1.Descriptor{}, wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return ociv1.Descriptor{}, wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 func (m *docker1SignedManifest) GetConfigDigest() (digest.Digest, error) {
-	return "", wraperr.New(fmt.Errorf("Config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return "", wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 
 func (m *docker1Manifest) GetDescriptorList() ([]ociv1.Descriptor, error) {
-	return []ociv1.Descriptor{}, wraperr.New(fmt.Errorf("Platform descriptor list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return []ociv1.Descriptor{}, wraperr.New(fmt.Errorf("platform descriptor list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 func (m *docker1SignedManifest) GetDescriptorList() ([]ociv1.Descriptor, error) {
-	return []ociv1.Descriptor{}, wraperr.New(fmt.Errorf("Platform descriptor list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return []ociv1.Descriptor{}, wraperr.New(fmt.Errorf("platform descriptor list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 
 func (m *docker1Manifest) GetLayers() ([]ociv1.Descriptor, error) {
@@ -75,17 +75,17 @@ func (m *docker1SignedManifest) GetOrigManifest() interface{} {
 }
 
 func (m *docker1Manifest) GetPlatformDesc(p *ociv1.Platform) (*ociv1.Descriptor, error) {
-	return nil, wraperr.New(fmt.Errorf("Platform lookup not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return nil, wraperr.New(fmt.Errorf("platform lookup not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 func (m *docker1SignedManifest) GetPlatformDesc(p *ociv1.Platform) (*ociv1.Descriptor, error) {
-	return nil, wraperr.New(fmt.Errorf("Platform lookup not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return nil, wraperr.New(fmt.Errorf("platform lookup not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 
 func (m *docker1Manifest) GetPlatformList() ([]*ociv1.Platform, error) {
-	return nil, wraperr.New(fmt.Errorf("Platform list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return nil, wraperr.New(fmt.Errorf("platform list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 func (m *docker1SignedManifest) GetPlatformList() ([]*ociv1.Platform, error) {
-	return nil, wraperr.New(fmt.Errorf("Platform list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return nil, wraperr.New(fmt.Errorf("platform list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 
 func (m *docker1Manifest) MarshalJSON() ([]byte, error) {
