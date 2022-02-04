@@ -1,12 +1,13 @@
+// Package ocidir implements the OCI Image Layout scheme with a directory (not packed in a tar)
 package ocidir
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/fs"
 	"io/ioutil"
 	"path"
+	"sync"
 
 	ociSpecs "github.com/opencontainers/image-spec/specs-go"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -21,22 +22,27 @@ const (
 	aRefName = "org.opencontainers.image.ref.name"
 )
 
+// OCIDir is used for accessing OCI Image Layouts defined as a directory
 type OCIDir struct {
-	fs  rwfs.RWFS
-	log *logrus.Logger
-	gc  bool
+	fs      rwfs.RWFS
+	log     *logrus.Logger
+	gc      bool
+	modRefs map[string]ref.Ref
+	mu      sync.Mutex
 }
 
-type Config struct {
+type config struct {
 	fs  rwfs.RWFS
 	gc  bool
 	log *logrus.Logger
 }
 
-type Opts func(*Config)
+// Opts are used for passing options to ocidir
+type Opts func(*config)
 
+// New creates a new OCIDir with options
 func New(opts ...Opts) *OCIDir {
-	conf := Config{
+	conf := config{
 		log: &logrus.Logger{Out: ioutil.Discard},
 		gc:  true,
 	}
@@ -44,27 +50,39 @@ func New(opts ...Opts) *OCIDir {
 		opt(&conf)
 	}
 	return &OCIDir{
-		fs:  conf.fs,
-		log: conf.log,
-		gc:  conf.gc,
+		fs:      conf.fs,
+		log:     conf.log,
+		gc:      conf.gc,
+		modRefs: map[string]ref.Ref{},
 	}
 }
+
+// WithFS allows the rwfs to be replaced
+// The default is to use the OS, this can be used to sandbox within a folder
+// This can also be used to pass an in-memory filesystem for testing or special use cases
 func WithFS(fs rwfs.RWFS) Opts {
-	return func(c *Config) {
+	return func(c *config) {
 		c.fs = fs
 	}
 }
+
+// WithGC configures the garbage collection setting
+// This defaults to enabled
 func WithGC(gc bool) Opts {
-	return func(c *Config) {
+	return func(c *config) {
 		c.gc = gc
 	}
 }
+
+// WithLog provides a logrus logger
+// By default logging is disabled
 func WithLog(log *logrus.Logger) Opts {
-	return func(c *Config) {
+	return func(c *config) {
 		c.log = log
 	}
 }
 
+// Info is experimental, do not use
 func (o *OCIDir) Info() scheme.Info {
 	return scheme.Info{ManifestPushFirst: true}
 }
@@ -133,9 +151,6 @@ func (o *OCIDir) writeIndex(r ref.Ref, i ociv1.Index) error {
 func (o *OCIDir) valid(dir string) error {
 	layout := ociv1.ImageLayout{}
 	reqVer := "1.0.0"
-	if !fs.ValidPath(dir) {
-		return fmt.Errorf("%w: %s is not a valid path", types.ErrParsingFailed, dir)
-	}
 	fh, err := o.fs.Open(path.Join(dir, ociv1.ImageLayoutFile))
 	if err != nil {
 		return fmt.Errorf("%s cannot be open: %w", ociv1.ImageLayoutFile, err)
@@ -153,6 +168,12 @@ func (o *OCIDir) valid(dir string) error {
 		return fmt.Errorf("unsupported oci layout version, expected %s, received %s", reqVer, layout.Version)
 	}
 	return nil
+}
+
+func (o *OCIDir) refMod(r ref.Ref) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.modRefs[r.Path] = r
 }
 
 func indexCreate() ociv1.Index {

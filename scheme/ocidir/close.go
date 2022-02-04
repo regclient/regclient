@@ -11,12 +11,23 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Close triggers a garbage collection if the underlying path has been modified
 func (o *OCIDir) Close(ctx context.Context, r ref.Ref) error {
 	if !o.gc {
 		return nil
 	}
 
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if _, ok := o.modRefs[r.Path]; !ok {
+		// unmodified, no need to gc ref
+		return nil
+	}
+
 	// perform GC
+	o.log.WithFields(logrus.Fields{
+		"ref": r.CommonName(),
+	}).Debug("running GC")
 	dl := map[string]bool{}
 	// recurse through index, manifests, and blob lists, generating a digest list
 	index, err := o.readIndex(r)
@@ -58,6 +69,7 @@ func (o *OCIDir) Close(ctx context.Context, r ref.Ref) error {
 			}
 		}
 	}
+	delete(o.modRefs, r.Path)
 	return nil
 }
 

@@ -27,6 +27,7 @@ func (o *OCIDir) TagDelete(ctx context.Context, r ref.Ref) error {
 		if t, ok := desc.Annotations[aRefName]; ok && t == r.Tag {
 			// remove matching entry from index
 			index.Manifests = append(index.Manifests[:i], index.Manifests[i+1:]...)
+			o.refMod(r)
 		}
 	}
 	// push manifest back out
@@ -38,7 +39,7 @@ func (o *OCIDir) TagDelete(ctx context.Context, r ref.Ref) error {
 }
 
 // TagList returns a list of tags from the repository
-func (o *OCIDir) TagList(ctx context.Context, r ref.Ref, opts ...scheme.TagOpts) (*tag.TagList, error) {
+func (o *OCIDir) TagList(ctx context.Context, r ref.Ref, opts ...scheme.TagOpts) (*tag.List, error) {
 	// get index
 	index, err := o.readIndex(r)
 	if err != nil {

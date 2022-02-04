@@ -16,6 +16,7 @@ import (
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
+	"github.com/sirupsen/logrus"
 )
 
 // ManifestDelete removes a manifest, including all tags that point to that manifest
@@ -48,6 +49,7 @@ func (o *OCIDir) ManifestDelete(ctx context.Context, r ref.Ref) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete manifest: %w", err)
 	}
+	o.refMod(r)
 	return nil
 }
 
@@ -86,6 +88,10 @@ func (o *OCIDir) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest,
 	if desc.Size == 0 {
 		desc.Size = int64(len(mb))
 	}
+	o.log.WithFields(logrus.Fields{
+		"ref":  r.CommonName(),
+		"file": file,
+	}).Debug("retrieved manifest")
 	return manifest.New(
 		manifest.WithRef(r),
 		manifest.WithDesc(desc),
@@ -184,5 +190,10 @@ func (o *OCIDir) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 			return fmt.Errorf("failed to write index: %w", err)
 		}
 	}
+	o.refMod(r)
+	o.log.WithFields(logrus.Fields{
+		"ref":  r.CommonName(),
+		"file": file,
+	}).Debug("pushed manifest")
 	return nil
 }
