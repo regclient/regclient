@@ -2,11 +2,9 @@ package rwfs
 
 import "io/fs"
 
-// This wraps a fs.FS with permission denied on any write attempt
-
-// read requests pass through to underlying FS and File
+// ROFS wraps a fs.FS with permission denied on any write attempt
 type ROFS struct {
-	fs.FS
+	fs.FS // read requests pass through to underlying FS and File
 }
 type ROFile struct {
 	fs.File
@@ -15,8 +13,11 @@ type ROFile struct {
 type roConfig struct {
 	roFS fs.FS
 }
+
+// ROOpts specifies options for RONew
 type ROOpts func(*roConfig)
 
+// RONew creates a new read-only filesystem
 func RONew(opts ...ROOpts) *ROFS {
 	rc := roConfig{}
 	for _, opt := range opts {
@@ -30,7 +31,8 @@ func RONew(opts ...ROOpts) *ROFS {
 	}
 }
 
-func WithFS(roFS fs.FS) ROOpts {
+// WithROFS provides the fs.FS used by ROFS
+func WithROFS(roFS fs.FS) ROOpts {
 	return func(fc *roConfig) {
 		fc.roFS = roFS
 	}

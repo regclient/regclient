@@ -1,3 +1,4 @@
+// Package rwfs implements a read-write filesystem, extending fs.FS
 package rwfs
 
 import (
@@ -9,6 +10,7 @@ import (
 	"strings"
 )
 
+//lint:file-ignore ST1003 names are uppercase to remain compatible with os names
 const (
 	// exactly one of these must be used
 	O_RDONLY = os.O_RDONLY // read-only
@@ -102,11 +104,20 @@ func CopyRecursive(srcFS fs.FS, srcName string, destFS RWFS, destName string) er
 	return nil
 }
 
+// TODO: add MakeTemp func
+
 func MkdirAll(rwfs RWFS, name string, perm fs.FileMode) error {
 	parts := strings.Split(name, "/")
+	prefix := ""
+	if strings.HasPrefix(name, "/") {
+		prefix = "/"
+	}
 	for i := range parts {
 		// assemble directory up to this point
-		cur := path.Join(parts[:i+1]...)
+		cur := prefix + path.Join(parts[:i+1]...)
+		if cur == "" || cur == "." || cur == "/" {
+			continue
+		}
 		fi, err := Stat(rwfs, cur)
 		if errors.Is(err, fs.ErrNotExist) {
 			// missing, create
@@ -137,6 +148,8 @@ func MkdirAll(rwfs RWFS, name string, perm fs.FileMode) error {
 	}
 	return nil
 }
+
+// TODO: add Rename func
 
 func Stat(rfs fs.FS, name string) (fs.FileInfo, error) {
 	fh, err := rfs.Open(name)
