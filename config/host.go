@@ -1,3 +1,4 @@
+// Package config is used for all regclient configuration settings
 package config
 
 import (
@@ -6,7 +7,6 @@ import (
 	"io"
 	"strings"
 
-	"github.com/regclient/regclient/internal/auth"
 	"github.com/sirupsen/logrus"
 )
 
@@ -71,7 +71,7 @@ func (t *TLSConf) UnmarshalJSON(b []byte) error {
 func (t *TLSConf) UnmarshalText(b []byte) error {
 	switch strings.ToLower(string(b)) {
 	default:
-		return fmt.Errorf("Unknown TLS value \"%s\"", b)
+		return fmt.Errorf("unknown TLS value \"%s\"", b)
 	case "":
 		*t = TLSUndefined
 	case "enabled":
@@ -98,7 +98,7 @@ type Host struct {
 	Pass       string            `json:"pass,omitempty"`
 	Token      string            `json:"token,omitempty"`
 	PathPrefix string            `json:"pathPrefix,omitempty"` // used for mirrors defined within a repository namespace
-	Mirrors    []string          `json:"mirrors,omitempty"`    // list of other ConfigHost Names to use as mirrors
+	Mirrors    []string          `json:"mirrors,omitempty"`    // list of other Host Names to use as mirrors
 	Priority   uint              `json:"priority,omitempty"`   // priority when sorting mirrors, higher priority attempted first
 	API        string            `json:"api,omitempty"`        // experimental: registry API to use
 	APIOpts    map[string]string `json:"apiOpts,omitempty"`    // options for APIs
@@ -106,7 +106,7 @@ type Host struct {
 	BlobMax    int64             `json:"blobMax,omitempty"`    // threshold to switch to chunked upload, -1 to disable, 0 for regclient.blobMaxPut
 }
 
-// HostNew creates a default ConfigHost entry
+// HostNew creates a default Host entry
 func HostNew() *Host {
 	h := Host{
 		TLS:     TLSEnabled,
@@ -115,7 +115,7 @@ func HostNew() *Host {
 	return &h
 }
 
-// HostNewName creates a default ConfigHost with a hostname
+// HostNewName creates a default Host with a hostname
 func HostNewName(host string) *Host {
 	h := Host{
 		Name:     host,
@@ -130,62 +130,54 @@ func HostNewName(host string) *Host {
 	return &h
 }
 
-// AuthCreds returns credentials for a host
-// TODO: remove
-func (host *Host) AuthCreds() func(h string) auth.Cred {
-	return func(h string) auth.Cred {
-		return auth.Cred{User: host.User, Password: host.Pass, Token: host.Token}
-	}
-}
-
 // Merge adds fields from a new config host entry
-func (curHost *Host) Merge(newHost Host, log *logrus.Logger) error {
+func (host *Host) Merge(newHost Host, log *logrus.Logger) error {
 	name := newHost.Name
 	if name == "" {
-		name = curHost.Name
+		name = host.Name
 	}
 	if log == nil {
 		log = &logrus.Logger{Out: io.Discard}
 	}
 
 	// merge the existing and new config host
-	if curHost.Name == "" {
+	if host.Name == "" {
 		// only set the name if it's not initialized, this shouldn't normally change
-		curHost.Name = newHost.Name
+		host.Name = newHost.Name
 	}
 
 	if newHost.User != "" {
-		if curHost.User != "" && curHost.User != newHost.User {
+		if host.User != "" && host.User != newHost.User {
 			log.WithFields(logrus.Fields{
-				"orig": curHost.User,
+				"orig": host.User,
 				"new":  newHost.User,
 				"host": name,
 			}).Warn("Changing login user for registry")
 		}
-		curHost.User = newHost.User
+		host.User = newHost.User
 	}
 
 	if newHost.Pass != "" {
-		if curHost.Pass != "" && curHost.Pass != newHost.Pass {
+		if host.Pass != "" && host.Pass != newHost.Pass {
 			log.WithFields(logrus.Fields{
 				"host": name,
 			}).Warn("Changing login password for registry")
 		}
-		curHost.Pass = newHost.Pass
+		host.Pass = newHost.Pass
 	}
 
 	if newHost.Token != "" {
-		if curHost.Token != "" && curHost.Token != newHost.Token {
+		if host.Token != "" && host.Token != newHost.Token {
 			log.WithFields(logrus.Fields{
 				"host": name,
 			}).Warn("Changing login token for registry")
 		}
-		curHost.Token = newHost.Token
+		host.Token = newHost.Token
 	}
 
 	if newHost.TLS != TLSUndefined {
-		if curHost.TLS != TLSUndefined && curHost.TLS != newHost.TLS {
-			tlsOrig, _ := curHost.TLS.MarshalText()
+		if host.TLS != TLSUndefined && host.TLS != newHost.TLS {
+			tlsOrig, _ := host.TLS.MarshalText()
 			tlsNew, _ := newHost.TLS.MarshalText()
 			log.WithFields(logrus.Fields{
 				"orig": string(tlsOrig),
@@ -193,103 +185,103 @@ func (curHost *Host) Merge(newHost Host, log *logrus.Logger) error {
 				"host": name,
 			}).Warn("Changing TLS settings for registry")
 		}
-		curHost.TLS = newHost.TLS
+		host.TLS = newHost.TLS
 	}
 
 	if newHost.RegCert != "" {
-		if curHost.RegCert != "" && curHost.RegCert != newHost.RegCert {
+		if host.RegCert != "" && host.RegCert != newHost.RegCert {
 			log.WithFields(logrus.Fields{
-				"orig": curHost.RegCert,
+				"orig": host.RegCert,
 				"new":  newHost.RegCert,
 				"host": name,
 			}).Warn("Changing certificate settings for registry")
 		}
-		curHost.RegCert = newHost.RegCert
+		host.RegCert = newHost.RegCert
 	}
 
 	if newHost.ClientCert != "" {
-		if curHost.ClientCert != "" && curHost.ClientCert != newHost.ClientCert {
+		if host.ClientCert != "" && host.ClientCert != newHost.ClientCert {
 			log.WithFields(logrus.Fields{
-				"orig": curHost.ClientCert,
+				"orig": host.ClientCert,
 				"new":  newHost.ClientCert,
 				"host": name,
 			}).Warn("Changing client certificate settings for registry")
 		}
-		curHost.ClientCert = newHost.ClientCert
+		host.ClientCert = newHost.ClientCert
 	}
 
 	if newHost.ClientKey != "" {
-		if curHost.ClientKey != "" && curHost.ClientKey != newHost.ClientKey {
+		if host.ClientKey != "" && host.ClientKey != newHost.ClientKey {
 			log.WithFields(logrus.Fields{
 				"host": name,
 			}).Warn("Changing client certificate key settings for registry")
 		}
-		curHost.ClientKey = newHost.ClientKey
+		host.ClientKey = newHost.ClientKey
 	}
 
 	if newHost.Hostname != "" {
-		if curHost.Hostname != "" && curHost.Hostname != newHost.Hostname {
+		if host.Hostname != "" && host.Hostname != newHost.Hostname {
 			log.WithFields(logrus.Fields{
-				"orig": curHost.Hostname,
+				"orig": host.Hostname,
 				"new":  newHost.Hostname,
 				"host": name,
 			}).Warn("Changing hostname settings for registry")
 		}
-		curHost.Hostname = newHost.Hostname
+		host.Hostname = newHost.Hostname
 	}
 
 	if newHost.PathPrefix != "" {
 		newHost.PathPrefix = strings.Trim(newHost.PathPrefix, "/") // leading and trailing / are not needed
-		if curHost.PathPrefix != "" && curHost.PathPrefix != newHost.PathPrefix {
+		if host.PathPrefix != "" && host.PathPrefix != newHost.PathPrefix {
 			log.WithFields(logrus.Fields{
-				"orig": curHost.PathPrefix,
+				"orig": host.PathPrefix,
 				"new":  newHost.PathPrefix,
 				"host": name,
 			}).Warn("Changing path prefix settings for registry")
 		}
-		curHost.PathPrefix = newHost.PathPrefix
+		host.PathPrefix = newHost.PathPrefix
 	}
 
 	if len(newHost.Mirrors) > 0 {
-		if len(curHost.Mirrors) > 0 && !stringSliceEq(curHost.Mirrors, newHost.Mirrors) {
+		if len(host.Mirrors) > 0 && !stringSliceEq(host.Mirrors, newHost.Mirrors) {
 			log.WithFields(logrus.Fields{
-				"orig": curHost.Mirrors,
+				"orig": host.Mirrors,
 				"new":  newHost.Mirrors,
 				"host": name,
 			}).Warn("Changing mirror settings for registry")
 		}
-		curHost.Mirrors = newHost.Mirrors
+		host.Mirrors = newHost.Mirrors
 	}
 
 	if newHost.Priority != 0 {
-		if curHost.Priority != 0 && curHost.Priority != newHost.Priority {
+		if host.Priority != 0 && host.Priority != newHost.Priority {
 			log.WithFields(logrus.Fields{
-				"orig": curHost.Priority,
+				"orig": host.Priority,
 				"new":  newHost.Priority,
 				"host": name,
 			}).Warn("Changing priority settings for registry")
 		}
-		curHost.Priority = newHost.Priority
+		host.Priority = newHost.Priority
 	}
 
 	if newHost.API != "" {
-		if curHost.API != "" && curHost.API != newHost.API {
+		if host.API != "" && host.API != newHost.API {
 			log.WithFields(logrus.Fields{
-				"orig": curHost.API,
+				"orig": host.API,
 				"new":  newHost.API,
 				"host": name,
 			}).Warn("Changing API settings for registry")
 		}
-		curHost.API = newHost.API
+		host.API = newHost.API
 	}
 
 	if len(newHost.APIOpts) > 0 {
-		if len(curHost.APIOpts) > 0 {
-			merged := copyMapString(curHost.APIOpts)
+		if len(host.APIOpts) > 0 {
+			merged := copyMapString(host.APIOpts)
 			for k, v := range newHost.APIOpts {
-				if curHost.APIOpts[k] != "" && curHost.APIOpts[k] != v {
+				if host.APIOpts[k] != "" && host.APIOpts[k] != v {
 					log.WithFields(logrus.Fields{
-						"orig": curHost.APIOpts[k],
+						"orig": host.APIOpts[k],
 						"new":  newHost.APIOpts[k],
 						"opt":  k,
 						"host": name,
@@ -297,32 +289,32 @@ func (curHost *Host) Merge(newHost Host, log *logrus.Logger) error {
 				}
 				merged[k] = v
 			}
-			curHost.APIOpts = merged
+			host.APIOpts = merged
 		} else {
-			curHost.APIOpts = newHost.APIOpts
+			host.APIOpts = newHost.APIOpts
 		}
 	}
 
 	if newHost.BlobChunk > 0 {
-		if curHost.BlobChunk != 0 && curHost.BlobChunk != newHost.BlobChunk {
+		if host.BlobChunk != 0 && host.BlobChunk != newHost.BlobChunk {
 			log.WithFields(logrus.Fields{
-				"orig": curHost.BlobChunk,
+				"orig": host.BlobChunk,
 				"new":  newHost.BlobChunk,
 				"host": name,
 			}).Warn("Changing blobChunk settings for registry")
 		}
-		curHost.BlobChunk = newHost.BlobChunk
+		host.BlobChunk = newHost.BlobChunk
 	}
 
 	if newHost.BlobMax != 0 {
-		if curHost.BlobMax != 0 && curHost.BlobMax != newHost.BlobMax {
+		if host.BlobMax != 0 && host.BlobMax != newHost.BlobMax {
 			log.WithFields(logrus.Fields{
-				"orig": curHost.BlobMax,
+				"orig": host.BlobMax,
 				"new":  newHost.BlobMax,
 				"host": name,
 			}).Warn("Changing blobMax settings for registry")
 		}
-		curHost.BlobMax = newHost.BlobMax
+		host.BlobMax = newHost.BlobMax
 	}
 
 	return nil
