@@ -38,6 +38,9 @@ jobs:
     - name: Test
       run: make test
 
+    - name: Linting
+      run: make lint
+
     - name: Build artifacts
       if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main'
       run: make artifacts
