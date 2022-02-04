@@ -13,12 +13,13 @@ LD_FLAGS=-s -w -extldflags -static
 GO_BUILD_FLAGS=-ldflags "$(LD_FLAGS)" -tags nolegacy
 DOCKERFILE_EXT:=$(shell if docker build --help 2>/dev/null | grep -q -- '--progress'; then echo ".buildkit"; fi)
 DOCKER_ARGS=--build-arg "VCS_REF=$(VCS_REF)"
+GOPATH:=$(shell go env GOPATH)
 
 .PHONY: all fmt vet test vendor binaries docker artifacts artifact-pre plugin-user plugin-host .FORCE
 
 .FORCE:
 
-all: fmt vet test binaries
+all: fmt vet test lint binaries
 
 fmt:
 	go fmt ./...
@@ -28,6 +29,9 @@ vet:
 
 test:
 	go test ./...
+
+lint: $(GOPATH)/bin/staticcheck
+	$(GOPATH)/bin/staticcheck -checks all ./...
 
 vendor:
 	go mod vendor
@@ -80,3 +84,6 @@ plugin-user:
 
 plugin-host:
 	sudo cp docker-plugin/docker-regclient /usr/libexec/docker/cli-plugins/docker-regctl
+
+$(GOPATH)/bin/staticcheck: 
+	go install "honnef.co/go/tools/cmd/staticcheck@latest"
