@@ -178,13 +178,19 @@ func TestNew(t *testing.T) {
 				return
 			}
 			raw, err := tl.RawBody()
-			if bytes.Compare(tt.raw, raw) != 0 {
+			if err != nil {
+				t.Errorf("error from RawBody: %v", err)
+			} else if !bytes.Equal(tt.raw, raw) {
 				t.Errorf("unexpected raw body: expected %s, received %s", tt.raw, raw)
 			}
 			if tt.repoName != tl.Name {
 				t.Errorf("unexpected repo name: expected %s, received %s", tt.repoName, tl.Name)
 			}
 			tags, err := tl.GetTags()
+			if err != nil {
+				t.Errorf("error from GetTags: %v", err)
+				return
+			}
 			if cmpSliceString(tt.tags, tags) == false {
 				t.Errorf("unexpected tag list: expected %v, received %v", tt.tags, tags)
 			}
