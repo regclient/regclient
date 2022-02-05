@@ -314,6 +314,12 @@ Additionally for available fields, review the source for various types:
 - Docker manifest: <https://github.com/docker/distribution/tree/master/manifest/schema2>
 - Docker manifest list: <https://github.com/docker/distribution/tree/master/manifest/manifestlist>
 
+Several commands expand the following format strings:
+
+- `raw`: this returns the raw headers and body.
+- `rawBody`, `raw-body`, or `body`: this returns the original body of the response.
+- `rawHeaders`, `raw-headers`, or `headers`: this returns the full HTTP headers of the response.
+
 Examples:
 
 ```shell
@@ -324,4 +330,6 @@ regctl image inspect --format '{{jsonPretty .}}' alpine:latest
 regctl image inspect --format '{{range $k, $v := .Config.Labels}}{{$k}} = {{$v}}{{println}}{{end}}' ... # loop through labels
 
 regctl image inspect --format '{{range $k, $v := .Config.Labels}}{{if eq $k "org.label-schema.build-date"}}{{$v}}{{end}}{{end}}' ... # output a specific label
+
+regctl image manifest --format raw-body alpine:latest # returns the raw manifest
 ```
