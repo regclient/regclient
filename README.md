@@ -10,25 +10,39 @@ This includes `regctl` for a command line interface to manage registries.
 
 ![regctl demo](docs/demo.gif)
 
+## regclient Features
+
+- Provides a client interface to interacting with registries.
+- Images may be inspected without pulling the layers, allowing quick access to the image manifest and configuration.
+- Tags may be listed for a repository.
+- Repositories may be listed from a registry (if supported).
+- Copying an image only pulls layers when needed, allowing images to be quickly retagged or promoted across repositories.
+- Multi-platform images are supported, allowing all platforms to be copied between registries.
+- Digest tags used by projects like sigstore/cosign are supported, allowing signature, attestation, and SBOM metadata to be copied with the image.
+- Digests may be queried for a tag without pulling the manifest.
+- Rate limits may be queried from the registry without pulling an image (useful for Docker Hub).
+- Images may be imported and exported to both OCI and Docker formatted tar files.
+- OCI Layout is supported for copying images to and from a local directory.
+- Delete APIs have been provided for tags, manifests, and blobs (the tag deletion will only delete a single tag even if multiple tags point to the same digest).
+- Registry logins are imported from docker when available
+- Self signed, insecure, and http-only registries are all supported.
+- Requests will retry and fall back to chunked uploads when network issues are encountered.
+
 ## regctl Features
 
-- Ability to inspect repo tags, manifests, and image configs without downloading the full image.
-- Ability to copy or retag an image without pulling it into docker.
-  Layers are only pulled if you are copying between different registries and the target registry does not have the layers already.
-- Ability to copy all platforms of a multi-platform image.
-- Ability to import an image to a registry from a tar file (OCI or Docker formatted).
-- Ability to export an image from a registry to a tar file (using a combined OCI and Docker format).
-- Ability to delete an image manifest.
-- Ability to delete a tag without removing the entire manifest.
-- Uses docker registry logins and `/etc/docker/certs.d` by default to support private repositories and self signed registries.
-- Shows current usage of Docker Hub's rate limit.
+`regctl` is a CLI interface to the `regclient` library.
+In addition to the features listed for `regclient`, `regctl` adds the following abilities:
+
+- Formatting output with templates.
+- Push and pull arbitrary artifacts.
 
 ## regsync features
 
-- Ability to copy or retag an image without pulling it into docker.
-  Layers are only pulled if you are copying between different registries and the target registry does not have the layers already.
-- Ability to copy all platforms of a multi-platform image.
-- Mirrors repositories or images based on a yaml configuration.
+`regsync` is an image mirroring tool.
+It will copy images between two locations with the following additional features:
+
+- Uses a yaml configuration.
+- The `regclient` copy is used to only pull needed layers, supporting multi-platform, and additional metadata.
 - Can use user's docker configuration for registry credentials.
 - Ability to run on a cron schedule, one time synchronization, or only check for stale images.
 - Ability to backup previous target image before overwriting.
@@ -36,6 +50,8 @@ This includes `regctl` for a command line interface to manage registries.
 - Ability to mirror multiple images concurrently.
 
 ## regbot features
+
+`regbot` is a scripting tool on top of the `regclient` API with the following features:
 
 - Runs user provided scripts based on a yaml configuration.
 - Scripts are written in Lua and executed directly in Go.
@@ -53,19 +69,15 @@ This includes `regctl` for a command line interface to manage registries.
 
 ## Development Status
 
-This project is in active development, a few features are not complete.
-Unfinished or not yet started work includes:
-
-- Ability to retry from a partial layer download.
-- Documentation.
-- Testing.
+This project is in active development.
+Various Go APIs may change, but efforts will be made to provide aliases and stubs for any removed API.
 
 ## Building
 
 ```shell
 git clone https://github.com/regclient/regclient.git
 cd regclient
-go build -o regctl ./cmd/regctl/
+make
 ```
 
 ## Downloading Binaries
@@ -80,6 +92,8 @@ The latest release can be downloaded using curl (adjust "regctl" and
 curl -L https://github.com/regclient/regclient/releases/latest/download/regctl-linux-amd64 >regctl
 chmod 755 regctl
 ```
+
+Merges into the main branch also have binaries available as artifacts within [GitHub Actions](https://github.com/regclient/regclient/actions/workflows/go.yml?query=branch%3Amain)
 
 ## Running as a Container
 
@@ -166,25 +180,3 @@ Available Commands:
 ## Usage
 
 See the [project documentation](docs/README.md).
-
-## Comparison to Other Tools
-
-Registry client API:
-
-- containerd:
-  containerd'd registry APIs focus more on pulling images than on a general purpose registry client API.
-  This means various registry API calls are not provided.
-- distribution/distribution:
-  The distribution project is focused on the server side of the registry API.
-  There are a few client API's, but they appear to be intended for internal use.
-
-There are also a variety of registry command line tools available:
-
-- genuinetools/img:
-  img works on top of buildkit for image creation and management.
-  Using this for a registry client means including lots of dependencies that many will not need.
-- genuinetools/reg:
-  reg is probably the closest match to this project.
-  Some features included in regctl that aren't included in reg are the ability to inject self signed certs, store login credentials separate from docker, copy or retag images, and export images into a tar file.
-- containers/skopeo:
-  Because of RedHat's push to remove any docker solutions from their stack, their skopeo project wasn't considered when searching for a complement to docker's tooling.

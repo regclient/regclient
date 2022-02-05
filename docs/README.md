@@ -1,15 +1,32 @@
 # regclient Documentation
 
-- [API](#regclient-api)
-- [regctl](regctl.md)
-- [regsync](regsync.md)
-- [regbot](regbot.md)
+- [Project Specific Documentation](#project-dpecific-documentation)
+- [Schemes](#schemes)
 - [Template Functions](#template-functions)
 - [FAQ](#faq)
 
-## regclient API
+## Project Specific Documentation
 
-API docs are still needed
+- [regclient API](https://pkg.go.dev/github.com/regclient/regclient)
+- [regctl](regctl.md)
+- [regsync](regsync.md)
+- [regbot](regbot.md)
+
+## Schemes
+
+For referencing a repository or image, the following schemes are supported:
+
+- Registry:
+  These are represented with the traditional image syntax (`registry:port/namespace/repo:tag`).
+  The Docker Hub defaults are applied, if an image is missing a registry (with either a `.`, `:`, or `localhost` in the field before the first `/`) then it defaults to `docker.io`.
+  And if a repository on Docker Hub is not provided, `library` is assumed which is the default for all Docker official images.
+  Examples include `alpine` which pulls `docker.io/library/alpine:latest` from Docker Hub, and `registry.example.com:5000/username/project@sha256:3f5754829e9747db418bd1a5a40f418b073ed863cba4d57aaeaefa08118c4743` which pulls a specific digest from the named registry.
+- `ocidir://`:
+  This implements an [OCI Layout](https://github.com/opencontainers/image-spec/blob/main/image-layout.md) to a local directory.
+  Multiple tags may be pushed/pulled to the same directory, making it equivalent to a repository on a registry.
+  Use `ocidir://name:tag` to refer to the `./name` directory and `ocidir:///tmp/name:tag` to refer to the `/tmp/name` directory (the third leading slash denotes an absolute path).
+
+These schemes can be used anywhere an image is referenced.
 
 ## Template Functions
 
