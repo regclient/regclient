@@ -217,6 +217,7 @@ func (a *auth) HandleResponse(resp *http.Response) error {
 		"challenge": cl,
 	}).Debug("Auth request parsed")
 	if len(cl) < 1 {
+		a.hs[host] = map[string]Handler{}
 		return ErrEmptyChallenge
 	}
 	goodChallenge := false
