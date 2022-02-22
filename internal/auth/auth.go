@@ -534,8 +534,7 @@ func (b *BearerHandler) AddScope(scope string) error {
 
 	// delete any scope specific or invalid token
 	// also delete any associated refresh tokens
-	b.token.Token = ""
-	b.token.RefreshToken = ""
+	b.clearToken()
 	return nil
 }
 
@@ -573,8 +572,7 @@ func (b *BearerHandler) ProcessChallenge(c Challenge) error {
 	}
 
 	// delete any scope specific or invalid token
-	b.token.Token = ""
-
+	b.clearToken()
 	return nil
 }
 
@@ -719,6 +717,12 @@ func (b *BearerHandler) validateResponse(resp *http.Response) error {
 	}
 
 	return nil
+}
+
+// Clears any token / refresh token references
+func (b *BearerHandler) clearToken() {
+	b.token.Token = ""
+	b.token.RefreshToken = ""
 }
 
 // JWTHubHandler supports JWT auth type requests
