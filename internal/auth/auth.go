@@ -533,7 +533,9 @@ func (b *BearerHandler) AddScope(scope string) error {
 	}
 
 	// delete any scope specific or invalid token
+	// also delete any associated refresh tokens
 	b.token.Token = ""
+	b.token.RefreshToken = ""
 	return nil
 }
 
