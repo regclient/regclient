@@ -131,19 +131,19 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 	mdh, errD := rc.ManifestHead(ctx, refTgt)
 	if opt.forceRecursive {
 		// copy forced, unable to run below skips
-	} else if errD == nil && refTgt.Digest != "" && digest.Digest(refTgt.Digest) == mdh.GetDigest() {
+	} else if errD == nil && refTgt.Digest != "" && digest.Digest(refTgt.Digest) == mdh.GetDescriptor().Digest {
 		rc.log.WithFields(logrus.Fields{
 			"target": refTgt.Reference,
-			"digest": mdh.GetDigest().String(),
+			"digest": mdh.GetDescriptor().Digest.String(),
 		}).Info("Copy not needed, target already up to date")
 		return nil
 	} else if errD == nil && refTgt.Digest == "" {
 		msh, errS := rc.ManifestHead(ctx, refSrc)
-		if errS == nil && msh.GetDigest() == mdh.GetDigest() {
+		if errS == nil && msh.GetDescriptor().Digest == mdh.GetDescriptor().Digest {
 			rc.log.WithFields(logrus.Fields{
 				"source": refSrc.Reference,
 				"target": refTgt.Reference,
-				"digest": mdh.GetDigest().String(),
+				"digest": mdh.GetDescriptor().Digest.String(),
 			}).Info("Copy not needed, target already up to date")
 			return nil
 		}
@@ -175,7 +175,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 		// copy components of the image if the repository is different
 		if m.IsList() {
 			// manifest lists need to recursively copy nested images by digest
-			pd, err := m.GetDescriptorList()
+			pd, err := m.GetManifestList()
 			if err != nil {
 				return err
 			}
@@ -229,7 +229,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 		} else {
 			// copy components of an image
 			// transfer the config
-			cd, err := m.GetConfigDigest()
+			cd, err := m.GetConfig()
 			if err != nil {
 				// docker schema v1 does not have a config object, ignore if it's missing
 				if !errors.Is(err, types.ErrUnsupportedMediaType) {
@@ -243,13 +243,13 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 				rc.log.WithFields(logrus.Fields{
 					"source": refSrc.Reference,
 					"target": refTgt.Reference,
-					"digest": cd.String(),
+					"digest": cd.Digest.String(),
 				}).Info("Copy config")
-				if err := rc.BlobCopy(ctx, refSrc, refTgt, cd); err != nil {
+				if err := rc.BlobCopy(ctx, refSrc, refTgt, cd.Digest); err != nil {
 					rc.log.WithFields(logrus.Fields{
 						"source": refSrc.Reference,
 						"target": refTgt.Reference,
-						"digest": cd.String(),
+						"digest": cd.Digest.String(),
 						"err":    err,
 					}).Warn("Failed to copy config")
 					return err
@@ -323,7 +323,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 			}
 			opt.tagList = tags
 		}
-		prefix := fmt.Sprintf("%s-%s", m.GetDigest().Algorithm(), m.GetDigest().Encoded())
+		prefix := fmt.Sprintf("%s-%s", m.GetDescriptor().Digest.Algorithm(), m.GetDescriptor().Digest.Encoded())
 		for _, tag := range opt.tagList {
 			if strings.HasPrefix(tag, prefix) {
 				refTagSrc := refSrc
@@ -391,19 +391,9 @@ func (rc *RegClient) ImageExport(ctx context.Context, ref ref.Ref, outStream io.
 	}
 
 	// create a manifest descriptor
-	mBody, err := m.RawBody()
-	if err != nil {
-		return err
-	}
-	mDesc := ociv1.Descriptor{
-		MediaType: m.GetMediaType(),
-		Digest:    m.GetDigest(),
-		Size:      int64(len(mBody)),
-		Annotations: map[string]string{
-			annotationImageName: ref.CommonName(),
-			annotationRefName:   ref.Tag,
-		},
-	}
+	mDesc := m.GetDescriptor()
+	mDesc.Annotations[annotationImageName] = ref.CommonName()
+	mDesc.Annotations[annotationRefName] = ref.Tag
 
 	// generate/write an OCI index
 	ociIndex.SchemaVersion = 2
@@ -415,7 +405,7 @@ func (rc *RegClient) ImageExport(ctx context.Context, ref ref.Ref, outStream io.
 
 	// append to docker manifest with tag, config filename, each layer filename, and layer descriptors
 	if !m.IsList() {
-		conf, err := m.GetConfigDescriptor()
+		conf, err := m.GetConfig()
 		if err != nil {
 			return err
 		}
@@ -486,7 +476,7 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 		}
 
 		// add config
-		confD, err := m.GetConfigDescriptor()
+		confD, err := m.GetConfig()
 		// ignore unsupported media type errors
 		if err != nil && !errors.Is(err, types.ErrUnsupportedMediaType) {
 			return err
@@ -536,7 +526,7 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 			return err
 		}
 		// recurse over entries in the list/index
-		mdl, err := m.GetDescriptorList()
+		mdl, err := m.GetManifestList()
 		if err != nil {
 			return err
 		}
@@ -769,7 +759,7 @@ func (rc *RegClient) imageImportOCIAddHandler(ctx context.Context, ref ref.Ref, 
 // imageImportOCIHandleManifest recursively processes index and manifest entries from an OCI layout tar
 func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.Ref, m manifest.Manifest, trd *tarReadData, push bool) error {
 	// cache the manifest to avoid needing to pull again later, this is used if index.json is a wrapper around some other manifest
-	trd.manifests[m.GetDigest()] = m
+	trd.manifests[m.GetDescriptor().Digest] = m
 
 	handleManifest := func(d ociv1.Descriptor) {
 		filename := tarOCILayoutDescPath(d)
@@ -808,7 +798,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 
 	if !push {
 		// for root index, add handler for matching reference (or only reference)
-		dl, err := m.GetDescriptorList()
+		dl, err := m.GetManifestList()
 		if err != nil {
 			return err
 		}
@@ -839,7 +829,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 		})
 	} else if m.IsList() {
 		// for index/manifest lists, add handlers for each embedded manifest
-		dl, err := m.GetDescriptorList()
+		dl, err := m.GetManifestList()
 		if err != nil {
 			return err
 		}
@@ -849,7 +839,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 	} else {
 		// else if a single image/manifest
 		// add handler for the config descriptor if it's defined
-		cd, err := m.GetConfigDescriptor()
+		cd, err := m.GetConfig()
 		if err == nil {
 			filename := tarOCILayoutDescPath(cd)
 			if !trd.processed[filename] && trd.handlers[filename] == nil {
@@ -880,7 +870,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 	if push {
 		trd.finish = append(trd.finish, func() error {
 			mRef := ref
-			mRef.Digest = string(m.GetDigest())
+			mRef.Digest = string(m.GetDescriptor().Digest)
 			_, err := rc.ManifestHead(ctx, mRef)
 			if err == nil {
 				return nil

@@ -18,6 +18,7 @@ import (
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/reqresp"
 	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/sirupsen/logrus"
 )
@@ -160,11 +161,11 @@ func TestManifest(t *testing.T) {
 			t.Errorf("Failed running ManifestGet: %v", err)
 			return
 		}
-		if mGet.GetMediaType() != types.MediaTypeDocker2Manifest {
-			t.Errorf("Unexpected media type: %s", mGet.GetMediaType())
+		if manifest.GetMediaType(mGet) != types.MediaTypeDocker2Manifest {
+			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mGet))
 		}
-		if mGet.GetDigest() != mDigest {
-			t.Errorf("Unexpected digest: %s", mGet.GetDigest().String())
+		if mGet.GetDescriptor().Digest != mDigest {
+			t.Errorf("Unexpected digest: %s", mGet.GetDescriptor().Digest.String())
 		}
 	})
 	t.Run("Head", func(t *testing.T) {
@@ -177,11 +178,11 @@ func TestManifest(t *testing.T) {
 			t.Errorf("Failed running ManifestHead: %v", err)
 			return
 		}
-		if mHead.GetMediaType() != types.MediaTypeDocker2Manifest {
-			t.Errorf("Unexpected media type: %s", mHead.GetMediaType())
+		if manifest.GetMediaType(mHead) != types.MediaTypeDocker2Manifest {
+			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mHead))
 		}
-		if mHead.GetDigest() != mDigest {
-			t.Errorf("Unexpected digest: %s", mHead.GetDigest().String())
+		if mHead.GetDescriptor().Digest != mDigest {
+			t.Errorf("Unexpected digest: %s", mHead.GetDescriptor().Digest.String())
 		}
 	})
 	t.Run("Head No Head", func(t *testing.T) {
@@ -206,11 +207,11 @@ func TestManifest(t *testing.T) {
 			t.Errorf("Failed running ManifestGet: %v", err)
 			return
 		}
-		if mNohead.GetMediaType() != types.MediaTypeDocker2Manifest {
-			t.Errorf("Unexpected media type: %s", mNohead.GetMediaType())
+		if manifest.GetMediaType(mNohead) != types.MediaTypeDocker2Manifest {
+			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mNohead))
 		}
-		if mNohead.GetDigest() != mDigest {
-			t.Errorf("Unexpected digest: %s", mNohead.GetDigest().String())
+		if mNohead.GetDescriptor().Digest != mDigest {
+			t.Errorf("Unexpected digest: %s", mNohead.GetDescriptor().Digest.String())
 		}
 	})
 	t.Run("Missing", func(t *testing.T) {

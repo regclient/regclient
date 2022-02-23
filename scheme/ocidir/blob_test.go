@@ -32,7 +32,7 @@ func TestBlob(t *testing.T) {
 		t.Errorf("expected manifest list")
 		return
 	}
-	dl, err := ml.GetDescriptorList()
+	dl, err := ml.GetManifestList()
 	if err != nil || len(dl) < 1 {
 		t.Errorf("descriptor list (%d): %v", len(dl), err)
 		return

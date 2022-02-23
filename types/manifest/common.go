@@ -25,6 +25,11 @@ func (m *common) GetDigest() digest.Digest {
 	return m.desc.Digest
 }
 
+// GetDescriptor returns the descriptor
+func (m *common) GetDescriptor() ociv1.Descriptor {
+	return m.desc
+}
+
 // GetMediaType returns the media type
 func (m *common) GetMediaType() string {
 	return m.desc.MediaType

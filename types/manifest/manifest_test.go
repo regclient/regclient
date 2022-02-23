@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"testing"
 
+	dockerManifestList "github.com/docker/distribution/manifest/manifestlist"
 	dockerSchema1 "github.com/docker/distribution/manifest/schema1"
 	dockerSchema2 "github.com/docker/distribution/manifest/schema2"
 	"github.com/opencontainers/go-digest"
@@ -281,19 +282,20 @@ var (
 `)
 )
 
+var (
+	digestDockerSchema2          = digest.FromBytes(rawDockerSchema2)
+	digestDockerSchema2List      = digest.FromBytes(rawDockerSchema2List)
+	digestInvalid                = digest.FromString("invalid")
+	digestDockerSchema1Signed, _ = digest.Parse("sha256:f3ef067962554c3352dc0c659ca563f73cc396fe0dea2a2c23a7964c6290f782")
+	digestOCIImage               = digest.FromBytes(rawOCIImage)
+	digestOCIIndex               = digest.FromBytes(rawOCIIndex)
+)
+
 func TestNew(t *testing.T) {
 	r, _ := ref.New("localhost:5000/test:latest")
-	digestDockerSchema2 := digest.FromBytes(rawDockerSchema2)
-	digestML := digest.FromBytes(rawDockerSchema2List)
-	digestInvalid := digest.FromString("invalid")
-	digestDockerSchema1Signed, err := digest.Parse("sha256:f3ef067962554c3352dc0c659ca563f73cc396fe0dea2a2c23a7964c6290f782")
-	if err != nil {
-		t.Fatalf("failed to parse docker schema1 signed digest string: %v", err)
-	}
-	digestOCIImage := digest.FromBytes(rawOCIImage)
 	var manifestDockerSchema2, manifestInvalid dockerSchema2.Manifest
 	var manifestDockerSchema1Signed dockerSchema1.SignedManifest
-	err = json.Unmarshal(rawDockerSchema2, &manifestDockerSchema2)
+	err := json.Unmarshal(rawDockerSchema2, &manifestDockerSchema2)
 	if err != nil {
 		t.Fatalf("failed to unmarshal docker schema2 json: %v", err)
 	}
@@ -358,7 +360,7 @@ func TestNew(t *testing.T) {
 				WithRaw(rawDockerSchema2List),
 				WithHeader(http.Header{
 					"Content-Type":          []string{MediaTypeDocker2ManifestList},
-					"Docker-Content-Digest": []string{digestML.String()},
+					"Docker-Content-Digest": []string{digestDockerSchema2List.String()},
 				}),
 			},
 			wantE: nil,
@@ -396,7 +398,7 @@ func TestNew(t *testing.T) {
 					"Docker-Content-Digest": []string{digestInvalid.String()},
 				}),
 			},
-			wantE: fmt.Errorf("manifest digest mismatch, expected %s, computed %s", digestInvalid, digestML),
+			wantE: fmt.Errorf("manifest digest mismatch, expected %s, computed %s", digestInvalid, digestDockerSchema2List),
 		},
 		{
 			name: "Ambiguous OCI Image",
@@ -516,13 +518,228 @@ func TestNew(t *testing.T) {
 			if tt.wantR.Scheme != "" && m.GetRef().CommonName() != tt.wantR.CommonName() {
 				t.Errorf("ref mismatch, expected %s, received %s", tt.wantR.CommonName(), m.GetRef().CommonName())
 			}
-			if tt.wantDesc.Digest != "" && m.GetDigest() != tt.wantDesc.Digest {
-				t.Errorf("digest mismatch, expected %s, received %s", tt.wantDesc.Digest, m.GetDigest())
+			if tt.wantDesc.Digest != "" && GetDigest(m) != tt.wantDesc.Digest {
+				t.Errorf("digest mismatch, expected %s, received %s", tt.wantDesc.Digest, GetDigest(m))
 			}
-			if tt.wantDesc.MediaType != "" && m.GetMediaType() != tt.wantDesc.MediaType {
-				t.Errorf("media type mismatch, expected %s, received %s", tt.wantDesc.MediaType, m.GetMediaType())
+			if tt.wantDesc.MediaType != "" && GetMediaType(m) != tt.wantDesc.MediaType {
+				t.Errorf("media type mismatch, expected %s, received %s", tt.wantDesc.MediaType, GetMediaType(m))
 			}
 
 		})
 	}
+}
+
+func TestModify(t *testing.T) {
+	addDigest := digest.FromString("new layer digest")
+	addDesc := ociv1.Descriptor{
+		Digest: addDigest,
+		Size:   42,
+		Annotations: map[string]string{
+			"test": "new descriptor",
+		},
+	}
+	// test list includes each original media type, a layer to add, run the convert
+	// verify new layer, altered digest, and/or any error conditions
+	tests := []struct {
+		name     string
+		opts     []Opts
+		addDesc  ociv1.Descriptor
+		origDesc ociv1.Descriptor
+	}{
+		{
+			name: "Docker Schema 2 Manifest",
+			opts: []Opts{
+				WithDesc(ociv1.Descriptor{
+					MediaType: types.MediaTypeDocker2Manifest,
+					Digest:    digestDockerSchema2,
+					Size:      int64(len(rawDockerSchema2)),
+				}),
+				WithRaw(rawDockerSchema2),
+			},
+			addDesc: addDesc,
+			origDesc: ociv1.Descriptor{
+				MediaType: types.MediaTypeDocker2Manifest,
+				Digest:    digestDockerSchema2,
+				Size:      int64(len(rawDockerSchema2)),
+			},
+		},
+		{
+			name: "Docker Schema 2 List",
+			opts: []Opts{
+				WithDesc(ociv1.Descriptor{
+					MediaType: types.MediaTypeDocker2ManifestList,
+					Digest:    digestDockerSchema2List,
+					Size:      int64(len(rawDockerSchema2List)),
+				}),
+				WithRaw(rawDockerSchema2List),
+			},
+			addDesc: addDesc,
+			origDesc: ociv1.Descriptor{
+				MediaType: types.MediaTypeDocker2ManifestList,
+				Digest:    digestDockerSchema2List,
+				Size:      int64(len(rawDockerSchema2List)),
+			},
+		},
+		{
+			name: "OCI Image",
+			opts: []Opts{
+				WithRaw(rawOCIImage),
+				WithDesc(ociv1.Descriptor{
+					MediaType: types.MediaTypeOCI1Manifest,
+					Digest:    digestOCIImage,
+					Size:      int64(len(rawOCIImage)),
+				}),
+			},
+			addDesc: addDesc,
+			origDesc: ociv1.Descriptor{
+				MediaType: types.MediaTypeOCI1Manifest,
+				Digest:    digestOCIImage,
+				Size:      int64(len(rawOCIImage)),
+			},
+		},
+		{
+			name: "OCI Index",
+			opts: []Opts{
+				WithRaw(rawOCIIndex),
+				WithDesc(ociv1.Descriptor{
+					MediaType: types.MediaTypeOCI1ManifestList,
+					Digest:    digestOCIIndex,
+					Size:      int64(len(rawOCIIndex)),
+				}),
+			},
+			addDesc: addDesc,
+			origDesc: ociv1.Descriptor{
+				MediaType: types.MediaTypeOCI1ManifestList,
+				Digest:    digestOCIIndex,
+				Size:      int64(len(rawOCIIndex)),
+			},
+		},
+	}
+
+	// Loop of tests performing a round trip with different types
+	// round trip creates the manifest, GetOrig, to OCI, modify, to Orig, SetOrig
+	// resulting manifest should have a changed digest from the added layer
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, err := New(tt.opts...)
+			if err != nil {
+				t.Errorf("error creating manifest: %v", err)
+				return
+			}
+			orig := m.GetOrig()
+			if m.IsList() {
+				ociI, err := OCIIndexFromAny(orig)
+				if err != nil {
+					t.Errorf("error converting to index: %v", err)
+					return
+				}
+				ociI.Manifests = append(ociI.Manifests, tt.addDesc)
+				err = OCIIndexToAny(ociI, &orig)
+				if err != nil {
+					t.Errorf("error converting back to orig: %v", err)
+					return
+				}
+			} else {
+				ociM, err := OCIManifestFromAny(orig)
+				if err != nil {
+					t.Errorf("error converting to index: %v", err)
+					return
+				}
+				ociM.Layers = append(ociM.Layers, tt.addDesc)
+				err = OCIManifestToAny(ociM, &orig)
+				if err != nil {
+					t.Errorf("error converting back to orig: %v", err)
+					return
+				}
+			}
+			err = m.SetOrig(orig)
+			if err != nil {
+				t.Errorf("error setting orig: %v", err)
+				return
+			}
+			raw, _ := m.RawBody()
+			t.Logf("raw manifest: %s", string(raw))
+			desc := m.GetDescriptor()
+			if tt.origDesc.Digest == desc.Digest {
+				t.Errorf("digest was not modified")
+			}
+			if tt.origDesc.MediaType != desc.MediaType {
+				t.Errorf("media type was modified: %s", desc.MediaType)
+			}
+		})
+	}
+
+	// Other test cases for error conditions
+	var manifestDockerSchema2 dockerSchema2.Manifest
+	var manifestDockerSchema2List dockerManifestList.ManifestList
+	var manifestOCIImage ociv1.Manifest
+	var manifestOCIIndex ociv1.Index
+	err := json.Unmarshal(rawDockerSchema2, &manifestDockerSchema2)
+	if err != nil {
+		t.Errorf("failed to unmarshal docker schema2 json: %v", err)
+		return
+	}
+	err = json.Unmarshal(rawDockerSchema2List, &manifestDockerSchema2List)
+	if err != nil {
+		t.Errorf("failed to unmarshal docker schema2 list json: %v", err)
+		return
+	}
+	err = json.Unmarshal(rawOCIImage, &manifestOCIImage)
+	if err != nil {
+		t.Errorf("failed to unmarshal OCI image json: %v", err)
+		return
+	}
+	err = json.Unmarshal(rawOCIIndex, &manifestOCIIndex)
+	if err != nil {
+		t.Errorf("failed to unmarshal OCI index json: %v", err)
+		return
+	}
+	t.Run("BadIndex", func(t *testing.T) {
+		_, err = OCIIndexFromAny(manifestDockerSchema2)
+		if err == nil {
+			t.Errorf("did not fail converting docker manifest to OCI index")
+		}
+	})
+	t.Run("BadManifest", func(t *testing.T) {
+		_, err = OCIManifestFromAny(manifestDockerSchema2List)
+		if err == nil {
+			t.Errorf("did not fail converting docker manifest list to OCI image")
+		}
+	})
+	t.Run("IndexToManifest", func(t *testing.T) {
+		err = OCIIndexToAny(manifestOCIIndex, &manifestDockerSchema2)
+		if err == nil {
+			t.Errorf("did not fail converting OCI index to docker image")
+		}
+	})
+	t.Run("ManifestToIndex", func(t *testing.T) {
+		err = OCIManifestToAny(manifestOCIImage, &manifestDockerSchema2List)
+		if err == nil {
+			t.Errorf("did not fail converting OCI image to docker manifest list")
+		}
+	})
+	t.Run("IndexWithoutPtr", func(t *testing.T) {
+		err = OCIIndexToAny(manifestOCIIndex, manifestDockerSchema2List)
+		if err == nil {
+			t.Errorf("did not fail converting OCI index to non-pointer")
+		}
+	})
+	t.Run("ManifestWithoutPtr", func(t *testing.T) {
+		err = OCIManifestToAny(manifestOCIImage, manifestDockerSchema2)
+		if err == nil {
+			t.Errorf("did not fail converting OCI image to non-pointer")
+		}
+	})
+	t.Run("IndexNil", func(t *testing.T) {
+		err = OCIIndexToAny(manifestOCIIndex, nil)
+		if err == nil {
+			t.Errorf("did not fail converting OCI index to non-pointer")
+		}
+	})
+	t.Run("ManifestNil", func(t *testing.T) {
+		err = OCIManifestToAny(manifestOCIImage, nil)
+		if err == nil {
+			t.Errorf("did not fail converting OCI image to non-pointer")
+		}
+	})
 }

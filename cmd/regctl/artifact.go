@@ -127,11 +127,11 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 
 	// if config-file defined, create file as writer, perform a blob get
 	if artifactOpts.configFile != "" {
-		d, err := mm.GetConfigDigest()
+		d, err := mm.GetConfig()
 		if err != nil {
 			return err
 		}
-		rdr, err := rc.BlobGet(ctx, r, d)
+		rdr, err := rc.BlobGet(ctx, r, d.Digest)
 		if err != nil {
 			return err
 		}

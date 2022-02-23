@@ -11,6 +11,7 @@ import (
 
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -34,14 +35,14 @@ func TestManifest(t *testing.T) {
 	if err != nil {
 		t.Errorf("manifest get: %v", err)
 	}
-	if ml.GetMediaType() != types.MediaTypeDocker2ManifestList {
-		t.Errorf("manifest mt, expected %s, received %s", types.MediaTypeDocker2ManifestList, ml.GetMediaType())
+	if manifest.GetMediaType(ml) != types.MediaTypeDocker2ManifestList {
+		t.Errorf("manifest mt, expected %s, received %s", types.MediaTypeDocker2ManifestList, manifest.GetMediaType(ml))
 	}
 	if !ml.IsList() {
 		t.Errorf("expected manifest list")
 		return
 	}
-	dl, err := ml.GetDescriptorList()
+	dl, err := ml.GetManifestList()
 	if err != nil || len(dl) < 1 {
 		t.Errorf("descriptor list (%d): %v", len(dl), err)
 		return
@@ -58,9 +59,9 @@ func TestManifest(t *testing.T) {
 		t.Errorf("manifest get: %v", err)
 		return
 	}
-	_, err = m.GetConfigDigest()
+	_, err = m.GetConfig()
 	if err != nil {
-		t.Errorf("config digest: %v", err)
+		t.Errorf("config: %v", err)
 		return
 	}
 	// test manifest put to a memfs

@@ -6,14 +6,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/containerd/containerd/platforms"
 	dockerDistribution "github.com/docker/distribution"
+	"github.com/docker/distribution/manifest"
 	dockerManifestList "github.com/docker/distribution/manifest/manifestlist"
 	dockerSchema1 "github.com/docker/distribution/manifest/schema1"
 	dockerSchema2 "github.com/docker/distribution/manifest/schema2"
 	digest "github.com/opencontainers/go-digest"
+	"github.com/opencontainers/image-spec/specs-go"
 	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/internal/wraperr"
 	"github.com/regclient/regclient/types"
@@ -23,23 +27,26 @@ import (
 // Manifest interface is implemented by all supported manifests but
 // many calls are only supported by certain underlying media types.
 type Manifest interface {
-	GetConfigDescriptor() (ociv1.Descriptor, error)
-	GetConfigDigest() (digest.Digest, error)
-	GetDigest() digest.Digest
-	GetDescriptorList() ([]ociv1.Descriptor, error)
+	GetConfig() (ociv1.Descriptor, error)
+	GetDescriptor() ociv1.Descriptor
 	GetLayers() ([]ociv1.Descriptor, error)
-	GetMediaType() string
-	GetPlatformDesc(p *ociv1.Platform) (*ociv1.Descriptor, error)
-	GetPlatformList() ([]*ociv1.Platform, error)
-	GetOrigManifest() interface{}
-	GetRateLimit() types.RateLimit
+	GetManifestList() ([]ociv1.Descriptor, error)
+	GetOrig() interface{}
 	GetRef() ref.Ref
-	HasRateLimit() bool
 	IsList() bool
 	IsSet() bool
 	MarshalJSON() ([]byte, error)
 	RawBody() ([]byte, error)
 	RawHeaders() (http.Header, error)
+	SetOrig(interface{}) error
+
+	GetConfigDigest() (digest.Digest, error)                      // TODO: deprecate
+	GetDigest() digest.Digest                                     // TODO: deprecate
+	GetMediaType() string                                         // TODO: deprecate
+	GetPlatformDesc(p *ociv1.Platform) (*ociv1.Descriptor, error) // TODO: deprecate
+	GetPlatformList() ([]*ociv1.Platform, error)                  // TODO: deprecate
+	GetRateLimit() types.RateLimit                                // TODO: deprecate
+	HasRateLimit() bool                                           // TODO: deprecate
 }
 
 type manifestConfig struct {
@@ -82,30 +89,275 @@ func New(opts ...Opts) (Manifest, error) {
 	}
 	return fromCommon(c)
 }
+
+// WithDesc specifies the descriptor for the manifest
 func WithDesc(desc ociv1.Descriptor) Opts {
 	return func(mc *manifestConfig) {
 		mc.desc = desc
 	}
 }
+
+// WithHeader provides the headers from the response when pulling the manifest
 func WithHeader(header http.Header) Opts {
 	return func(mc *manifestConfig) {
 		mc.header = header
 	}
 }
+
+// WithOrig provides the original manifest variable
 func WithOrig(orig interface{}) Opts {
 	return func(mc *manifestConfig) {
 		mc.orig = orig
 	}
 }
+
+// WithRaw provides the manifest bytes or HTTP response body
 func WithRaw(raw []byte) Opts {
 	return func(mc *manifestConfig) {
 		mc.raw = raw
 	}
 }
+
+// WithRef provides the reference used to get the manifest
 func WithRef(r ref.Ref) Opts {
 	return func(mc *manifestConfig) {
 		mc.r = r
 	}
+}
+
+// GetDigest returns the digest from the manifest descriptor
+func GetDigest(m Manifest) digest.Digest {
+	d := m.GetDescriptor()
+	return d.Digest
+}
+
+// GetMediaType returns the media type from the manifest descriptor
+func GetMediaType(m Manifest) string {
+	d := m.GetDescriptor()
+	return d.MediaType
+}
+
+// GetPlatformDesc returns the descriptor for a specific platform from an index
+func GetPlatformDesc(m Manifest, p *ociv1.Platform) (*ociv1.Descriptor, error) {
+	dl, err := m.GetManifestList()
+	if err != nil {
+		return nil, err
+	}
+	platformCmp := platforms.NewMatcher(*p)
+	for _, d := range dl {
+		if d.Platform != nil && platformCmp.Match(*d.Platform) {
+			return &d, nil
+		}
+	}
+	return nil, wraperr.New(fmt.Errorf("platform not found: %s", platforms.Format(*p)), types.ErrNotFound)
+}
+
+// GetPlatformList returns the list of platforms from an index
+func GetPlatformList(m Manifest) ([]*ociv1.Platform, error) {
+	dl, err := m.GetManifestList()
+	if err != nil {
+		return nil, err
+	}
+	var l []*ociv1.Platform
+	for _, d := range dl {
+		if d.Platform != nil {
+			l = append(l, d.Platform)
+		}
+	}
+	return l, nil
+}
+
+// GetRateLimit returns the current rate limit seen in headers
+func GetRateLimit(m Manifest) types.RateLimit {
+	rl := types.RateLimit{}
+	header, err := m.RawHeaders()
+	if err != nil {
+		return rl
+	}
+	// check for rate limit headers
+	rlLimit := header.Get("RateLimit-Limit")
+	rlRemain := header.Get("RateLimit-Remaining")
+	rlReset := header.Get("RateLimit-Reset")
+	if rlLimit != "" {
+		lpSplit := strings.Split(rlLimit, ",")
+		lSplit := strings.Split(lpSplit[0], ";")
+		rlLimitI, err := strconv.Atoi(lSplit[0])
+		if err != nil {
+			rl.Limit = 0
+		} else {
+			rl.Limit = rlLimitI
+		}
+		if len(lSplit) > 1 {
+			rl.Policies = lpSplit
+		} else if len(lpSplit) > 1 {
+			rl.Policies = lpSplit[1:]
+		}
+	}
+	if rlRemain != "" {
+		rSplit := strings.Split(rlRemain, ";")
+		rlRemainI, err := strconv.Atoi(rSplit[0])
+		if err != nil {
+			rl.Remain = 0
+		} else {
+			rl.Remain = rlRemainI
+			rl.Set = true
+		}
+	}
+	if rlReset != "" {
+		rlResetI, err := strconv.Atoi(rlReset)
+		if err != nil {
+			rl.Reset = 0
+		} else {
+			rl.Reset = rlResetI
+		}
+	}
+	return rl
+}
+
+// HasRateLimit indicates whether the rate limit is set and available
+func HasRateLimit(m Manifest) bool {
+	rl := GetRateLimit(m)
+	return rl.Set
+}
+
+func OCIIndexFromAny(orig interface{}) (ociv1.Index, error) {
+	ociI := ociv1.Index{
+		Versioned: specs.Versioned{SchemaVersion: 2},
+		MediaType: types.MediaTypeOCI1ManifestList,
+	}
+	switch orig := orig.(type) {
+	case dockerManifestList.ManifestList:
+		ml := make([]ociv1.Descriptor, len(orig.Manifests))
+		for i, d := range orig.Manifests {
+			ml[i] = *dl2oDescriptor(d)
+		}
+		ociI.Manifests = ml
+	case ociv1.Index:
+		ociI = orig
+	default:
+		return ociI, fmt.Errorf("unable to convert %T to OCI index", orig)
+	}
+	return ociI, nil
+}
+
+func OCIIndexToAny(ociI ociv1.Index, origP interface{}) error {
+	// reflect is used to handle both *interface{} and *Manifest
+	rv := reflect.ValueOf(origP)
+	for rv.IsValid() && rv.Type().Kind() == reflect.Ptr {
+		rv = rv.Elem()
+	}
+	if !rv.IsValid() {
+		return fmt.Errorf("invalid manifest output parameter: %T", origP)
+	}
+	if !rv.CanSet() {
+		return fmt.Errorf("manifest output must be a pointer: %T", origP)
+	}
+	origR := rv.Interface()
+	switch orig := (origR).(type) {
+	case dockerManifestList.ManifestList:
+		ml := make([]dockerManifestList.ManifestDescriptor, len(ociI.Manifests))
+		for i, d := range ociI.Manifests {
+			ml[i] = dockerManifestList.ManifestDescriptor{
+				Descriptor: dockerDistribution.Descriptor{
+					MediaType:   d.MediaType,
+					Size:        d.Size,
+					Digest:      d.Digest,
+					URLs:        d.URLs,
+					Annotations: d.Annotations,
+					Platform:    d.Platform,
+				},
+			}
+			if d.Platform != nil {
+				ml[i].Platform = dockerManifestList.PlatformSpec{
+					Architecture: d.Platform.Architecture,
+					OS:           d.Platform.OS,
+					OSVersion:    d.Platform.OSVersion,
+					OSFeatures:   d.Platform.OSFeatures,
+					Variant:      d.Platform.Variant,
+				}
+			}
+		}
+		orig.Manifests = ml
+		orig.Versioned = manifest.Versioned{
+			SchemaVersion: 2,
+			MediaType:     types.MediaTypeDocker2ManifestList,
+		}
+		rv.Set(reflect.ValueOf(orig))
+	case ociv1.Index:
+		rv.Set(reflect.ValueOf(ociI))
+	default:
+		return fmt.Errorf("unable to convert OCI index to %T", origR)
+	}
+	return nil
+}
+
+func OCIManifestFromAny(orig interface{}) (ociv1.Manifest, error) {
+	ociM := ociv1.Manifest{
+		Versioned: specs.Versioned{SchemaVersion: 2},
+		MediaType: types.MediaTypeOCI1Manifest,
+	}
+	switch orig := orig.(type) {
+	case dockerSchema2.Manifest:
+		ll := make([]ociv1.Descriptor, len(orig.Layers))
+		for i, l := range orig.Layers {
+			ll[i] = *d2oDescriptor(l)
+		}
+		ociM.Config = *d2oDescriptor(orig.Config)
+		ociM.Layers = ll
+	case ociv1.Manifest:
+		ociM = orig
+	default:
+		// TODO: consider supporting Docker schema v1 media types
+		return ociM, fmt.Errorf("unable to convert %T to OCI image", orig)
+	}
+	return ociM, nil
+}
+
+func OCIManifestToAny(ociM ociv1.Manifest, origP interface{}) error {
+	// reflect is used to handle both *interface{} and *Manifest
+	rv := reflect.ValueOf(origP)
+	for rv.IsValid() && rv.Type().Kind() == reflect.Ptr {
+		rv = rv.Elem()
+	}
+	if !rv.IsValid() {
+		return fmt.Errorf("invalid manifest output parameter: %T", origP)
+	}
+	if !rv.CanSet() {
+		return fmt.Errorf("manifest output must be a pointer: %T", origP)
+	}
+	origR := rv.Interface()
+	switch orig := (origR).(type) {
+	case dockerSchema2.Manifest:
+		ll := make([]dockerDistribution.Descriptor, len(ociM.Layers))
+		for i, l := range ociM.Layers {
+			ll[i] = dockerDistribution.Descriptor{
+				MediaType:   l.MediaType,
+				Size:        l.Size,
+				Digest:      l.Digest,
+				URLs:        l.URLs,
+				Annotations: l.Annotations,
+				Platform:    l.Platform,
+			}
+		}
+		orig.Layers = ll
+		orig.Config = dockerDistribution.Descriptor{
+			MediaType:   ociM.Config.MediaType,
+			Size:        ociM.Config.Size,
+			Digest:      ociM.Config.Digest,
+			URLs:        ociM.Config.URLs,
+			Annotations: ociM.Config.Annotations,
+			Platform:    ociM.Config.Platform,
+		}
+		orig.Versioned.MediaType = types.MediaTypeDocker2Manifest
+		orig.Versioned.SchemaVersion = 2
+		rv.Set(reflect.ValueOf(orig))
+	case ociv1.Manifest:
+		rv.Set(reflect.ValueOf(ociM))
+	default:
+		// Docker schema v1 will not be supported, can't resign, and no need for unsigned
+		return fmt.Errorf("unable to convert OCI image to %T", origR)
+	}
+	return nil
 }
 
 // FromOrig creates a new manifest from the original upstream manifest type.
@@ -201,15 +453,24 @@ func fromCommon(c common) (Manifest, error) {
 		if c.desc.MediaType != MediaTypeDocker1ManifestSigned {
 			d := digest.FromBytes(c.rawBody)
 			c.desc.Digest = d
+			c.desc.Size = int64(len(c.rawBody))
 		}
 	}
 	// extract media type from body if needed
 	if c.desc.MediaType == "" && len(c.rawBody) > 0 {
 		mt := struct {
-			MediaType string `json:"mediaType,omitempty"`
+			MediaType     string        `json:"mediaType,omitempty"`
+			SchemaVersion int           `json:"schemaVersion,omitempty"`
+			Signatures    []interface{} `json:"signatures,omitempty"`
 		}{}
 		err = json.Unmarshal(c.rawBody, &mt)
-		c.desc.MediaType = mt.MediaType
+		if mt.MediaType != "" {
+			c.desc.MediaType = mt.MediaType
+		} else if mt.SchemaVersion == 1 && len(mt.Signatures) > 0 {
+			c.desc.MediaType = types.MediaTypeDocker1ManifestSigned
+		} else if mt.SchemaVersion == 1 {
+			c.desc.MediaType = types.MediaTypeDocker1Manifest
+		}
 	}
 	switch c.desc.MediaType {
 	case MediaTypeDocker1Manifest:
@@ -226,6 +487,7 @@ func fromCommon(c common) (Manifest, error) {
 			mt = mOrig.MediaType
 			d := digest.FromBytes(mOrig.Canonical)
 			c.desc.Digest = d
+			c.desc.Size = int64(len(mOrig.Canonical))
 		}
 		m = &docker1SignedManifest{common: c, SignedManifest: mOrig}
 	case MediaTypeDocker2Manifest:

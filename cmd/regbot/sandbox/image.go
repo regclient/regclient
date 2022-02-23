@@ -84,12 +84,12 @@ func (s *Sandbox) configGet(ls *lua.LState) int {
 		"script": s.name,
 		"image":  m.r.CommonName(),
 	}).Debug("Retrieve image config")
-	confDigest, err := m.m.GetConfigDigest()
+	confDesc, err := m.m.GetConfig()
 	if err != nil {
 		ls.RaiseError("Failed looking up \"%s\" config digest: %v", m.r.CommonName(), err)
 	}
 
-	confBlob, err := s.rc.BlobGetOCIConfig(s.ctx, m.r, confDigest)
+	confBlob, err := s.rc.BlobGetOCIConfig(s.ctx, m.r, confDesc.Digest)
 	if err != nil {
 		ls.RaiseError("Failed retrieving \"%s\" config: %v", m.r.CommonName(), err)
 	}
@@ -266,7 +266,7 @@ func (s *Sandbox) imageRateLimit(ls *lua.LState) int {
 		ls.RaiseError("Context error: %v", err)
 	}
 	m := s.checkManifest(ls, 1, false, true)
-	rl := go2lua.Export(ls, m.m.GetRateLimit())
+	rl := go2lua.Export(ls, manifest.GetRateLimit(m.m))
 	ls.Push(rl)
 	return 1
 }
@@ -310,7 +310,7 @@ func (s *Sandbox) imageRateLimitWait(ls *lua.LState) int {
 			return 0
 		}
 		// success if rate limit not set or remaining is above our limit
-		rl := mh.GetRateLimit()
+		rl := manifest.GetRateLimit(mh)
 		if !rl.Set || rl.Remain >= limit {
 			ls.Push(lua.LBool(true))
 			return 1
