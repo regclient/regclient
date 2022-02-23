@@ -10,11 +10,13 @@ import (
 
 // Common interface is provided by all Blob implementations
 type Common interface {
-	Digest() digest.Digest
-	Length() int64
-	MediaType() string
+	GetDescriptor() ociv1.Descriptor
 	Response() *http.Response
 	RawHeaders() http.Header
+
+	Digest() digest.Digest // TODO: deprecate
+	Length() int64         // TODO: deprecate
+	MediaType() string     // TODO: deprecate
 }
 
 type common struct {
@@ -23,6 +25,11 @@ type common struct {
 	blobSet   bool
 	rawHeader http.Header
 	resp      *http.Response
+}
+
+// GetDescriptor returns the descriptor associated with the blob
+func (b *common) GetDescriptor() ociv1.Descriptor {
+	return b.desc
 }
 
 // Digest returns the provided or calculated digest of the blob

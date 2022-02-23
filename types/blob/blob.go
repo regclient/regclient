@@ -16,12 +16,13 @@ type Blob interface {
 }
 
 type blobConfig struct {
-	desc   ociv1.Descriptor
-	header http.Header
-	image  ociv1.Image
-	r      ref.Ref
-	rdr    io.Reader
-	resp   *http.Response
+	desc    ociv1.Descriptor
+	header  http.Header
+	image   *ociv1.Image
+	r       ref.Ref
+	rdr     io.Reader
+	resp    *http.Response
+	rawBody []byte
 }
 
 type Opts func(*blobConfig)
@@ -43,7 +44,14 @@ func WithHeader(header http.Header) Opts {
 // WithImage provides the OCI Image config needed for config blobs
 func WithImage(image ociv1.Image) Opts {
 	return func(bc *blobConfig) {
-		bc.image = image
+		bc.image = &image
+	}
+}
+
+// WithRawBody defines the raw blob contents for OCIConfig
+func WithRawBody(raw []byte) Opts {
+	return func(bc *blobConfig) {
+		bc.rawBody = raw
 	}
 }
 
@@ -65,7 +73,7 @@ func WithRef(r ref.Ref) Opts {
 func WithResp(resp *http.Response) Opts {
 	return func(bc *blobConfig) {
 		bc.resp = resp
-		if bc.header == nil {
+		if bc.header == nil && resp != nil {
 			bc.header = resp.Header
 		}
 	}

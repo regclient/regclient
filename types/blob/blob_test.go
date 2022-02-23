@@ -2,6 +2,7 @@ package blob
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -62,6 +63,11 @@ var (
 		Header:        exHeaders,
 		ContentLength: exLen,
 		Body:          io.NopCloser(bytes.NewReader(exBlob)),
+	}
+	exDesc = ociv1.Descriptor{
+		MediaType: exMT,
+		Digest:    exDigest,
+		Size:      exLen,
 	}
 )
 
@@ -141,14 +147,14 @@ func TestCommon(t *testing.T) {
 					t.Errorf("rawbody, expected %s, received %s", string(tt.eBytes), string(bb))
 				}
 			}
-			if tt.eDigest != "" && b.Digest() != tt.eDigest {
-				t.Errorf("digest, expected %s, received %s", tt.eDigest, b.Digest())
+			if tt.eDigest != "" && b.GetDescriptor().Digest != tt.eDigest {
+				t.Errorf("digest, expected %s, received %s", tt.eDigest, b.GetDescriptor().Digest)
 			}
-			if tt.eLen > 0 && b.Length() != tt.eLen {
-				t.Errorf("length, expected %d, received %d", tt.eLen, b.Length())
+			if tt.eLen > 0 && b.GetDescriptor().Size != tt.eLen {
+				t.Errorf("length, expected %d, received %d", tt.eLen, b.GetDescriptor().Size)
 			}
-			if tt.eMT != "" && b.MediaType() != tt.eMT {
-				t.Errorf("media type, expected %s, received %s", tt.eMT, b.MediaType())
+			if tt.eMT != "" && b.GetDescriptor().MediaType != tt.eMT {
+				t.Errorf("media type, expected %s, received %s", tt.eMT, b.GetDescriptor().MediaType)
 			}
 			if tt.eHeaders != nil {
 				bHeader := b.RawHeaders()
@@ -159,6 +165,10 @@ func TestCommon(t *testing.T) {
 						t.Errorf("header mismatch for key %s, expected %v, received %v", k, v, bHeader[k])
 					}
 				}
+			}
+			err := b.Close()
+			if err != nil {
+				t.Errorf("failed closing blob: %v", err)
 			}
 		})
 	}
@@ -218,11 +228,11 @@ func TestReader(t *testing.T) {
 			t.Errorf("readall: %v", err)
 			return
 		}
-		if b.Digest() != exDigest {
-			t.Errorf("digest mismatch, expected %s, received %s", exDigest, b.Digest())
+		if b.GetDescriptor().Digest != exDigest {
+			t.Errorf("digest mismatch, expected %s, received %s", exDigest, b.GetDescriptor().Digest)
 		}
-		if b.Length() != exLen {
-			t.Errorf("length mismatch, expected %d, received %d", exLen, b.Length())
+		if b.GetDescriptor().Size != exLen {
+			t.Errorf("length mismatch, expected %d, received %d", exLen, b.GetDescriptor().Size)
 		}
 	})
 
@@ -243,8 +253,8 @@ func TestReader(t *testing.T) {
 			t.Errorf("ToOCIConfig: %v", err)
 			return
 		}
-		if exDigest != oc.Digest() {
-			t.Errorf("digest, expected %s, received %s", exDigest, oc.Digest())
+		if exDigest != oc.GetDescriptor().Digest {
+			t.Errorf("digest, expected %s, received %s", exDigest, oc.GetDescriptor().Digest)
 		}
 		ocb, err := oc.RawBody()
 		if err != nil {
@@ -269,6 +279,102 @@ func TestReader(t *testing.T) {
 		}
 		if !bytes.Equal(exBlob, bb) {
 			t.Errorf("config bytes, expected %s, received %s", string(exBlob), string(bb))
+		}
+	})
+}
+
+func TestOCI(t *testing.T) {
+	ociConfig := ociv1.Image{}
+	err := json.Unmarshal(exBlob, &ociConfig)
+	if err != nil {
+		t.Errorf("failed to unmarshal exBlob: %v", err)
+		return
+	}
+	tests := []struct {
+		name     string
+		opts     []Opts
+		wantRaw  []byte
+		wantDesc ociv1.Descriptor
+	}{
+		{
+			name: "RawBody",
+			opts: []Opts{
+				WithRawBody(exBlob),
+				WithDesc(exDesc),
+			},
+			wantDesc: exDesc,
+			wantRaw:  exBlob,
+		},
+		{
+			name: "Config with Default Desc",
+			opts: []Opts{
+				WithImage(ociConfig),
+			},
+			wantDesc: ociv1.Descriptor{MediaType: types.MediaTypeOCI1ImageConfig},
+		},
+		{
+			name: "Config with Docker Desc",
+			opts: []Opts{
+				WithImage(ociConfig),
+				WithDesc(exDesc),
+			},
+			wantDesc: ociv1.Descriptor{MediaType: exMT},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			oc := NewOCIConfig(tt.opts...)
+
+			if tt.wantDesc.Digest != "" && tt.wantDesc.Digest != oc.GetDescriptor().Digest {
+				t.Errorf("digest, expected %s, received %s", tt.wantDesc.Digest, oc.GetDescriptor().Digest)
+			}
+			if tt.wantDesc.MediaType != "" && tt.wantDesc.MediaType != oc.GetDescriptor().MediaType {
+				t.Errorf("media type, expected %s, received %s", tt.wantDesc.MediaType, oc.GetDescriptor().MediaType)
+			}
+			if tt.wantDesc.Size > 0 && tt.wantDesc.Size != oc.GetDescriptor().Size {
+				t.Errorf("size, expected %d, received %d", tt.wantDesc.Size, oc.GetDescriptor().Size)
+			}
+			if len(tt.wantRaw) > 0 {
+				raw, err := oc.RawBody()
+				if err != nil {
+					t.Errorf("config rawbody: %v", err)
+					return
+				}
+				if !bytes.Equal(tt.wantRaw, raw) {
+					t.Errorf("config bytes, expected %s, received %s", string(tt.wantRaw), string(raw))
+				}
+			}
+		})
+	}
+	t.Run("ModConfig", func(t *testing.T) {
+		// create blob
+		oc := NewOCIConfig(
+			WithRawBody(exBlob),
+			WithDesc(ociv1.Descriptor{
+				MediaType: exMT,
+				Digest:    exDigest,
+				Size:      exLen,
+			}),
+			WithRef(exRef),
+		)
+		ociC := oc.GetConfig()
+		ociC.History = append(ociC.History, ociv1.History{Comment: "test", EmptyLayer: true})
+		oc.SetConfig(ociC)
+		// ensure digest and raw body change
+		if exDigest == oc.GetDescriptor().Digest {
+			t.Errorf("digest did not change, received %s", oc.GetDescriptor().Digest)
+		}
+		if exMT != oc.GetDescriptor().MediaType {
+			t.Errorf("media type changed, expected %s, received %s", exMT, oc.GetDescriptor().MediaType)
+		}
+		raw, err := oc.RawBody()
+		if err != nil {
+			t.Errorf("config rawbody: %v", err)
+			return
+		}
+		if bytes.Equal(exBlob, raw) {
+			t.Errorf("config bytes unchanged, received %s", string(raw))
 		}
 	})
 }

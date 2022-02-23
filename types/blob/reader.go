@@ -1,14 +1,12 @@
 package blob
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"strconv"
 
 	"github.com/opencontainers/go-digest"
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 // Reader is an unprocessed Blob with an available ReadCloser for reading the Blob
@@ -153,11 +151,11 @@ func (b *reader) ToOCIConfig() (OCIConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error reading image config for %s: %w", b.r.CommonName(), err)
 	}
-	var ociImage ociv1.Image
-	err = json.Unmarshal(blobBody, &ociImage)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing image config for %s: %w", b.r.CommonName(), err)
-	}
-	// return the resulting blobOCIConfig, reuse blobCommon, setting rawBody read above, and the unmarshaled OCI image config
-	return &ociConfig{common: b.common, rawBody: blobBody, Image: ociImage}, nil
+	return NewOCIConfig(
+		WithDesc(b.desc),
+		WithHeader(b.rawHeader),
+		WithRawBody(blobBody),
+		WithRef(b.r),
+		WithResp(b.resp),
+	), nil
 }
