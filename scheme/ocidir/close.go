@@ -76,7 +76,7 @@ func (o *OCIDir) Close(ctx context.Context, r ref.Ref) error {
 func (o *OCIDir) closeProcManifest(ctx context.Context, r ref.Ref, m manifest.Manifest, dl *map[string]bool) error {
 	if m.IsList() {
 		// go through manifest list, updating dl, and recursively processing nested manifests
-		ml, err := m.GetDescriptorList()
+		ml, err := m.GetManifestList()
 		if err != nil {
 			return err
 		}
@@ -88,6 +88,10 @@ func (o *OCIDir) closeProcManifest(ctx context.Context, r ref.Ref, m manifest.Ma
 			cm, err := o.ManifestGet(ctx, cr)
 			if err != nil {
 				// ignore errors in case a manifest has been deleted or sparse copy
+				o.log.WithFields(logrus.Fields{
+					"ref": cr.CommonName(),
+					"err": err,
+				}).Debug("could not retrieve manifest")
 				continue
 			}
 			err = o.closeProcManifest(ctx, cr, cm, dl)
@@ -97,7 +101,7 @@ func (o *OCIDir) closeProcManifest(ctx context.Context, r ref.Ref, m manifest.Ma
 		}
 	} else {
 		// get config from manifest if it exists
-		cd, err := m.GetConfigDescriptor()
+		cd, err := m.GetConfig()
 		if err == nil {
 			(*dl)[cd.Digest.String()] = true
 		}

@@ -176,7 +176,7 @@ func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest,
 
 	// build/send request
 	headers := http.Header{
-		"Content-Type": []string{m.GetMediaType()},
+		"Content-Type": []string{manifest.GetMediaType(m)},
 	}
 	req := &reghttp.Req{
 		Host:      r.Registry,

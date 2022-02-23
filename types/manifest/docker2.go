@@ -32,7 +32,7 @@ type docker2ManifestList struct {
 	dockerManifestList.ManifestList
 }
 
-func (m *docker2Manifest) GetConfigDescriptor() (ociv1.Descriptor, error) {
+func (m *docker2Manifest) GetConfig() (ociv1.Descriptor, error) {
 	return ociv1.Descriptor{
 		MediaType:   m.Config.MediaType,
 		Digest:      m.Config.Digest,
@@ -45,17 +45,17 @@ func (m *docker2Manifest) GetConfigDescriptor() (ociv1.Descriptor, error) {
 func (m *docker2Manifest) GetConfigDigest() (digest.Digest, error) {
 	return m.Config.Digest, nil
 }
-func (m *docker2ManifestList) GetConfigDescriptor() (ociv1.Descriptor, error) {
+func (m *docker2ManifestList) GetConfig() (ociv1.Descriptor, error) {
 	return ociv1.Descriptor{}, wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 func (m *docker2ManifestList) GetConfigDigest() (digest.Digest, error) {
 	return "", wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 
-func (m *docker2Manifest) GetDescriptorList() ([]ociv1.Descriptor, error) {
+func (m *docker2Manifest) GetManifestList() ([]ociv1.Descriptor, error) {
 	return []ociv1.Descriptor{}, wraperr.New(fmt.Errorf("platform descriptor list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
-func (m *docker2ManifestList) GetDescriptorList() ([]ociv1.Descriptor, error) {
+func (m *docker2ManifestList) GetManifestList() ([]ociv1.Descriptor, error) {
 	dl := []ociv1.Descriptor{}
 	for _, d := range m.Manifests {
 		dl = append(dl, *dl2oDescriptor(d))
@@ -74,10 +74,10 @@ func (m *docker2ManifestList) GetLayers() ([]ociv1.Descriptor, error) {
 	return []ociv1.Descriptor{}, wraperr.New(fmt.Errorf("layers are not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 
-func (m *docker2Manifest) GetOrigManifest() interface{} {
+func (m *docker2Manifest) GetOrig() interface{} {
 	return m.Manifest
 }
-func (m *docker2ManifestList) GetOrigManifest() interface{} {
+func (m *docker2ManifestList) GetOrig() interface{} {
 	return m.ManifestList
 }
 
@@ -85,7 +85,7 @@ func (m *docker2Manifest) GetPlatformDesc(p *ociv1.Platform) (*ociv1.Descriptor,
 	return nil, wraperr.New(fmt.Errorf("platform lookup not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 func (m *docker2ManifestList) GetPlatformDesc(p *ociv1.Platform) (*ociv1.Descriptor, error) {
-	dl, err := m.GetDescriptorList()
+	dl, err := m.GetManifestList()
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +96,7 @@ func (m *docker2Manifest) GetPlatformList() ([]*ociv1.Platform, error) {
 	return nil, wraperr.New(fmt.Errorf("platform list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 func (m *docker2ManifestList) GetPlatformList() ([]*ociv1.Platform, error) {
-	dl, err := m.GetDescriptorList()
+	dl, err := m.GetManifestList()
 	if err != nil {
 		return nil, err
 	}
@@ -178,4 +178,54 @@ func (m *docker2ManifestList) MarshalPretty() ([]byte, error) {
 	}
 	tw.Flush()
 	return buf.Bytes(), nil
+}
+
+func (m *docker2Manifest) SetOrig(origIn interface{}) error {
+	orig, ok := origIn.(dockerSchema2.Manifest)
+	if !ok {
+		return types.ErrUnsupportedMediaType
+	}
+	if orig.MediaType != types.MediaTypeDocker2Manifest {
+		// TODO: error?
+		orig.MediaType = types.MediaTypeDocker2Manifest
+	}
+	mj, err := json.Marshal(orig)
+	if err != nil {
+		return err
+	}
+	m.manifSet = true
+	m.rawBody = mj
+	m.desc = ociv1.Descriptor{
+		MediaType: types.MediaTypeDocker2Manifest,
+		Digest:    digest.FromBytes(mj),
+		Size:      int64(len(mj)),
+	}
+	m.Manifest = orig
+
+	return nil
+}
+
+func (m *docker2ManifestList) SetOrig(origIn interface{}) error {
+	orig, ok := origIn.(dockerManifestList.ManifestList)
+	if !ok {
+		return types.ErrUnsupportedMediaType
+	}
+	if orig.MediaType != types.MediaTypeDocker2ManifestList {
+		// TODO: error?
+		orig.MediaType = types.MediaTypeDocker2ManifestList
+	}
+	mj, err := json.Marshal(orig)
+	if err != nil {
+		return err
+	}
+	m.manifSet = true
+	m.rawBody = mj
+	m.desc = ociv1.Descriptor{
+		MediaType: types.MediaTypeDocker2ManifestList,
+		Digest:    digest.FromBytes(mj),
+		Size:      int64(len(mj)),
+	}
+	m.ManifestList = orig
+
+	return nil
 }

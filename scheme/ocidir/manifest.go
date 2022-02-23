@@ -141,20 +141,14 @@ func (o *OCIDir) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 	if err != nil {
 		index = indexCreate()
 	}
-	d := m.GetDigest()
-	mt := m.GetMediaType()
+	desc := m.GetDescriptor()
 	b, err := m.RawBody()
 	if err != nil {
 		return fmt.Errorf("could not serialize manifest: %w", err)
 	}
 	if r.Tag == "" {
 		// force digest to match manifest value
-		r.Digest = d.String()
-	}
-	desc := ociv1.Descriptor{
-		MediaType: mt,
-		Size:      int64(len(b)),
-		Digest:    d,
+		r.Digest = desc.Digest.String()
 	}
 	if r.Tag != "" {
 		desc.Annotations = map[string]string{
@@ -162,12 +156,12 @@ func (o *OCIDir) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 		}
 	}
 	// create manifest CAS file
-	dir := path.Join(r.Path, "blobs", d.Algorithm().String())
+	dir := path.Join(r.Path, "blobs", desc.Digest.Algorithm().String())
 	err = rwfs.MkdirAll(o.fs, dir, 0777)
 	if err != nil && !errors.Is(err, fs.ErrExist) {
 		return fmt.Errorf("failed creating %s: %w", dir, err)
 	}
-	file := path.Join(r.Path, "blobs", d.Algorithm().String(), d.Encoded())
+	file := path.Join(dir, desc.Digest.Encoded())
 	fd, err := o.fs.Create(file)
 	if err != nil {
 		return fmt.Errorf("failed to create manifest: %w", err)

@@ -104,8 +104,8 @@ func (s *Sandbox) manifestDelete(ls *lua.LState) int {
 	m := s.checkManifest(ls, 1, true, true)
 	r := m.r
 	if r.Digest == "" {
-		d := m.m.GetDigest()
-		r.Digest = d.String()
+		d := m.m.GetDescriptor()
+		r.Digest = d.Digest.String()
 	}
 	s.log.WithFields(logrus.Fields{
 		"script":  s.name,
@@ -143,7 +143,7 @@ func (s *Sandbox) manifestExport(ls *lua.LState) int {
 			ls.RaiseError("failed exporting config (unwrap): %v", err)
 		}
 		// get the original manifest object, used to set fields that can be extracted from lua table
-		origMM := origM.m.GetOrigManifest()
+		origMM := origM.m.GetOrig()
 		newMMP := reflect.New(reflect.TypeOf(origMM)).Interface()
 		// newMMP is interface{} -> *someManifestType
 		// because it's an empty interface, it needs to remain a "reflect.New" pointer
@@ -166,7 +166,7 @@ func (s *Sandbox) manifestExport(ls *lua.LState) int {
 		ls.ArgError(i, "Manifest expected")
 	}
 	// wrap manifest to send back to lua
-	ud, err := wrapUserData(ls, newM, newM.m.GetOrigManifest(), luaManifestName)
+	ud, err := wrapUserData(ls, newM, newM.m.GetOrig(), luaManifestName)
 	if err != nil {
 		ls.RaiseError("Failed packaging manifest: %v", err)
 	}
@@ -203,7 +203,7 @@ func (s *Sandbox) manifestGetWithOpts(ls *lua.LState, list bool) int {
 		ls.RaiseError("Failed retrieving \"%s\" manifest: %v", r.r.CommonName(), err)
 	}
 
-	ud, err := wrapUserData(ls, &sbManifest{m: m, r: r.r}, m.GetOrigManifest(), luaManifestName)
+	ud, err := wrapUserData(ls, &sbManifest{m: m, r: r.r}, m.GetOrig(), luaManifestName)
 	if err != nil {
 		ls.RaiseError("Failed packaging \"%s\" manifest: %v", r.r.CommonName(), err)
 	}
@@ -254,7 +254,7 @@ func (s *Sandbox) manifestPut(ls *lua.LState) int {
 		"image":  r.r.CommonName(),
 	}).Debug("Put manifest")
 
-	m, err := manifest.New(manifest.WithOrig(sbm.m.GetOrigManifest()))
+	m, err := manifest.New(manifest.WithOrig(sbm.m.GetOrig()))
 	if err != nil {
 		ls.RaiseError("Failed to put manifest: %v", err)
 	}
@@ -291,7 +291,7 @@ func (s *Sandbox) rcManifestGet(r ref.Ref, list bool, platform string) (manifest
 		if plat.OS == "" {
 			plat = platforms.DefaultSpec()
 		}
-		desc, err := m.GetPlatformDesc(&plat)
+		desc, err := manifest.GetPlatformDesc(m, &plat)
 		if err != nil {
 			return m, err
 		}

@@ -573,7 +573,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 	}
 	mTgt, err := rc.ManifestHead(ctx, tgt)
 	tgtMatches := false
-	if err == nil && mSrc.GetDigest().String() == mTgt.GetDigest().String() {
+	if err == nil && manifest.GetDigest(mSrc).String() == manifest.GetDigest(mTgt).String() {
 		tgtMatches = true
 	}
 	if tgtMatches && (s.ForceRecursive == nil || !*s.ForceRecursive) {
@@ -586,7 +586,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 	tgtExists := (err == nil)
 
 	// skip when source manifest is an unsupported type
-	smt := mSrc.GetMediaType()
+	smt := manifest.GetMediaType(mSrc)
 	found := false
 	for _, mt := range s.MediaTypes {
 		if mt == smt {
@@ -597,7 +597,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 	if !found {
 		log.WithFields(logrus.Fields{
 			"ref":       src.CommonName(),
-			"mediaType": mSrc.GetMediaType(),
+			"mediaType": manifest.GetMediaType(mSrc),
 			"allowed":   s.MediaTypes,
 		}).Info("Skipping unsupported media type")
 		return nil
@@ -610,7 +610,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 			return err
 		}
 		src.Digest = platDigest.String()
-		if tgtExists && platDigest.String() == mTgt.GetDigest().String() {
+		if tgtExists && platDigest.String() == manifest.GetDigest(mTgt).String() {
 			tgtMatches = true
 		}
 		if tgtMatches && (s.ForceRecursive == nil || !*s.ForceRecursive) {
@@ -640,7 +640,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 	// wait for parallel tasks
 	sem.Acquire(ctx, 1)
 	// delay for rate limit on source
-	if s.RateLimit.Min > 0 && mSrc.GetRateLimit().Set {
+	if s.RateLimit.Min > 0 && manifest.GetRateLimit(mSrc).Set {
 		// refresh current rate limit after acquiring semaphore
 		mSrc, err = rc.ManifestHead(ctx, src)
 		if err != nil {
@@ -651,7 +651,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 			return err
 		}
 		// delay if rate limit exceeded
-		rlSrc := mSrc.GetRateLimit()
+		rlSrc := manifest.GetRateLimit(mSrc)
 		for rlSrc.Remain < s.RateLimit.Min {
 			sem.Release(1)
 			log.WithFields(logrus.Fields{
@@ -676,7 +676,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 				}).Error("rate limit check failed")
 				return err
 			}
-			rlSrc = mSrc.GetRateLimit()
+			rlSrc = manifest.GetRateLimit(mSrc)
 		}
 		log.WithFields(logrus.Fields{
 			"source":        src.CommonName(),
@@ -842,7 +842,7 @@ func getPlatformDigest(ctx context.Context, r ref.Ref, platStr string, origMan m
 	}
 	// cache manifestGet response
 	manifestCache.mu.Lock()
-	getMan, ok := manifestCache.manifests[origMan.GetDigest().String()]
+	getMan, ok := manifestCache.manifests[manifest.GetDigest(origMan).String()]
 	if !ok {
 		getMan, err = rc.ManifestGet(ctx, r)
 		if err != nil {
@@ -853,12 +853,12 @@ func getPlatformDigest(ctx context.Context, r ref.Ref, platStr string, origMan m
 			manifestCache.mu.Unlock()
 			return "", err
 		}
-		manifestCache.manifests[origMan.GetDigest().String()] = getMan
+		manifestCache.manifests[manifest.GetDigest(origMan).String()] = getMan
 	}
 	manifestCache.mu.Unlock()
-	descPlat, err := getMan.GetPlatformDesc(&plat)
+	descPlat, err := manifest.GetPlatformDesc(getMan, &plat)
 	if err != nil {
-		pl, _ := getMan.GetPlatformList()
+		pl, _ := manifest.GetPlatformList(getMan)
 		var ps []string
 		for _, p := range pl {
 			ps = append(ps, platforms.Format(*p))

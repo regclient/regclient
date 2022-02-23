@@ -104,7 +104,7 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 	confDigest := digester.Digest()
 
 	// create manifest with config, matching the original tag manifest type
-	switch curManifest.GetMediaType() {
+	switch manifest.GetMediaType(curManifest) {
 	case types.MediaTypeOCI1Manifest, types.MediaTypeOCI1ManifestList:
 		tempManifest, err = manifest.New(manifest.WithOrig(ociv1.Manifest{
 			Versioned: ociv1Specs.Versioned{
@@ -154,7 +154,7 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 		return fmt.Errorf("failed sending dummy manifest to delete %s: %w", r.CommonName(), err)
 	}
 
-	r.Digest = tempManifest.GetDigest().String()
+	r.Digest = tempManifest.GetDescriptor().Digest.String()
 
 	// delete manifest by digest
 	reg.log.WithFields(logrus.Fields{

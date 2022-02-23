@@ -155,9 +155,9 @@ func getPlatformDesc(rc *regclient.RegClient, m manifest.Manifest) (*ociv1.Descr
 	if plat.OS == "" {
 		plat = platforms.DefaultSpec()
 	}
-	desc, err = m.GetPlatformDesc(&plat)
+	desc, err = manifest.GetPlatformDesc(m, &plat)
 	if err != nil {
-		pl, _ := m.GetPlatformList()
+		pl, _ := manifest.GetPlatformList(m)
 		var ps []string
 		for _, p := range pl {
 			ps = append(ps, platforms.Format(*p))
@@ -190,7 +190,7 @@ func runManifestDelete(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		r.Digest = m.GetDigest().String()
+		r.Digest = manifest.GetDigest(m).String()
 		log.WithFields(logrus.Fields{
 			"tag":    r.Tag,
 			"digest": r.Digest,
@@ -251,7 +251,7 @@ func runManifestDigest(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Println(m.GetDigest().String())
+	fmt.Println(manifest.GetDigest(m).String())
 	return nil
 }
 
