@@ -210,7 +210,7 @@ func TestBlobGet(t *testing.T) {
 			return
 		}
 		defer br.Close()
-		if br.Length() != int64(blobLen) {
+		if br.GetDescriptor().Size != int64(blobLen) {
 			t.Errorf("Failed comparing blob length")
 		}
 	})

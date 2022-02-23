@@ -48,13 +48,13 @@ func TestBlob(t *testing.T) {
 		t.Errorf("manifest get: %v", err)
 		return
 	}
-	cd, err := m.GetConfigDigest()
+	cd, err := m.GetConfig()
 	if err != nil {
 		t.Errorf("config digest: %v", err)
 		return
 	}
 	// blob head
-	bh, err := o.BlobHead(ctx, r, cd)
+	bh, err := o.BlobHead(ctx, r, cd.Digest)
 	if err != nil {
 		t.Errorf("blob head: %v", err)
 		return
@@ -64,7 +64,7 @@ func TestBlob(t *testing.T) {
 		t.Errorf("blob head close: %v", err)
 	}
 	// blob get
-	bg, err := o.BlobGet(ctx, r, cd)
+	bg, err := o.BlobGet(ctx, r, cd.Digest)
 	if err != nil {
 		t.Errorf("blob get: %v", err)
 		return
@@ -74,14 +74,14 @@ func TestBlob(t *testing.T) {
 		t.Errorf("blob readall: %v", err)
 		return
 	}
-	if bg.Digest() != cd {
-		t.Errorf("blob digest mismatch, expected %s, received %s", cd.String(), bg.Digest().String())
+	if bg.GetDescriptor().Digest != cd.Digest {
+		t.Errorf("blob digest mismatch, expected %s, received %s", cd.Digest.String(), bg.GetDescriptor().Digest.String())
 	}
 	err = bg.Close()
 	if err != nil {
 		t.Errorf("blob get close: %v", err)
 	}
-	bFS, err := os.ReadFile(fmt.Sprintf("testdata/regctl/blobs/%s/%s", cd.Algorithm().String(), cd.Encoded()))
+	bFS, err := os.ReadFile(fmt.Sprintf("testdata/regctl/blobs/%s/%s", cd.Digest.Algorithm().String(), cd.Digest.Encoded()))
 	if err != nil {
 		t.Errorf("blob read file: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestBlob(t *testing.T) {
 	}
 
 	// toOCIConfig
-	bg, err = o.BlobGet(ctx, r, cd)
+	bg, err = o.BlobGet(ctx, r, cd.Digest)
 	if err != nil {
 		t.Errorf("blob get 2: %v", err)
 		return
@@ -99,15 +99,15 @@ func TestBlob(t *testing.T) {
 	if err != nil {
 		t.Errorf("to oci config: %v", err)
 	}
-	if ociConf.Digest() != cd {
-		t.Errorf("config digest mismatch, expected %s, received %s", cd.String(), ociConf.Digest().String())
+	if ociConf.GetDescriptor().Digest != cd.Digest {
+		t.Errorf("config digest mismatch, expected %s, received %s", cd.Digest.String(), ociConf.GetDescriptor().Digest.String())
 	}
 
 	// blob put (to memfs)
 	fm := rwfs.MemNew()
 	om := New(WithFS(fm))
 	bRdr := bytes.NewReader(bBytes)
-	bpd, bpl, err := om.BlobPut(ctx, r, cd, bRdr, int64(len(bBytes)))
+	bpd, bpl, err := om.BlobPut(ctx, r, cd.Digest, bRdr, int64(len(bBytes)))
 	if err != nil {
 		t.Errorf("blob put: %v", err)
 		return
@@ -115,10 +115,10 @@ func TestBlob(t *testing.T) {
 	if bpl != int64(len(bBytes)) {
 		t.Errorf("blob put length, expected %d, received %d", len(bBytes), bpl)
 	}
-	if bpd != cd {
-		t.Errorf("blob put digest, expected %s, received %s", cd, bpd)
+	if bpd != cd.Digest {
+		t.Errorf("blob put digest, expected %s, received %s", cd.Digest, bpd)
 	}
-	fd, err := fm.Open(fmt.Sprintf("testdata/regctl/blobs/%s/%s", cd.Algorithm().String(), cd.Encoded()))
+	fd, err := fm.Open(fmt.Sprintf("testdata/regctl/blobs/%s/%s", cd.Digest.Algorithm().String(), cd.Digest.Encoded()))
 	if err != nil {
 		t.Errorf("blob put open file: %v", err)
 	}

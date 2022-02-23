@@ -59,7 +59,7 @@ func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Re
 		return err
 	}
 	defer blobIO.Close()
-	if _, _, err := rc.BlobPut(ctx, refTgt, d, blobIO, blobIO.Length()); err != nil {
+	if _, _, err := rc.BlobPut(ctx, refTgt, d, blobIO, blobIO.GetDescriptor().Size); err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"err": err,
 			"src": refSrc.Reference,
