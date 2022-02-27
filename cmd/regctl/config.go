@@ -44,7 +44,8 @@ type ConfigHost struct {
 	PathPrefix string            `json:"pathPrefix,omitempty"` // used for mirrors defined within a repository namespace
 	Mirrors    []string          `json:"mirrors,omitempty"`    // list of other Host names to use as mirrors
 	Priority   uint              `json:"priority,omitempty"`   // priority when sorting mirrors, higher priority attempted first
-	API        string            `json:"api,omitempty"`        // registry API to use
+	RepoAuth   bool              `json:"repoAuth,omitempty"`
+	API        string            `json:"api,omitempty"` // registry API to use
 	APIOpts    map[string]string `json:"apiOpts,omitempty"`
 	BlobChunk  int64             `json:"blobChunk,omitempty"` // size of each blob chunk
 	BlobMax    int64             `json:"blobMax,omitempty"`   // threshold to switch to chunked upload, -1 to disable
@@ -64,6 +65,7 @@ func configHostToRCHost(name string, c config.Host) config.Host {
 		PathPrefix: c.PathPrefix,
 		Mirrors:    c.Mirrors,
 		Priority:   c.Priority,
+		RepoAuth:   c.RepoAuth,
 		API:        c.API,
 		APIOpts:    c.APIOpts,
 		BlobChunk:  c.BlobChunk,

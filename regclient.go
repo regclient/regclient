@@ -171,6 +171,7 @@ func WithConfigHosts(configHosts []config.Host) Opt {
 				"name":       configHost.Name,
 				"user":       configHost.User,
 				"hostname":   configHost.Hostname,
+				"repoAuth":   configHost.RepoAuth,
 				"tls":        string(tls),
 				"pathPrefix": configHost.PathPrefix,
 				"mirrors":    configHost.Mirrors,

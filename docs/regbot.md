@@ -118,6 +118,10 @@ scripts:
   - `priority`:
     Non-negative integer priority used for sorting mirrors.
     This defaults to 0.
+  - `repoAuth`:
+    Configures authentication requests per repository instead of for the registry.
+    This is required for some registry providers, specifically `gcr.io`.
+    This defaults to `false`.
   - `blobChunk`:
     Chunk size for pushing blobs.
     Each chunk is a separate http request, incurring network overhead.

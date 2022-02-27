@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -25,6 +26,7 @@ import (
 func TestRegHttp(t *testing.T) {
 	ctx := context.Background()
 	// setup req/resp
+	useragent := "regclient/test"
 	getBody := []byte("get body")
 	getDigest := digest.FromBytes(getBody)
 	postBody := []byte("{\"message\": \"Body\"}")
@@ -37,6 +39,125 @@ func TestRegHttp(t *testing.T) {
 	user := "user"
 	pass := "testpass"
 	userAuth := base64.StdEncoding.EncodeToString([]byte(user + ":" + pass))
+	token1GForm := url.Values{}
+	token1GForm.Set("scope", "repository:project:pull")
+	token1GForm.Set("service", "test")
+	token1GForm.Set("client_id", useragent)
+	token1GForm.Set("grant_type", "password")
+	token1GForm.Set("username", user)
+	token1GForm.Set("password", pass)
+	token1GBody := token1GForm.Encode()
+	token1GValue := "token1GValue"
+	token1GResp, _ := json.Marshal(auth.BearerToken{
+		Token:        token1GValue,
+		ExpiresIn:    900,
+		IssuedAt:     time.Now(),
+		RefreshToken: "refresh1GValue",
+		Scope:        "repository:project:pull",
+	})
+	token1PForm := url.Values{}
+	token1PForm.Set("scope", "repository:project:pull,push")
+	token1PForm.Set("service", "test")
+	token1PForm.Set("client_id", useragent)
+	token1PForm.Set("grant_type", "password")
+	token1PForm.Set("username", user)
+	token1PForm.Set("password", pass)
+	token1PBody := token1PForm.Encode()
+	token1PValue := "token1PValue"
+	token1PResp, _ := json.Marshal(auth.BearerToken{
+		Token:        token1PValue,
+		ExpiresIn:    900,
+		IssuedAt:     time.Now(),
+		RefreshToken: "refresh1PValue",
+		Scope:        "repository:project:pull,push",
+	})
+	token2GForm := url.Values{}
+	token2GForm.Set("scope", "repository:project2:pull")
+	token2GForm.Set("service", "test")
+	token2GForm.Set("client_id", useragent)
+	token2GForm.Set("grant_type", "password")
+	token2GForm.Set("username", user)
+	token2GForm.Set("password", pass)
+	token2GBody := token2GForm.Encode()
+	token2GValue := "token2GValue"
+	token2GResp, _ := json.Marshal(auth.BearerToken{
+		Token:        token2GValue,
+		ExpiresIn:    900,
+		IssuedAt:     time.Now(),
+		RefreshToken: "refresh2GValue",
+		Scope:        "repository:project2:pull",
+	})
+	token2PForm := url.Values{}
+	token2PForm.Set("scope", "repository:project2:pull,push")
+	token2PForm.Set("service", "test")
+	token2PForm.Set("client_id", useragent)
+	token2PForm.Set("grant_type", "password")
+	token2PForm.Set("username", user)
+	token2PForm.Set("password", pass)
+	token2PBody := token2PForm.Encode()
+	token2PValue := "token2PValue"
+	token2PResp, _ := json.Marshal(auth.BearerToken{
+		Token:        token2PValue,
+		ExpiresIn:    900,
+		IssuedAt:     time.Now(),
+		RefreshToken: "refresh2PValue",
+		Scope:        "repository:project2:pull,push",
+	})
+	rrsToken := []reqresp.ReqResp{
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "req token1G",
+				Method: "POST",
+				Path:   "/token",
+				Body:   []byte(token1GBody),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: 200,
+				Body:   token1GResp,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "req token1P",
+				Method: "POST",
+				Path:   "/token",
+				Body:   []byte(token1PBody),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: 200,
+				Body:   token1PResp,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "req token2G",
+				Method: "POST",
+				Path:   "/token",
+				Body:   []byte(token2GBody),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: 200,
+				Body:   token2GResp,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "req token2P",
+				Method: "POST",
+				Path:   "/token",
+				Body:   []byte(token2PBody),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: 200,
+				Body:   token2PResp,
+			},
+		},
+	}
+	tsToken := httptest.NewServer(reqresp.NewHandler(t, rrsToken))
+	defer tsToken.Close()
+	tsTokenURL, _ := url.Parse(tsToken.URL)
+	tsTokenHost := tsTokenURL.Host
+
 	rrs := []reqresp.ReqResp{
 		{
 			ReqEntry: reqresp.ReqEntry{
@@ -99,6 +220,130 @@ func TestRegHttp(t *testing.T) {
 				Body:   []byte("Unauthorized"),
 				Headers: http.Header{
 					"WWW-Authenticate": []string{"Basic realm=\"test\""},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "authorized repoauth get",
+				Method: "GET",
+				Path:   "/v2/project/manifests/tag-repoauth",
+				Headers: http.Header{
+					"Authorization": []string{fmt.Sprintf("Bearer %s", token1GValue)},
+				},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Body:   getBody,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", len(getBody))},
+					"Content-Type":          []string{"application/vnd.docker.distribution.manifest.v2+json"},
+					"Docker-Content-Digest": []string{getDigest.String()},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "unauthorized repoauth get",
+				Method: "GET",
+				Path:   "/v2/project/manifests/tag-repoauth",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusUnauthorized,
+				Body:   []byte("Unauthorized"),
+				Headers: http.Header{
+					"WWW-Authenticate": []string{`Bearer realm="http://` + tsTokenHost + `/token",service=test,scope="repository:project:pull"`},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "authorized repoauth put",
+				Method: "PUT",
+				Path:   "/v2/project/manifests/tag-repoauth",
+				Body:   putBody,
+				Headers: http.Header{
+					"Authorization": []string{fmt.Sprintf("Bearer %s", token1PValue)},
+				},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusCreated,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "unauthorized repoauth put",
+				Method: "PUT",
+				Path:   "/v2/project/manifests/tag-repoauth",
+				Body:   putBody,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusUnauthorized,
+				Body:   []byte("Unauthorized"),
+				Headers: http.Header{
+					"WWW-Authenticate": []string{`Bearer realm="http://` + tsTokenHost + `/token",service=test,scope="repository:project:pull,push"`},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "authorized project2 repoauth get",
+				Method: "GET",
+				Path:   "/v2/project2/manifests/tag-repoauth",
+				Headers: http.Header{
+					"Authorization": []string{fmt.Sprintf("Bearer %s", token2GValue)},
+				},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Body:   getBody,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", len(getBody))},
+					"Content-Type":          []string{"application/vnd.docker.distribution.manifest.v2+json"},
+					"Docker-Content-Digest": []string{getDigest.String()},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "unauthorized project2 repoauth get",
+				Method: "GET",
+				Path:   "/v2/project2/manifests/tag-repoauth",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusUnauthorized,
+				Body:   []byte("Unauthorized"),
+				Headers: http.Header{
+					"WWW-Authenticate": []string{`Bearer realm="http://` + tsTokenHost + `/token",service=test,scope="repository:project2:pull"`},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "authorized project2 repoauth put",
+				Method: "PUT",
+				Path:   "/v2/project2/manifests/tag-repoauth",
+				Body:   putBody,
+				Headers: http.Header{
+					"Authorization": []string{fmt.Sprintf("Bearer %s", token2PValue)},
+				},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusCreated,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "unauthorized project2 repoauth put",
+				Method: "PUT",
+				Path:   "/v2/project2/manifests/tag-repoauth",
+				Body:   putBody,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusUnauthorized,
+				Body:   []byte("Unauthorized"),
+				Headers: http.Header{
+					"WWW-Authenticate": []string{`Bearer realm="http://` + tsTokenHost + `/token",service=test,scope="repository:project2:pull,push"`},
 				},
 			},
 		},
@@ -325,6 +570,14 @@ func TestRegHttp(t *testing.T) {
 			Pass:     "bad" + pass,
 		},
 		{
+			Name:     "repoauth." + tsHost,
+			Hostname: tsHost,
+			TLS:      config.TLSDisabled,
+			User:     user,
+			Pass:     pass,
+			RepoAuth: true,
+		},
+		{
 			Name:     "nohead." + tsHost,
 			Hostname: tsHost,
 			TLS:      config.TLSDisabled,
@@ -401,7 +654,11 @@ func TestRegHttp(t *testing.T) {
 	// create http client
 	delayInit, _ := time.ParseDuration("0.05s")
 	delayMax, _ := time.ParseDuration("0.10s")
-	hc := NewClient(WithConfigHosts(configHosts), WithDelay(delayInit, delayMax))
+	hc := NewClient(
+		WithConfigHosts(configHosts),
+		WithDelay(delayInit, delayMax),
+		WithUserAgent(useragent),
+	)
 
 	// test standard get
 	// test getting http response
@@ -678,6 +935,126 @@ func TestRegHttp(t *testing.T) {
 			return
 		} else if !errors.Is(err, auth.ErrUnauthorized) {
 			t.Errorf("expected error %v, received error %v", auth.ErrUnauthorized, err)
+		}
+	})
+	// test repoauth
+	t.Run("RepoAuth", func(t *testing.T) {
+		apiAuth1G := map[string]ReqAPI{
+			"": {
+				Method:     "GET",
+				Repository: "project",
+				Path:       "manifests/tag-repoauth",
+				Headers:    headers,
+				Digest:     getDigest,
+			},
+		}
+		authReq1G := &Req{
+			Host: "repoauth." + tsHost,
+			APIs: apiAuth1G,
+		}
+		resp, err := hc.Do(ctx, authReq1G)
+		if err != nil {
+			t.Errorf("failed to run get: %v", err)
+			return
+		}
+		if resp.HTTPResponse().StatusCode != 200 {
+			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
+		}
+		body, err := io.ReadAll(resp)
+		if err != nil {
+			t.Errorf("body read failure: %v", err)
+		} else if !bytes.Equal(body, getBody) {
+			t.Errorf("body read mismatch, expected %s, received %s", getBody, body)
+		}
+		err = resp.Close()
+		if err != nil {
+			t.Errorf("error closing request: %v", err)
+		}
+
+		apiAuth1P := map[string]ReqAPI{
+			"": {
+				Method:     "PUT",
+				Repository: "project",
+				Path:       "manifests/tag-repoauth",
+				Headers:    headers,
+				Digest:     getDigest,
+				BodyBytes:  putBody,
+			},
+		}
+		authReq1P := &Req{
+			Host: "repoauth." + tsHost,
+			APIs: apiAuth1P,
+		}
+		resp, err = hc.Do(ctx, authReq1P)
+		if err != nil {
+			t.Errorf("failed to run put: %v", err)
+			return
+		}
+		if resp.HTTPResponse().StatusCode != 201 {
+			t.Errorf("invalid status code, expected 201, received %d", resp.HTTPResponse().StatusCode)
+		}
+		err = resp.Close()
+		if err != nil {
+			t.Errorf("error closing request: %v", err)
+		}
+
+		apiAuth2G := map[string]ReqAPI{
+			"": {
+				Method:     "GET",
+				Repository: "project2",
+				Path:       "manifests/tag-repoauth",
+				Headers:    headers,
+				Digest:     getDigest,
+			},
+		}
+		authReq2G := &Req{
+			Host: "repoauth." + tsHost,
+			APIs: apiAuth2G,
+		}
+		resp, err = hc.Do(ctx, authReq2G)
+		if err != nil {
+			t.Errorf("failed to run get: %v", err)
+			return
+		}
+		if resp.HTTPResponse().StatusCode != 200 {
+			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
+		}
+		body, err = io.ReadAll(resp)
+		if err != nil {
+			t.Errorf("body read failure: %v", err)
+		} else if !bytes.Equal(body, getBody) {
+			t.Errorf("body read mismatch, expected %s, received %s", getBody, body)
+		}
+		err = resp.Close()
+		if err != nil {
+			t.Errorf("error closing request: %v", err)
+		}
+
+		apiAuth2P := map[string]ReqAPI{
+			"": {
+				Method:     "PUT",
+				Repository: "project2",
+				Path:       "manifests/tag-repoauth",
+				Headers:    headers,
+				Digest:     getDigest,
+				BodyBytes:  putBody,
+			},
+		}
+		authReq2P := &Req{
+			Host: "repoauth." + tsHost,
+			APIs: apiAuth2P,
+		}
+		resp, err = hc.Do(ctx, authReq2P)
+		if err != nil {
+			t.Errorf("failed to run put: %v", err)
+			return
+		}
+		if resp.HTTPResponse().StatusCode != 201 {
+			t.Errorf("invalid status code, expected 201, received %d", resp.HTTPResponse().StatusCode)
+		}
+		err = resp.Close()
+		if err != nil {
+			t.Errorf("error closing request: %v", err)
 		}
 	})
 	// test body func and body string
