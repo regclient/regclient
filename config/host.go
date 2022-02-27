@@ -100,6 +100,7 @@ type Host struct {
 	PathPrefix string            `json:"pathPrefix,omitempty"` // used for mirrors defined within a repository namespace
 	Mirrors    []string          `json:"mirrors,omitempty"`    // list of other Host Names to use as mirrors
 	Priority   uint              `json:"priority,omitempty"`   // priority when sorting mirrors, higher priority attempted first
+	RepoAuth   bool              `json:"repoAuth,omitempty"`   // tracks a separate auth per repo
 	API        string            `json:"api,omitempty"`        // experimental: registry API to use
 	APIOpts    map[string]string `json:"apiOpts,omitempty"`    // options for APIs
 	BlobChunk  int64             `json:"blobChunk,omitempty"`  // size of each blob chunk
@@ -262,6 +263,10 @@ func (host *Host) Merge(newHost Host, log *logrus.Logger) error {
 			}).Warn("Changing priority settings for registry")
 		}
 		host.Priority = newHost.Priority
+	}
+
+	if newHost.RepoAuth {
+		host.RepoAuth = newHost.RepoAuth
 	}
 
 	if newHost.API != "" {

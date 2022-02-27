@@ -60,6 +60,7 @@ var registryOpts struct {
 	cacert, tls          string // set opts
 	mirrors              []string
 	priority             uint
+	repoAuth             bool
 	blobChunk, blobMax   int64
 	apiOpts              []string
 	scheme               string   // TODO: remove
@@ -78,6 +79,7 @@ func init() {
 	registrySetCmd.Flags().StringVarP(&registryOpts.pathPrefix, "path-prefix", "", "", "Prefix to all repositories")
 	registrySetCmd.Flags().StringArrayVarP(&registryOpts.mirrors, "mirror", "", nil, "List of mirrors (registry names)")
 	registrySetCmd.Flags().UintVarP(&registryOpts.priority, "priority", "", 0, "Priority (for sorting mirrors)")
+	registrySetCmd.Flags().BoolVarP(&registryOpts.repoAuth, "repo-auth", "", false, "Separate auth requests per repository instead of per registry")
 	registrySetCmd.Flags().Int64VarP(&registryOpts.blobChunk, "blob-chunk", "", 0, "Blob chunk size")
 	registrySetCmd.Flags().Int64VarP(&registryOpts.blobMax, "blob-max", "", 0, "Blob size before switching to chunked push, -1 to disable")
 	registrySetCmd.Flags().StringArrayVarP(&registryOpts.apiOpts, "api-opts", "", nil, "List of options (key=value))")
@@ -171,7 +173,7 @@ func runRegistryLogin(cmd *cobra.Command, args []string) error {
 		h = &config.Host{}
 		c.Hosts[args[0]] = h
 	}
-	if registryOpts.user != "" {
+	if flagChanged(cmd, "user") {
 		h.User = registryOpts.user
 	} else {
 		// prompt for username
@@ -189,7 +191,7 @@ func runRegistryLogin(cmd *cobra.Command, args []string) error {
 			return ErrMissingInput
 		}
 	}
-	if registryOpts.pass != "" {
+	if flagChanged(cmd, "pass") {
 		h.Pass = registryOpts.pass
 	} else {
 		// prompt for a password
@@ -272,45 +274,48 @@ func runRegistrySet(cmd *cobra.Command, args []string) error {
 		c.Hosts[name] = h
 	}
 
-	if registryOpts.scheme != "" {
+	if flagChanged(cmd, "scheme") {
 		log.WithFields(logrus.Fields{
 			"name":   name,
 			"scheme": registryOpts.scheme,
 		}).Warn("Scheme flag is deprecated, for http set tls to disabled")
 	}
-	if registryOpts.dns != nil {
+	if flagChanged(cmd, "dns") {
 		log.WithFields(logrus.Fields{
 			"name": name,
 			"dns":  registryOpts.dns,
 		}).Warn("DNS flag is deprecated, use hostname and mirrors instead")
 	}
-	if registryOpts.tls != "" {
+	if flagChanged(cmd, "tls") {
 		if err := h.TLS.UnmarshalText([]byte(registryOpts.tls)); err != nil {
 			return err
 		}
 	}
-	if registryOpts.cacert != "" {
+	if flagChanged(cmd, "cacert") {
 		h.RegCert = registryOpts.cacert
 	}
-	if registryOpts.hostname != "" {
+	if flagChanged(cmd, "hostname") {
 		h.Hostname = registryOpts.hostname
 	}
-	if registryOpts.pathPrefix != "" {
+	if flagChanged(cmd, "path-prefix") {
 		h.PathPrefix = registryOpts.pathPrefix
 	}
-	if len(registryOpts.mirrors) > 0 {
+	if flagChanged(cmd, "mirror") {
 		h.Mirrors = registryOpts.mirrors
 	}
-	if registryOpts.priority != 0 {
+	if flagChanged(cmd, "priority") {
 		h.Priority = registryOpts.priority
 	}
-	if registryOpts.blobChunk != 0 {
+	if flagChanged(cmd, "repo-auth") {
+		h.RepoAuth = registryOpts.repoAuth
+	}
+	if flagChanged(cmd, "blob-chunk") {
 		h.BlobChunk = registryOpts.blobChunk
 	}
-	if registryOpts.blobMax != 0 {
+	if flagChanged(cmd, "blob-max") {
 		h.BlobMax = registryOpts.blobMax
 	}
-	if len(registryOpts.apiOpts) > 0 {
+	if flagChanged(cmd, "api-opts") {
 		if h.APIOpts == nil {
 			h.APIOpts = map[string]string{}
 		}

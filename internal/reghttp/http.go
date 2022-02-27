@@ -52,7 +52,9 @@ type clientHost struct {
 	backoffCur   int
 	backoffUntil time.Time
 	config       *config.Host
-	auth         auth.Auth
+	auth         map[string]auth.Auth
+	newAuth      func() auth.Auth
+	mu           sync.Mutex
 }
 
 // Req is a request to send to a registry
@@ -373,17 +375,18 @@ func (resp *clientResp) Next() error {
 				}
 			}
 
-			if h.auth != nil {
+			hAuth := h.getAuth(api.Repository)
+			if hAuth != nil {
 				// include docker generated scope to emulate docker clients
 				if api.Repository != "" {
 					scope := "repository:" + api.Repository + ":pull"
 					if api.Method != "HEAD" && api.Method != "GET" {
 						scope = scope + ",push"
 					}
-					h.auth.AddScope(api.Repository, scope)
+					hAuth.AddScope(h.config.Hostname, scope)
 				}
 				// add auth headers
-				err = h.auth.UpdateRequest(httpReq)
+				err = hAuth.UpdateRequest(httpReq)
 				if err != nil {
 					backoff = true
 					return err
@@ -438,7 +441,11 @@ func (resp *clientResp) Next() error {
 				switch statusCode {
 				case http.StatusUnauthorized:
 					// if auth can be done, retry same host without delay, otherwise drop/backoff
-					err = h.auth.HandleResponse(resp.resp)
+					if hAuth != nil {
+						err = hAuth.HandleResponse(resp.resp)
+					} else {
+						err = fmt.Errorf("authentication handler unavailable")
+					}
 					if err != nil {
 						c.log.WithFields(logrus.Fields{
 							"URL": u.String(),
@@ -638,14 +645,32 @@ func (c *Client) getHost(host string) *clientHost {
 		h.config = config.HostNewName(host)
 	}
 	if h.auth == nil {
-		h.auth = auth.NewAuth(
-			auth.WithLog(c.log),
-			auth.WithHTTPClient(c.httpClient),
-			auth.WithCreds(h.AuthCreds()),
-			auth.WithClientID(c.userAgent),
-		)
+		h.auth = map[string]auth.Auth{}
+	}
+	if h.newAuth == nil {
+		h.newAuth = func() auth.Auth {
+			return auth.NewAuth(
+				auth.WithLog(c.log),
+				auth.WithHTTPClient(c.httpClient),
+				auth.WithCreds(h.AuthCreds()),
+				auth.WithClientID(c.userAgent),
+			)
+		}
 	}
 	return h
+}
+
+// getAuth returns an auth, which may be repository specific
+func (ch *clientHost) getAuth(repo string) auth.Auth {
+	ch.mu.Lock()
+	defer ch.mu.Unlock()
+	if !ch.config.RepoAuth {
+		repo = "" // without RepoAuth, unset the provided repo
+	}
+	if _, ok := ch.auth[repo]; !ok {
+		ch.auth[repo] = ch.newAuth()
+	}
+	return ch.auth[repo]
 }
 
 func (ch *clientHost) AuthCreds() func(h string) auth.Cred {

@@ -163,3 +163,11 @@ func setupVCSVars() {
 		VCSTag = verS.VCSTag
 	}
 }
+
+func flagChanged(cmd *cobra.Command, name string) bool {
+	flag := cmd.Flags().Lookup(name)
+	if flag == nil {
+		return false
+	}
+	return flag.Changed
+}

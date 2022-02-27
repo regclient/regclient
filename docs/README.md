@@ -81,7 +81,7 @@ The following functions have been added in addition to the defaults available in
      /etc/docker/registry/config.yml
    ```
 
-2. Q: Can I delete images from Docker Hub?
+1. Q: Can I delete images from Docker Hub?
 
    A: Officially, Hub does not support the manifest delete API, you'll get an access denied.
    For now, I'm waiting to see if Docker will provide support for distribution-spec API's or at least provide tokens that can be used to manage images.
@@ -104,7 +104,7 @@ The following functions have been added in addition to the defaults available in
    Similar API and Token fields are available in regbot, but this remains experimental.
    Note that no other APIs are currently expected to work against `hub.docker.com`, query `docker.io` for the tag list and inspecting images.
 
-3. Q: Can I use docker credential helpers?
+1. Q: Can I use docker credential helpers?
 
    A: If your `$HOME/.docker/config.json` includes a section like the following:
 
@@ -121,3 +121,17 @@ The following functions have been added in addition to the defaults available in
    Note that the `gcloud` helper is not included since it results in a significant increase in the alpine image size (40M vs over 500M).
    Instead you can switch to `gcr` and copy your key to `$HOME/.config/gcloud/application_default_credentials.json`.
    For more details on the gcr helper, see <https://github.com/GoogleCloudPlatform/docker-credential-gcr>.
+
+1. Q: Actions against multiple `gcr.io` repositories fail with authentication errors.
+
+   A: Authentication on `gcr.io` does not handle multiple scopes like other registries do.
+   This can be solved to limiting the authentication to a single since repository on those registries.
+   Set the `repoAuth` flag to true in yaml configurations to enable this:
+
+   ```yaml
+   creds:
+   - registry: gcr.io
+     repoAuth: true
+   ```
+
+   For `regctl`, use `regctl registry set --repo-auth gcr.io`.

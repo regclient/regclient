@@ -26,6 +26,7 @@ type ConfigCreds struct {
 	User       string            `yaml:"user" json:"user"`
 	Pass       string            `yaml:"pass" json:"pass"`
 	Token      string            `yaml:"token" json:"token"`
+	RepoAuth   bool              `yaml:"repoAuth" json:"repoAuth"`
 	TLS        config.TLSConf    `yaml:"tls" json:"tls"`
 	Scheme     string            `yaml:"scheme" json:"scheme"` // TODO: delete
 	RegCert    string            `yaml:"regcert" json:"regcert"`
@@ -45,6 +46,7 @@ func credsToRCHost(c ConfigCreds) config.Host {
 		User:       c.User,
 		Pass:       c.Pass,
 		Token:      c.Token,
+		RepoAuth:   c.RepoAuth,
 		TLS:        c.TLS,
 		RegCert:    c.RegCert,
 		PathPrefix: c.PathPrefix,

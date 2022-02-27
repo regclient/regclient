@@ -46,6 +46,7 @@ type ConfigCreds struct {
 	PathPrefix string            `yaml:"pathPrefix" json:"pathPrefix"`
 	Mirrors    []string          `yaml:"mirrors" json:"mirrors"`
 	Priority   uint              `yaml:"priority" json:"priority"`
+	RepoAuth   bool              `yaml:"repoAuth" json:"repoAuth"`
 	API        string            `yaml:"api" json:"api"`
 	APIOpts    map[string]string `yaml:"apiOpts" json:"apiOpts"`
 	BlobChunk  int64             `yaml:"blobChunk" json:"blobChunk"`
@@ -64,6 +65,7 @@ func credsToRCHost(c ConfigCreds) config.Host {
 		PathPrefix: c.PathPrefix,
 		Mirrors:    c.Mirrors,
 		Priority:   c.Priority,
+		RepoAuth:   c.RepoAuth,
 		API:        c.API,
 		APIOpts:    c.APIOpts,
 		BlobChunk:  c.BlobChunk,

@@ -75,7 +75,7 @@ type Handler interface {
 }
 
 // HandlerBuild is used to make a new handler for a specific authType and URL
-type HandlerBuild func(client *http.Client, clientID, host string, cred Cred) Handler
+type HandlerBuild func(client *http.Client, clientID, host string, cred Cred, log *logrus.Logger) Handler
 
 // Opts configures options for NewAuth
 type Opts func(*auth)
@@ -167,10 +167,16 @@ func WithLog(log *logrus.Logger) Opts {
 	}
 }
 
+// AddScope extends an existing auth with additional scopes.
+// This is used to pre-populate scopes with the Docker convention rather than
+// depend on the registry to respond with the correct http status and headers.
 func (a *auth) AddScope(host, scope string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	success := false
+	if a.hs[host] == nil {
+		return ErrNoNewChallenge
+	}
 	for _, at := range a.authTypes {
 		if a.hs[host][at] != nil {
 			err := a.hs[host][at].AddScope(scope)
@@ -191,14 +197,10 @@ func (a *auth) AddScope(host, scope string) error {
 	return nil
 }
 
+// HandleResponse parses the 401 response, extracting the WWW-Authenticate
+// header and verifying the requirement is different from what was included in
+// the last request
 func (a *auth) HandleResponse(resp *http.Response) error {
-	/* 	- HandleResponse: parse 401 response, register/update auth method
-	   	- Manage handlers in map based on URL's host field
-	   	- Parse Www-Authenticate header
-	   	- Switch based on scheme (basic/bearer)
-	   	  - If handler doesn't exist, create handler
-	   	  - Call handler specific HandleResponse
-	*/
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	// verify response is an access denied
@@ -206,9 +208,8 @@ func (a *auth) HandleResponse(resp *http.Response) error {
 		return ErrUnsupported
 	}
 
-	// identify host for the request
+	// extract host and auth header
 	host := resp.Request.URL.Host
-	// parse WWW-Authenticate header
 	cl, err := ParseAuthHeaders(resp.Header.Values("WWW-Authenticate"))
 	if err != nil {
 		return err
@@ -220,6 +221,7 @@ func (a *auth) HandleResponse(resp *http.Response) error {
 		return ErrEmptyChallenge
 	}
 	goodChallenge := false
+	// loop over the received challenge(s)
 	for _, c := range cl {
 		if _, ok := a.hbs[c.authType]; !ok {
 			a.log.WithFields(logrus.Fields{
@@ -227,16 +229,18 @@ func (a *auth) HandleResponse(resp *http.Response) error {
 			}).Warn("Unsupported auth type")
 			continue
 		}
+		// setup a handler for the host and auth type
 		if _, ok := a.hs[host]; !ok {
 			a.hs[host] = map[string]Handler{}
 		}
 		if _, ok := a.hs[host][c.authType]; !ok {
-			h := a.hbs[c.authType](a.httpClient, a.clientID, host, a.credsFn(host))
+			h := a.hbs[c.authType](a.httpClient, a.clientID, host, a.credsFn(host), a.log)
 			if h == nil {
 				continue
 			}
 			a.hs[host][c.authType] = h
 		}
+		// process the challenge with that handler
 		err := a.hs[host][c.authType].ProcessChallenge(c)
 		if err == nil {
 			goodChallenge = true
@@ -259,11 +263,8 @@ func (a *auth) HandleResponse(resp *http.Response) error {
 	return nil
 }
 
+// UpdateRequest adds Authorization headers to a request
 func (a *auth) UpdateRequest(req *http.Request) error {
-	/* 	- UpdateRequest:
-	   	- Lookup handler, noop if no handler for URL's host
-	   	- Call handler updateRequest func, add returned header
-	*/
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	host := req.URL.Host
@@ -302,6 +303,7 @@ func (a *auth) addDefaultHandlers() {
 		a.hbs["bearer"] = NewBearerHandler
 		a.authTypes = append(a.authTypes, "bearer")
 	}
+	// jwt is considered experimental, used for some Hub specific API's
 	if _, ok := a.hbs["jwt"]; !ok {
 		a.hbs["jwt"] = NewJWTHandler
 		a.authTypes = append(a.authTypes, "jwt")
@@ -456,7 +458,7 @@ type BasicHandler struct {
 }
 
 // NewBasicHandler creates a new BasicHandler
-func NewBasicHandler(client *http.Client, clientID, host string, cred Cred) Handler {
+func NewBasicHandler(client *http.Client, clientID, host string, cred Cred, log *logrus.Logger) Handler {
 	return &BasicHandler{
 		realm: "",
 		cred:  cred,
@@ -497,6 +499,7 @@ type BearerHandler struct {
 	cred           Cred
 	scopes         []string
 	token          BearerToken
+	log            *logrus.Logger
 }
 
 // BearerToken is the json response to the Bearer request
@@ -510,7 +513,7 @@ type BearerToken struct {
 }
 
 // NewBearerHandler creates a new BearerHandler
-func NewBearerHandler(client *http.Client, clientID, host string, cred Cred) Handler {
+func NewBearerHandler(client *http.Client, clientID, host string, cred Cred, log *logrus.Logger) Handler {
 	return &BearerHandler{
 		client:   client,
 		clientID: clientID,
@@ -518,6 +521,7 @@ func NewBearerHandler(client *http.Client, clientID, host string, cred Cred) Han
 		realm:    "",
 		service:  "",
 		scopes:   []string{},
+		log:      log,
 	}
 }
 
@@ -528,13 +532,25 @@ func (b *BearerHandler) AddScope(scope string) error {
 	if existingScope && (b.token.Token == "" || !b.isExpired()) {
 		return ErrNoNewChallenge
 	}
-	if !existingScope {
+	return b.addScope(scope)
+}
+
+func (b *BearerHandler) addScope(scope string) error {
+	replaced := false
+	for i, cur := range b.scopes {
+		// extend an existing scope with more actions
+		if strings.HasPrefix(scope, cur+",") {
+			b.scopes[i] = scope
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
 		b.scopes = append(b.scopes, scope)
 	}
-
-	// delete any scope specific or invalid token
-	// also delete any associated refresh tokens
-	b.clearToken()
+	// delete any scope specific or invalid tokens
+	b.token.Token = ""
+	b.token.RefreshToken = ""
 	return nil
 }
 
@@ -568,11 +584,8 @@ func (b *BearerHandler) ProcessChallenge(c Challenge) error {
 		return ErrInvalidChallenge
 	}
 	if !existingScope {
-		b.scopes = append(b.scopes, c.params["scope"])
+		return b.addScope(c.params["scope"])
 	}
-
-	// delete any scope specific or invalid token
-	b.clearToken()
 	return nil
 }
 
@@ -600,7 +613,8 @@ func (b *BearerHandler) GenerateAuth() (string, error) {
 	return "", ErrUnauthorized
 }
 
-// returns true when token issue date is either 0, token has expired, or will expire within buffer time
+// isExpired returns true when token issue date is either 0, token has expired,
+// or will expire within buffer time
 func (b *BearerHandler) isExpired() bool {
 	if b.token.IssuedAt.IsZero() {
 		return true
@@ -610,6 +624,7 @@ func (b *BearerHandler) isExpired() bool {
 	return time.Now().After(expireSec)
 }
 
+// tryGet requests a new token with a GET request
 func (b *BearerHandler) tryGet() error {
 	req, err := http.NewRequest("GET", b.realm, nil)
 	if err != nil {
@@ -643,6 +658,7 @@ func (b *BearerHandler) tryGet() error {
 	return b.validateResponse(resp)
 }
 
+// tryPost requests a new token via a POST request
 func (b *BearerHandler) tryPost() error {
 	form := url.Values{}
 	if len(b.scopes) > 0 {
@@ -679,19 +695,21 @@ func (b *BearerHandler) tryPost() error {
 	return b.validateResponse(resp)
 }
 
-// check if the scope already exists within the list of scopes
+// scopeExists check if the scope already exists within the list of scopes
 func (b *BearerHandler) scopeExists(search string) bool {
 	if search == "" {
 		return true
 	}
 	for _, scope := range b.scopes {
-		if scope == search {
+		// allow scopes with additional actions, search for pull should match pull,push
+		if scope == search || strings.HasPrefix(scope, search+",") {
 			return true
 		}
 	}
 	return false
 }
 
+// validateResponse extracts the returned token
 func (b *BearerHandler) validateResponse(resp *http.Response) error {
 	if resp.StatusCode != 200 {
 		return ErrUnauthorized
@@ -719,12 +737,6 @@ func (b *BearerHandler) validateResponse(resp *http.Response) error {
 	return nil
 }
 
-// Clears any token / refresh token references
-func (b *BearerHandler) clearToken() {
-	b.token.Token = ""
-	b.token.RefreshToken = ""
-}
-
 // JWTHubHandler supports JWT auth type requests
 type JWTHubHandler struct {
 	client   *http.Client
@@ -745,7 +757,7 @@ type jwtHubResp struct {
 }
 
 // NewJWTHandler creates a new JWTHandler
-func NewJWTHandler(client *http.Client, clientID, host string, cred Cred) Handler {
+func NewJWTHandler(client *http.Client, clientID, host string, cred Cred, log *logrus.Logger) Handler {
 	// JWT handler is only tested against Hub, and the API is Hub specific
 	if host == "hub.docker.com" {
 		return &JWTHubHandler{
