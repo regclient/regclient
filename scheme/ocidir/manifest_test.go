@@ -7,11 +7,10 @@ import (
 	"io"
 	"testing"
 
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
-
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
+	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -71,7 +70,7 @@ func TestManifest(t *testing.T) {
 	if err != nil {
 		t.Errorf("manifest put: %v", err)
 	}
-	fh, err := fm.Open("testdata/regctl/" + ociv1.ImageLayoutFile)
+	fh, err := fm.Open("testdata/regctl/" + imageLayoutFile)
 	if err != nil {
 		t.Errorf("open oci-layout: %v", err)
 		return
@@ -80,7 +79,7 @@ func TestManifest(t *testing.T) {
 	if err != nil {
 		t.Errorf("readall oci-layout: %v", err)
 	}
-	l := ociv1.ImageLayout{}
+	l := v1.ImageLayout{}
 	err = json.Unmarshal(lb, &l)
 	if err != nil {
 		t.Errorf("json unmarshal oci-layout: %v", err)

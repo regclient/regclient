@@ -7,54 +7,54 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/containerd/containerd/platforms"
 	digest "github.com/opencontainers/go-digest"
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/internal/wraperr"
 	"github.com/regclient/regclient/types"
+	v1 "github.com/regclient/regclient/types/oci/v1"
+	"github.com/regclient/regclient/types/platform"
 )
 
 const (
 	// MediaTypeOCI1Manifest OCI v1 manifest media type
-	MediaTypeOCI1Manifest = ociv1.MediaTypeImageManifest
+	MediaTypeOCI1Manifest = types.MediaTypeOCI1Manifest
 	// MediaTypeOCI1ManifestList OCI v1 manifest list media type
-	MediaTypeOCI1ManifestList = ociv1.MediaTypeImageIndex
+	MediaTypeOCI1ManifestList = types.MediaTypeOCI1ManifestList
 )
 
 type oci1Manifest struct {
 	common
-	ociv1.Manifest
+	v1.Manifest
 }
 type oci1Index struct {
 	common
-	ociv1.Index
+	v1.Index
 }
 
-func (m *oci1Manifest) GetConfig() (ociv1.Descriptor, error) {
+func (m *oci1Manifest) GetConfig() (types.Descriptor, error) {
 	return m.Config, nil
 }
 func (m *oci1Manifest) GetConfigDigest() (digest.Digest, error) {
 	return m.Config.Digest, nil
 }
-func (m *oci1Index) GetConfig() (ociv1.Descriptor, error) {
-	return ociv1.Descriptor{}, wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+func (m *oci1Index) GetConfig() (types.Descriptor, error) {
+	return types.Descriptor{}, wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 func (m *oci1Index) GetConfigDigest() (digest.Digest, error) {
 	return "", wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 
-func (m *oci1Manifest) GetManifestList() ([]ociv1.Descriptor, error) {
-	return []ociv1.Descriptor{}, wraperr.New(fmt.Errorf("platform descriptor list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+func (m *oci1Manifest) GetManifestList() ([]types.Descriptor, error) {
+	return []types.Descriptor{}, wraperr.New(fmt.Errorf("platform descriptor list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
-func (m *oci1Index) GetManifestList() ([]ociv1.Descriptor, error) {
+func (m *oci1Index) GetManifestList() ([]types.Descriptor, error) {
 	return m.Manifests, nil
 }
 
-func (m *oci1Manifest) GetLayers() ([]ociv1.Descriptor, error) {
+func (m *oci1Manifest) GetLayers() ([]types.Descriptor, error) {
 	return m.Layers, nil
 }
-func (m *oci1Index) GetLayers() ([]ociv1.Descriptor, error) {
-	return []ociv1.Descriptor{}, wraperr.New(fmt.Errorf("layers are not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+func (m *oci1Index) GetLayers() ([]types.Descriptor, error) {
+	return []types.Descriptor{}, wraperr.New(fmt.Errorf("layers are not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 
 func (m *oci1Manifest) GetOrig() interface{} {
@@ -64,10 +64,10 @@ func (m *oci1Index) GetOrig() interface{} {
 	return m.Index
 }
 
-func (m *oci1Manifest) GetPlatformDesc(p *ociv1.Platform) (*ociv1.Descriptor, error) {
+func (m *oci1Manifest) GetPlatformDesc(p *platform.Platform) (*types.Descriptor, error) {
 	return nil, wraperr.New(fmt.Errorf("platform lookup not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
-func (m *oci1Index) GetPlatformDesc(p *ociv1.Platform) (*ociv1.Descriptor, error) {
+func (m *oci1Index) GetPlatformDesc(p *platform.Platform) (*types.Descriptor, error) {
 	dl, err := m.GetManifestList()
 	if err != nil {
 		return nil, err
@@ -75,10 +75,10 @@ func (m *oci1Index) GetPlatformDesc(p *ociv1.Platform) (*ociv1.Descriptor, error
 	return getPlatformDesc(p, dl)
 }
 
-func (m *oci1Manifest) GetPlatformList() ([]*ociv1.Platform, error) {
+func (m *oci1Manifest) GetPlatformList() ([]*platform.Platform, error) {
 	return nil, wraperr.New(fmt.Errorf("platform list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
-func (m *oci1Index) GetPlatformList() ([]*ociv1.Platform, error) {
+func (m *oci1Index) GetPlatformList() ([]*platform.Platform, error) {
 	dl, err := m.GetManifestList()
 	if err != nil {
 		return nil, err
@@ -148,7 +148,7 @@ func (m *oci1Index) MarshalPretty() ([]byte, error) {
 		fmt.Fprintf(tw, "  MediaType:\t%s\n", d.MediaType)
 		if d.Platform != nil {
 			if p := d.Platform; p.OS != "" {
-				fmt.Fprintf(tw, "  Platform:\t%s\n", platforms.Format(*p))
+				fmt.Fprintf(tw, "  Platform:\t%s\n", *p)
 				if p.OSVersion != "" {
 					fmt.Fprintf(tw, "  OSVersion:\t%s\n", p.OSVersion)
 				}
@@ -172,7 +172,7 @@ func (m *oci1Index) MarshalPretty() ([]byte, error) {
 }
 
 func (m *oci1Manifest) SetOrig(origIn interface{}) error {
-	orig, ok := origIn.(ociv1.Manifest)
+	orig, ok := origIn.(v1.Manifest)
 	if !ok {
 		return types.ErrUnsupportedMediaType
 	}
@@ -186,7 +186,7 @@ func (m *oci1Manifest) SetOrig(origIn interface{}) error {
 	}
 	m.manifSet = true
 	m.rawBody = mj
-	m.desc = ociv1.Descriptor{
+	m.desc = types.Descriptor{
 		MediaType: types.MediaTypeOCI1Manifest,
 		Digest:    digest.FromBytes(mj),
 		Size:      int64(len(mj)),
@@ -197,7 +197,7 @@ func (m *oci1Manifest) SetOrig(origIn interface{}) error {
 }
 
 func (m *oci1Index) SetOrig(origIn interface{}) error {
-	orig, ok := origIn.(ociv1.Index)
+	orig, ok := origIn.(v1.Index)
 	if !ok {
 		return types.ErrUnsupportedMediaType
 	}
@@ -211,7 +211,7 @@ func (m *oci1Index) SetOrig(origIn interface{}) error {
 	}
 	m.manifSet = true
 	m.rawBody = mj
-	m.desc = ociv1.Descriptor{
+	m.desc = types.Descriptor{
 		MediaType: types.MediaTypeOCI1ManifestList,
 		Digest:    digest.FromBytes(mj),
 		Size:      int64(len(mj)),

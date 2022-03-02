@@ -6,11 +6,11 @@ import (
 	"os"
 	"time"
 
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/cmd/regbot/internal/go2lua"
 	"github.com/regclient/regclient/types/blob"
 	"github.com/regclient/regclient/types/manifest"
+	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/sirupsen/logrus"
 	lua "github.com/yuin/gopher-lua"
@@ -125,7 +125,7 @@ func (s *Sandbox) configExport(ls *lua.LState) int {
 		// get the original config object, used to set fields that can be extracted from lua table
 		origOCIConf := origC.conf.GetConfig()
 		// build a new oci image from the lua table
-		var ociImage ociv1.Image
+		var ociImage v1.Image
 		err = go2lua.Import(ls, utab, &ociImage, &origOCIConf)
 		if err != nil {
 			ls.RaiseError("Failed exporting config (go2lua): %v", err)

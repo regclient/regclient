@@ -15,13 +15,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/containerd/containerd/platforms"
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
@@ -832,7 +832,7 @@ func init() {
 // getPlatformDigest resolves a manifest list to a specific platform's digest
 // This uses the above cache to only call ManifestGet when a new manifest list digest is seen
 func getPlatformDigest(ctx context.Context, r ref.Ref, platStr string, origMan manifest.Manifest) (digest.Digest, error) {
-	plat, err := platforms.Parse(platStr)
+	plat, err := platform.Parse(platStr)
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"platform": platStr,
@@ -861,10 +861,10 @@ func getPlatformDigest(ctx context.Context, r ref.Ref, platStr string, origMan m
 		pl, _ := manifest.GetPlatformList(getMan)
 		var ps []string
 		for _, p := range pl {
-			ps = append(ps, platforms.Format(*p))
+			ps = append(ps, p.String())
 		}
 		log.WithFields(logrus.Fields{
-			"platform":  platforms.Format(plat),
+			"platform":  plat,
 			"err":       err,
 			"platforms": strings.Join(ps, ", "),
 		}).Warn("Platform could not be found in source manifest list")

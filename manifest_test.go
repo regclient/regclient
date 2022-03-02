@@ -12,12 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/distribution"
-	dockerSchema2 "github.com/docker/distribution/manifest/schema2"
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/reqresp"
 	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/docker/schema2"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/sirupsen/logrus"
@@ -31,13 +30,13 @@ func TestManifest(t *testing.T) {
 	missingTag := "missing"
 	digest1 := digest.FromString("example1")
 	digest2 := digest.FromString("example2")
-	m := dockerSchema2.Manifest{
-		Config: distribution.Descriptor{
+	m := schema2.Manifest{
+		Config: types.Descriptor{
 			MediaType: types.MediaTypeDocker2ImageConfig,
 			Size:      8,
 			Digest:    digest1,
 		},
-		Layers: []distribution.Descriptor{
+		Layers: []types.Descriptor{
 			{
 				MediaType: types.MediaTypeDocker2Layer,
 				Size:      8,

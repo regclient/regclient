@@ -9,17 +9,17 @@ import (
 	"path"
 	"sync"
 
-	ociSpecs "github.com/opencontainers/image-spec/specs-go"
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
+	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/sirupsen/logrus"
 )
 
 const (
-	aRefName = "org.opencontainers.image.ref.name"
+	imageLayoutFile = "oci-layout"
+	aRefName        = "org.opencontainers.image.ref.name"
 )
 
 // OCIDir is used for accessing OCI Image Layouts defined as a directory
@@ -87,9 +87,9 @@ func (o *OCIDir) Info() scheme.Info {
 	return scheme.Info{ManifestPushFirst: true}
 }
 
-func (o *OCIDir) readIndex(r ref.Ref) (ociv1.Index, error) {
+func (o *OCIDir) readIndex(r ref.Ref) (v1.Index, error) {
 	// validate dir
-	index := ociv1.Index{}
+	index := v1.Index{}
 	err := o.valid(r.Path)
 	if err != nil {
 		return index, err
@@ -111,23 +111,23 @@ func (o *OCIDir) readIndex(r ref.Ref) (ociv1.Index, error) {
 	return index, nil
 }
 
-func (o *OCIDir) writeIndex(r ref.Ref, i ociv1.Index) error {
+func (o *OCIDir) writeIndex(r ref.Ref, i v1.Index) error {
 	// create/replace oci-layout file
-	layout := ociv1.ImageLayout{
+	layout := v1.ImageLayout{
 		Version: "1.0.0",
 	}
 	lb, err := json.Marshal(layout)
 	if err != nil {
 		return fmt.Errorf("cannot marshal layout: %w", err)
 	}
-	lfh, err := o.fs.Create(path.Join(r.Path, ociv1.ImageLayoutFile))
+	lfh, err := o.fs.Create(path.Join(r.Path, imageLayoutFile))
 	if err != nil {
-		return fmt.Errorf("cannot create %s: %w", ociv1.ImageLayoutFile, err)
+		return fmt.Errorf("cannot create %s: %w", imageLayoutFile, err)
 	}
 	defer lfh.Close()
 	_, err = lfh.Write(lb)
 	if err != nil {
-		return fmt.Errorf("cannot write %s: %w", ociv1.ImageLayoutFile, err)
+		return fmt.Errorf("cannot write %s: %w", imageLayoutFile, err)
 	}
 	// create/replace index.json file
 	indexFile := path.Join(r.Path, "index.json")
@@ -149,20 +149,20 @@ func (o *OCIDir) writeIndex(r ref.Ref, i ociv1.Index) error {
 
 // func valid (dir) (error) // check for `oci-layout` file and `index.json` for read
 func (o *OCIDir) valid(dir string) error {
-	layout := ociv1.ImageLayout{}
+	layout := v1.ImageLayout{}
 	reqVer := "1.0.0"
-	fh, err := o.fs.Open(path.Join(dir, ociv1.ImageLayoutFile))
+	fh, err := o.fs.Open(path.Join(dir, imageLayoutFile))
 	if err != nil {
-		return fmt.Errorf("%s cannot be open: %w", ociv1.ImageLayoutFile, err)
+		return fmt.Errorf("%s cannot be open: %w", imageLayoutFile, err)
 	}
 	defer fh.Close()
 	lb, err := io.ReadAll(fh)
 	if err != nil {
-		return fmt.Errorf("%s cannot be read: %w", ociv1.ImageLayoutFile, err)
+		return fmt.Errorf("%s cannot be read: %w", imageLayoutFile, err)
 	}
 	err = json.Unmarshal(lb, &layout)
 	if err != nil {
-		return fmt.Errorf("%s cannot be parsed: %w", ociv1.ImageLayoutFile, err)
+		return fmt.Errorf("%s cannot be parsed: %w", imageLayoutFile, err)
 	}
 	if layout.Version != reqVer {
 		return fmt.Errorf("unsupported oci layout version, expected %s, received %s", reqVer, layout.Version)
@@ -176,19 +176,17 @@ func (o *OCIDir) refMod(r ref.Ref) {
 	o.modRefs[r.Path] = r
 }
 
-func indexCreate() ociv1.Index {
-	i := ociv1.Index{
-		Versioned: ociSpecs.Versioned{
-			SchemaVersion: 2,
-		},
+func indexCreate() v1.Index {
+	i := v1.Index{
+		Versioned:   v1.IndexSchemaVersion,
 		MediaType:   types.MediaTypeOCI1ManifestList,
-		Manifests:   []ociv1.Descriptor{},
+		Manifests:   []types.Descriptor{},
 		Annotations: map[string]string{},
 	}
 	return i
 }
 
-func indexRefLookup(index ociv1.Index, r ref.Ref) (int, error) {
+func indexRefLookup(index v1.Index, r ref.Ref) (int, error) {
 	// make 2 passes, first for the tag, and second for the digest without a tag
 	// one digest could be tagged multiple times in the index
 	if r.Tag != "" {

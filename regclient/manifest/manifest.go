@@ -7,7 +7,6 @@ package manifest
 import (
 	"net/http"
 
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	topTypes "github.com/regclient/regclient/types"
 	topManifest "github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
@@ -39,7 +38,7 @@ var (
 
 func New(mediaType string, raw []byte, r ref.Ref, header http.Header) (Manifest, error) {
 	return topManifest.New(
-		topManifest.WithDesc(ociv1.Descriptor{
+		topManifest.WithDesc(topTypes.Descriptor{
 			MediaType: mediaType,
 		}),
 		topManifest.WithRef(r),
@@ -48,7 +47,7 @@ func New(mediaType string, raw []byte, r ref.Ref, header http.Header) (Manifest,
 	)
 }
 
-func FromDescriptor(desc ociv1.Descriptor, mBytes []byte) (Manifest, error) {
+func FromDescriptor(desc topTypes.Descriptor, mBytes []byte) (Manifest, error) {
 	return topManifest.New(
 		topManifest.WithDesc(desc),
 		topManifest.WithRaw(mBytes),

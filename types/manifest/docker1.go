@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 
-	dockerSchema1 "github.com/docker/distribution/manifest/schema1"
 	digest "github.com/opencontainers/go-digest"
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/internal/wraperr"
 	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/docker/schema1"
+	"github.com/regclient/regclient/types/platform"
 )
 
 const (
@@ -21,46 +21,46 @@ const (
 
 type docker1Manifest struct {
 	common
-	dockerSchema1.Manifest
+	schema1.Manifest
 }
 type docker1SignedManifest struct {
 	common
-	dockerSchema1.SignedManifest
+	schema1.SignedManifest
 }
 
-func (m *docker1Manifest) GetConfig() (ociv1.Descriptor, error) {
-	return ociv1.Descriptor{}, wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+func (m *docker1Manifest) GetConfig() (types.Descriptor, error) {
+	return types.Descriptor{}, wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 func (m *docker1Manifest) GetConfigDigest() (digest.Digest, error) {
 	return "", wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
-func (m *docker1SignedManifest) GetConfig() (ociv1.Descriptor, error) {
-	return ociv1.Descriptor{}, wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+func (m *docker1SignedManifest) GetConfig() (types.Descriptor, error) {
+	return types.Descriptor{}, wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 func (m *docker1SignedManifest) GetConfigDigest() (digest.Digest, error) {
 	return "", wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 
-func (m *docker1Manifest) GetManifestList() ([]ociv1.Descriptor, error) {
-	return []ociv1.Descriptor{}, wraperr.New(fmt.Errorf("platform descriptor list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+func (m *docker1Manifest) GetManifestList() ([]types.Descriptor, error) {
+	return []types.Descriptor{}, wraperr.New(fmt.Errorf("platform descriptor list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
-func (m *docker1SignedManifest) GetManifestList() ([]ociv1.Descriptor, error) {
-	return []ociv1.Descriptor{}, wraperr.New(fmt.Errorf("platform descriptor list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+func (m *docker1SignedManifest) GetManifestList() ([]types.Descriptor, error) {
+	return []types.Descriptor{}, wraperr.New(fmt.Errorf("platform descriptor list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 
-func (m *docker1Manifest) GetLayers() ([]ociv1.Descriptor, error) {
-	var dl []ociv1.Descriptor
+func (m *docker1Manifest) GetLayers() ([]types.Descriptor, error) {
+	var dl []types.Descriptor
 	for _, sd := range m.FSLayers {
-		dl = append(dl, ociv1.Descriptor{
+		dl = append(dl, types.Descriptor{
 			Digest: sd.BlobSum,
 		})
 	}
 	return dl, nil
 }
-func (m *docker1SignedManifest) GetLayers() ([]ociv1.Descriptor, error) {
-	var dl []ociv1.Descriptor
+func (m *docker1SignedManifest) GetLayers() ([]types.Descriptor, error) {
+	var dl []types.Descriptor
 	for _, sd := range m.FSLayers {
-		dl = append(dl, ociv1.Descriptor{
+		dl = append(dl, types.Descriptor{
 			Digest: sd.BlobSum,
 		})
 	}
@@ -74,17 +74,17 @@ func (m *docker1SignedManifest) GetOrig() interface{} {
 	return m.SignedManifest
 }
 
-func (m *docker1Manifest) GetPlatformDesc(p *ociv1.Platform) (*ociv1.Descriptor, error) {
+func (m *docker1Manifest) GetPlatformDesc(p *platform.Platform) (*types.Descriptor, error) {
 	return nil, wraperr.New(fmt.Errorf("platform lookup not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
-func (m *docker1SignedManifest) GetPlatformDesc(p *ociv1.Platform) (*ociv1.Descriptor, error) {
+func (m *docker1SignedManifest) GetPlatformDesc(p *platform.Platform) (*types.Descriptor, error) {
 	return nil, wraperr.New(fmt.Errorf("platform lookup not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 
-func (m *docker1Manifest) GetPlatformList() ([]*ociv1.Platform, error) {
+func (m *docker1Manifest) GetPlatformList() ([]*platform.Platform, error) {
 	return nil, wraperr.New(fmt.Errorf("platform list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
-func (m *docker1SignedManifest) GetPlatformList() ([]*ociv1.Platform, error) {
+func (m *docker1SignedManifest) GetPlatformList() ([]*platform.Platform, error) {
 	return nil, wraperr.New(fmt.Errorf("platform list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 
@@ -122,7 +122,7 @@ func (m *docker1SignedManifest) MarshalPretty() ([]byte, error) {
 }
 
 func (m *docker1Manifest) SetOrig(origIn interface{}) error {
-	orig, ok := origIn.(dockerSchema1.Manifest)
+	orig, ok := origIn.(schema1.Manifest)
 	if !ok {
 		return types.ErrUnsupportedMediaType
 	}
@@ -136,7 +136,7 @@ func (m *docker1Manifest) SetOrig(origIn interface{}) error {
 	}
 	m.manifSet = true
 	m.rawBody = mj
-	m.desc = ociv1.Descriptor{
+	m.desc = types.Descriptor{
 		MediaType: types.MediaTypeDocker1Manifest,
 		Digest:    digest.FromBytes(mj),
 		Size:      int64(len(mj)),
@@ -147,7 +147,7 @@ func (m *docker1Manifest) SetOrig(origIn interface{}) error {
 }
 
 func (m *docker1SignedManifest) SetOrig(origIn interface{}) error {
-	orig, ok := origIn.(dockerSchema1.SignedManifest)
+	orig, ok := origIn.(schema1.SignedManifest)
 	if !ok {
 		return types.ErrUnsupportedMediaType
 	}
@@ -161,7 +161,7 @@ func (m *docker1SignedManifest) SetOrig(origIn interface{}) error {
 	}
 	m.manifSet = true
 	m.rawBody = mj
-	m.desc = ociv1.Descriptor{
+	m.desc = types.Descriptor{
 		MediaType: types.MediaTypeDocker1ManifestSigned,
 		Digest:    digest.FromBytes(mj),
 		Size:      int64(len(mj)),
