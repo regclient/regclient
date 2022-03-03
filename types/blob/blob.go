@@ -5,7 +5,8 @@ import (
 	"io"
 	"net/http"
 
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/regclient/regclient/types"
+	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -16,9 +17,9 @@ type Blob interface {
 }
 
 type blobConfig struct {
-	desc    ociv1.Descriptor
+	desc    types.Descriptor
 	header  http.Header
-	image   *ociv1.Image
+	image   *v1.Image
 	r       ref.Ref
 	rdr     io.Reader
 	resp    *http.Response
@@ -28,7 +29,7 @@ type blobConfig struct {
 type Opts func(*blobConfig)
 
 // WithDesc specifies the descriptor associated with the blob
-func WithDesc(d ociv1.Descriptor) Opts {
+func WithDesc(d types.Descriptor) Opts {
 	return func(bc *blobConfig) {
 		bc.desc = d
 	}
@@ -42,7 +43,7 @@ func WithHeader(header http.Header) Opts {
 }
 
 // WithImage provides the OCI Image config needed for config blobs
-func WithImage(image ociv1.Image) Opts {
+func WithImage(image v1.Image) Opts {
 	return func(bc *blobConfig) {
 		bc.image = &image
 	}

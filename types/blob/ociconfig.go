@@ -5,15 +5,15 @@ import (
 	"fmt"
 
 	"github.com/opencontainers/go-digest"
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/types"
+	v1 "github.com/regclient/regclient/types/oci/v1"
 )
 
 // OCIConfig wraps an OCI Config struct extracted from a Blob
 type OCIConfig interface {
 	Blob
-	GetConfig() ociv1.Image
-	SetConfig(ociv1.Image)
+	GetConfig() v1.Image
+	SetConfig(v1.Image)
 }
 
 // ociConfig includes an OCI Config struct extracted from a Blob
@@ -21,7 +21,7 @@ type OCIConfig interface {
 type ociConfig struct {
 	common
 	rawBody []byte
-	ociv1.Image
+	v1.Image
 }
 
 // NewOCIConfig creates a new BlobOCIConfig from an OCI Image
@@ -39,7 +39,7 @@ func NewOCIConfig(opts ...Opts) OCIConfig {
 	}
 	if len(bc.rawBody) > 0 {
 		if bc.image == nil {
-			bc.image = &ociv1.Image{}
+			bc.image = &v1.Image{}
 			err := json.Unmarshal(bc.rawBody, bc.image)
 			if err != nil {
 				bc.image = nil
@@ -71,7 +71,7 @@ func NewOCIConfig(opts ...Opts) OCIConfig {
 }
 
 // GetConfig returns OCI config
-func (b *ociConfig) GetConfig() ociv1.Image {
+func (b *ociConfig) GetConfig() v1.Image {
 	return b.Image
 }
 
@@ -88,7 +88,7 @@ func (b *ociConfig) RawBody() ([]byte, error) {
 }
 
 // SetConfig updates the config, including raw body and descriptor
-func (b *ociConfig) SetConfig(c ociv1.Image) {
+func (b *ociConfig) SetConfig(c v1.Image) {
 	b.Image = c
 	b.rawBody, _ = json.Marshal(b.Image)
 	if b.desc.MediaType == "" {

@@ -10,27 +10,23 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/containerd/containerd/platforms"
-	dockerDistribution "github.com/docker/distribution"
-	"github.com/docker/distribution/manifest"
-	dockerManifestList "github.com/docker/distribution/manifest/manifestlist"
-	dockerSchema1 "github.com/docker/distribution/manifest/schema1"
-	dockerSchema2 "github.com/docker/distribution/manifest/schema2"
 	digest "github.com/opencontainers/go-digest"
-	"github.com/opencontainers/image-spec/specs-go"
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/internal/wraperr"
 	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/docker/schema1"
+	"github.com/regclient/regclient/types/docker/schema2"
+	v1 "github.com/regclient/regclient/types/oci/v1"
+	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 )
 
 // Manifest interface is implemented by all supported manifests but
 // many calls are only supported by certain underlying media types.
 type Manifest interface {
-	GetConfig() (ociv1.Descriptor, error)
-	GetDescriptor() ociv1.Descriptor
-	GetLayers() ([]ociv1.Descriptor, error)
-	GetManifestList() ([]ociv1.Descriptor, error)
+	GetConfig() (types.Descriptor, error)
+	GetDescriptor() types.Descriptor
+	GetLayers() ([]types.Descriptor, error)
+	GetManifestList() ([]types.Descriptor, error)
 	GetOrig() interface{}
 	GetRef() ref.Ref
 	IsList() bool
@@ -40,18 +36,18 @@ type Manifest interface {
 	RawHeaders() (http.Header, error)
 	SetOrig(interface{}) error
 
-	GetConfigDigest() (digest.Digest, error)                      // TODO: deprecate
-	GetDigest() digest.Digest                                     // TODO: deprecate
-	GetMediaType() string                                         // TODO: deprecate
-	GetPlatformDesc(p *ociv1.Platform) (*ociv1.Descriptor, error) // TODO: deprecate
-	GetPlatformList() ([]*ociv1.Platform, error)                  // TODO: deprecate
-	GetRateLimit() types.RateLimit                                // TODO: deprecate
-	HasRateLimit() bool                                           // TODO: deprecate
+	GetConfigDigest() (digest.Digest, error)                         // TODO: deprecate
+	GetDigest() digest.Digest                                        // TODO: deprecate
+	GetMediaType() string                                            // TODO: deprecate
+	GetPlatformDesc(p *platform.Platform) (*types.Descriptor, error) // TODO: deprecate
+	GetPlatformList() ([]*platform.Platform, error)                  // TODO: deprecate
+	GetRateLimit() types.RateLimit                                   // TODO: deprecate
+	HasRateLimit() bool                                              // TODO: deprecate
 }
 
 type manifestConfig struct {
 	r      ref.Ref
-	desc   ociv1.Descriptor
+	desc   types.Descriptor
 	raw    []byte
 	orig   interface{}
 	header http.Header
@@ -91,7 +87,7 @@ func New(opts ...Opts) (Manifest, error) {
 }
 
 // WithDesc specifies the descriptor for the manifest
-func WithDesc(desc ociv1.Descriptor) Opts {
+func WithDesc(desc types.Descriptor) Opts {
 	return func(mc *manifestConfig) {
 		mc.desc = desc
 	}
@@ -138,27 +134,21 @@ func GetMediaType(m Manifest) string {
 }
 
 // GetPlatformDesc returns the descriptor for a specific platform from an index
-func GetPlatformDesc(m Manifest, p *ociv1.Platform) (*ociv1.Descriptor, error) {
+func GetPlatformDesc(m Manifest, p *platform.Platform) (*types.Descriptor, error) {
 	dl, err := m.GetManifestList()
 	if err != nil {
 		return nil, err
 	}
-	platformCmp := platforms.NewMatcher(*p)
-	for _, d := range dl {
-		if d.Platform != nil && platformCmp.Match(*d.Platform) {
-			return &d, nil
-		}
-	}
-	return nil, wraperr.New(fmt.Errorf("platform not found: %s", platforms.Format(*p)), types.ErrNotFound)
+	return getPlatformDesc(p, dl)
 }
 
 // GetPlatformList returns the list of platforms from an index
-func GetPlatformList(m Manifest) ([]*ociv1.Platform, error) {
+func GetPlatformList(m Manifest) ([]*platform.Platform, error) {
 	dl, err := m.GetManifestList()
 	if err != nil {
 		return nil, err
 	}
-	var l []*ociv1.Platform
+	var l []*platform.Platform
 	for _, d := range dl {
 		if d.Platform != nil {
 			l = append(l, d.Platform)
@@ -220,19 +210,15 @@ func HasRateLimit(m Manifest) bool {
 	return rl.Set
 }
 
-func OCIIndexFromAny(orig interface{}) (ociv1.Index, error) {
-	ociI := ociv1.Index{
-		Versioned: specs.Versioned{SchemaVersion: 2},
+func OCIIndexFromAny(orig interface{}) (v1.Index, error) {
+	ociI := v1.Index{
+		Versioned: v1.IndexSchemaVersion,
 		MediaType: types.MediaTypeOCI1ManifestList,
 	}
 	switch orig := orig.(type) {
-	case dockerManifestList.ManifestList:
-		ml := make([]ociv1.Descriptor, len(orig.Manifests))
-		for i, d := range orig.Manifests {
-			ml[i] = *dl2oDescriptor(d)
-		}
-		ociI.Manifests = ml
-	case ociv1.Index:
+	case schema2.ManifestList:
+		ociI.Manifests = orig.Manifests
+	case v1.Index:
 		ociI = orig
 	default:
 		return ociI, fmt.Errorf("unable to convert %T to OCI index", orig)
@@ -240,7 +226,7 @@ func OCIIndexFromAny(orig interface{}) (ociv1.Index, error) {
 	return ociI, nil
 }
 
-func OCIIndexToAny(ociI ociv1.Index, origP interface{}) error {
+func OCIIndexToAny(ociI v1.Index, origP interface{}) error {
 	// reflect is used to handle both *interface{} and *Manifest
 	rv := reflect.ValueOf(origP)
 	for rv.IsValid() && rv.Type().Kind() == reflect.Ptr {
@@ -254,36 +240,11 @@ func OCIIndexToAny(ociI ociv1.Index, origP interface{}) error {
 	}
 	origR := rv.Interface()
 	switch orig := (origR).(type) {
-	case dockerManifestList.ManifestList:
-		ml := make([]dockerManifestList.ManifestDescriptor, len(ociI.Manifests))
-		for i, d := range ociI.Manifests {
-			ml[i] = dockerManifestList.ManifestDescriptor{
-				Descriptor: dockerDistribution.Descriptor{
-					MediaType:   d.MediaType,
-					Size:        d.Size,
-					Digest:      d.Digest,
-					URLs:        d.URLs,
-					Annotations: d.Annotations,
-					Platform:    d.Platform,
-				},
-			}
-			if d.Platform != nil {
-				ml[i].Platform = dockerManifestList.PlatformSpec{
-					Architecture: d.Platform.Architecture,
-					OS:           d.Platform.OS,
-					OSVersion:    d.Platform.OSVersion,
-					OSFeatures:   d.Platform.OSFeatures,
-					Variant:      d.Platform.Variant,
-				}
-			}
-		}
-		orig.Manifests = ml
-		orig.Versioned = manifest.Versioned{
-			SchemaVersion: 2,
-			MediaType:     types.MediaTypeDocker2ManifestList,
-		}
+	case schema2.ManifestList:
+		orig.Versioned = schema2.ManifestListSchemaVersion
+		orig.Manifests = ociI.Manifests
 		rv.Set(reflect.ValueOf(orig))
-	case ociv1.Index:
+	case v1.Index:
 		rv.Set(reflect.ValueOf(ociI))
 	default:
 		return fmt.Errorf("unable to convert OCI index to %T", origR)
@@ -291,20 +252,16 @@ func OCIIndexToAny(ociI ociv1.Index, origP interface{}) error {
 	return nil
 }
 
-func OCIManifestFromAny(orig interface{}) (ociv1.Manifest, error) {
-	ociM := ociv1.Manifest{
-		Versioned: specs.Versioned{SchemaVersion: 2},
+func OCIManifestFromAny(orig interface{}) (v1.Manifest, error) {
+	ociM := v1.Manifest{
+		Versioned: v1.ManifestSchemaVersion,
 		MediaType: types.MediaTypeOCI1Manifest,
 	}
 	switch orig := orig.(type) {
-	case dockerSchema2.Manifest:
-		ll := make([]ociv1.Descriptor, len(orig.Layers))
-		for i, l := range orig.Layers {
-			ll[i] = *d2oDescriptor(l)
-		}
-		ociM.Config = *d2oDescriptor(orig.Config)
-		ociM.Layers = ll
-	case ociv1.Manifest:
+	case schema2.Manifest:
+		ociM.Config = orig.Config
+		ociM.Layers = orig.Layers
+	case v1.Manifest:
 		ociM = orig
 	default:
 		// TODO: consider supporting Docker schema v1 media types
@@ -313,7 +270,7 @@ func OCIManifestFromAny(orig interface{}) (ociv1.Manifest, error) {
 	return ociM, nil
 }
 
-func OCIManifestToAny(ociM ociv1.Manifest, origP interface{}) error {
+func OCIManifestToAny(ociM v1.Manifest, origP interface{}) error {
 	// reflect is used to handle both *interface{} and *Manifest
 	rv := reflect.ValueOf(origP)
 	for rv.IsValid() && rv.Type().Kind() == reflect.Ptr {
@@ -327,31 +284,12 @@ func OCIManifestToAny(ociM ociv1.Manifest, origP interface{}) error {
 	}
 	origR := rv.Interface()
 	switch orig := (origR).(type) {
-	case dockerSchema2.Manifest:
-		ll := make([]dockerDistribution.Descriptor, len(ociM.Layers))
-		for i, l := range ociM.Layers {
-			ll[i] = dockerDistribution.Descriptor{
-				MediaType:   l.MediaType,
-				Size:        l.Size,
-				Digest:      l.Digest,
-				URLs:        l.URLs,
-				Annotations: l.Annotations,
-				Platform:    l.Platform,
-			}
-		}
-		orig.Layers = ll
-		orig.Config = dockerDistribution.Descriptor{
-			MediaType:   ociM.Config.MediaType,
-			Size:        ociM.Config.Size,
-			Digest:      ociM.Config.Digest,
-			URLs:        ociM.Config.URLs,
-			Annotations: ociM.Config.Annotations,
-			Platform:    ociM.Config.Platform,
-		}
-		orig.Versioned.MediaType = types.MediaTypeDocker2Manifest
-		orig.Versioned.SchemaVersion = 2
+	case schema2.Manifest:
+		orig.Versioned = schema2.ManifestSchemaVersion
+		orig.Config = ociM.Config
+		orig.Layers = ociM.Layers
 		rv.Set(reflect.ValueOf(orig))
-	case ociv1.Manifest:
+	case v1.Manifest:
 		rv.Set(reflect.ValueOf(ociM))
 	default:
 		// Docker schema v1 will not be supported, can't resign, and no need for unsigned
@@ -375,7 +313,7 @@ func fromOrig(c common, orig interface{}) (Manifest, error) {
 	if len(c.rawBody) == 0 {
 		c.rawBody = mj
 	}
-	if _, ok := orig.(dockerSchema1.SignedManifest); !ok {
+	if _, ok := orig.(schema1.SignedManifest); !ok {
 		c.desc.Digest = digest.FromBytes(mj)
 	}
 	if c.desc.Size == 0 {
@@ -383,14 +321,14 @@ func fromOrig(c common, orig interface{}) (Manifest, error) {
 	}
 	// create manifest based on type
 	switch mOrig := orig.(type) {
-	case dockerSchema1.Manifest:
+	case schema1.Manifest:
 		mt = mOrig.MediaType
 		c.desc.MediaType = types.MediaTypeDocker1Manifest
 		m = &docker1Manifest{
 			common:   c,
 			Manifest: mOrig,
 		}
-	case dockerSchema1.SignedManifest:
+	case schema1.SignedManifest:
 		mt = mOrig.MediaType
 		c.desc.MediaType = types.MediaTypeDocker1ManifestSigned
 		// recompute digest on the canonical data
@@ -399,33 +337,33 @@ func fromOrig(c common, orig interface{}) (Manifest, error) {
 			common:         c,
 			SignedManifest: mOrig,
 		}
-	case dockerSchema2.Manifest:
+	case schema2.Manifest:
 		mt = mOrig.MediaType
 		c.desc.MediaType = types.MediaTypeDocker2Manifest
 		m = &docker2Manifest{
 			common:   c,
 			Manifest: mOrig,
 		}
-	case dockerManifestList.ManifestList:
+	case schema2.ManifestList:
 		mt = mOrig.MediaType
 		c.desc.MediaType = types.MediaTypeDocker2ManifestList
 		m = &docker2ManifestList{
 			common:       c,
 			ManifestList: mOrig,
 		}
-	case ociv1.Manifest:
+	case v1.Manifest:
 		mt = mOrig.MediaType
 		c.desc.MediaType = types.MediaTypeOCI1Manifest
 		m = &oci1Manifest{
 			common:   c,
 			Manifest: mOrig,
 		}
-	case ociv1.Index:
+	case v1.Index:
 		mt = mOrig.MediaType
 		c.desc.MediaType = types.MediaTypeOCI1ManifestList
 		m = &oci1Index{
 			common: c,
-			Index:  orig.(ociv1.Index),
+			Index:  orig.(v1.Index),
 		}
 	default:
 		return nil, fmt.Errorf("unsupported type to convert to a manifest: %T", orig)
@@ -450,7 +388,7 @@ func fromCommon(c common) (Manifest, error) {
 	// compute/verify digest
 	if len(c.rawBody) > 0 {
 		c.manifSet = true
-		if c.desc.MediaType != MediaTypeDocker1ManifestSigned {
+		if c.desc.MediaType != types.MediaTypeDocker1ManifestSigned {
 			d := digest.FromBytes(c.rawBody)
 			c.desc.Digest = d
 			c.desc.Size = int64(len(c.rawBody))
@@ -473,15 +411,15 @@ func fromCommon(c common) (Manifest, error) {
 		}
 	}
 	switch c.desc.MediaType {
-	case MediaTypeDocker1Manifest:
-		var mOrig dockerSchema1.Manifest
+	case types.MediaTypeDocker1Manifest:
+		var mOrig schema1.Manifest
 		if len(c.rawBody) > 0 {
 			err = json.Unmarshal(c.rawBody, &mOrig)
 			mt = mOrig.MediaType
 		}
 		m = &docker1Manifest{common: c, Manifest: mOrig}
-	case MediaTypeDocker1ManifestSigned:
-		var mOrig dockerSchema1.SignedManifest
+	case types.MediaTypeDocker1ManifestSigned:
+		var mOrig schema1.SignedManifest
 		if len(c.rawBody) > 0 {
 			err = json.Unmarshal(c.rawBody, &mOrig)
 			mt = mOrig.MediaType
@@ -490,29 +428,29 @@ func fromCommon(c common) (Manifest, error) {
 			c.desc.Size = int64(len(mOrig.Canonical))
 		}
 		m = &docker1SignedManifest{common: c, SignedManifest: mOrig}
-	case MediaTypeDocker2Manifest:
-		var mOrig dockerSchema2.Manifest
+	case types.MediaTypeDocker2Manifest:
+		var mOrig schema2.Manifest
 		if len(c.rawBody) > 0 {
 			err = json.Unmarshal(c.rawBody, &mOrig)
 			mt = mOrig.MediaType
 		}
 		m = &docker2Manifest{common: c, Manifest: mOrig}
-	case MediaTypeDocker2ManifestList:
-		var mOrig dockerManifestList.ManifestList
+	case types.MediaTypeDocker2ManifestList:
+		var mOrig schema2.ManifestList
 		if len(c.rawBody) > 0 {
 			err = json.Unmarshal(c.rawBody, &mOrig)
 			mt = mOrig.MediaType
 		}
 		m = &docker2ManifestList{common: c, ManifestList: mOrig}
-	case MediaTypeOCI1Manifest:
-		var mOrig ociv1.Manifest
+	case types.MediaTypeOCI1Manifest:
+		var mOrig v1.Manifest
 		if len(c.rawBody) > 0 {
 			err = json.Unmarshal(c.rawBody, &mOrig)
 			mt = mOrig.MediaType
 		}
 		m = &oci1Manifest{common: c, Manifest: mOrig}
-	case MediaTypeOCI1ManifestList:
-		var mOrig ociv1.Index
+	case types.MediaTypeOCI1ManifestList:
+		var mOrig v1.Index
 		if len(c.rawBody) > 0 {
 			err = json.Unmarshal(c.rawBody, &mOrig)
 			mt = mOrig.MediaType
@@ -543,54 +481,24 @@ func verifyMT(expected, received string) error {
 	return nil
 }
 
-func getPlatformDesc(p *ociv1.Platform, dl []ociv1.Descriptor) (*ociv1.Descriptor, error) {
-	platformCmp := platforms.NewMatcher(*p)
+func getPlatformDesc(p *platform.Platform, dl []types.Descriptor) (*types.Descriptor, error) {
+	if p == nil {
+		return nil, wraperr.New(fmt.Errorf("invalid input, platform is nil"), types.ErrNotFound)
+	}
 	for _, d := range dl {
-		if d.Platform != nil && platformCmp.Match(*d.Platform) {
+		if d.Platform != nil && platform.Match(*p, *d.Platform) {
 			return &d, nil
 		}
 	}
-	return nil, wraperr.New(fmt.Errorf("platform not found: %s", platforms.Format(*p)), types.ErrNotFound)
+	return nil, wraperr.New(fmt.Errorf("platform not found: %s", *p), types.ErrNotFound)
 }
 
-func getPlatformList(dl []ociv1.Descriptor) ([]*ociv1.Platform, error) {
-	var l []*ociv1.Platform
+func getPlatformList(dl []types.Descriptor) ([]*platform.Platform, error) {
+	var l []*platform.Platform
 	for _, d := range dl {
 		if d.Platform != nil {
 			l = append(l, d.Platform)
 		}
 	}
 	return l, nil
-}
-
-func d2oDescriptor(sd dockerDistribution.Descriptor) *ociv1.Descriptor {
-	return &ociv1.Descriptor{
-		MediaType:   sd.MediaType,
-		Digest:      sd.Digest,
-		Size:        sd.Size,
-		URLs:        sd.URLs,
-		Annotations: sd.Annotations,
-		Platform:    sd.Platform,
-	}
-}
-
-func dl2oDescriptor(sd dockerManifestList.ManifestDescriptor) *ociv1.Descriptor {
-	return &ociv1.Descriptor{
-		MediaType:   sd.MediaType,
-		Digest:      sd.Digest,
-		Size:        sd.Size,
-		URLs:        sd.URLs,
-		Annotations: sd.Annotations,
-		Platform:    dlp2Platform(sd.Platform),
-	}
-}
-
-func dlp2Platform(sp dockerManifestList.PlatformSpec) *ociv1.Platform {
-	return &ociv1.Platform{
-		Architecture: sp.Architecture,
-		OS:           sp.OS,
-		Variant:      sp.Variant,
-		OSVersion:    sp.OSVersion,
-		OSFeatures:   sp.OSFeatures,
-	}
 }

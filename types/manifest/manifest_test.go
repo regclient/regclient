@@ -7,12 +7,11 @@ import (
 	"net/http"
 	"testing"
 
-	dockerManifestList "github.com/docker/distribution/manifest/manifestlist"
-	dockerSchema1 "github.com/docker/distribution/manifest/schema1"
-	dockerSchema2 "github.com/docker/distribution/manifest/schema2"
 	"github.com/opencontainers/go-digest"
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/docker/schema1"
+	"github.com/regclient/regclient/types/docker/schema2"
+	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -293,8 +292,8 @@ var (
 
 func TestNew(t *testing.T) {
 	r, _ := ref.New("localhost:5000/test:latest")
-	var manifestDockerSchema2, manifestInvalid dockerSchema2.Manifest
-	var manifestDockerSchema1Signed dockerSchema1.SignedManifest
+	var manifestDockerSchema2, manifestInvalid schema2.Manifest
+	var manifestDockerSchema1Signed schema1.SignedManifest
 	err := json.Unmarshal(rawDockerSchema2, &manifestDockerSchema2)
 	if err != nil {
 		t.Fatalf("failed to unmarshal docker schema2 json: %v", err)
@@ -312,7 +311,7 @@ func TestNew(t *testing.T) {
 		name     string
 		opts     []Opts
 		wantR    ref.Ref
-		wantDesc ociv1.Descriptor
+		wantDesc types.Descriptor
 		wantE    error
 	}{
 		{
@@ -323,13 +322,13 @@ func TestNew(t *testing.T) {
 			name: "Docker Schema 2 Manifest",
 			opts: []Opts{
 				WithRef(r),
-				WithDesc(ociv1.Descriptor{
+				WithDesc(types.Descriptor{
 					MediaType: types.MediaTypeDocker2Manifest,
 				}),
 				WithRaw(rawDockerSchema2),
 			},
 			wantR: r,
-			wantDesc: ociv1.Descriptor{
+			wantDesc: types.Descriptor{
 				MediaType: types.MediaTypeDocker2Manifest,
 				Size:      int64(len(rawDockerSchema2)),
 				Digest:    digestDockerSchema2,
@@ -339,14 +338,14 @@ func TestNew(t *testing.T) {
 		{
 			name: "Docker Schema 2 Manifest full desc",
 			opts: []Opts{
-				WithDesc(ociv1.Descriptor{
+				WithDesc(types.Descriptor{
 					MediaType: types.MediaTypeDocker2Manifest,
 					Digest:    digestDockerSchema2,
 					Size:      int64(len(rawDockerSchema2)),
 				}),
 				WithRaw(rawDockerSchema2),
 			},
-			wantDesc: ociv1.Descriptor{
+			wantDesc: types.Descriptor{
 				MediaType: types.MediaTypeDocker2Manifest,
 				Size:      int64(len(rawDockerSchema2)),
 				Digest:    digestDockerSchema2,
@@ -370,7 +369,7 @@ func TestNew(t *testing.T) {
 			opts: []Opts{
 				WithRef(r),
 				WithRaw(rawDockerSchema1Signed),
-				WithDesc(ociv1.Descriptor{
+				WithDesc(types.Descriptor{
 					MediaType: types.MediaTypeDocker1ManifestSigned,
 				}),
 			},
@@ -380,7 +379,7 @@ func TestNew(t *testing.T) {
 			name: "Docker Schema 1 Signed Manifest",
 			opts: []Opts{
 				WithRaw(rawDockerSchema1Signed),
-				WithDesc(ociv1.Descriptor{
+				WithDesc(types.Descriptor{
 					MediaType: types.MediaTypeDocker1ManifestSigned,
 					Digest:    digestDockerSchema1Signed,
 					Size:      int64(len(rawDockerSchema1Signed)),
@@ -405,7 +404,7 @@ func TestNew(t *testing.T) {
 			opts: []Opts{
 				WithRef(r),
 				WithRaw(rawAmbiguousOCI),
-				WithDesc(ociv1.Descriptor{
+				WithDesc(types.Descriptor{
 					MediaType: types.MediaTypeOCI1Manifest,
 				}),
 			},
@@ -416,7 +415,7 @@ func TestNew(t *testing.T) {
 			opts: []Opts{
 				WithRef(r),
 				WithRaw(rawAmbiguousOCI),
-				WithDesc(ociv1.Descriptor{
+				WithDesc(types.Descriptor{
 					MediaType: types.MediaTypeOCI1ManifestList,
 				}),
 			},
@@ -427,7 +426,7 @@ func TestNew(t *testing.T) {
 			opts: []Opts{
 				WithRef(r),
 				WithRaw(rawOCIImage),
-				WithDesc(ociv1.Descriptor{
+				WithDesc(types.Descriptor{
 					MediaType: types.MediaTypeOCI1ManifestList,
 				}),
 			},
@@ -438,7 +437,7 @@ func TestNew(t *testing.T) {
 			opts: []Opts{
 				WithRef(r),
 				WithRaw(rawOCIIndex),
-				WithDesc(ociv1.Descriptor{
+				WithDesc(types.Descriptor{
 					MediaType: types.MediaTypeOCI1Manifest,
 				}),
 			},
@@ -449,7 +448,7 @@ func TestNew(t *testing.T) {
 			opts: []Opts{
 				WithRef(r),
 				WithRaw(rawDockerSchema2),
-				WithDesc(ociv1.Descriptor{
+				WithDesc(types.Descriptor{
 					MediaType: types.MediaTypeDocker2Manifest,
 					Digest:    digestInvalid,
 					Size:      int64(len(rawDockerSchema2)),
@@ -462,7 +461,7 @@ func TestNew(t *testing.T) {
 			opts: []Opts{
 				WithRef(r),
 				WithRaw(rawOCIImage),
-				WithDesc(ociv1.Descriptor{
+				WithDesc(types.Descriptor{
 					MediaType: types.MediaTypeOCI1ManifestList,
 					Digest:    digestOCIImage,
 					Size:      int64(len(rawOCIImage)),
@@ -531,7 +530,7 @@ func TestNew(t *testing.T) {
 
 func TestModify(t *testing.T) {
 	addDigest := digest.FromString("new layer digest")
-	addDesc := ociv1.Descriptor{
+	addDesc := types.Descriptor{
 		Digest: addDigest,
 		Size:   42,
 		Annotations: map[string]string{
@@ -543,13 +542,13 @@ func TestModify(t *testing.T) {
 	tests := []struct {
 		name     string
 		opts     []Opts
-		addDesc  ociv1.Descriptor
-		origDesc ociv1.Descriptor
+		addDesc  types.Descriptor
+		origDesc types.Descriptor
 	}{
 		{
 			name: "Docker Schema 2 Manifest",
 			opts: []Opts{
-				WithDesc(ociv1.Descriptor{
+				WithDesc(types.Descriptor{
 					MediaType: types.MediaTypeDocker2Manifest,
 					Digest:    digestDockerSchema2,
 					Size:      int64(len(rawDockerSchema2)),
@@ -557,7 +556,7 @@ func TestModify(t *testing.T) {
 				WithRaw(rawDockerSchema2),
 			},
 			addDesc: addDesc,
-			origDesc: ociv1.Descriptor{
+			origDesc: types.Descriptor{
 				MediaType: types.MediaTypeDocker2Manifest,
 				Digest:    digestDockerSchema2,
 				Size:      int64(len(rawDockerSchema2)),
@@ -566,7 +565,7 @@ func TestModify(t *testing.T) {
 		{
 			name: "Docker Schema 2 List",
 			opts: []Opts{
-				WithDesc(ociv1.Descriptor{
+				WithDesc(types.Descriptor{
 					MediaType: types.MediaTypeDocker2ManifestList,
 					Digest:    digestDockerSchema2List,
 					Size:      int64(len(rawDockerSchema2List)),
@@ -574,7 +573,7 @@ func TestModify(t *testing.T) {
 				WithRaw(rawDockerSchema2List),
 			},
 			addDesc: addDesc,
-			origDesc: ociv1.Descriptor{
+			origDesc: types.Descriptor{
 				MediaType: types.MediaTypeDocker2ManifestList,
 				Digest:    digestDockerSchema2List,
 				Size:      int64(len(rawDockerSchema2List)),
@@ -584,14 +583,14 @@ func TestModify(t *testing.T) {
 			name: "OCI Image",
 			opts: []Opts{
 				WithRaw(rawOCIImage),
-				WithDesc(ociv1.Descriptor{
+				WithDesc(types.Descriptor{
 					MediaType: types.MediaTypeOCI1Manifest,
 					Digest:    digestOCIImage,
 					Size:      int64(len(rawOCIImage)),
 				}),
 			},
 			addDesc: addDesc,
-			origDesc: ociv1.Descriptor{
+			origDesc: types.Descriptor{
 				MediaType: types.MediaTypeOCI1Manifest,
 				Digest:    digestOCIImage,
 				Size:      int64(len(rawOCIImage)),
@@ -601,14 +600,14 @@ func TestModify(t *testing.T) {
 			name: "OCI Index",
 			opts: []Opts{
 				WithRaw(rawOCIIndex),
-				WithDesc(ociv1.Descriptor{
+				WithDesc(types.Descriptor{
 					MediaType: types.MediaTypeOCI1ManifestList,
 					Digest:    digestOCIIndex,
 					Size:      int64(len(rawOCIIndex)),
 				}),
 			},
 			addDesc: addDesc,
-			origDesc: ociv1.Descriptor{
+			origDesc: types.Descriptor{
 				MediaType: types.MediaTypeOCI1ManifestList,
 				Digest:    digestOCIIndex,
 				Size:      int64(len(rawOCIIndex)),
@@ -670,10 +669,10 @@ func TestModify(t *testing.T) {
 	}
 
 	// Other test cases for error conditions
-	var manifestDockerSchema2 dockerSchema2.Manifest
-	var manifestDockerSchema2List dockerManifestList.ManifestList
-	var manifestOCIImage ociv1.Manifest
-	var manifestOCIIndex ociv1.Index
+	var manifestDockerSchema2 schema2.Manifest
+	var manifestDockerSchema2List schema2.ManifestList
+	var manifestOCIImage v1.Manifest
+	var manifestOCIIndex v1.Index
 	err := json.Unmarshal(rawDockerSchema2, &manifestDockerSchema2)
 	if err != nil {
 		t.Errorf("failed to unmarshal docker schema2 json: %v", err)

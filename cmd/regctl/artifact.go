@@ -10,9 +10,10 @@ import (
 	"strings"
 
 	"github.com/opencontainers/go-digest"
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/pkg/archive"
+	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
+	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/spf13/cobra"
 )
@@ -295,8 +296,8 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	}
 
 	// init empty manifest
-	m := ociv1.Manifest{
-		Layers:      []ociv1.Descriptor{},
+	m := v1.Manifest{
+		Layers:      []types.Descriptor{},
 		Annotations: map[string]string{},
 	}
 	m.SchemaVersion = 2 // OCI bumped to match docker schema
@@ -330,7 +331,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	// save config descriptor to manifest
-	m.Config = ociv1.Descriptor{
+	m.Config = types.Descriptor{
 		MediaType: artifactOpts.configMT,
 		Digest:    configDigest,
 		Size:      int64(len(configBytes)),
@@ -388,7 +389,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 						af = fSplit[len(fSplit)-2] + "/"
 					}
 				}
-				m.Layers = append(m.Layers, ociv1.Descriptor{
+				m.Layers = append(m.Layers, types.Descriptor{
 					MediaType: mt,
 					Digest:    d,
 					Size:      l,
@@ -427,7 +428,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		m.Layers = append(m.Layers, ociv1.Descriptor{
+		m.Layers = append(m.Layers, types.Descriptor{
 			MediaType: mt,
 			Digest:    d,
 			Size:      l,

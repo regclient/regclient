@@ -4,13 +4,13 @@ import (
 	"net/http"
 
 	"github.com/opencontainers/go-digest"
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/ref"
 )
 
 // Common interface is provided by all Blob implementations
 type Common interface {
-	GetDescriptor() ociv1.Descriptor
+	GetDescriptor() types.Descriptor
 	Response() *http.Response
 	RawHeaders() http.Header
 
@@ -21,14 +21,14 @@ type Common interface {
 
 type common struct {
 	r         ref.Ref
-	desc      ociv1.Descriptor
+	desc      types.Descriptor
 	blobSet   bool
 	rawHeader http.Header
 	resp      *http.Response
 }
 
 // GetDescriptor returns the descriptor associated with the blob
-func (b *common) GetDescriptor() ociv1.Descriptor {
+func (b *common) GetDescriptor() types.Descriptor {
 	return b.desc
 }
 

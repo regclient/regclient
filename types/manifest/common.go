@@ -6,14 +6,13 @@ import (
 	"strings"
 
 	digest "github.com/opencontainers/go-digest"
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/ref"
 )
 
 type common struct {
 	r         ref.Ref
-	desc      ociv1.Descriptor
+	desc      types.Descriptor
 	manifSet  bool
 	ratelimit types.RateLimit
 	rawHeader http.Header
@@ -26,7 +25,7 @@ func (m *common) GetDigest() digest.Digest {
 }
 
 // GetDescriptor returns the descriptor
-func (m *common) GetDescriptor() ociv1.Descriptor {
+func (m *common) GetDescriptor() types.Descriptor {
 	return m.desc
 }
 

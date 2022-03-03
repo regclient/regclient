@@ -9,7 +9,6 @@ import (
 	"path"
 
 	"github.com/opencontainers/go-digest"
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/internal/wraperr"
 	"github.com/regclient/regclient/scheme"
@@ -62,7 +61,7 @@ func (o *OCIDir) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest,
 	if r.Digest == "" && r.Tag == "" {
 		r.Tag = "latest"
 	}
-	desc := ociv1.Descriptor{}
+	desc := types.Descriptor{}
 	if r.Digest != "" {
 		desc.Digest = digest.Digest(r.Digest)
 	} else {
@@ -105,7 +104,7 @@ func (o *OCIDir) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest
 	if err != nil {
 		return nil, err
 	}
-	var desc ociv1.Descriptor
+	var desc types.Descriptor
 	if r.Digest == "" && r.Tag == "" {
 		r.Tag = "latest"
 	}

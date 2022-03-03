@@ -4,10 +4,9 @@ import (
 	"encoding/json"
 	"reflect"
 
-	"github.com/containerd/containerd/platforms"
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/cmd/regbot/internal/go2lua"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/sirupsen/logrus"
 	lua "github.com/yuin/gopher-lua"
@@ -271,25 +270,25 @@ func (s *Sandbox) manifestPut(ls *lua.LState) int {
 	return 0
 }
 
-func (s *Sandbox) rcManifestGet(r ref.Ref, list bool, platform string) (manifest.Manifest, error) {
+func (s *Sandbox) rcManifestGet(r ref.Ref, list bool, pStr string) (manifest.Manifest, error) {
 	m, err := s.rc.ManifestGet(s.ctx, r)
 	if err != nil {
 		return m, err
 	}
 
 	if m.IsList() && !list {
-		var plat ociv1.Platform
-		if platform != "" {
-			plat, err = platforms.Parse(platform)
+		var plat platform.Platform
+		if pStr != "" {
+			plat, err = platform.Parse(pStr)
 			if err != nil {
 				s.log.WithFields(logrus.Fields{
-					"platform": platform,
+					"platform": pStr,
 					"err":      err,
 				}).Warn("Could not parse platform")
 			}
 		}
 		if plat.OS == "" {
-			plat = platforms.DefaultSpec()
+			plat = platform.Local()
 		}
 		desc, err := manifest.GetPlatformDesc(m, &plat)
 		if err != nil {

@@ -10,7 +10,6 @@ import (
 	"path"
 
 	"github.com/opencontainers/go-digest"
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
@@ -38,7 +37,7 @@ func (o *OCIDir) BlobGet(ctx context.Context, r ref.Ref, d digest.Digest) (blob.
 	br := blob.NewReader(
 		blob.WithRef(r),
 		blob.WithReader(fd),
-		blob.WithDesc(ociv1.Descriptor{
+		blob.WithDesc(types.Descriptor{
 			Digest: d,
 			Size:   fi.Size(),
 		}),
@@ -64,7 +63,7 @@ func (o *OCIDir) BlobHead(ctx context.Context, r ref.Ref, d digest.Digest) (blob
 	}
 	br := blob.NewReader(
 		blob.WithRef(r),
-		blob.WithDesc(ociv1.Descriptor{
+		blob.WithDesc(types.Descriptor{
 			Digest: d,
 			Size:   fi.Size(),
 		}),

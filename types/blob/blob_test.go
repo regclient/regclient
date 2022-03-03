@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	"github.com/opencontainers/go-digest"
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/types"
+	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -64,7 +64,7 @@ var (
 		ContentLength: exLen,
 		Body:          io.NopCloser(bytes.NewReader(exBlob)),
 	}
-	exDesc = ociv1.Descriptor{
+	exDesc = types.Descriptor{
 		MediaType: exMT,
 		Digest:    exDigest,
 		Size:      exLen,
@@ -96,7 +96,7 @@ func TestCommon(t *testing.T) {
 			name: "descriptor",
 			opts: []Opts{
 				WithReader(bytes.NewReader(exBlob)),
-				WithDesc(ociv1.Descriptor{
+				WithDesc(types.Descriptor{
 					MediaType: exMT,
 					Digest:    exDigest,
 					Size:      exLen,
@@ -240,7 +240,7 @@ func TestReader(t *testing.T) {
 		// create blob
 		b := NewReader(
 			WithReader(bytes.NewReader(exBlob)),
-			WithDesc(ociv1.Descriptor{
+			WithDesc(types.Descriptor{
 				MediaType: exMT,
 				Digest:    exDigest,
 				Size:      exLen,
@@ -284,7 +284,7 @@ func TestReader(t *testing.T) {
 }
 
 func TestOCI(t *testing.T) {
-	ociConfig := ociv1.Image{}
+	ociConfig := v1.Image{}
 	err := json.Unmarshal(exBlob, &ociConfig)
 	if err != nil {
 		t.Errorf("failed to unmarshal exBlob: %v", err)
@@ -294,7 +294,7 @@ func TestOCI(t *testing.T) {
 		name     string
 		opts     []Opts
 		wantRaw  []byte
-		wantDesc ociv1.Descriptor
+		wantDesc types.Descriptor
 	}{
 		{
 			name: "RawBody",
@@ -310,7 +310,7 @@ func TestOCI(t *testing.T) {
 			opts: []Opts{
 				WithImage(ociConfig),
 			},
-			wantDesc: ociv1.Descriptor{MediaType: types.MediaTypeOCI1ImageConfig},
+			wantDesc: types.Descriptor{MediaType: types.MediaTypeOCI1ImageConfig},
 		},
 		{
 			name: "Config with Docker Desc",
@@ -318,7 +318,7 @@ func TestOCI(t *testing.T) {
 				WithImage(ociConfig),
 				WithDesc(exDesc),
 			},
-			wantDesc: ociv1.Descriptor{MediaType: exMT},
+			wantDesc: types.Descriptor{MediaType: exMT},
 		},
 	}
 
@@ -351,7 +351,7 @@ func TestOCI(t *testing.T) {
 		// create blob
 		oc := NewOCIConfig(
 			WithRawBody(exBlob),
-			WithDesc(ociv1.Descriptor{
+			WithDesc(types.Descriptor{
 				MediaType: exMT,
 				Digest:    exDigest,
 				Size:      exLen,
@@ -359,7 +359,7 @@ func TestOCI(t *testing.T) {
 			WithRef(exRef),
 		)
 		ociC := oc.GetConfig()
-		ociC.History = append(ociC.History, ociv1.History{Comment: "test", EmptyLayer: true})
+		ociC.History = append(ociC.History, v1.History{Comment: "test", EmptyLayer: true})
 		oc.SetConfig(ociC)
 		// ensure digest and raw body change
 		if exDigest == oc.GetDescriptor().Digest {

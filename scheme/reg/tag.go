@@ -12,16 +12,13 @@ import (
 	"strconv"
 	"time"
 
-	dockerDistribution "github.com/docker/distribution"
-	dockerManifest "github.com/docker/distribution/manifest"
-	dockerSchema2 "github.com/docker/distribution/manifest/schema2"
 	"github.com/opencontainers/go-digest"
-	ociv1Specs "github.com/opencontainers/image-spec/specs-go"
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient/internal/reghttp"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/docker/schema2"
 	"github.com/regclient/regclient/types/manifest"
+	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/regclient/regclient/types/tag"
 	"github.com/sirupsen/logrus"
@@ -76,9 +73,9 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 	// create empty image config with single label
 	// Note, this should be MediaType specific, but it appears that docker uses OCI for the config
 	now := time.Now()
-	conf := ociv1.Image{
+	conf := v1.Image{
 		Created: &now,
-		Config: ociv1.ImageConfig{
+		Config: v1.ImageConfig{
 			Labels: map[string]string{
 				"delete-tag":  r.Tag,
 				"delete-date": now.String(),
@@ -86,7 +83,7 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 		},
 		OS:           "linux",
 		Architecture: "amd64",
-		RootFS: ociv1.RootFS{
+		RootFS: v1.RootFS{
 			Type:    "layers",
 			DiffIDs: []digest.Digest{},
 		},
@@ -106,33 +103,28 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 	// create manifest with config, matching the original tag manifest type
 	switch manifest.GetMediaType(curManifest) {
 	case types.MediaTypeOCI1Manifest, types.MediaTypeOCI1ManifestList:
-		tempManifest, err = manifest.New(manifest.WithOrig(ociv1.Manifest{
-			Versioned: ociv1Specs.Versioned{
-				SchemaVersion: 2,
-			},
+		tempManifest, err = manifest.New(manifest.WithOrig(v1.Manifest{
+			Versioned: v1.ManifestSchemaVersion,
 			MediaType: types.MediaTypeOCI1Manifest,
-			Config: ociv1.Descriptor{
+			Config: types.Descriptor{
 				MediaType: types.MediaTypeOCI1ImageConfig,
 				Digest:    confDigest,
 				Size:      int64(len(confB)),
 			},
-			Layers: []ociv1.Descriptor{},
+			Layers: []types.Descriptor{},
 		}))
 		if err != nil {
 			return err
 		}
 	default: // default to the docker v2 schema
-		tempManifest, err = manifest.New(manifest.WithOrig(dockerSchema2.Manifest{
-			Versioned: dockerManifest.Versioned{
-				SchemaVersion: 2,
-				MediaType:     types.MediaTypeDocker2Manifest,
-			},
-			Config: dockerDistribution.Descriptor{
+		tempManifest, err = manifest.New(manifest.WithOrig(schema2.Manifest{
+			Versioned: schema2.ManifestSchemaVersion,
+			Config: types.Descriptor{
 				MediaType: types.MediaTypeDocker2ImageConfig,
 				Digest:    confDigest,
 				Size:      int64(len(confB)),
 			},
-			Layers: []dockerDistribution.Descriptor{},
+			Layers: []types.Descriptor{},
 		}))
 		if err != nil {
 			return err

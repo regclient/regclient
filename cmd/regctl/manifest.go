@@ -7,11 +7,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/containerd/containerd/platforms"
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/pkg/template"
+	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -129,8 +129,8 @@ func getManifest(rc *regclient.RegClient, r ref.Ref) (manifest.Manifest, error) 
 	return m, nil
 }
 
-func getPlatformDesc(rc *regclient.RegClient, m manifest.Manifest) (*ociv1.Descriptor, error) {
-	var desc *ociv1.Descriptor
+func getPlatformDesc(rc *regclient.RegClient, m manifest.Manifest) (*types.Descriptor, error) {
+	var desc *types.Descriptor
 	var err error
 	if !m.IsList() {
 		return desc, fmt.Errorf("%w: manifest is not a list", ErrInvalidInput)
@@ -142,9 +142,9 @@ func getPlatformDesc(rc *regclient.RegClient, m manifest.Manifest) (*ociv1.Descr
 		}
 	}
 
-	var plat ociv1.Platform
+	var plat platform.Platform
 	if manifestOpts.platform != "" {
-		plat, err = platforms.Parse(manifestOpts.platform)
+		plat, err = platform.Parse(manifestOpts.platform)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"platform": manifestOpts.platform,
@@ -153,24 +153,24 @@ func getPlatformDesc(rc *regclient.RegClient, m manifest.Manifest) (*ociv1.Descr
 		}
 	}
 	if plat.OS == "" {
-		plat = platforms.DefaultSpec()
+		plat = platform.Local()
 	}
 	desc, err = manifest.GetPlatformDesc(m, &plat)
 	if err != nil {
 		pl, _ := manifest.GetPlatformList(m)
 		var ps []string
 		for _, p := range pl {
-			ps = append(ps, platforms.Format(*p))
+			ps = append(ps, p.String())
 		}
 		log.WithFields(logrus.Fields{
-			"platform":  platforms.Format(plat),
+			"platform":  plat,
 			"err":       err,
 			"platforms": strings.Join(ps, ", "),
 		}).Warn("Platform could not be found in manifest list")
 		return desc, ErrNotFound
 	}
 	log.WithFields(logrus.Fields{
-		"platform": platforms.Format(plat),
+		"platform": plat,
 		"digest":   desc.Digest.String(),
 	}).Debug("Found platform specific digest in manifest list")
 	return desc, nil
@@ -296,7 +296,7 @@ func runManifestPut(cmd *cobra.Command, args []string) error {
 	rcM, err := manifest.New(
 		manifest.WithRef(r),
 		manifest.WithRaw(raw),
-		manifest.WithDesc(ociv1.Descriptor{
+		manifest.WithDesc(types.Descriptor{
 			MediaType: manifestOpts.contentType,
 		}),
 	)
