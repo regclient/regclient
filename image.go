@@ -391,12 +391,15 @@ func (rc *RegClient) ImageExport(ctx context.Context, ref ref.Ref, outStream io.
 
 	// create a manifest descriptor
 	mDesc := m.GetDescriptor()
+	if mDesc.Annotations == nil {
+		mDesc.Annotations = map[string]string{}
+	}
 	mDesc.Annotations[annotationImageName] = ref.CommonName()
 	mDesc.Annotations[annotationRefName] = ref.Tag
 
 	// generate/write an OCI index
-	ociIndex.SchemaVersion = 2
-	ociIndex.Manifests = append(ociIndex.Manifests, mDesc) // add the descriptor to the manifest list
+	ociIndex.Versioned = v1.IndexSchemaVersion
+	ociIndex.Manifests = []types.Descriptor{mDesc} // initialize with the descriptor to the manifest list
 	err = twd.tarWriteFileJSON(ociIndexFilename, ociIndex)
 	if err != nil {
 		return err
