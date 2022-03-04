@@ -4,7 +4,6 @@ go 1.16
 
 require (
 	github.com/docker/cli v20.10.12+incompatible
-	github.com/docker/distribution v2.7.1+incompatible
 	github.com/docker/docker v20.10.12+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.6.4 // indirect
 	github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7

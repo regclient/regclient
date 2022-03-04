@@ -242,7 +242,7 @@ func TestRegsync(t *testing.T) {
 				Type:   "image",
 			},
 			desired: []string{},
-			expErr:  fmt.Errorf("invalid reference format: repository name must be lowercase"),
+			expErr:  fmt.Errorf(`invalid reference "InvalidTestmissing:v1:garbage"`),
 		},
 		{
 			name: "InvalidTargetImage",
@@ -252,7 +252,7 @@ func TestRegsync(t *testing.T) {
 				Type:   "image",
 			},
 			desired: []string{},
-			expErr:  fmt.Errorf("invalid reference format: repository name must be lowercase"),
+			expErr:  fmt.Errorf(`invalid reference "InvalidTestmissing:v1:garbage"`),
 		},
 		{
 			name: "InvalidSourceRepository",
@@ -262,7 +262,7 @@ func TestRegsync(t *testing.T) {
 				Type:   "repository",
 			},
 			desired: []string{},
-			expErr:  fmt.Errorf("invalid reference format: repository name must be lowercase"),
+			expErr:  fmt.Errorf(`invalid reference "InvalidTestmissing:v1:garbage"`),
 		},
 		{
 			name: "InvalidTargetRepository",
@@ -272,7 +272,7 @@ func TestRegsync(t *testing.T) {
 				Type:   "repository",
 			},
 			desired: []string{},
-			expErr:  fmt.Errorf("invalid reference format: repository name must be lowercase"),
+			expErr:  fmt.Errorf(`invalid reference "InvalidTestmissing:v1:garbage"`),
 		},
 		{
 			name: "InvalidType",

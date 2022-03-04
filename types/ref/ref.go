@@ -6,14 +6,35 @@ package ref
 import (
 	"fmt"
 	"regexp"
+	"strings"
+)
 
-	"github.com/docker/distribution/reference"
+const (
+	dockerLibrary = "library"
+	// DockerRegistry is the name resolved in docker images on Hub
+	dockerRegistry = "docker.io"
+	// DockerRegistryLegacy is the name resolved in docker images on Hub
+	dockerRegistryLegacy = "index.docker.io"
+	// DockerRegistryDNS is the host to connect to for Hub
+	dockerRegistryDNS = "registry-1.docker.io"
 )
 
 var (
-	pathS    = `[/a-zA-Z0-9_\-. ]+`
-	tagS     = `[\w][\w.-]{0,127}`
-	digestS  = `[A-Za-z][A-Za-z0-9]*(?:[-_+.][A-Za-z][A-Za-z0-9]*)*[:][[:xdigit:]]{32,}`
+	hostPartS = `(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)`
+	// host with port allows a short name in addition to hostDomainS
+	hostPortS = `(?:` + hostPartS + `(?:` + regexp.QuoteMeta(`.`) + hostPartS + `)*` + regexp.QuoteMeta(`.`) + `?` + regexp.QuoteMeta(`:`) + `[0-9]+)`
+	// hostname may be ip, fqdn (example.com), or trailing dot (example.)
+	hostDomainS = `(?:` + hostPartS + `(?:(?:` + regexp.QuoteMeta(`.`) + hostPartS + `)+` + regexp.QuoteMeta(`.`) + `?|` + regexp.QuoteMeta(`.`) + `))`
+	hostUpperS  = `(?:[a-zA-Z0-9]*[A-Z][a-zA-Z0-9-]*[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[A-Z][a-zA-Z0-9]*)`
+	registryS   = `(?:` + hostDomainS + `|` + hostPortS + `|` + hostUpperS + `|localhost(?:` + regexp.QuoteMeta(`:`) + `[0-9]+))`
+	repoPartS   = `[a-z0-9]+(?:(?:[_.]|__|[-]*)[a-z0-9]+)*`
+	pathS       = `[/a-zA-Z0-9_\-. ]+`
+	tagS        = `[\w][\w.-]{0,127}`
+	digestS     = `[A-Za-z][A-Za-z0-9]*(?:[-_+.][A-Za-z][A-Za-z0-9]*)*[:][[:xdigit:]]{32,}`
+	refRE       = regexp.MustCompile(`^(?:(` + registryS + `)` + regexp.QuoteMeta(`/`) + `)?` +
+		`(` + repoPartS + `(?:` + regexp.QuoteMeta(`/`) + repoPartS + `)*)` +
+		`(?:` + regexp.QuoteMeta(`:`) + `(` + tagS + `))?` +
+		`(?:` + regexp.QuoteMeta(`@`) + `(` + digestS + `))?$`)
 	schemeRE = regexp.MustCompile(`^([a-z]+)://(.+)$`)
 	pathRE   = regexp.MustCompile(`^(` + pathS + `)` +
 		`(?:` + regexp.QuoteMeta(`:`) + `(` + tagS + `))?` +
@@ -36,32 +57,46 @@ type Ref struct {
 }
 
 // New returns a reference based on the scheme, defaulting to a
-func New(ref string) (Ref, error) {
+func New(parse string) (Ref, error) {
 	scheme := ""
-	path := ref
-	matchScheme := schemeRE.FindStringSubmatch(ref)
+	path := parse
+	matchScheme := schemeRE.FindStringSubmatch(parse)
 	if len(matchScheme) == 3 {
 		scheme = matchScheme[1]
 		path = matchScheme[2]
 	}
 	ret := Ref{
 		Scheme:    scheme,
-		Reference: ref,
+		Reference: parse,
 	}
 	switch scheme {
 	case "":
 		ret.Scheme = "reg"
-		parsed, err := reference.ParseNormalizedNamed(ref)
-		if err != nil {
-			return ret, err
+		matchRef := refRE.FindStringSubmatch(path)
+		if matchRef == nil || len(matchRef) < 5 {
+			if refRE.FindStringSubmatch(strings.ToLower(path)) != nil {
+				return Ref{}, fmt.Errorf("invalid reference \"%s\", repo must be lowercase", path)
+			}
+			return Ref{}, fmt.Errorf("invalid reference \"%s\"", path)
 		}
-		ret.Registry = reference.Domain(parsed)
-		ret.Repository = reference.Path(parsed)
-		if canonical, ok := parsed.(reference.Canonical); ok {
-			ret.Digest = canonical.Digest().String()
+		ret = Ref{
+			Scheme:     "reg",
+			Registry:   matchRef[1],
+			Repository: matchRef[2],
+			Tag:        matchRef[3],
+			Digest:     matchRef[4],
 		}
-		if tagged, ok := parsed.(reference.Tagged); ok {
-			ret.Tag = tagged.Tag()
+		repoPath := strings.Split(ret.Repository, "/")
+		if ret.Registry == "" && repoPath[0] == "localhost" {
+			ret.Registry = repoPath[0]
+			ret.Repository = strings.Join(repoPath[1:], "/")
+		}
+		switch ret.Registry {
+		case "", dockerRegistryDNS, dockerRegistryLegacy:
+			ret.Registry = dockerRegistry
+		}
+		if ret.Registry == dockerRegistry && !strings.Contains(ret.Repository, "/") {
+			ret.Repository = dockerLibrary + "/" + ret.Repository
 		}
 		if ret.Tag == "" && ret.Digest == "" {
 			ret.Tag = "latest"
@@ -81,7 +116,7 @@ func New(ref string) (Ref, error) {
 		}
 
 	default:
-		return Ref{}, fmt.Errorf("unhandled reference scheme \"%s\" in \"%s\"", scheme, ref)
+		return Ref{}, fmt.Errorf("unhandled reference scheme \"%s\" in \"%s\"", scheme, parse)
 	}
 	return ret, nil
 }
@@ -98,17 +133,19 @@ func (r Ref) CommonName() string {
 			return ""
 		}
 		cn = cn + r.Repository
+		if r.Tag != "" {
+			cn = cn + ":" + r.Tag
+		}
 		if r.Digest != "" {
 			cn = cn + "@" + r.Digest
-		} else if r.Tag != "" {
-			cn = cn + ":" + r.Tag
 		}
 	case "ocidir":
 		cn = fmt.Sprintf("ocidir://%s", r.Path)
+		if r.Tag != "" {
+			cn = cn + ":" + r.Tag
+		}
 		if r.Digest != "" {
 			cn = cn + "@" + r.Digest
-		} else if r.Tag != "" {
-			cn = cn + ":" + r.Tag
 		}
 	}
 	return cn
