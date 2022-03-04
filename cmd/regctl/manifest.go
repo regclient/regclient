@@ -76,17 +76,19 @@ var manifestOpts struct {
 func init() {
 	manifestDeleteCmd.Flags().BoolVarP(&manifestOpts.forceTagDeref, "force-tag-dereference", "", false, "Dereference the a tag to a digest, this is unsafe")
 
-	manifestDigestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", false, "Do not resolve platform from manifest list (recommended)")
-	manifestDigestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
+	manifestDigestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Do not resolve platform from manifest list (enabled by default)")
+	manifestDigestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	manifestDigestCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
 	manifestDigestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
+	manifestDigestCmd.Flags().MarkHidden("list")
 
-	manifestGetCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", false, "Output manifest list if available")
-	manifestGetCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
+	manifestGetCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Output manifest list if available (enabled by default)")
+	manifestGetCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	manifestGetCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
 	manifestGetCmd.Flags().StringVarP(&manifestOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	manifestGetCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	manifestGetCmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	manifestGetCmd.Flags().MarkHidden("list")
 
 	manifestPutCmd.Flags().StringVarP(&manifestOpts.contentType, "content-type", "t", "", "Specify content-type (e.g. application/vnd.docker.distribution.manifest.v2+json)")
 	manifestPutCmd.MarkFlagRequired("content-type")
@@ -99,7 +101,7 @@ func init() {
 	rootCmd.AddCommand(manifestCmd)
 }
 
-func getManifest(rc *regclient.RegClient, r ref.Ref) (manifest.Manifest, error) {
+func getManifest(ctx context.Context, rc *regclient.RegClient, r ref.Ref) (manifest.Manifest, error) {
 	m, err := rc.ManifestGet(context.Background(), r)
 	if err != nil {
 		return m, err
@@ -116,12 +118,12 @@ func getManifest(rc *regclient.RegClient, r ref.Ref) (manifest.Manifest, error) 
 
 	// retrieve the specified platform from the manifest list
 	if m.IsList() && !manifestOpts.list && !manifestOpts.requireList {
-		desc, err := getPlatformDesc(rc, m)
+		desc, err := getPlatformDesc(ctx, rc, m)
 		if err != nil {
 			return m, fmt.Errorf("failed to lookup platform specific digest: %w", err)
 		}
 		r.Digest = desc.Digest.String()
-		m, err = rc.ManifestGet(context.Background(), r)
+		m, err = rc.ManifestGet(ctx, r)
 		if err != nil {
 			return m, fmt.Errorf("failed to pull platform specific digest: %w", err)
 		}
@@ -129,21 +131,21 @@ func getManifest(rc *regclient.RegClient, r ref.Ref) (manifest.Manifest, error) 
 	return m, nil
 }
 
-func getPlatformDesc(rc *regclient.RegClient, m manifest.Manifest) (*types.Descriptor, error) {
+func getPlatformDesc(ctx context.Context, rc *regclient.RegClient, m manifest.Manifest) (*types.Descriptor, error) {
 	var desc *types.Descriptor
 	var err error
 	if !m.IsList() {
 		return desc, fmt.Errorf("%w: manifest is not a list", ErrInvalidInput)
 	}
 	if !m.IsSet() {
-		m, err = rc.ManifestGet(context.Background(), m.GetRef())
+		m, err = rc.ManifestGet(ctx, m.GetRef())
 		if err != nil {
 			return desc, fmt.Errorf("unable to retrieve manifest list: %w", err)
 		}
 	}
 
 	var plat platform.Platform
-	if manifestOpts.platform != "" {
+	if manifestOpts.platform != "" && manifestOpts.platform != "local" {
 		plat, err = platform.Parse(manifestOpts.platform)
 		if err != nil {
 			log.WithFields(logrus.Fields{
@@ -211,6 +213,13 @@ func runManifestDelete(cmd *cobra.Command, args []string) error {
 }
 
 func runManifestDigest(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	if manifestOpts.platform != "" && !flagChanged(cmd, "list") {
+		manifestOpts.list = false
+	} else if !manifestOpts.list && !flagChanged(cmd, "list") {
+		manifestOpts.list = true
+	}
+
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
@@ -224,7 +233,7 @@ func runManifestDigest(cmd *cobra.Command, args []string) error {
 	}).Debug("Manifest digest")
 
 	// attempt to request only the headers, avoids Docker Hub rate limits
-	m, err := rc.ManifestHead(context.Background(), r)
+	m, err := rc.ManifestHead(ctx, r)
 	if err != nil {
 		return err
 	}
@@ -240,12 +249,12 @@ func runManifestDigest(cmd *cobra.Command, args []string) error {
 
 	// retrieve the specified platform from the manifest list
 	for m.IsList() && !manifestOpts.list && !manifestOpts.requireList {
-		desc, err := getPlatformDesc(rc, m)
+		desc, err := getPlatformDesc(ctx, rc, m)
 		if err != nil {
 			return fmt.Errorf("failed retrieving platform specific digest: %w", err)
 		}
 		r.Digest = desc.Digest.String()
-		m, err = rc.ManifestHead(context.Background(), r)
+		m, err = rc.ManifestHead(ctx, r)
 		if err != nil {
 			return fmt.Errorf("failed retrieving platform specific digest: %w", err)
 		}
@@ -257,6 +266,12 @@ func runManifestDigest(cmd *cobra.Command, args []string) error {
 
 func runManifestGet(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
+	if manifestOpts.platform != "" && !flagChanged(cmd, "list") {
+		manifestOpts.list = false
+	} else if !manifestOpts.list && !flagChanged(cmd, "list") {
+		manifestOpts.list = true
+	}
+
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
@@ -264,7 +279,7 @@ func runManifestGet(cmd *cobra.Command, args []string) error {
 	rc := newRegClient()
 	defer rc.Close(ctx, r)
 
-	m, err := getManifest(rc, r)
+	m, err := getManifest(ctx, rc, r)
 	if err != nil {
 		return err
 	}

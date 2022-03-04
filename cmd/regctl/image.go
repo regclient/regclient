@@ -115,22 +115,24 @@ func init() {
 
 	imageDeleteCmd.Flags().BoolVarP(&manifestOpts.forceTagDeref, "force-tag-dereference", "", false, "Dereference the a tag to a digest, this is unsafe")
 
-	imageDigestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", false, "Do not resolve platform from manifest list (recommended)")
-	imageDigestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
+	imageDigestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Do not resolve platform from manifest list (enabled by default)")
+	imageDigestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageDigestCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
 	imageDigestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
+	imageDigestCmd.Flags().MarkHidden("list")
 
-	imageInspectCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
+	imageInspectCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageInspectCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	imageInspectCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	imageInspectCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
-	imageManifestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", false, "Output manifest list if available")
-	imageManifestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
+	imageManifestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Output manifest list if available (enabled by default)")
+	imageManifestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageManifestCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
 	imageManifestCmd.Flags().StringVarP(&manifestOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	imageManifestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	imageManifestCmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	imageManifestCmd.Flags().MarkHidden("list")
 
 	imageRateLimitCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	imageRateLimitCmd.RegisterFlagCompletionFunc("format", completeArgNone)
@@ -240,7 +242,11 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 	}).Debug("Image inspect")
 
 	manifestOpts.platform = imageOpts.platform
-	m, err := getManifest(rc, r)
+	if !flagChanged(cmd, "list") {
+		manifestOpts.list = false
+	}
+
+	m, err := getManifest(ctx, rc, r)
 	if err != nil {
 		return err
 	}
