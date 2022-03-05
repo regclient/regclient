@@ -85,7 +85,7 @@ func init() {
 	manifestGetCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Output manifest list if available (enabled by default)")
 	manifestGetCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	manifestGetCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
-	manifestGetCmd.Flags().StringVarP(&manifestOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+	manifestGetCmd.Flags().StringVarP(&manifestOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax (use \"raw-body\" for the original manifest)")
 	manifestGetCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	manifestGetCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 	manifestGetCmd.Flags().MarkHidden("list")
