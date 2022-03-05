@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"text/tabwriter"
 
 	digest "github.com/opencontainers/go-digest"
+	"github.com/regclient/regclient/internal/units"
 	"github.com/regclient/regclient/internal/wraperr"
 	"github.com/regclient/regclient/types"
 	v1 "github.com/regclient/regclient/types/oci/v1"
@@ -110,11 +110,37 @@ func (m *oci1Index) MarshalJSON() ([]byte, error) {
 }
 
 func (m *oci1Manifest) MarshalPretty() ([]byte, error) {
+	if m == nil {
+		return []byte{}, nil
+	}
 	buf := &bytes.Buffer{}
-	enc := json.NewEncoder(buf)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	enc.Encode(m.Manifest)
+	tw := tabwriter.NewWriter(buf, 0, 0, 1, ' ', 0)
+	if m.r.Reference != "" {
+		fmt.Fprintf(tw, "Name:\t%s\n", m.r.Reference)
+	}
+	fmt.Fprintf(tw, "MediaType:\t%s\n", m.desc.MediaType)
+	fmt.Fprintf(tw, "Digest:\t%s\n", m.desc.Digest.String())
+	var total int64
+	for _, d := range m.Layers {
+		total += d.Size
+	}
+	fmt.Fprintf(tw, "Total Size:\t%s\n", units.HumanSize(float64(total)))
+	fmt.Fprintf(tw, "\t\n")
+	fmt.Fprintf(tw, "Config:\t\n")
+	err := m.Config.MarshalPrettyTW(tw, "  ")
+	if err != nil {
+		return []byte{}, err
+	}
+	fmt.Fprintf(tw, "\t\n")
+	fmt.Fprintf(tw, "Layers:\t\n")
+	for _, d := range m.Layers {
+		fmt.Fprintf(tw, "\t\n")
+		err := d.MarshalPrettyTW(tw, "  ")
+		if err != nil {
+			return []byte{}, err
+		}
+	}
+	tw.Flush()
 	return buf.Bytes(), nil
 }
 func (m *oci1Index) MarshalPretty() ([]byte, error) {
@@ -142,29 +168,10 @@ func (m *oci1Index) MarshalPretty() ([]byte, error) {
 		if dRef.Reference != "" {
 			dRef.Digest = d.Digest.String()
 			fmt.Fprintf(tw, "  Name:\t%s\n", dRef.CommonName())
-		} else {
-			fmt.Fprintf(tw, "  Digest:\t%s\n", string(d.Digest))
 		}
-		fmt.Fprintf(tw, "  MediaType:\t%s\n", d.MediaType)
-		if d.Platform != nil {
-			if p := d.Platform; p.OS != "" {
-				fmt.Fprintf(tw, "  Platform:\t%s\n", *p)
-				if p.OSVersion != "" {
-					fmt.Fprintf(tw, "  OSVersion:\t%s\n", p.OSVersion)
-				}
-				if len(p.OSFeatures) > 0 {
-					fmt.Fprintf(tw, "  OSFeatures:\t%s\n", strings.Join(p.OSFeatures, ", "))
-				}
-			}
-		}
-		if len(d.URLs) > 0 {
-			fmt.Fprintf(tw, "  URLs:\t%s\n", strings.Join(d.URLs, ", "))
-		}
-		if d.Annotations != nil {
-			fmt.Fprintf(tw, "  Annotations:\t\n")
-			for k, v := range d.Annotations {
-				fmt.Fprintf(tw, "    %s:\t%s\n", k, v)
-			}
+		err := d.MarshalPrettyTW(tw, "  ")
+		if err != nil {
+			return []byte{}, err
 		}
 	}
 	tw.Flush()

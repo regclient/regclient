@@ -514,6 +514,15 @@ func TestNew(t *testing.T) {
 				t.Errorf("failed running New: %v", err)
 				return
 			}
+			mp, ok := m.(interface{ MarshalPretty() ([]byte, error) })
+			if ok {
+				pretty, err := mp.MarshalPretty()
+				if err != nil {
+					t.Errorf("marshal pretty: %v", err)
+				} else {
+					t.Logf("marshal pretty:\n%s", string(pretty))
+				}
+			}
 			if tt.wantR.Scheme != "" && m.GetRef().CommonName() != tt.wantR.CommonName() {
 				t.Errorf("ref mismatch, expected %s, received %s", tt.wantR.CommonName(), m.GetRef().CommonName())
 			}
