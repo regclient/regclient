@@ -343,6 +343,9 @@ func TestRef(t *testing.T) {
 			} else if tt.wantE != nil {
 				return
 			}
+			if tt.ref != ref.Reference {
+				t.Errorf("reference mismatch for %s, received %s", tt.ref, ref.Reference)
+			}
 			if tt.scheme != ref.Scheme {
 				t.Errorf("scheme mismatch for %s, expected %s, received %s", tt.ref, tt.scheme, ref.Scheme)
 			}

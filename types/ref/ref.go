@@ -79,13 +79,12 @@ func New(parse string) (Ref, error) {
 			}
 			return Ref{}, fmt.Errorf("invalid reference \"%s\"", path)
 		}
-		ret = Ref{
-			Scheme:     "reg",
-			Registry:   matchRef[1],
-			Repository: matchRef[2],
-			Tag:        matchRef[3],
-			Digest:     matchRef[4],
-		}
+		ret.Registry = matchRef[1]
+		ret.Repository = matchRef[2]
+		ret.Tag = matchRef[3]
+		ret.Digest = matchRef[4]
+
+		// handle localhost use case since it matches the regex for a repo path entry
 		repoPath := strings.Split(ret.Repository, "/")
 		if ret.Registry == "" && repoPath[0] == "localhost" {
 			ret.Registry = repoPath[0]
