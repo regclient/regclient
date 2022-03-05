@@ -88,7 +88,7 @@ The following functions have been added in addition to the defaults available in
    Experimentally, the API call has been added to take a token and run the tag delete against `hub.docker.com` instead of `docker.io`.
    To implement this, add the following section to the `~/.regctl/config.json`:
 
-   ```json
+   ```jsonc
    {
      "hosts": {
        "hub.docker.com": {
@@ -108,11 +108,11 @@ The following functions have been added in addition to the defaults available in
 
    A: If your `$HOME/.docker/config.json` includes a section like the following:
 
-   ```json
+   ```jsonc
    "credHelpers": {
       "gcr.io": "gcr", 
       "public.ecr.aws": "ecr-login", 
-   },
+   }
    ```
 
    These will work with standalone binaries or with the alpine image variants.

@@ -14,8 +14,9 @@ GO_BUILD_FLAGS=-ldflags "$(LD_FLAGS)" -tags nolegacy
 DOCKERFILE_EXT:=$(shell if docker build --help 2>/dev/null | grep -q -- '--progress'; then echo ".buildkit"; fi)
 DOCKER_ARGS=--build-arg "VCS_REF=$(VCS_REF)"
 GOPATH:=$(shell go env GOPATH)
+PWD:=$(shell pwd)
 
-.PHONY: all fmt vet test vendor binaries docker artifacts artifact-pre plugin-user plugin-host .FORCE
+.PHONY: all fmt vet test lint lint-go lint-md vendor binaries docker artifacts artifact-pre plugin-user plugin-host .FORCE
 
 .FORCE:
 
@@ -30,8 +31,14 @@ vet:
 test:
 	go test -cover ./...
 
-lint: $(GOPATH)/bin/staticcheck
+lint: lint-go lint-md
+
+lint-go: $(GOPATH)/bin/staticcheck .FORCE
 	$(GOPATH)/bin/staticcheck -checks all ./...
+
+lint-md: .FORCE
+	docker run --rm -v "$(PWD):/workdir:ro" ghcr.io/igorshubovych/markdownlint-cli:latest \
+	  --ignore vendor .
 
 vendor:
 	go mod vendor
