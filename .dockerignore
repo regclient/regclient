@@ -1,8 +1,14 @@
 *
 !.git/
 !cmd/
-!go.*
+!config/
+!embed/
+!internal/
 !pkg/
 !regclient/
+!scheme/
+!types/
 !vendor/
+!go.*
+!*.go
 !Makefile

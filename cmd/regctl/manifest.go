@@ -7,12 +7,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/containerd/containerd/platforms"
-	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/regclient"
-	"github.com/regclient/regclient/regclient/manifest"
-	"github.com/regclient/regclient/regclient/types"
+	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/platform"
+	"github.com/regclient/regclient/types/ref"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -76,17 +76,19 @@ var manifestOpts struct {
 func init() {
 	manifestDeleteCmd.Flags().BoolVarP(&manifestOpts.forceTagDeref, "force-tag-dereference", "", false, "Dereference the a tag to a digest, this is unsafe")
 
-	manifestDigestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", false, "Do not resolve platform from manifest list (recommended)")
-	manifestDigestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
+	manifestDigestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Do not resolve platform from manifest list (enabled by default)")
+	manifestDigestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	manifestDigestCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
 	manifestDigestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
+	manifestDigestCmd.Flags().MarkHidden("list")
 
-	manifestGetCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", false, "Output manifest list if available")
-	manifestGetCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
+	manifestGetCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Output manifest list if available (enabled by default)")
+	manifestGetCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	manifestGetCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
-	manifestGetCmd.Flags().StringVarP(&manifestOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+	manifestGetCmd.Flags().StringVarP(&manifestOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax (use \"raw-body\" for the original manifest)")
 	manifestGetCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	manifestGetCmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	manifestGetCmd.Flags().MarkHidden("list")
 
 	manifestPutCmd.Flags().StringVarP(&manifestOpts.contentType, "content-type", "t", "", "Specify content-type (e.g. application/vnd.docker.distribution.manifest.v2+json)")
 	manifestPutCmd.MarkFlagRequired("content-type")
@@ -99,8 +101,8 @@ func init() {
 	rootCmd.AddCommand(manifestCmd)
 }
 
-func getManifest(rc regclient.RegClient, ref types.Ref) (manifest.Manifest, error) {
-	m, err := rc.ManifestGet(context.Background(), ref)
+func getManifest(ctx context.Context, rc *regclient.RegClient, r ref.Ref) (manifest.Manifest, error) {
+	m, err := rc.ManifestGet(context.Background(), r)
 	if err != nil {
 		return m, err
 	}
@@ -116,35 +118,35 @@ func getManifest(rc regclient.RegClient, ref types.Ref) (manifest.Manifest, erro
 
 	// retrieve the specified platform from the manifest list
 	if m.IsList() && !manifestOpts.list && !manifestOpts.requireList {
-		desc, err := getPlatformDesc(rc, m)
+		desc, err := getPlatformDesc(ctx, rc, m)
 		if err != nil {
-			return m, fmt.Errorf("Failed to lookup platform specific digest: %w", err)
+			return m, fmt.Errorf("failed to lookup platform specific digest: %w", err)
 		}
-		ref.Digest = desc.Digest.String()
-		m, err = rc.ManifestGet(context.Background(), ref)
+		r.Digest = desc.Digest.String()
+		m, err = rc.ManifestGet(ctx, r)
 		if err != nil {
-			return m, fmt.Errorf("Failed to pull platform specific digest: %w", err)
+			return m, fmt.Errorf("failed to pull platform specific digest: %w", err)
 		}
 	}
 	return m, nil
 }
 
-func getPlatformDesc(rc regclient.RegClient, m manifest.Manifest) (*ociv1.Descriptor, error) {
-	var desc *ociv1.Descriptor
+func getPlatformDesc(ctx context.Context, rc *regclient.RegClient, m manifest.Manifest) (*types.Descriptor, error) {
+	var desc *types.Descriptor
 	var err error
 	if !m.IsList() {
 		return desc, fmt.Errorf("%w: manifest is not a list", ErrInvalidInput)
 	}
 	if !m.IsSet() {
-		m, err = rc.ManifestGet(context.Background(), m.GetRef())
+		m, err = rc.ManifestGet(ctx, m.GetRef())
 		if err != nil {
-			return desc, err
+			return desc, fmt.Errorf("unable to retrieve manifest list: %w", err)
 		}
 	}
 
-	var plat ociv1.Platform
-	if manifestOpts.platform != "" {
-		plat, err = platforms.Parse(manifestOpts.platform)
+	var plat platform.Platform
+	if manifestOpts.platform != "" && manifestOpts.platform != "local" {
+		plat, err = platform.Parse(manifestOpts.platform)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"platform": manifestOpts.platform,
@@ -153,55 +155,57 @@ func getPlatformDesc(rc regclient.RegClient, m manifest.Manifest) (*ociv1.Descri
 		}
 	}
 	if plat.OS == "" {
-		plat = platforms.DefaultSpec()
+		plat = platform.Local()
 	}
-	desc, err = m.GetPlatformDesc(&plat)
+	desc, err = manifest.GetPlatformDesc(m, &plat)
 	if err != nil {
-		pl, _ := m.GetPlatformList()
+		pl, _ := manifest.GetPlatformList(m)
 		var ps []string
 		for _, p := range pl {
-			ps = append(ps, platforms.Format(*p))
+			ps = append(ps, p.String())
 		}
 		log.WithFields(logrus.Fields{
-			"platform":  platforms.Format(plat),
+			"platform":  plat,
 			"err":       err,
 			"platforms": strings.Join(ps, ", "),
 		}).Warn("Platform could not be found in manifest list")
 		return desc, ErrNotFound
 	}
 	log.WithFields(logrus.Fields{
-		"platform": platforms.Format(plat),
+		"platform": plat,
 		"digest":   desc.Digest.String(),
 	}).Debug("Found platform specific digest in manifest list")
 	return desc, nil
 }
 
 func runManifestDelete(cmd *cobra.Command, args []string) error {
-	ref, err := types.NewRef(args[0])
+	ctx := cmd.Context()
+	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
 	rc := newRegClient()
+	defer rc.Close(ctx, r)
 
-	if ref.Digest == "" && manifestOpts.forceTagDeref {
-		m, err := rc.ManifestHead(context.Background(), ref)
+	if r.Digest == "" && manifestOpts.forceTagDeref {
+		m, err := rc.ManifestHead(ctx, r)
 		if err != nil {
 			return err
 		}
-		ref.Digest = m.GetDigest().String()
+		r.Digest = manifest.GetDigest(m).String()
 		log.WithFields(logrus.Fields{
-			"tag":    ref.Tag,
-			"digest": ref.Digest,
+			"tag":    r.Tag,
+			"digest": r.Digest,
 		}).Debug("Forced dereference of tag")
 	}
 
 	log.WithFields(logrus.Fields{
-		"host":   ref.Registry,
-		"repo":   ref.Repository,
-		"digest": ref.Digest,
+		"host":   r.Registry,
+		"repo":   r.Repository,
+		"digest": r.Digest,
 	}).Debug("Manifest delete")
 
-	err = rc.ManifestDelete(context.Background(), ref)
+	err = rc.ManifestDelete(ctx, r)
 	if err != nil {
 		return err
 	}
@@ -209,20 +213,27 @@ func runManifestDelete(cmd *cobra.Command, args []string) error {
 }
 
 func runManifestDigest(cmd *cobra.Command, args []string) error {
-	ref, err := types.NewRef(args[0])
+	ctx := cmd.Context()
+	if manifestOpts.platform != "" && !flagChanged(cmd, "list") {
+		manifestOpts.list = false
+	} else if !manifestOpts.list && !flagChanged(cmd, "list") {
+		manifestOpts.list = true
+	}
+
+	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
 	rc := newRegClient()
 
 	log.WithFields(logrus.Fields{
-		"host": ref.Registry,
-		"repo": ref.Repository,
-		"tag":  ref.Tag,
+		"host": r.Registry,
+		"repo": r.Repository,
+		"tag":  r.Tag,
 	}).Debug("Manifest digest")
 
 	// attempt to request only the headers, avoids Docker Hub rate limits
-	m, err := rc.ManifestHead(context.Background(), ref)
+	m, err := rc.ManifestHead(ctx, r)
 	if err != nil {
 		return err
 	}
@@ -238,26 +249,37 @@ func runManifestDigest(cmd *cobra.Command, args []string) error {
 
 	// retrieve the specified platform from the manifest list
 	for m.IsList() && !manifestOpts.list && !manifestOpts.requireList {
-		desc, err := getPlatformDesc(rc, m)
-		ref.Digest = desc.Digest.String()
-		m, err = rc.ManifestHead(context.Background(), ref)
+		desc, err := getPlatformDesc(ctx, rc, m)
 		if err != nil {
-			return fmt.Errorf("Failed retrieving platform specific digest: %w", err)
+			return fmt.Errorf("failed retrieving platform specific digest: %w", err)
+		}
+		r.Digest = desc.Digest.String()
+		m, err = rc.ManifestHead(ctx, r)
+		if err != nil {
+			return fmt.Errorf("failed retrieving platform specific digest: %w", err)
 		}
 	}
 
-	fmt.Println(m.GetDigest().String())
+	fmt.Println(manifest.GetDigest(m).String())
 	return nil
 }
 
 func runManifestGet(cmd *cobra.Command, args []string) error {
-	ref, err := types.NewRef(args[0])
+	ctx := cmd.Context()
+	if manifestOpts.platform != "" && !flagChanged(cmd, "list") {
+		manifestOpts.list = false
+	} else if !manifestOpts.list && !flagChanged(cmd, "list") {
+		manifestOpts.list = true
+	}
+
+	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
 	rc := newRegClient()
+	defer rc.Close(ctx, r)
 
-	m, err := getManifest(rc, ref)
+	m, err := getManifest(ctx, rc, r)
 	if err != nil {
 		return err
 	}
@@ -270,23 +292,32 @@ func runManifestGet(cmd *cobra.Command, args []string) error {
 	case "rawHeaders", "raw-headers", "headers":
 		manifestOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
-	return template.Writer(os.Stdout, manifestOpts.format, m, template.WithFuncs(regclient.TemplateFuncs))
+	return template.Writer(os.Stdout, manifestOpts.format, m)
 }
 
 func runManifestPut(cmd *cobra.Command, args []string) error {
-	ref, err := types.NewRef(args[0])
+	ctx := cmd.Context()
+	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
 	rc := newRegClient()
+	defer rc.Close(ctx, r)
+
 	raw, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
 		return err
 	}
-	rcM, err := manifest.New(manifestOpts.contentType, raw, ref, nil)
+	rcM, err := manifest.New(
+		manifest.WithRef(r),
+		manifest.WithRaw(raw),
+		manifest.WithDesc(types.Descriptor{
+			MediaType: manifestOpts.contentType,
+		}),
+	)
 	if err != nil {
 		return err
 	}
 
-	return rc.ManifestPut(context.Background(), ref, rcM)
+	return rc.ManifestPut(ctx, r, rcM)
 }

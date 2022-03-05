@@ -1,13 +1,12 @@
 package main
 
 import (
-	"context"
 	"io"
 	"os"
 
+	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/regclient"
-	"github.com/regclient/regclient/regclient/types"
+	"github.com/regclient/regclient/types/ref"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -116,22 +115,24 @@ func init() {
 
 	imageDeleteCmd.Flags().BoolVarP(&manifestOpts.forceTagDeref, "force-tag-dereference", "", false, "Dereference the a tag to a digest, this is unsafe")
 
-	imageDigestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", false, "Do not resolve platform from manifest list (recommended)")
-	imageDigestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
+	imageDigestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Do not resolve platform from manifest list (enabled by default)")
+	imageDigestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageDigestCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
 	imageDigestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
+	imageDigestCmd.Flags().MarkHidden("list")
 
-	imageInspectCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
+	imageInspectCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageInspectCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	imageInspectCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	imageInspectCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
-	imageManifestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", false, "Output manifest list if available")
-	imageManifestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64)")
+	imageManifestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Output manifest list if available (enabled by default)")
+	imageManifestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageManifestCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
-	imageManifestCmd.Flags().StringVarP(&manifestOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+	imageManifestCmd.Flags().StringVarP(&manifestOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax (use \"raw-body\" for the original manifest)")
 	imageManifestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	imageManifestCmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	imageManifestCmd.Flags().MarkHidden("list")
 
 	imageRateLimitCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	imageRateLimitCmd.RegisterFlagCompletionFunc("format", completeArgNone)
@@ -148,22 +149,22 @@ func init() {
 }
 
 func runImageCopy(cmd *cobra.Command, args []string) error {
-	refSrc, err := types.NewRef(args[0])
+	ctx := cmd.Context()
+	rSrc, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
-	refTgt, err := types.NewRef(args[1])
+	rTgt, err := ref.New(args[1])
 	if err != nil {
 		return err
 	}
 	rc := newRegClient()
+	defer rc.Close(ctx, rSrc)
+	defer rc.Close(ctx, rTgt)
+
 	log.WithFields(logrus.Fields{
-		"source host": refSrc.Registry,
-		"source repo": refSrc.Repository,
-		"source tag":  refSrc.Tag,
-		"target host": refTgt.Registry,
-		"target repo": refTgt.Repository,
-		"target tag":  refTgt.Tag,
+		"source":      rSrc.CommonName(),
+		"target":      rTgt.CommonName(),
 		"recursive":   imageOpts.forceRecursive,
 		"digest-tags": imageOpts.digestTags,
 	}).Debug("Image copy")
@@ -177,11 +178,12 @@ func runImageCopy(cmd *cobra.Command, args []string) error {
 	if len(imageOpts.platforms) > 0 {
 		opts = append(opts, regclient.ImageWithPlatforms(imageOpts.platforms))
 	}
-	return rc.ImageCopy(context.Background(), refSrc, refTgt, opts...)
+	return rc.ImageCopy(ctx, rSrc, rTgt, opts...)
 }
 
 func runImageExport(cmd *cobra.Command, args []string) error {
-	ref, err := types.NewRef(args[0])
+	ctx := cmd.Context()
+	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
@@ -195,14 +197,16 @@ func runImageExport(cmd *cobra.Command, args []string) error {
 		w = os.Stdout
 	}
 	rc := newRegClient()
+	defer rc.Close(ctx, r)
 	log.WithFields(logrus.Fields{
-		"ref": ref.CommonName(),
+		"ref": r.CommonName(),
 	}).Debug("Image export")
-	return rc.ImageExport(context.Background(), ref, w)
+	return rc.ImageExport(ctx, r, w)
 }
 
 func runImageImport(cmd *cobra.Command, args []string) error {
-	ref, err := types.NewRef(args[0])
+	ctx := cmd.Context()
+	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
@@ -212,39 +216,46 @@ func runImageImport(cmd *cobra.Command, args []string) error {
 	}
 	defer rs.Close()
 	rc := newRegClient()
+	defer rc.Close(ctx, r)
 	log.WithFields(logrus.Fields{
-		"ref":  ref.CommonName(),
+		"ref":  r.CommonName(),
 		"file": args[1],
 	}).Debug("Image import")
 
-	return rc.ImageImport(context.Background(), ref, rs)
+	return rc.ImageImport(ctx, r, rs)
 }
 
 func runImageInspect(cmd *cobra.Command, args []string) error {
-	ref, err := types.NewRef(args[0])
+	ctx := cmd.Context()
+	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
 	rc := newRegClient()
+	defer rc.Close(ctx, r)
 
 	log.WithFields(logrus.Fields{
-		"host":     ref.Registry,
-		"repo":     ref.Repository,
-		"tag":      ref.Tag,
+		"host":     r.Registry,
+		"repo":     r.Repository,
+		"tag":      r.Tag,
 		"platform": imageOpts.platform,
 	}).Debug("Image inspect")
 
 	manifestOpts.platform = imageOpts.platform
-	m, err := getManifest(rc, ref)
+	if !flagChanged(cmd, "list") {
+		manifestOpts.list = false
+	}
+
+	m, err := getManifest(ctx, rc, r)
 	if err != nil {
 		return err
 	}
-	cd, err := m.GetConfigDigest()
+	cd, err := m.GetConfig()
 	if err != nil {
 		return err
 	}
 
-	blobConfig, err := rc.BlobGetOCIConfig(context.Background(), ref, cd)
+	blobConfig, err := rc.BlobGetOCIConfig(ctx, r, cd.Digest)
 	if err != nil {
 		return err
 	}
@@ -256,27 +267,28 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 	case "rawHeaders", "raw-headers", "headers":
 		imageOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
-	return template.Writer(os.Stdout, imageOpts.format, blobConfig, template.WithFuncs(regclient.TemplateFuncs))
+	return template.Writer(os.Stdout, imageOpts.format, blobConfig)
 }
 
 func runImageRateLimit(cmd *cobra.Command, args []string) error {
-	ref, err := types.NewRef(args[0])
+	ctx := cmd.Context()
+	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
 	rc := newRegClient()
 
 	log.WithFields(logrus.Fields{
-		"host": ref.Registry,
-		"repo": ref.Repository,
-		"tag":  ref.Tag,
+		"host": r.Registry,
+		"repo": r.Repository,
+		"tag":  r.Tag,
 	}).Debug("Image rate limit")
 
 	// request only the headers, avoids adding to Docker Hub rate limits
-	m, err := rc.ManifestHead(context.Background(), ref)
+	m, err := rc.ManifestHead(ctx, r)
 	if err != nil {
 		return err
 	}
 
-	return template.Writer(os.Stdout, imageOpts.format, m.GetRateLimit(), template.WithFuncs(regclient.TemplateFuncs))
+	return template.Writer(os.Stdout, imageOpts.format, m.GetRateLimit())
 }

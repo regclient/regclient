@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/regclient"
 	"gopkg.in/yaml.v2"
 )
 
@@ -26,7 +26,8 @@ type ConfigCreds struct {
 	User       string            `yaml:"user" json:"user"`
 	Pass       string            `yaml:"pass" json:"pass"`
 	Token      string            `yaml:"token" json:"token"`
-	TLS        regclient.TLSConf `yaml:"tls" json:"tls"`
+	RepoAuth   bool              `yaml:"repoAuth" json:"repoAuth"`
+	TLS        config.TLSConf    `yaml:"tls" json:"tls"`
 	Scheme     string            `yaml:"scheme" json:"scheme"` // TODO: delete
 	RegCert    string            `yaml:"regcert" json:"regcert"`
 	PathPrefix string            `yaml:"pathPrefix" json:"pathPrefix"`
@@ -38,13 +39,14 @@ type ConfigCreds struct {
 	BlobMax    int64             `yaml:"blobMax" json:"blobMax"`
 }
 
-func credsToRCHost(c ConfigCreds) regclient.ConfigHost {
-	return regclient.ConfigHost{
+func credsToRCHost(c ConfigCreds) config.Host {
+	return config.Host{
 		Name:       c.Registry,
 		Hostname:   c.Hostname,
 		User:       c.User,
 		Pass:       c.Pass,
 		Token:      c.Token,
+		RepoAuth:   c.RepoAuth,
 		TLS:        c.TLS,
 		RegCert:    c.RegCert,
 		PathPrefix: c.PathPrefix,

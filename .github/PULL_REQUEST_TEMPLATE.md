@@ -26,7 +26,7 @@ See [DCO missing](https://github.com/src-d/guide/blob/master/developer-community
 
 <!-- Mark the following with an [X] to verify they are included -->
 
-- [ ] Tests have been added
-- [ ] Documentation has been added or updated
+- [ ] Tests have been added or not applicable
+- [ ] Documentation has been added, updated, or not applicable
 - [ ] Changes have been rebased to main
 - [ ] Multiple commits to the same code have been squashed

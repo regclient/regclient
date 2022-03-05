@@ -21,29 +21,41 @@ func setupTag(s *Sandbox) {
 }
 
 func (s *Sandbox) tagDelete(ls *lua.LState) int {
-	ref := s.checkReference(ls, 1)
+	err := s.ctx.Err()
+	if err != nil {
+		ls.RaiseError("Context error: %v", err)
+	}
+	r := s.checkReference(ls, 1)
 	s.log.WithFields(logrus.Fields{
 		"script":  s.name,
-		"image":   ref.ref.CommonName(),
+		"image":   r.r.CommonName(),
 		"dry-run": s.dryRun,
 	}).Info("Delete tag")
 	if s.dryRun {
 		return 0
 	}
-	err := s.rc.TagDelete(s.ctx, ref.ref)
+	err = s.rc.TagDelete(s.ctx, r.r)
 	if err != nil {
-		ls.RaiseError("Failed deleting \"%s\": %v", ref.ref.CommonName(), err)
+		ls.RaiseError("Failed deleting \"%s\": %v", r.r.CommonName(), err)
+	}
+	err = s.rc.Close(s.ctx, r.r)
+	if err != nil {
+		ls.RaiseError("Failed closing reference \"%s\": %v", r.r.CommonName(), err)
 	}
 	return 0
 }
 
 func (s *Sandbox) tagLs(ls *lua.LState) int {
-	ref := s.checkReference(ls, 1)
+	err := s.ctx.Err()
+	if err != nil {
+		ls.RaiseError("Context error: %v", err)
+	}
+	r := s.checkReference(ls, 1)
 	s.log.WithFields(logrus.Fields{
 		"script": s.name,
-		"repo":   ref.ref.CommonName(),
+		"repo":   r.r.CommonName(),
 	}).Debug("Listing tags")
-	tl, err := s.rc.TagList(s.ctx, ref.ref)
+	tl, err := s.rc.TagList(s.ctx, r.r)
 	if err != nil {
 		ls.RaiseError("Failed retrieving tag list: %v", err)
 	}

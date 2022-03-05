@@ -1,0 +1,2 @@
+This folder should not be deleted.
+The Makefile will create a version.json for including versions in binaries.

@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/signal"
 	"regexp"
@@ -12,12 +15,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/containerd/containerd/platforms"
 	"github.com/opencontainers/go-digest"
+	"github.com/regclient/regclient"
+	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/regclient"
-	"github.com/regclient/regclient/regclient/manifest"
-	"github.com/regclient/regclient/regclient/types"
+	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/platform"
+	"github.com/regclient/regclient/types/ref"
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -38,15 +43,18 @@ var rootOpts struct {
 	format    string // for Go template formatting of various commands
 }
 
+//go:embed embed/*
+var embedFS embed.FS
+
 var (
-	config *Config
+	// VCSRef and VCSTag are populated from an embed at build time
+	// These are used to version the UserAgent header
+	VCSRef = ""
+	VCSTag = ""
+	conf   *Config
 	log    *logrus.Logger
-	rc     regclient.RegClient
+	rc     *regclient.RegClient
 	sem    *semaphore.Weighted
-	// VCSRef is injected from a build flag, used to version the UserAgent header
-	VCSRef = "unknown"
-	// VCSTag is injected from a build flag
-	VCSTag = "unknown"
 )
 
 var rootCmd = &cobra.Command{
@@ -101,6 +109,7 @@ func init() {
 		Hooks:     make(logrus.LevelHooks),
 		Level:     logrus.InfoLevel,
 	}
+	setupVCSVars()
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.confFile, "config", "c", "", "Config file")
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.InfoLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
 	rootCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
@@ -151,7 +160,7 @@ func runOnce(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(cmd.Context())
 	// handle interrupt signal
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
@@ -163,9 +172,9 @@ func runOnce(cmd *cobra.Command, args []string) error {
 	}()
 	var wg sync.WaitGroup
 	var mainErr error
-	for _, s := range config.Sync {
+	for _, s := range conf.Sync {
 		s := s
-		if config.Defaults.Parallel > 0 {
+		if conf.Defaults.Parallel > 0 {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -196,13 +205,13 @@ func runServer(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(cmd.Context())
 	var wg sync.WaitGroup
 	var mainErr error
 	c := cron.New(cron.WithChain(
 		cron.SkipIfStillRunning(cron.DefaultLogger),
 	))
-	for _, s := range config.Sync {
+	for _, s := range conf.Sync {
 		s := s
 		sched := s.Schedule
 		if sched == "" && s.Interval != 0 {
@@ -257,8 +266,8 @@ func runCheck(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	var mainErr error
-	ctx := context.Background()
-	for _, s := range config.Sync {
+	ctx := cmd.Context()
+	for _, s := range conf.Sync {
 		err := s.process(ctx, "check")
 		if err != nil {
 			if mainErr == nil {
@@ -272,7 +281,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 func loadConf() error {
 	var err error
 	if rootOpts.confFile == "-" {
-		config, err = ConfigLoadReader(os.Stdin)
+		conf, err = ConfigLoadReader(os.Stdin)
 		if err != nil {
 			return err
 		}
@@ -282,7 +291,7 @@ func loadConf() error {
 			return err
 		}
 		defer r.Close()
-		config, err = ConfigLoadReader(r)
+		conf, err = ConfigLoadReader(r)
 		if err != nil {
 			return err
 		}
@@ -290,7 +299,7 @@ func loadConf() error {
 		return ErrMissingInput
 	}
 	// use a semaphore to control parallelism
-	concurrent := int64(config.Defaults.Parallel)
+	concurrent := int64(conf.Defaults.Parallel)
 	if concurrent <= 0 {
 		concurrent = 1
 	}
@@ -301,13 +310,19 @@ func loadConf() error {
 	// set the regclient, loading docker creds unless disabled, and inject logins from config file
 	rcOpts := []regclient.Opt{
 		regclient.WithLog(log),
-		regclient.WithUserAgent(UserAgent + " (" + VCSRef + ")"),
 	}
-	if !config.Defaults.SkipDockerConf {
+	if VCSTag != "" {
+		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+VCSTag+")"))
+	} else if VCSRef != "" {
+		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+VCSRef+")"))
+	} else {
+		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" (unknown)"))
+	}
+	if !conf.Defaults.SkipDockerConf {
 		rcOpts = append(rcOpts, regclient.WithDockerCreds(), regclient.WithDockerCerts())
 	}
-	rcHosts := []regclient.ConfigHost{}
-	for _, host := range config.Creds {
+	rcHosts := []config.Host{}
+	for _, host := range conf.Creds {
 		if host.Scheme != "" {
 			log.WithFields(logrus.Fields{
 				"name": host.Registry,
@@ -318,7 +333,7 @@ func loadConf() error {
 	if len(rcHosts) > 0 {
 		rcOpts = append(rcOpts, regclient.WithConfigHosts(rcHosts))
 	}
-	rc = regclient.NewRegClient(rcOpts...)
+	rc = regclient.New(rcOpts...)
 	return nil
 }
 
@@ -344,7 +359,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 			return err
 		}
 		for _, repo := range sRepoList {
-			sRepoRef, err := types.NewRef(fmt.Sprintf("%s/%s", s.Source, repo))
+			sRepoRef, err := ref.New(fmt.Sprintf("%s/%s", s.Source, repo))
 			if err != nil {
 				log.WithFields(logrus.Fields{
 					"source": s.Source,
@@ -392,7 +407,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 				retErr = err
 				continue
 			}
-			tRepoRef, err := types.NewRef(fmt.Sprintf("%s/%s", s.Target, repo))
+			tRepoRef, err := ref.New(fmt.Sprintf("%s/%s", s.Target, repo))
 			if err != nil {
 				log.WithFields(logrus.Fields{
 					"target": s.Target,
@@ -415,10 +430,17 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 					}).Error("Failed to sync")
 					retErr = err
 				}
+				err = rc.Close(ctx, tRef)
+				if err != nil {
+					log.WithFields(logrus.Fields{
+						"ref":   tRef.CommonName(),
+						"error": err,
+					}).Error("Error closing ref")
+				}
 			}
 		}
 	case "repository":
-		sRepoRef, err := types.NewRef(s.Source)
+		sRepoRef, err := ref.New(s.Source)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"source": s.Source,
@@ -461,7 +483,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 			}).Warn("No matching tags found")
 			return nil
 		}
-		tRepoRef, err := types.NewRef(s.Target)
+		tRepoRef, err := ref.New(s.Target)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"target": s.Target,
@@ -483,10 +505,17 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 				}).Error("Failed to sync")
 				retErr = err
 			}
+			err = rc.Close(ctx, tRef)
+			if err != nil {
+				log.WithFields(logrus.Fields{
+					"ref":   tRef.CommonName(),
+					"error": err,
+				}).Error("Error closing ref")
+			}
 		}
 
 	case "image":
-		sRef, err := types.NewRef(s.Source)
+		sRef, err := ref.New(s.Source)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"source": s.Source,
@@ -494,7 +523,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 			}).Error("Failed parsing source")
 			return err
 		}
-		tRef, err := types.NewRef(s.Target)
+		tRef, err := ref.New(s.Target)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"target": s.Target,
@@ -511,6 +540,13 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 			}).Error("Failed to sync")
 			retErr = err
 		}
+		err = rc.Close(ctx, tRef)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"ref":   tRef.CommonName(),
+				"error": err,
+			}).Error("Error closing ref")
+		}
 
 	default:
 		log.WithFields(logrus.Fields{
@@ -523,9 +559,9 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 }
 
 // process a sync step
-func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action string) error {
+func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action string) error {
 	mSrc, err := rc.ManifestHead(ctx, src)
-	if err != nil && errors.Is(err, regclient.ErrUnsupportedAPI) {
+	if err != nil && errors.Is(err, types.ErrUnsupportedAPI) {
 		mSrc, err = rc.ManifestGet(ctx, src)
 	}
 	if err != nil {
@@ -537,7 +573,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action s
 	}
 	mTgt, err := rc.ManifestHead(ctx, tgt)
 	tgtMatches := false
-	if err == nil && mSrc.GetDigest().String() == mTgt.GetDigest().String() {
+	if err == nil && manifest.GetDigest(mSrc).String() == manifest.GetDigest(mTgt).String() {
 		tgtMatches = true
 	}
 	if tgtMatches && (s.ForceRecursive == nil || !*s.ForceRecursive) {
@@ -550,7 +586,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action s
 	tgtExists := (err == nil)
 
 	// skip when source manifest is an unsupported type
-	smt := mSrc.GetMediaType()
+	smt := manifest.GetMediaType(mSrc)
 	found := false
 	for _, mt := range s.MediaTypes {
 		if mt == smt {
@@ -561,7 +597,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action s
 	if !found {
 		log.WithFields(logrus.Fields{
 			"ref":       src.CommonName(),
-			"mediaType": mSrc.GetMediaType(),
+			"mediaType": manifest.GetMediaType(mSrc),
 			"allowed":   s.MediaTypes,
 		}).Info("Skipping unsupported media type")
 		return nil
@@ -574,7 +610,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action s
 			return err
 		}
 		src.Digest = platDigest.String()
-		if tgtExists && platDigest.String() == mTgt.GetDigest().String() {
+		if tgtExists && platDigest.String() == manifest.GetDigest(mTgt).String() {
 			tgtMatches = true
 		}
 		if tgtMatches && (s.ForceRecursive == nil || !*s.ForceRecursive) {
@@ -604,7 +640,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action s
 	// wait for parallel tasks
 	sem.Acquire(ctx, 1)
 	// delay for rate limit on source
-	if s.RateLimit.Min > 0 && mSrc.GetRateLimit().Set {
+	if s.RateLimit.Min > 0 && manifest.GetRateLimit(mSrc).Set {
 		// refresh current rate limit after acquiring semaphore
 		mSrc, err = rc.ManifestHead(ctx, src)
 		if err != nil {
@@ -615,7 +651,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action s
 			return err
 		}
 		// delay if rate limit exceeded
-		rlSrc := mSrc.GetRateLimit()
+		rlSrc := manifest.GetRateLimit(mSrc)
 		for rlSrc.Remain < s.RateLimit.Min {
 			sem.Release(1)
 			log.WithFields(logrus.Fields{
@@ -640,7 +676,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action s
 				}).Error("rate limit check failed")
 				return err
 			}
-			rlSrc = mSrc.GetRateLimit()
+			rlSrc = manifest.GetRateLimit(mSrc)
 		}
 		log.WithFields(logrus.Fields{
 			"source":        src.CommonName(),
@@ -661,7 +697,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action s
 	if tgtExists && !tgtMatches && s.Backup != "" {
 		// expand template
 		data := struct {
-			Ref  types.Ref
+			Ref  ref.Ref
 			Step ConfigSync
 		}{Ref: tgt, Step: s}
 		backupStr, err := template.String(s.Backup, data)
@@ -677,7 +713,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action s
 		backupRef := tgt
 		if strings.ContainsAny(backupStr, ":/") {
 			// if the : or / are in the string, parse it as a full reference
-			backupRef, err = types.NewRef(backupStr)
+			backupRef, err = ref.New(backupStr)
 			if err != nil {
 				log.WithFields(logrus.Fields{
 					"original": tgt.CommonName(),
@@ -691,6 +727,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt types.Ref, action s
 			// else parse backup string as just a tag
 			backupRef.Tag = backupStr
 		}
+		defer rc.Close(ctx, backupRef)
 		// run copy from tgt ref to backup ref
 		log.WithFields(logrus.Fields{
 			"original": tgt.CommonName(),
@@ -794,8 +831,8 @@ func init() {
 
 // getPlatformDigest resolves a manifest list to a specific platform's digest
 // This uses the above cache to only call ManifestGet when a new manifest list digest is seen
-func getPlatformDigest(ctx context.Context, ref types.Ref, platStr string, origMan manifest.Manifest) (digest.Digest, error) {
-	plat, err := platforms.Parse(platStr)
+func getPlatformDigest(ctx context.Context, r ref.Ref, platStr string, origMan manifest.Manifest) (digest.Digest, error) {
+	plat, err := platform.Parse(platStr)
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"platform": platStr,
@@ -805,33 +842,59 @@ func getPlatformDigest(ctx context.Context, ref types.Ref, platStr string, origM
 	}
 	// cache manifestGet response
 	manifestCache.mu.Lock()
-	getMan, ok := manifestCache.manifests[origMan.GetDigest().String()]
+	getMan, ok := manifestCache.manifests[manifest.GetDigest(origMan).String()]
 	if !ok {
-		getMan, err = rc.ManifestGet(ctx, ref)
+		getMan, err = rc.ManifestGet(ctx, r)
 		if err != nil {
 			log.WithFields(logrus.Fields{
-				"source": ref.CommonName(),
+				"source": r.CommonName(),
 				"error":  err,
 			}).Error("Failed to get source manifest")
 			manifestCache.mu.Unlock()
 			return "", err
 		}
-		manifestCache.manifests[origMan.GetDigest().String()] = getMan
+		manifestCache.manifests[manifest.GetDigest(origMan).String()] = getMan
 	}
 	manifestCache.mu.Unlock()
-	descPlat, err := getMan.GetPlatformDesc(&plat)
+	descPlat, err := manifest.GetPlatformDesc(getMan, &plat)
 	if err != nil {
-		pl, _ := getMan.GetPlatformList()
+		pl, _ := manifest.GetPlatformList(getMan)
 		var ps []string
 		for _, p := range pl {
-			ps = append(ps, platforms.Format(*p))
+			ps = append(ps, p.String())
 		}
 		log.WithFields(logrus.Fields{
-			"platform":  platforms.Format(plat),
+			"platform":  plat,
 			"err":       err,
 			"platforms": strings.Join(ps, ", "),
 		}).Warn("Platform could not be found in source manifest list")
 		return "", ErrNotFound
 	}
 	return descPlat.Digest, nil
+}
+
+func setupVCSVars() {
+	verS := struct {
+		VCSRef string
+		VCSTag string
+	}{}
+
+	verB, err := embedFS.ReadFile("embed/version.json")
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return
+	}
+
+	if len(verB) > 0 {
+		err = json.Unmarshal(verB, &verS)
+		if err != nil {
+			return
+		}
+	}
+
+	if verS.VCSRef != "" {
+		VCSRef = verS.VCSRef
+	}
+	if verS.VCSTag != "" {
+		VCSTag = verS.VCSTag
+	}
 }

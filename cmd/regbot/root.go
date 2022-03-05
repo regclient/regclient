@@ -2,14 +2,19 @@ package main
 
 import (
 	"context"
+	"embed"
+	"encoding/json"
+	"errors"
+	"io/fs"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
 
+	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/cmd/regbot/sandbox"
+	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/regclient"
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -31,15 +36,18 @@ var rootOpts struct {
 	format    string // for Go template formatting of various commands
 }
 
+//go:embed embed/*
+var embedFS embed.FS
+
 var (
-	config *Config
+	// VCSRef and VCSTag are populated from an embed at build time
+	// These are used to version the UserAgent header
+	VCSRef = ""
+	VCSTag = ""
+	conf   *Config
 	log    *logrus.Logger
-	rc     regclient.RegClient
+	rc     *regclient.RegClient
 	sem    *semaphore.Weighted
-	// VCSRef is injected from a build flag, used to version the UserAgent header
-	VCSRef = "unknown"
-	// VCSTag is injected from a build flag
-	VCSTag = "unknown"
 )
 
 var rootCmd = &cobra.Command{
@@ -80,6 +88,7 @@ func init() {
 		Hooks:     make(logrus.LevelHooks),
 		Level:     logrus.InfoLevel,
 	}
+	setupVCSVars()
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.confFile, "config", "c", "", "Config file")
 	rootCmd.PersistentFlags().BoolVarP(&rootOpts.dryRun, "dry-run", "", false, "Dry Run, skip all external actions")
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.InfoLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
@@ -129,7 +138,7 @@ func runOnce(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(cmd.Context())
 	// handle interrupt signal
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
@@ -141,9 +150,9 @@ func runOnce(cmd *cobra.Command, args []string) error {
 	}()
 	var wg sync.WaitGroup
 	var mainErr error
-	for _, s := range config.Scripts {
+	for _, s := range conf.Scripts {
 		s := s
-		if config.Defaults.Parallel > 0 {
+		if conf.Defaults.Parallel > 0 {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -174,13 +183,13 @@ func runServer(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(cmd.Context())
 	var wg sync.WaitGroup
 	var mainErr error
 	c := cron.New(cron.WithChain(
 		cron.SkipIfStillRunning(cron.DefaultLogger),
 	))
-	for _, s := range config.Scripts {
+	for _, s := range conf.Scripts {
 		s := s
 		sched := s.Schedule
 		if sched == "" && s.Interval != 0 {
@@ -225,7 +234,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 func loadConf() error {
 	var err error
 	if rootOpts.confFile == "-" {
-		config, err = ConfigLoadReader(os.Stdin)
+		conf, err = ConfigLoadReader(os.Stdin)
 		if err != nil {
 			return err
 		}
@@ -235,7 +244,7 @@ func loadConf() error {
 			return err
 		}
 		defer r.Close()
-		config, err = ConfigLoadReader(r)
+		conf, err = ConfigLoadReader(r)
 		if err != nil {
 			return err
 		}
@@ -243,7 +252,7 @@ func loadConf() error {
 		return ErrMissingInput
 	}
 	// use a semaphore to control parallelism
-	concurrent := int64(config.Defaults.Parallel)
+	concurrent := int64(conf.Defaults.Parallel)
 	if concurrent <= 0 {
 		concurrent = 1
 	}
@@ -254,13 +263,19 @@ func loadConf() error {
 	// set the regclient, loading docker creds unless disabled, and inject logins from config file
 	rcOpts := []regclient.Opt{
 		regclient.WithLog(log),
-		regclient.WithUserAgent(UserAgent + " (" + VCSRef + ")"),
 	}
-	if !config.Defaults.SkipDockerConf {
+	if VCSTag != "" {
+		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+VCSTag+")"))
+	} else if VCSRef != "" {
+		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+VCSRef+")"))
+	} else {
+		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" (unknown)"))
+	}
+	if !conf.Defaults.SkipDockerConf {
 		rcOpts = append(rcOpts, regclient.WithDockerCreds(), regclient.WithDockerCerts())
 	}
-	rcHosts := []regclient.ConfigHost{}
-	for _, host := range config.Creds {
+	rcHosts := []config.Host{}
+	for _, host := range conf.Creds {
 		if host.Scheme != "" {
 			log.WithFields(logrus.Fields{
 				"name": host.Registry,
@@ -271,7 +286,7 @@ func loadConf() error {
 	if len(rcHosts) > 0 {
 		rcOpts = append(rcOpts, regclient.WithConfigHosts(rcHosts))
 	}
-	rc = regclient.NewRegClient(rcOpts...)
+	rc = regclient.New(rcOpts...)
 	return nil
 }
 
@@ -310,4 +325,30 @@ func (s ConfigScript) process(ctx context.Context) error {
 	}).Debug("Finished script")
 
 	return nil
+}
+
+func setupVCSVars() {
+	verS := struct {
+		VCSRef string
+		VCSTag string
+	}{}
+
+	verB, err := embedFS.ReadFile("embed/version.json")
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return
+	}
+
+	if len(verB) > 0 {
+		err = json.Unmarshal(verB, &verS)
+		if err != nil {
+			return
+		}
+	}
+
+	if verS.VCSRef != "" {
+		VCSRef = verS.VCSRef
+	}
+	if verS.VCSTag != "" {
+		VCSTag = verS.VCSTag
+	}
 }

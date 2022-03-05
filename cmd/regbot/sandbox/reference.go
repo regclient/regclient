@@ -1,7 +1,7 @@
 package sandbox
 
 import (
-	"github.com/regclient/regclient/regclient/types"
+	"github.com/regclient/regclient/types/ref"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -10,10 +10,12 @@ func setupReference(s *Sandbox) {
 		luaReferenceName,
 		map[string]lua.LGFunction{
 			"new":        s.newReference,
+			"close":      s.closeReference,
 			"__tostring": s.referenceString,
 		},
 		map[string]map[string]lua.LGFunction{
 			"__index": {
+				"close":  s.closeReference,
 				"digest": s.referenceGetSetDigest,
 				"tag":    s.referenceGetSetTag,
 			},
@@ -23,82 +25,99 @@ func setupReference(s *Sandbox) {
 
 // reference refers to a repository or image name
 type reference struct {
-	ref types.Ref
+	r ref.Ref
 }
 
 // newReference creates a reference
 func (s *Sandbox) newReference(ls *lua.LState) int {
-	ref := s.checkReference(ls, 1)
+	err := s.ctx.Err()
+	if err != nil {
+		ls.RaiseError("Context error: %v", err)
+	}
+	r := s.checkReference(ls, 1)
 	ud := ls.NewUserData()
-	ud.Value = &reference{ref: ref.ref}
+	ud.Value = &reference{r: r.r}
 	ls.SetMetatable(ud, ls.GetTypeMetatable(luaReferenceName))
 	ls.Push(ud)
 	return 1
 }
 
+func (s *Sandbox) closeReference(ls *lua.LState) int {
+	err := s.ctx.Err()
+	if err != nil {
+		ls.RaiseError("Context error: %v", err)
+	}
+	r := s.checkReference(ls, 1)
+	err = s.rc.Close(s.ctx, r.r)
+	if err != nil {
+		ls.ArgError(1, "reference close failed: "+err.Error())
+	}
+	return 0
+}
+
 func (s *Sandbox) checkReference(ls *lua.LState, i int) *reference {
-	var ref *reference
+	var r *reference
 	switch ls.Get(i).Type() {
 	case lua.LTString:
-		nr, err := types.NewRef(ls.CheckString(i))
+		nr, err := ref.New(ls.CheckString(i))
 		if err != nil {
 			ls.ArgError(i, "reference parsing failed: "+err.Error())
 		}
-		ref = &reference{ref: nr}
+		r = &reference{r: nr}
 	case lua.LTUserData:
 		ud := ls.CheckUserData(i)
 		switch ud.Value.(type) {
 		case *reference:
-			ref = ud.Value.(*reference)
+			r = ud.Value.(*reference)
 		case *sbManifest:
 			m := ud.Value.(*sbManifest)
-			ref = &reference{ref: m.ref}
+			r = &reference{r: m.r}
 		case *config:
 			c := ud.Value.(*config)
-			ref = &reference{ref: c.ref}
+			r = &reference{r: c.r}
 		default:
 			ls.ArgError(i, "reference expected")
 		}
 	default:
 		ls.ArgError(i, "reference expected")
 	}
-	return ref
+	return r
 }
 
-func isReference(ls *lua.LState, i int) bool {
-	if ls.Get(i).Type() != lua.LTUserData {
-		return false
-	}
-	ud := ls.CheckUserData(i)
-	if _, ok := ud.Value.(*reference); ok {
-		return true
-	}
-	return false
-}
+// func isReference(ls *lua.LState, i int) bool {
+// 	if ls.Get(i).Type() != lua.LTUserData {
+// 		return false
+// 	}
+// 	ud := ls.CheckUserData(i)
+// 	if _, ok := ud.Value.(*reference); ok {
+// 		return true
+// 	}
+// 	return false
+// }
 
 // referenceString converts a reference back to a common name
 func (s *Sandbox) referenceString(ls *lua.LState) int {
 	r := s.checkReference(ls, 1)
-	ls.Push(lua.LString(r.ref.CommonName()))
+	ls.Push(lua.LString(r.r.CommonName()))
 	return 1
 }
 
 func (s *Sandbox) referenceGetSetDigest(ls *lua.LState) int {
 	r := s.checkReference(ls, 1)
 	if ls.GetTop() == 2 {
-		r.ref.Digest = ls.CheckString(2)
+		r.r.Digest = ls.CheckString(2)
 		return 0
 	}
-	ls.Push(lua.LString(r.ref.Digest))
+	ls.Push(lua.LString(r.r.Digest))
 	return 1
 }
 
 func (s *Sandbox) referenceGetSetTag(ls *lua.LState) int {
 	r := s.checkReference(ls, 1)
 	if ls.GetTop() == 2 {
-		r.ref.Tag = ls.CheckString(2)
+		r.r.Tag = ls.CheckString(2)
 		return 0
 	}
-	ls.Push(lua.LString(r.ref.Tag))
+	ls.Push(lua.LString(r.r.Tag))
 	return 1
 }
