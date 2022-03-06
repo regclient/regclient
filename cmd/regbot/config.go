@@ -66,6 +66,7 @@ type ConfigDefaults struct {
 	Parallel       int           `yaml:"parallel" json:"parallel"`
 	SkipDockerConf bool          `yaml:"skipDockerConfig" json:"skipDockerConfig"`
 	Timeout        time.Duration `yaml:"timeout" json:"timeout"`
+	UserAgent      string        `yaml:"userAgent" json:"userAgent"`
 }
 
 // ConfigScript defines a source/target repository to sync

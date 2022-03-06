@@ -146,6 +146,8 @@ scripts:
     This timeout is enforced when calling various actions like an image copy.
   - `skipDockerConfig`:
     Do not read the user credentials in `${HOME}/.docker/config.json`.
+  - `userAgent`:
+    Override the user-agent for http requests.
 
 - `scripts`:
   Array of Lua scripts to run.
