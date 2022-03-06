@@ -181,7 +181,7 @@ func TestBlobGet(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed creating ref: %v", err)
 		}
-		br, err := rc.BlobGet(ctx, ref, d1)
+		br, err := rc.BlobGet(ctx, ref, types.Descriptor{Digest: d1})
 		if err != nil {
 			t.Errorf("Failed running BlobGet: %v", err)
 			return
@@ -202,7 +202,7 @@ func TestBlobGet(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed creating ref: %v", err)
 		}
-		br, err := rc.BlobHead(ctx, ref, d1)
+		br, err := rc.BlobHead(ctx, ref, types.Descriptor{Digest: d1})
 		if err != nil {
 			t.Errorf("Failed running BlobHead: %v", err)
 			return
@@ -218,7 +218,7 @@ func TestBlobGet(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed creating ref: %v", err)
 		}
-		br, err := rc.BlobGet(ctx, ref, dMissing)
+		br, err := rc.BlobGet(ctx, ref, types.Descriptor{Digest: dMissing})
 		if err == nil {
 			defer br.Close()
 			t.Errorf("Unexpected success running BlobGet")
@@ -234,7 +234,7 @@ func TestBlobGet(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed creating ref: %v", err)
 		}
-		br, err := rc.BlobGet(ctx, ref, d2)
+		br, err := rc.BlobGet(ctx, ref, types.Descriptor{Digest: d2})
 		if err != nil {
 			t.Errorf("Failed running BlobGet: %v", err)
 			return
@@ -255,7 +255,7 @@ func TestBlobGet(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed creating ref: %v", err)
 		}
-		br, err := rc.BlobGet(ctx, ref, d1)
+		br, err := rc.BlobGet(ctx, ref, types.Descriptor{Digest: d1})
 		if err == nil {
 			defer br.Close()
 			t.Errorf("Unexpected success running BlobGet")
@@ -654,16 +654,16 @@ func TestBlobPut(t *testing.T) {
 			t.Errorf("Failed creating ref: %v", err)
 		}
 		br := bytes.NewReader(blob1)
-		dp, clp, err := rc.BlobPut(ctx, ref, d1, br, int64(len(blob1)))
+		dp, err := rc.BlobPut(ctx, ref, types.Descriptor{Digest: d1, Size: int64(len(blob1))}, br)
 		if err != nil {
 			t.Errorf("Failed running BlobPut: %v", err)
 			return
 		}
-		if dp.String() != d1.String() {
-			t.Errorf("Digest mismatch, expected %s, received %s", d1.String(), dp.String())
+		if dp.Digest.String() != d1.String() {
+			t.Errorf("Digest mismatch, expected %s, received %s", d1.String(), dp.Digest.String())
 		}
-		if clp != int64(len(blob1)) {
-			t.Errorf("Content length mismatch, expected %d, received %d", len(blob1), clp)
+		if dp.Size != int64(len(blob1)) {
+			t.Errorf("Content length mismatch, expected %d, received %d", len(blob1), dp.Size)
 		}
 
 	})
@@ -674,16 +674,16 @@ func TestBlobPut(t *testing.T) {
 			t.Errorf("Failed creating ref: %v", err)
 		}
 		br := bytes.NewReader(blob2)
-		dp, clp, err := rc.BlobPut(ctx, ref, d2, br, int64(len(blob2)))
+		dp, err := rc.BlobPut(ctx, ref, types.Descriptor{Digest: d2, Size: int64(len(blob2))}, br)
 		if err != nil {
 			t.Errorf("Failed running BlobPut: %v", err)
 			return
 		}
-		if dp.String() != d2.String() {
-			t.Errorf("Digest mismatch, expected %s, received %s", d2.String(), dp.String())
+		if dp.Digest.String() != d2.String() {
+			t.Errorf("Digest mismatch, expected %s, received %s", d2.String(), dp.Digest.String())
 		}
-		if clp != int64(len(blob2)) {
-			t.Errorf("Content length mismatch, expected %d, received %d", len(blob2), clp)
+		if dp.Size != int64(len(blob2)) {
+			t.Errorf("Content length mismatch, expected %d, received %d", len(blob2), dp.Size)
 		}
 
 	})
@@ -694,16 +694,16 @@ func TestBlobPut(t *testing.T) {
 			t.Errorf("Failed creating ref: %v", err)
 		}
 		br := bytes.NewReader(blob3)
-		dp, clp, err := rc.BlobPut(ctx, ref, d3, br, int64(len(blob3)))
+		dp, err := rc.BlobPut(ctx, ref, types.Descriptor{Digest: d3, Size: int64(len(blob3))}, br)
 		if err != nil {
 			t.Errorf("Failed running BlobPut: %v", err)
 			return
 		}
-		if dp.String() != d3.String() {
-			t.Errorf("Digest mismatch, expected %s, received %s", d3.String(), dp.String())
+		if dp.Digest.String() != d3.String() {
+			t.Errorf("Digest mismatch, expected %s, received %s", d3.String(), dp.Digest.String())
 		}
-		if clp != int64(len(blob3)) {
-			t.Errorf("Content length mismatch, expected %d, received %d", len(blob3), clp)
+		if dp.Size != int64(len(blob3)) {
+			t.Errorf("Content length mismatch, expected %d, received %d", len(blob3), dp.Size)
 		}
 
 	})

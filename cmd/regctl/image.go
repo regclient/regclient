@@ -255,7 +255,7 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	blobConfig, err := rc.BlobGetOCIConfig(ctx, r, cd.Digest)
+	blobConfig, err := rc.BlobGetOCIConfig(ctx, r, cd)
 	if err != nil {
 		return err
 	}

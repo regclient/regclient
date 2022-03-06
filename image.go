@@ -212,13 +212,13 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					types.MediaTypeDocker2Layer, types.MediaTypeOCI1Layer, types.MediaTypeOCI1LayerGzip,
 					types.MediaTypeBuildkitCacheConfig:
 					// known blob media type
-					err = rc.BlobCopy(ctx, entrySrc, entryTgt, entry.Digest)
+					err = rc.BlobCopy(ctx, entrySrc, entryTgt, entry)
 				default:
 					// unknown media type, first try an image copy
 					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, true, opt)
 					if err != nil {
 						// fall back to trying to copy a blob
-						err = rc.BlobCopy(ctx, entrySrc, entryTgt, entry.Digest)
+						err = rc.BlobCopy(ctx, entrySrc, entryTgt, entry)
 					}
 				}
 				if err != nil {
@@ -244,7 +244,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					"target": refTgt.Reference,
 					"digest": cd.Digest.String(),
 				}).Info("Copy config")
-				if err := rc.BlobCopy(ctx, refSrc, refTgt, cd.Digest); err != nil {
+				if err := rc.BlobCopy(ctx, refSrc, refTgt, cd); err != nil {
 					rc.log.WithFields(logrus.Fields{
 						"source": refSrc.Reference,
 						"target": refTgt.Reference,
@@ -276,7 +276,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					"target": refTgt.Reference,
 					"layer":  layerSrc.Digest.String(),
 				}).Info("Copy layer")
-				if err := rc.BlobCopy(ctx, refSrc, refTgt, layerSrc.Digest); err != nil {
+				if err := rc.BlobCopy(ctx, refSrc, refTgt, layerSrc); err != nil {
 					rc.log.WithFields(logrus.Fields{
 						"source": refSrc.Reference,
 						"target": refTgt.Reference,
@@ -541,7 +541,7 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 
 	default:
 		// get blob
-		blobR, err := rc.BlobGet(ctx, ref, desc.Digest)
+		blobR, err := rc.BlobGet(ctx, ref, desc)
 		if err != nil {
 			return err
 		}
@@ -612,12 +612,12 @@ func (rc *RegClient) ImageImport(ctx context.Context, ref ref.Ref, rs io.ReadSee
 
 func (rc *RegClient) imageImportBlob(ctx context.Context, ref ref.Ref, desc types.Descriptor, trd *tarReadData) error {
 	// skip if blob already exists
-	_, err := rc.BlobHead(ctx, ref, desc.Digest)
+	_, err := rc.BlobHead(ctx, ref, desc)
 	if err == nil {
 		return nil
 	}
 	// upload blob
-	_, _, err = rc.BlobPut(ctx, ref, desc.Digest, trd.tr, desc.Size)
+	_, err = rc.BlobPut(ctx, ref, desc, trd.tr)
 	if err != nil {
 		return err
 	}
@@ -650,19 +650,16 @@ func (rc *RegClient) imageImportDockerAddLayerHandlers(ctx context.Context, ref 
 	// add handler for config
 	trd.handlers[trd.dockerManifestList[0].Config] = func(header *tar.Header, trd *tarReadData) error {
 		// upload blob, digest is unknown
-		d, size, err := rc.BlobPut(ctx, ref, "", trd.tr, header.Size)
+		d, err := rc.BlobPut(ctx, ref, types.Descriptor{Size: header.Size}, trd.tr)
 		if err != nil {
 			return err
 		}
 		// save the resulting descriptor to the manifest
-		if od, ok := trd.dockerManifestList[0].LayerSources[d]; ok {
+		if od, ok := trd.dockerManifestList[0].LayerSources[d.Digest]; ok {
 			trd.dockerManifest.Config = od
 		} else {
-			trd.dockerManifest.Config = types.Descriptor{
-				Digest:    d,
-				Size:      size,
-				MediaType: types.MediaTypeDocker2ImageConfig,
-			}
+			d.MediaType = types.MediaTypeDocker2ImageConfig
+			trd.dockerManifest.Config = d
 		}
 		return nil
 	}
@@ -676,19 +673,16 @@ func (rc *RegClient) imageImportDockerAddLayerHandlers(ctx context.Context, ref 
 					return err
 				}
 				// upload blob, digest and size is unknown
-				d, size, err := rc.BlobPut(ctx, ref, "", gzipR, 0)
+				d, err := rc.BlobPut(ctx, ref, types.Descriptor{}, gzipR)
 				if err != nil {
 					return err
 				}
 				// save the resulting descriptor in the appropriate layer
-				if od, ok := trd.dockerManifestList[0].LayerSources[d]; ok {
+				if od, ok := trd.dockerManifestList[0].LayerSources[d.Digest]; ok {
 					trd.dockerManifest.Layers[i] = od
 				} else {
-					trd.dockerManifest.Layers[i] = types.Descriptor{
-						MediaType: types.MediaTypeDocker2Layer,
-						Size:      size,
-						Digest:    d,
-					}
+					d.MediaType = types.MediaTypeDocker2Layer
+					trd.dockerManifest.Layers[i] = d
 				}
 				return nil
 			}

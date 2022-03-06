@@ -89,7 +89,7 @@ func (s *Sandbox) configGet(ls *lua.LState) int {
 		ls.RaiseError("Failed looking up \"%s\" config digest: %v", m.r.CommonName(), err)
 	}
 
-	confBlob, err := s.rc.BlobGetOCIConfig(s.ctx, m.r, confDesc.Digest)
+	confBlob, err := s.rc.BlobGetOCIConfig(s.ctx, m.r, confDesc)
 	if err != nil {
 		ls.RaiseError("Failed retrieving \"%s\" config: %v", m.r.CommonName(), err)
 	}
