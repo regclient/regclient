@@ -172,6 +172,8 @@ sync:
     Defaults to: `["application/vnd.docker.distribution.manifest.v2+json", "application/vnd.docker.distribution.manifest.list.v2+json", "application/vnd.oci.image.manifest.v1+json", "application/vnd.oci.image.index.v1+json"]`
   - `skipDockerConfig`:
     Do not read the user credentials in `${HOME}/.docker/config.json`.
+  - `userAgent`:
+    Override the user-agent for http requests.
 
 - `sync`:
   Array of steps to run for copying images from the source to target repository.

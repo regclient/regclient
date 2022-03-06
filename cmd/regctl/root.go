@@ -52,6 +52,7 @@ var rootOpts struct {
 	verbosity string
 	logopts   []string
 	format    string // for Go template formatting of various commands
+	userAgent string
 }
 
 func init() {
@@ -65,6 +66,8 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.WarnLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
 	rootCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
+	rootCmd.PersistentFlags().StringVarP(&rootOpts.userAgent, "user-agent", "", "", "Override user agent")
+
 	rootCmd.RegisterFlagCompletionFunc("verbosity", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"debug", "info", "warn", "error", "fatal", "panic"}, cobra.ShellCompDirectiveNoFileComp
 	})
@@ -113,7 +116,9 @@ func newRegClient() *regclient.RegClient {
 	rcOpts := []regclient.Opt{
 		regclient.WithLog(log),
 	}
-	if VCSTag != "" {
+	if rootOpts.userAgent != "" {
+		rcOpts = append(rcOpts, regclient.WithUserAgent(rootOpts.userAgent))
+	} else if VCSTag != "" {
 		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+VCSTag+")"))
 	} else if VCSRef != "" {
 		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+VCSRef+")"))

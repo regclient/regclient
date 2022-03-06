@@ -85,6 +85,7 @@ type ConfigDefaults struct {
 	MediaTypes     []string        `yaml:"mediaTypes" json:"mediaTypes"`
 	SkipDockerConf bool            `yaml:"skipDockerConfig" json:"skipDockerConfig"`
 	Hooks          ConfigHooks     `yaml:"hooks" json:"hooks"`
+	UserAgent      string          `yaml:"userAgent" json:"userAgent"`
 }
 
 // ConfigRateLimit is for rate limit settings
