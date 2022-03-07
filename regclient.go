@@ -10,9 +10,6 @@ import (
 	"strings"
 	"time"
 
-	// crypto libraries included for go-digest
-	_ "crypto/sha256"
-	_ "crypto/sha512"
 	"fmt"
 	"os"
 

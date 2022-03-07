@@ -3,6 +3,10 @@ package blob
 import (
 	"net/http"
 
+	// crypto libraries included for go-digest
+	_ "crypto/sha256"
+	_ "crypto/sha512"
+
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/ref"

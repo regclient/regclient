@@ -5,6 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
+	// crypto libraries included for go-digest
+	_ "crypto/sha256"
+	_ "crypto/sha512"
+
 	digest "github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/internal/wraperr"
 	"github.com/regclient/regclient/types"

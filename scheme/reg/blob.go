@@ -9,6 +9,10 @@ import (
 	"net/http"
 	"net/url"
 
+	// crypto libraries included for go-digest
+	_ "crypto/sha256"
+	_ "crypto/sha512"
+
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/internal/reghttp"
 	"github.com/regclient/regclient/types"
