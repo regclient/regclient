@@ -1,6 +1,7 @@
 package regclient
 
 import (
+	"bytes"
 	"context"
 	"io"
 
@@ -83,6 +84,10 @@ func (rc *RegClient) BlobDelete(ctx context.Context, r ref.Ref, d types.Descript
 
 // BlobGet retrieves a blob, returning a reader
 func (rc *RegClient) BlobGet(ctx context.Context, r ref.Ref, d types.Descriptor) (blob.Reader, error) {
+	data, err := d.GetData()
+	if err == nil {
+		return blob.NewReader(blob.WithDesc(d), blob.WithRef(r), blob.WithReader(bytes.NewReader(data))), nil
+	}
 	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
 		return nil, err

@@ -3,6 +3,7 @@ package regclient
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -32,7 +33,8 @@ func TestBlobGet(t *testing.T) {
 	blobLen := 1024 // must be greater than 512 for retry test
 	d1, blob1 := reqresp.NewRandomBlob(blobLen, seed)
 	d2, blob2 := reqresp.NewRandomBlob(blobLen, seed+1)
-	dMissing := digest.FromBytes([]byte("missing"))
+	bMissing := []byte("missing")
+	dMissing := digest.FromBytes(bMissing)
 	// define req/resp entries
 	rrs := []reqresp.ReqResp{
 		// head
@@ -181,7 +183,34 @@ func TestBlobGet(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed creating ref: %v", err)
 		}
-		br, err := rc.BlobGet(ctx, ref, types.Descriptor{Digest: d1})
+		br, err := rc.BlobGet(ctx, ref, types.Descriptor{Digest: d1, Size: int64(len(blob1))})
+		if err != nil {
+			t.Errorf("Failed running BlobGet: %v", err)
+			return
+		}
+		defer br.Close()
+		brBlob, err := ioutil.ReadAll(br)
+		if err != nil {
+			t.Errorf("Failed reading blob: %v", err)
+			return
+		}
+		if !bytes.Equal(blob1, brBlob) {
+			t.Errorf("Blob does not match")
+		}
+	})
+
+	// Test data
+	t.Run("Data", func(t *testing.T) {
+		ref, err := ref.New(tsURL.Host + blobRepo + "/data")
+		if err != nil {
+			t.Errorf("Failed creating ref: %v", err)
+		}
+		desc := types.Descriptor{
+			Digest: d1,
+			Size:   int64(len(blob1)),
+			Data:   []byte(base64.StdEncoding.EncodeToString(blob1)),
+		}
+		br, err := rc.BlobGet(ctx, ref, desc)
 		if err != nil {
 			t.Errorf("Failed running BlobGet: %v", err)
 			return
