@@ -12,6 +12,10 @@ import (
 	"strings"
 	"time"
 
+	// crypto libraries included for go-digest
+	_ "crypto/sha256"
+	_ "crypto/sha512"
+
 	digest "github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/pkg/archive"
 	"github.com/regclient/regclient/scheme"
@@ -76,7 +80,7 @@ type imageOpt struct {
 // ImageOpts define options for the Image* commands
 type ImageOpts func(*imageOpt)
 
-// ImageWithForceRecursive attemtps to copy every manifest and blob even if parent manifests already exist.
+// ImageWithForceRecursive attempts to copy every manifest and blob even if parent manifests already exist.
 func ImageWithForceRecursive() ImageOpts {
 	return func(opts *imageOpt) {
 		opts.forceRecursive = true
@@ -109,10 +113,10 @@ func (rc *RegClient) ImageCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.R
 	for _, optFn := range opts {
 		optFn(&opt)
 	}
-	return rc.imageCopyOpt(ctx, refSrc, refTgt, false, &opt)
+	return rc.imageCopyOpt(ctx, refSrc, refTgt, types.Descriptor{}, false, &opt)
 }
 
-func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, child bool, opt *imageOpt) error {
+func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor, child bool, opt *imageOpt) error {
 	mOpts := []scheme.ManifestOpts{}
 	if child {
 		mOpts = append(mOpts, scheme.WithManifestChild())
@@ -149,7 +153,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 	}
 
 	// get the manifest for the source
-	m, err := rc.ManifestGet(ctx, refSrc)
+	m, err := rc.ManifestGet(ctx, refSrc, ManifestWithDesc(d))
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"ref": refSrc.Reference,
@@ -207,7 +211,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					types.MediaTypeDocker2Manifest, types.MediaTypeDocker2ManifestList,
 					types.MediaTypeOCI1Manifest, types.MediaTypeOCI1ManifestList:
 					// known manifest media type
-					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, true, opt)
+					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, entry, true, opt)
 				case types.MediaTypeDocker2ImageConfig, types.MediaTypeOCI1ImageConfig,
 					types.MediaTypeDocker2Layer, types.MediaTypeOCI1Layer, types.MediaTypeOCI1LayerGzip,
 					types.MediaTypeBuildkitCacheConfig:
@@ -215,7 +219,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					err = rc.BlobCopy(ctx, entrySrc, entryTgt, entry)
 				default:
 					// unknown media type, first try an image copy
-					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, true, opt)
+					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, entry, true, opt)
 					if err != nil {
 						// fall back to trying to copy a blob
 						err = rc.BlobCopy(ctx, entrySrc, entryTgt, entry)
@@ -331,7 +335,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 				refTagTgt := refTgt
 				refTagTgt.Tag = tag
 				refTagTgt.Digest = ""
-				err = rc.imageCopyOpt(ctx, refTagSrc, refTagTgt, false, opt)
+				err = rc.imageCopyOpt(ctx, refTagSrc, refTagTgt, types.Descriptor{}, false, opt)
 				if err != nil {
 					rc.log.WithFields(logrus.Fields{
 						"tag": tag,
@@ -457,9 +461,7 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 	case types.MediaTypeDocker1Manifest, types.MediaTypeDocker1ManifestSigned, types.MediaTypeDocker2Manifest, types.MediaTypeOCI1Manifest:
 		// Handle single platform manifests
 		// retrieve manifest
-		mRef := ref
-		mRef.Digest = desc.Digest.String()
-		m, err := rc.ManifestGet(ctx, mRef)
+		m, err := rc.ManifestGet(ctx, ref, ManifestWithDesc(desc))
 		if err != nil {
 			return err
 		}
@@ -508,9 +510,7 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 	case types.MediaTypeDocker2ManifestList, types.MediaTypeOCI1ManifestList:
 		// handle OCI index and Docker manifest list
 		// retrieve manifest
-		mRef := ref
-		mRef.Digest = desc.Digest.String()
-		m, err := rc.ManifestGet(ctx, mRef)
+		m, err := rc.ManifestGet(ctx, ref, ManifestWithDesc(desc))
 		if err != nil {
 			return err
 		}

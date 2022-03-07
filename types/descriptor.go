@@ -1,9 +1,14 @@
 package types
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"text/tabwriter"
+
+	// crypto libraries included for go-digest
+	_ "crypto/sha256"
+	_ "crypto/sha512"
 
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/internal/units"
@@ -27,9 +32,39 @@ type Descriptor struct {
 	// Annotations contains arbitrary metadata relating to the targeted content.
 	Annotations map[string]string `json:"annotations,omitempty"`
 
+	// Data is an embedding of the targeted content. This is encoded as a base64
+	// string when marshalled to JSON (automatically, by encoding/json). If
+	// present, Data can be used directly to avoid fetching the targeted content.
+	Data []byte `json:"data,omitempty"`
+
 	// Platform describes the platform which the image in the manifest runs on.
 	// This should only be used when referring to a manifest.
 	Platform *platform.Platform `json:"platform,omitempty"`
+}
+
+var emptyDigest = digest.FromBytes([]byte{})
+
+// GetData decodes the Data field from the descriptor if available
+func (d Descriptor) GetData() ([]byte, error) {
+	if len(d.Data) == 0 && d.Digest != emptyDigest {
+		return nil, ErrParsingFailed
+	}
+	// base64 decode data field
+	dBytes, err := base64.StdEncoding.DecodeString(string(d.Data))
+	if err != nil {
+		return nil, ErrParsingFailed
+	}
+	// verify length
+	if int64(len(dBytes)) != d.Size {
+		return nil, ErrParsingFailed
+	}
+	// generate and verify digest
+	dDig := digest.FromBytes(dBytes)
+	if d.Digest != dDig {
+		return nil, ErrParsingFailed
+	}
+	// return data
+	return dBytes, nil
 }
 
 func (d Descriptor) MarshalPrettyTW(tw *tabwriter.Writer, prefix string) error {

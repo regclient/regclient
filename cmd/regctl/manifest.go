@@ -122,8 +122,7 @@ func getManifest(ctx context.Context, rc *regclient.RegClient, r ref.Ref) (manif
 		if err != nil {
 			return m, fmt.Errorf("failed to lookup platform specific digest: %w", err)
 		}
-		r.Digest = desc.Digest.String()
-		m, err = rc.ManifestGet(ctx, r)
+		m, err = rc.ManifestGet(ctx, r, regclient.ManifestWithDesc(*desc))
 		if err != nil {
 			return m, fmt.Errorf("failed to pull platform specific digest: %w", err)
 		}
