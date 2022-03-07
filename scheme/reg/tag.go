@@ -135,7 +135,7 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 	}).Debug("Sending dummy manifest to replace tag")
 
 	// push config
-	_, _, err = reg.BlobPut(ctx, r, confDigest, bytes.NewReader(confB), int64(len(confB)))
+	_, err = reg.BlobPut(ctx, r, types.Descriptor{Digest: confDigest, Size: int64(len(confB))}, bytes.NewReader(confB))
 	if err != nil {
 		return fmt.Errorf("failed sending dummy config to delete %s: %w", r.CommonName(), err)
 	}

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/opencontainers/go-digest"
+	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/sirupsen/logrus"
@@ -107,7 +108,7 @@ func (s *Sandbox) blobGet(ls *lua.LState) int {
 		"ref":    r.r.CommonName(),
 		"digest": d,
 	}).Debug("Retrieve blob")
-	b, err := s.rc.BlobGet(s.ctx, r.r, digest.Digest(d))
+	b, err := s.rc.BlobGet(s.ctx, r.r, types.Descriptor{Digest: digest.Digest(d)})
 	if err != nil {
 		ls.RaiseError("Failed retrieving \"%s\" blob \"%s\": %v", r.r.CommonName(), d, err)
 	}
@@ -135,7 +136,7 @@ func (s *Sandbox) blobHead(ls *lua.LState) int {
 		"ref":    r.r.CommonName(),
 		"digest": d,
 	}).Debug("Retrieve blob")
-	b, err := s.rc.BlobHead(s.ctx, r.r, digest.Digest(d))
+	b, err := s.rc.BlobHead(s.ctx, r.r, types.Descriptor{Digest: digest.Digest(d)})
 	if err != nil {
 		ls.RaiseError("Failed retrieving \"%s\" blob \"%s\": %v", r.r.CommonName(), d, err)
 	}
@@ -186,13 +187,13 @@ func (s *Sandbox) blobPut(ls *lua.LState) int {
 		ls.ArgError(2, "blob content expected")
 	}
 
-	d, size, err := s.rc.BlobPut(s.ctx, r.r, d, rdr, 0)
+	dOut, err := s.rc.BlobPut(s.ctx, r.r, types.Descriptor{Digest: d}, rdr)
 	if err != nil {
 		ls.RaiseError("Failed to put blob: %v", err)
 	}
 
-	ls.Push(lua.LString(d.String()))
-	ls.Push(lua.LNumber(size))
+	ls.Push(lua.LString(dOut.Digest.String()))
+	ls.Push(lua.LNumber(dOut.Size))
 
 	return 2
 }

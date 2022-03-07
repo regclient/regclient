@@ -54,7 +54,7 @@ func TestBlob(t *testing.T) {
 		return
 	}
 	// blob head
-	bh, err := o.BlobHead(ctx, r, cd.Digest)
+	bh, err := o.BlobHead(ctx, r, cd)
 	if err != nil {
 		t.Errorf("blob head: %v", err)
 		return
@@ -64,7 +64,7 @@ func TestBlob(t *testing.T) {
 		t.Errorf("blob head close: %v", err)
 	}
 	// blob get
-	bg, err := o.BlobGet(ctx, r, cd.Digest)
+	bg, err := o.BlobGet(ctx, r, cd)
 	if err != nil {
 		t.Errorf("blob get: %v", err)
 		return
@@ -90,7 +90,7 @@ func TestBlob(t *testing.T) {
 	}
 
 	// toOCIConfig
-	bg, err = o.BlobGet(ctx, r, cd.Digest)
+	bg, err = o.BlobGet(ctx, r, cd)
 	if err != nil {
 		t.Errorf("blob get 2: %v", err)
 		return
@@ -107,16 +107,16 @@ func TestBlob(t *testing.T) {
 	fm := rwfs.MemNew()
 	om := New(WithFS(fm))
 	bRdr := bytes.NewReader(bBytes)
-	bpd, bpl, err := om.BlobPut(ctx, r, cd.Digest, bRdr, int64(len(bBytes)))
+	bpd, err := om.BlobPut(ctx, r, cd, bRdr)
 	if err != nil {
 		t.Errorf("blob put: %v", err)
 		return
 	}
-	if bpl != int64(len(bBytes)) {
-		t.Errorf("blob put length, expected %d, received %d", len(bBytes), bpl)
+	if bpd.Size != int64(len(bBytes)) {
+		t.Errorf("blob put length, expected %d, received %d", len(bBytes), bpd.Size)
 	}
-	if bpd != cd.Digest {
-		t.Errorf("blob put digest, expected %s, received %s", cd.Digest, bpd)
+	if bpd.Digest != cd.Digest {
+		t.Errorf("blob put digest, expected %s, received %s", cd.Digest, bpd.Digest)
 	}
 	fd, err := fm.Open(fmt.Sprintf("testdata/regctl/blobs/%s/%s", cd.Digest.Algorithm().String(), cd.Digest.Encoded()))
 	if err != nil {
