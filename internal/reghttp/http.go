@@ -19,6 +19,10 @@ import (
 	"sync"
 	"time"
 
+	// crypto libraries included for go-digest
+	_ "crypto/sha256"
+	_ "crypto/sha512"
+
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/auth"
