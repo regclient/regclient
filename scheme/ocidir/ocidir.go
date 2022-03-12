@@ -186,26 +186,68 @@ func indexCreate() v1.Index {
 	return i
 }
 
-func indexRefLookup(index v1.Index, r ref.Ref) (int, error) {
-	// make 2 passes, first for the tag, and second for the digest without a tag
-	// one digest could be tagged multiple times in the index
-	if r.Tag != "" {
-		for i, im := range index.Manifests {
-			if name, ok := im.Annotations[aRefName]; ok && name == r.Tag {
-				return i, nil
-			}
-		}
+func indexGet(index v1.Index, r ref.Ref) (types.Descriptor, error) {
+	if r.Digest == "" && r.Tag == "" {
+		r.Tag = "latest"
 	}
 	if r.Digest != "" {
-		for i, im := range index.Manifests {
-			if _, ok := im.Annotations[aRefName]; !ok && im.Digest.String() == r.Digest {
-				return i, nil
+		for _, im := range index.Manifests {
+			if im.Digest.String() == r.Digest {
+				return im, nil
+			}
+		}
+	} else if r.Tag != "" {
+		for _, im := range index.Manifests {
+			if name, ok := im.Annotations[aRefName]; ok && name == r.Tag {
+				return im, nil
 			}
 		}
 	}
-	return 0, types.ErrNotFound
+	return types.Descriptor{}, types.ErrNotFound
 }
 
-// func (*OCIDir) readDesc (ref, digest) (readcloser, error)
-// func (*OCIDir) createDesc (ref, digest) (writecloser, error)
-// func (*OCIDir) writeDesc (ref, digest, []byte) (error)
+func indexSet(index *v1.Index, r ref.Ref, d types.Descriptor) error {
+	if index == nil {
+		return fmt.Errorf("index is nil")
+	}
+	if r.Tag != "" {
+		if d.Annotations == nil {
+			d.Annotations = map[string]string{}
+		}
+		d.Annotations[aRefName] = r.Tag
+	}
+	if index.Manifests == nil {
+		index.Manifests = []types.Descriptor{}
+	}
+	pos := -1
+	// search for existing
+	for i := range index.Manifests {
+		var name string
+		var ok bool
+		if r.Tag != "" && index.Manifests[i].Annotations != nil {
+			name, ok = index.Manifests[i].Annotations[aRefName]
+		}
+		if (index.Manifests[i].Digest == d.Digest && !ok) || (ok && name == r.Tag) {
+			index.Manifests[i] = d
+			pos = i
+			break
+		}
+	}
+	if pos >= 0 {
+		// existing entry was replaced, remove any dup entries
+		for i := len(index.Manifests) - 1; i > pos; i-- {
+			var name string
+			var ok bool
+			if r.Tag != "" && index.Manifests[i].Annotations != nil {
+				name, ok = index.Manifests[i].Annotations[aRefName]
+			}
+			if (index.Manifests[i].Digest == d.Digest && !ok) || (ok && name == r.Tag) {
+				index.Manifests = append(index.Manifests[:i], index.Manifests[i+1:]...)
+			}
+		}
+	} else {
+		// existing entry to replace was not found, add the descriptor
+		index.Manifests = append(index.Manifests, d)
+	}
+	return nil
+}

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/regclient/regclient/internal/rwfs"
+	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -130,4 +131,31 @@ func TestBlob(t *testing.T) {
 	if !bytes.Equal(fBytes, bBytes) {
 		t.Errorf("blob put bytes, expected %s, saw %s", string(bBytes), string(fBytes))
 	}
+
+	// put the blob again, but without the descriptor
+	bRdr = bytes.NewReader(bBytes)
+	bpd, err = om.BlobPut(ctx, r, types.Descriptor{}, bRdr)
+	if err != nil {
+		t.Errorf("blob put: %v", err)
+		return
+	}
+	if bpd.Size != int64(len(bBytes)) {
+		t.Errorf("blob put length, expected %d, received %d", len(bBytes), bpd.Size)
+	}
+	if bpd.Digest != cd.Digest {
+		t.Errorf("blob put digest, expected %s, received %s", cd.Digest, bpd.Digest)
+	}
+	fd, err = fm.Open(fmt.Sprintf("testdata/regctl/blobs/%s/%s", cd.Digest.Algorithm().String(), cd.Digest.Encoded()))
+	if err != nil {
+		t.Errorf("blob put open file: %v", err)
+	}
+	defer fd.Close()
+	fBytes, err = io.ReadAll(fd)
+	if err != nil {
+		t.Errorf("blob put readall: %v", err)
+	}
+	if !bytes.Equal(fBytes, bBytes) {
+		t.Errorf("blob put bytes, expected %s, saw %s", string(bBytes), string(fBytes))
+	}
+
 }
