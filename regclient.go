@@ -51,9 +51,8 @@ func init() {
 
 // RegClient is used to access OCI distribution-spec registries
 type RegClient struct {
-	certPaths []string
-	hosts     map[string]*config.Host
-	log       *logrus.Logger
+	hosts map[string]*config.Host
+	log   *logrus.Logger
 	// mu        sync.Mutex
 	regOpts   []reg.Opts
 	schemes   map[string]scheme.API
@@ -67,7 +66,6 @@ type Opt func(*RegClient)
 // New returns a registry client
 func New(opts ...Opt) *RegClient {
 	var rc = RegClient{
-		certPaths: []string{},
 		hosts:     map[string]*config.Host{},
 		userAgent: DefaultUserAgent,
 		// logging is disabled by default
@@ -94,9 +92,6 @@ func New(opts ...Opt) *RegClient {
 	}
 
 	// configure regOpts
-	if len(rc.certPaths) > 0 {
-		rc.regOpts = append(rc.regOpts, reg.WithCertFiles(rc.certPaths))
-	}
 	hostList := []*config.Host{}
 	for _, h := range rc.hosts {
 		hostList = append(hostList, h)
@@ -128,9 +123,7 @@ func WithCertDir(path ...string) Opt {
 
 // WithDockerCerts adds certificates trusted by docker in /etc/docker/certs.d
 func WithDockerCerts() Opt {
-	return func(rc *RegClient) {
-		rc.certPaths = append(rc.certPaths, DockerCertDir)
-	}
+	return WithCertDir(DockerCertDir)
 }
 
 // WithDockerCreds adds configuration from users docker config with registry logins
