@@ -56,6 +56,7 @@ type clientHost struct {
 	backoffCur   int
 	backoffUntil time.Time
 	config       *config.Host
+	httpClient   *http.Client
 	auth         map[string]auth.Auth
 	newAuth      func() auth.Auth
 	mu           sync.Mutex
@@ -399,7 +400,10 @@ func (resp *clientResp) Next() error {
 
 			// update http client for insecure requests and root certs
 			httpClient := *c.httpClient
-			if h.config.TLS == config.TLSInsecure || len(c.rootCAPool) > 0 || len(c.rootCADirs) > 0 || h.config.RegCert != "" {
+			if h.httpClient != nil {
+				// if we have previously setup a http client for this host, reuse it
+				httpClient = *h.httpClient
+			} else if h.config.TLS == config.TLSInsecure || len(c.rootCAPool) > 0 || len(c.rootCADirs) > 0 || h.config.RegCert != "" {
 				if httpClient.Transport == nil {
 					httpClient.Transport = &http.Transport{}
 				}
@@ -426,6 +430,8 @@ func (resp *clientResp) Next() error {
 					t.TLSClientConfig = tlsc
 					httpClient.Transport = t
 				}
+				// cache the resulting client
+				h.httpClient = &httpClient
 			}
 
 			// send request
