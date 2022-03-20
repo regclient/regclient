@@ -1,7 +1,9 @@
 package regclient
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -50,6 +52,7 @@ func TestManifest(t *testing.T) {
 	}
 	mDigest := digest.FromBytes(mBody)
 	mLen := len(mBody)
+	missingDigest := digest.FromString("missing descriptor")
 	ctx := context.Background()
 	rrs := []reqresp.ReqResp{
 		{
@@ -57,6 +60,22 @@ func TestManifest(t *testing.T) {
 				Name:   "Get",
 				Method: "GET",
 				Path:   "/v2" + repoPath + "/manifests/" + getTag,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", mLen)},
+					"Content-Type":          []string{types.MediaTypeDocker2Manifest},
+					"Docker-Content-Digest": []string{mDigest.String()},
+				},
+				Body: mBody,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "Digest",
+				Method: "GET",
+				Path:   "/v2" + repoPath + "/manifests/" + mDigest.String(),
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusOK,
@@ -104,6 +123,16 @@ func TestManifest(t *testing.T) {
 				Name:   "Missing",
 				Method: "GET",
 				Path:   "/v2" + repoPath + "/manifests/" + missingTag,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusNotFound,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "Missing",
+				Method: "GET",
+				Path:   "/v2" + repoPath + "/manifests/" + missingDigest.String(),
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusNotFound,
@@ -224,4 +253,79 @@ func TestManifest(t *testing.T) {
 			return
 		}
 	})
+	t.Run("Data", func(t *testing.T) {
+		dataRef, err := ref.New(tsURL.Host + repoPath + ":data")
+		if err != nil {
+			t.Errorf("Failed creating getRef: %v", err)
+		}
+		d := types.Descriptor{
+			MediaType: types.MediaTypeDocker2Manifest,
+			Size:      int64(mLen),
+			Digest:    mDigest,
+			Data:      []byte(base64.StdEncoding.EncodeToString(mBody)),
+		}
+		mGet, err := rc.ManifestGet(ctx, dataRef, ManifestWithDesc(d))
+		if err != nil {
+			t.Errorf("failed running ManifestGet: %v", err)
+		}
+		mBodyOut, err := mGet.RawBody()
+		if err != nil {
+			t.Errorf("failed running RawBody: %v", err)
+		}
+		if !bytes.Equal(mBody, mBodyOut) {
+			t.Errorf("manifest body mismatch: expected %s, received %s", string(mBody), string(mBodyOut))
+		}
+	})
+	t.Run("Data fallback", func(t *testing.T) {
+		getRef, err := ref.New(tsURL.Host + repoPath + ":" + getTag)
+		if err != nil {
+			t.Errorf("Failed creating getRef: %v", err)
+		}
+		d := types.Descriptor{
+			MediaType: types.MediaTypeDocker2Manifest,
+			Size:      int64(mLen),
+			Digest:    mDigest,
+			Data:      []byte(base64.StdEncoding.EncodeToString([]byte("invalid data"))),
+		}
+		_, err = rc.ManifestGet(ctx, getRef, ManifestWithDesc(d))
+		if err != nil {
+			t.Errorf("Failed running ManifestGet: %v", err)
+			return
+		}
+	})
+	t.Run("Bad Data and Found Digest", func(t *testing.T) {
+		missingRef, err := ref.New("missing." + tsURL.Host + repoPath + ":" + missingTag)
+		if err != nil {
+			t.Errorf("Failed creating missingRef: %v", err)
+		}
+		d := types.Descriptor{
+			MediaType: types.MediaTypeDocker2Manifest,
+			Size:      int64(mLen),
+			Digest:    mDigest,
+			Data:      []byte(base64.StdEncoding.EncodeToString([]byte("invalid data"))),
+		}
+		_, err = rc.ManifestGet(ctx, missingRef, ManifestWithDesc(d))
+		if err != nil {
+			t.Errorf("get with descriptor failed, didn't fall back to digest")
+			return
+		}
+	})
+	t.Run("Bad Data and Missing Digest", func(t *testing.T) {
+		missingRef, err := ref.New("missing." + tsURL.Host + repoPath + ":" + missingTag)
+		if err != nil {
+			t.Errorf("Failed creating missingRef: %v", err)
+		}
+		d := types.Descriptor{
+			MediaType: types.MediaTypeDocker2Manifest,
+			Size:      int64(mLen),
+			Digest:    missingDigest,
+			Data:      []byte(base64.StdEncoding.EncodeToString([]byte("invalid data"))),
+		}
+		_, err = rc.ManifestGet(ctx, missingRef, ManifestWithDesc(d))
+		if err == nil {
+			t.Errorf("Success running ManifestGet on missing ref")
+			return
+		}
+	})
+
 }

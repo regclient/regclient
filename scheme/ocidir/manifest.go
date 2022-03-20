@@ -8,6 +8,10 @@ import (
 	"io/fs"
 	"path"
 
+	// crypto libraries included for go-digest
+	_ "crypto/sha256"
+	_ "crypto/sha512"
+
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/internal/wraperr"
@@ -25,20 +29,24 @@ func (o *OCIDir) ManifestDelete(ctx context.Context, r ref.Ref) error {
 	}
 
 	// get index
+	changed := false
 	index, err := o.readIndex(r)
 	if err != nil {
 		return fmt.Errorf("failed to read index: %w", err)
 	}
-	for i, desc := range index.Manifests {
+	for i := len(index.Manifests) - 1; i >= 0; i-- {
 		// remove matching entry from index
-		if r.Digest != "" && desc.Digest.String() == r.Digest {
+		if r.Digest != "" && index.Manifests[i].Digest.String() == r.Digest {
+			changed = true
 			index.Manifests = append(index.Manifests[:i], index.Manifests[i+1:]...)
 		}
 	}
 	// push manifest back out
-	err = o.writeIndex(r, index)
-	if err != nil {
-		return fmt.Errorf("failed to write index: %w", err)
+	if changed {
+		err = o.writeIndex(r, index)
+		if err != nil {
+			return fmt.Errorf("failed to write index: %w", err)
+		}
 	}
 
 	// delete from filesystem like a registry would do
@@ -61,15 +69,13 @@ func (o *OCIDir) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest,
 	if r.Digest == "" && r.Tag == "" {
 		r.Tag = "latest"
 	}
-	desc := types.Descriptor{}
-	if r.Digest != "" {
-		desc.Digest = digest.Digest(r.Digest)
-	} else {
-		i, err := indexRefLookup(index, r)
-		if err != nil {
+	desc, err := indexGet(index, r)
+	if err != nil {
+		if r.Digest != "" {
+			desc.Digest = digest.Digest(r.Digest)
+		} else {
 			return nil, err
 		}
-		desc = index.Manifests[i]
 	}
 	if desc.Digest == "" {
 		return nil, types.ErrNotFound
@@ -172,11 +178,9 @@ func (o *OCIDir) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 	}
 	// replace existing tag or create a new entry
 	if !config.Child {
-		i, err := indexRefLookup(index, r)
-		if err == nil {
-			index.Manifests[i] = desc
-		} else {
-			index.Manifests = append(index.Manifests, desc)
+		err := indexSet(&index, r, desc)
+		if err != nil {
+			return fmt.Errorf("failed to update index: %w", err)
 		}
 		err = o.writeIndex(r, index)
 		if err != nil {

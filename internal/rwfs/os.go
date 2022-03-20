@@ -116,13 +116,6 @@ func (o *OSFS) join(op, name string) (string, error) {
 		}
 		return ".", nil
 	}
-	if (name[:1] == "/" && !fs.ValidPath(name[1:])) || (name[:1] != "/" && !fs.ValidPath(name)) {
-		return "", &fs.PathError{
-			Op:   op,
-			Path: name,
-			Err:  fs.ErrInvalid,
-		}
-	}
 	// relative paths allowed when o.dir is not set
 	if o.dir == "" {
 		return path.Clean(name), nil
@@ -132,7 +125,16 @@ func (o *OSFS) join(op, name string) (string, error) {
 		name = path.Clean(name)
 	} else {
 		name = path.Clean("/" + name)
-		name = name[1:]
+		if len(name) > 1 {
+			name = name[1:]
+		}
+	}
+	if !fs.ValidPath(name) {
+		return "", &fs.PathError{
+			Op:   op,
+			Path: name,
+			Err:  fs.ErrInvalid,
+		}
 	}
 	return path.Join(o.dir, name), nil
 }

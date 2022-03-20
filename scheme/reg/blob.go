@@ -9,6 +9,10 @@ import (
 	"net/http"
 	"net/url"
 
+	// crypto libraries included for go-digest
+	_ "crypto/sha256"
+	_ "crypto/sha512"
+
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/internal/reghttp"
 	"github.com/regclient/regclient/types"
@@ -18,29 +22,29 @@ import (
 )
 
 // BlobDelete removes a blob from the repository
-func (reg *Reg) BlobDelete(ctx context.Context, r ref.Ref, d digest.Digest) error {
+func (reg *Reg) BlobDelete(ctx context.Context, r ref.Ref, d types.Descriptor) error {
 	req := &reghttp.Req{
 		Host: r.Registry,
 		APIs: map[string]reghttp.ReqAPI{
 			"": {
 				Method:     "DELETE",
 				Repository: r.Repository,
-				Path:       "blobs/" + d.String(),
+				Path:       "blobs/" + d.Digest.String(),
 			},
 		},
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
-		return fmt.Errorf("failed to delete blob, digest %s, ref %s: %w", d, r.CommonName(), err)
+		return fmt.Errorf("failed to delete blob, digest %s, ref %s: %w", d.Digest.String(), r.CommonName(), err)
 	}
 	if resp.HTTPResponse().StatusCode != 202 {
-		return fmt.Errorf("failed to delete blob, digest %s, ref %s: %w", d, r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
+		return fmt.Errorf("failed to delete blob, digest %s, ref %s: %w", d.Digest.String(), r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 	}
 	return nil
 }
 
 // BlobGet retrieves a blob from the repository, returning a blob reader
-func (reg *Reg) BlobGet(ctx context.Context, r ref.Ref, d digest.Digest) (blob.Reader, error) {
+func (reg *Reg) BlobGet(ctx context.Context, r ref.Ref, d types.Descriptor) (blob.Reader, error) {
 	// build/send request
 	req := &reghttp.Req{
 		Host: r.Registry,
@@ -48,23 +52,23 @@ func (reg *Reg) BlobGet(ctx context.Context, r ref.Ref, d digest.Digest) (blob.R
 			"": {
 				Method:     "GET",
 				Repository: r.Repository,
-				Path:       "blobs/" + d.String(),
+				Path:       "blobs/" + d.Digest.String(),
 			},
 		},
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get blob, digest %s, ref %s: %w", d, r.CommonName(), err)
+		return nil, fmt.Errorf("failed to get blob, digest %s, ref %s: %w", d.Digest.String(), r.CommonName(), err)
 	}
 	if resp.HTTPResponse().StatusCode != 200 {
-		return nil, fmt.Errorf("failed to get blob, digest %s, ref %s: %w", d, r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
+		return nil, fmt.Errorf("failed to get blob, digest %s, ref %s: %w", d.Digest.String(), r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 	}
 
 	b := blob.NewReader(
 		blob.WithRef(r),
 		blob.WithReader(resp),
 		blob.WithDesc(types.Descriptor{
-			Digest: d,
+			Digest: d.Digest,
 		}),
 		blob.WithResp(resp.HTTPResponse()),
 	)
@@ -72,7 +76,7 @@ func (reg *Reg) BlobGet(ctx context.Context, r ref.Ref, d digest.Digest) (blob.R
 }
 
 // BlobHead is used to verify if a blob exists and is accessible
-func (reg *Reg) BlobHead(ctx context.Context, r ref.Ref, d digest.Digest) (blob.Reader, error) {
+func (reg *Reg) BlobHead(ctx context.Context, r ref.Ref, d types.Descriptor) (blob.Reader, error) {
 	// build/send request
 	req := &reghttp.Req{
 		Host: r.Registry,
@@ -80,23 +84,23 @@ func (reg *Reg) BlobHead(ctx context.Context, r ref.Ref, d digest.Digest) (blob.
 			"": {
 				Method:     "HEAD",
 				Repository: r.Repository,
-				Path:       "blobs/" + d.String(),
+				Path:       "blobs/" + d.Digest.String(),
 			},
 		},
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to request blob head, digest %s, ref %s: %w", d, r.CommonName(), err)
+		return nil, fmt.Errorf("failed to request blob head, digest %s, ref %s: %w", d.Digest.String(), r.CommonName(), err)
 	}
 	defer resp.Close()
 	if resp.HTTPResponse().StatusCode != 200 {
-		return nil, fmt.Errorf("failed to request blob head, digest %s, ref %s: %w", d, r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
+		return nil, fmt.Errorf("failed to request blob head, digest %s, ref %s: %w", d.Digest.String(), r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 	}
 
 	b := blob.NewReader(
 		blob.WithRef(r),
 		blob.WithDesc(types.Descriptor{
-			Digest: d,
+			Digest: d.Digest,
 		}),
 		blob.WithResp(resp.HTTPResponse()),
 	)
@@ -104,7 +108,7 @@ func (reg *Reg) BlobHead(ctx context.Context, r ref.Ref, d digest.Digest) (blob.
 }
 
 // BlobMount attempts to perform a server side copy/mount of the blob between repositories
-func (reg *Reg) BlobMount(ctx context.Context, rSrc ref.Ref, rTgt ref.Ref, d digest.Digest) error {
+func (reg *Reg) BlobMount(ctx context.Context, rSrc ref.Ref, rTgt ref.Ref, d types.Descriptor) error {
 	_, uuid, err := reg.blobMount(ctx, rTgt, d, rSrc)
 	// if mount fails and returns an upload location, cancel that upload
 	if err != nil {
@@ -117,19 +121,19 @@ func (reg *Reg) BlobMount(ctx context.Context, rSrc ref.Ref, rTgt ref.Ref, d dig
 // This will attempt an anonymous blob mount first which some registries may support.
 // It will then try doing a full put of the blob without chunking (most widely supported).
 // If the full put fails, it will fall back to a chunked upload (useful for flaky networks).
-func (reg *Reg) BlobPut(ctx context.Context, r ref.Ref, d digest.Digest, rdr io.Reader, cl int64) (digest.Digest, int64, error) {
+func (reg *Reg) BlobPut(ctx context.Context, r ref.Ref, d types.Descriptor, rdr io.Reader) (types.Descriptor, error) {
 	var putURL *url.URL
 	var err error
 	// defaults for content-type and length
-	if cl == 0 {
-		cl = -1
+	if d.Size == 0 {
+		d.Size = -1
 	}
 
 	// attempt an anonymous blob mount
-	if d != "" && cl > 0 {
+	if d.Digest != "" && d.Size > 0 {
 		putURL, _, err = reg.blobMount(ctx, r, d, ref.Ref{})
 		if err == nil {
-			return digest.Digest(d), cl, nil
+			return d, nil
 		}
 		if err != types.ErrMountReturnedLocation {
 			putURL = nil
@@ -139,35 +143,35 @@ func (reg *Reg) BlobPut(ctx context.Context, r ref.Ref, d digest.Digest, rdr io.
 	if putURL == nil {
 		putURL, err = reg.blobGetUploadURL(ctx, r)
 		if err != nil {
-			return "", 0, err
+			return d, err
 		}
 	}
 
 	// send upload as one-chunk
-	tryPut := bool(d != "" && cl > 0)
+	tryPut := bool(d.Digest != "" && d.Size > 0)
 	if tryPut {
 		host := reg.hostGet(r.Registry)
 		maxPut := host.BlobMax
 		if maxPut == 0 {
 			maxPut = reg.blobMaxPut
 		}
-		if maxPut > 0 && cl > maxPut {
+		if maxPut > 0 && d.Size > maxPut {
 			tryPut = false
 		}
 	}
 	if tryPut {
-		err = reg.blobPutUploadFull(ctx, r, d, putURL, rdr, cl)
+		err = reg.blobPutUploadFull(ctx, r, d, putURL, rdr)
 		if err == nil {
-			return digest.Digest(d), cl, nil
+			return d, nil
 		}
 		// on failure, attempt to seek back to start to perform a chunked upload
 		rdrSeek, ok := rdr.(io.ReadSeeker)
 		if !ok {
-			return digest.Digest(d), cl, err
+			return d, err
 		}
 		offset, errR := rdrSeek.Seek(0, io.SeekStart)
 		if errR != nil || offset != 0 {
-			return digest.Digest(d), cl, err
+			return d, err
 		}
 	}
 
@@ -218,10 +222,10 @@ func (reg *Reg) blobGetUploadURL(ctx context.Context, r ref.Ref) (*url.URL, erro
 	return putURL, nil
 }
 
-func (reg *Reg) blobMount(ctx context.Context, rTgt ref.Ref, d digest.Digest, rSrc ref.Ref) (*url.URL, string, error) {
+func (reg *Reg) blobMount(ctx context.Context, rTgt ref.Ref, d types.Descriptor, rSrc ref.Ref) (*url.URL, string, error) {
 	// build/send request
 	query := url.Values{}
-	query.Set("mount", d.String())
+	query.Set("mount", d.Digest.String())
 	if rSrc.Registry == rTgt.Registry && rSrc.Repository != "" {
 		query.Set("from", rSrc.Repository)
 	}
@@ -240,7 +244,7 @@ func (reg *Reg) blobMount(ctx context.Context, rTgt ref.Ref, d digest.Digest, rS
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to mount blob, digest %s, ref %s: %w", d, rTgt.CommonName(), err)
+		return nil, "", fmt.Errorf("failed to mount blob, digest %s, ref %s: %w", d.Digest.String(), rTgt.CommonName(), err)
 	}
 	defer resp.Close()
 	// 201 indicates the blob mount succeeded
@@ -265,15 +269,15 @@ func (reg *Reg) blobMount(ctx context.Context, rTgt ref.Ref, d digest.Digest, rS
 		}
 	}
 	// all other responses unhandled
-	return nil, "", fmt.Errorf("failed to mount blob, digest %s, ref %s: %w", d, rTgt.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
+	return nil, "", fmt.Errorf("failed to mount blob, digest %s, ref %s: %w", d.Digest.String(), rTgt.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 }
 
-func (reg *Reg) blobPutUploadFull(ctx context.Context, r ref.Ref, d digest.Digest, putURL *url.URL, rdr io.Reader, cl int64) error {
+func (reg *Reg) blobPutUploadFull(ctx context.Context, r ref.Ref, d types.Descriptor, putURL *url.URL, rdr io.Reader) error {
 	// append digest to request to use the monolithic upload option
 	if putURL.RawQuery != "" {
-		putURL.RawQuery = putURL.RawQuery + "&digest=" + url.QueryEscape(d.String())
+		putURL.RawQuery = putURL.RawQuery + "&digest=" + url.QueryEscape(d.Digest.String())
 	} else {
-		putURL.RawQuery = "digest=" + url.QueryEscape(d.String())
+		putURL.RawQuery = "digest=" + url.QueryEscape(d.Digest.String())
 	}
 
 	// make a reader function for the blob
@@ -306,7 +310,7 @@ func (reg *Reg) blobPutUploadFull(ctx context.Context, r ref.Ref, d digest.Diges
 				Repository: r.Repository,
 				DirectURL:  putURL,
 				BodyFunc:   bodyFunc,
-				BodyLen:    cl,
+				BodyLen:    d.Size,
 				Headers:    header,
 			},
 		},
@@ -314,17 +318,17 @@ func (reg *Reg) blobPutUploadFull(ctx context.Context, r ref.Ref, d digest.Diges
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
-		return fmt.Errorf("failed to send blob (put), digest %s, ref %s: %w", d, r.CommonName(), err)
+		return fmt.Errorf("failed to send blob (put), digest %s, ref %s: %w", d.Digest.String(), r.CommonName(), err)
 	}
 	defer resp.Close()
 	// 201 follows distribution-spec, 204 is listed as possible in the Docker registry spec
 	if resp.HTTPResponse().StatusCode != 201 && resp.HTTPResponse().StatusCode != 204 {
-		return fmt.Errorf("failed to send blob (put), digest %s, ref %s: %w", d, r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
+		return fmt.Errorf("failed to send blob (put), digest %s, ref %s: %w", d.Digest.String(), r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 	}
 	return nil
 }
 
-func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url.URL, rdr io.Reader) (digest.Digest, int64, error) {
+func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url.URL, rdr io.Reader) (types.Descriptor, error) {
 	host := reg.hostGet(r.Registry)
 	bufSize := host.BlobChunk
 	if bufSize <= 0 {
@@ -361,7 +365,7 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url
 		if err == io.EOF || err == io.ErrUnexpectedEOF {
 			finalChunk = true
 		} else if err != nil {
-			return "", 0, fmt.Errorf("failed to send blob chunk, ref %s: %w", r.CommonName(), err)
+			return types.Descriptor{}, fmt.Errorf("failed to send blob chunk, ref %s: %w", r.CommonName(), err)
 		}
 		// update length on partial read
 		if chunkSize != len(bufBytes) {
@@ -396,7 +400,7 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url
 			}
 			resp, err := reg.reghttp.Do(ctx, req)
 			if err != nil {
-				return "", 0, fmt.Errorf("failed to send blob (chunk), ref %s: %w", r.CommonName(), err)
+				return types.Descriptor{}, fmt.Errorf("failed to send blob (chunk), ref %s: %w", r.CommonName(), err)
 			}
 			resp.Close()
 
@@ -408,7 +412,7 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url
 					"chunkSize":  chunkSize,
 				}).Debug("Early accept of chunk in PATCH before PUT request")
 			} else if resp.HTTPResponse().StatusCode != 202 {
-				return "", 0, fmt.Errorf("failed to send blob (chunk), ref %s: %w", r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
+				return types.Descriptor{}, fmt.Errorf("failed to send blob (chunk), ref %s: %w", r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 			}
 			chunkStart += int64(chunkSize)
 			location := resp.HTTPResponse().Header.Get("Location")
@@ -419,7 +423,7 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url
 				prevURL := resp.HTTPResponse().Request.URL
 				parseURL, err := prevURL.Parse(location)
 				if err != nil {
-					return "", 0, fmt.Errorf("failed to send blob (parse next chunk location), ref %s: %w", r.CommonName(), err)
+					return types.Descriptor{}, fmt.Errorf("failed to send blob (parse next chunk location), ref %s: %w", r.CommonName(), err)
 				}
 				chunkURL = *parseURL
 			}
@@ -456,15 +460,15 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
-		return "", 0, fmt.Errorf("failed to send blob (chunk digest), digest %s, ref %s: %w", d, r.CommonName(), err)
+		return types.Descriptor{}, fmt.Errorf("failed to send blob (chunk digest), digest %s, ref %s: %w", d, r.CommonName(), err)
 	}
 	defer resp.Close()
 	// 201 follows distribution-spec, 204 is listed as possible in the Docker registry spec
 	if resp.HTTPResponse().StatusCode != 201 && resp.HTTPResponse().StatusCode != 204 {
-		return "", 0, fmt.Errorf("failed to send blob (chunk digest), digest %s, ref %s: %w", d, r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
+		return types.Descriptor{}, fmt.Errorf("failed to send blob (chunk digest), digest %s, ref %s: %w", d, r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 	}
 
-	return d, chunkStart, nil
+	return types.Descriptor{Digest: d, Size: chunkStart}, nil
 }
 
 // TODO: just take a putURL rather than the uuid and call a delete on that url

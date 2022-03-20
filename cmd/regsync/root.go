@@ -15,6 +15,10 @@ import (
 	"syscall"
 	"time"
 
+	// crypto libraries included for go-digest
+	_ "crypto/sha256"
+	_ "crypto/sha512"
+
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
@@ -311,7 +315,9 @@ func loadConf() error {
 	rcOpts := []regclient.Opt{
 		regclient.WithLog(log),
 	}
-	if VCSTag != "" {
+	if conf.Defaults.UserAgent != "" {
+		rcOpts = append(rcOpts, regclient.WithUserAgent(conf.Defaults.UserAgent))
+	} else if VCSTag != "" {
 		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+VCSTag+")"))
 	} else if VCSRef != "" {
 		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+VCSRef+")"))

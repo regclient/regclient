@@ -4,8 +4,13 @@ import (
 	"io"
 	"os"
 
+	// crypto libraries included for go-digest
+	_ "crypto/sha256"
+	_ "crypto/sha512"
+
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/pkg/template"
+	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -93,7 +98,7 @@ func runBlobGet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	blob, err := rc.BlobGet(ctx, r, d)
+	blob, err := rc.BlobGet(ctx, r, types.Descriptor{Digest: d})
 	if err != nil {
 		return err
 	}
@@ -134,7 +139,7 @@ func runBlobPut(cmd *cobra.Command, args []string) error {
 		"repository": r.Repository,
 		"digest":     blobOpts.digest,
 	}).Debug("Pushing blob")
-	dOut, size, err := rc.BlobPut(ctx, r, digest.Digest(blobOpts.digest), os.Stdin, 0)
+	dOut, err := rc.BlobPut(ctx, r, types.Descriptor{Digest: digest.Digest(blobOpts.digest)}, os.Stdin)
 	if err != nil {
 		return err
 	}
@@ -143,8 +148,8 @@ func runBlobPut(cmd *cobra.Command, args []string) error {
 		Digest digest.Digest
 		Size   int64
 	}{
-		Digest: dOut,
-		Size:   size,
+		Digest: dOut.Digest,
+		Size:   dOut.Size,
 	}
 
 	return template.Writer(os.Stdout, blobOpts.format, result)

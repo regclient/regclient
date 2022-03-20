@@ -3,6 +3,9 @@ package schema1
 
 import (
 	"encoding/json"
+	// crypto libraries included for go-digest
+	_ "crypto/sha256"
+	_ "crypto/sha512"
 
 	"github.com/docker/libtrust"
 	"github.com/opencontainers/go-digest"

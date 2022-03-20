@@ -5,7 +5,7 @@ import (
 	"context"
 	"io"
 
-	"github.com/opencontainers/go-digest"
+	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
@@ -18,15 +18,15 @@ type API interface {
 	Info() Info
 
 	// BlobDelete removes a blob from the repository
-	BlobDelete(ctx context.Context, r ref.Ref, d digest.Digest) error
+	BlobDelete(ctx context.Context, r ref.Ref, d types.Descriptor) error
 	// BlobGet retrieves a blob, returning a reader
-	BlobGet(ctx context.Context, r ref.Ref, d digest.Digest) (blob.Reader, error)
+	BlobGet(ctx context.Context, r ref.Ref, d types.Descriptor) (blob.Reader, error)
 	// BlobHead verifies the existence of a blob, the reader contains the headers but no body to read
-	BlobHead(ctx context.Context, r ref.Ref, d digest.Digest) (blob.Reader, error)
+	BlobHead(ctx context.Context, r ref.Ref, d types.Descriptor) (blob.Reader, error)
 	// BlobMount attempts to perform a server side copy of the blob
-	BlobMount(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d digest.Digest) error
+	BlobMount(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor) error
 	// BlobPut sends a blob to the repository, returns the digest and size when successful
-	BlobPut(ctx context.Context, r ref.Ref, d digest.Digest, rdr io.Reader, cl int64) (digest.Digest, int64, error)
+	BlobPut(ctx context.Context, r ref.Ref, d types.Descriptor, rdr io.Reader) (types.Descriptor, error)
 
 	// ManifestDelete removes a manifest, including all tags that point to that manifest
 	ManifestDelete(ctx context.Context, r ref.Ref) error

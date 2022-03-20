@@ -9,6 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	// crypto libraries included for go-digest
+	_ "crypto/sha256"
+	_ "crypto/sha512"
+
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/pkg/archive"
 	"github.com/regclient/regclient/types"
@@ -132,7 +136,7 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		rdr, err := rc.BlobGet(ctx, r, d.Digest)
+		rdr, err := rc.BlobGet(ctx, r, d)
 		if err != nil {
 			return err
 		}
@@ -196,7 +200,7 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 			// wrap in a closure to trigger defer on each step, avoiding open file handles
 			err = func() error {
 				// perform blob get
-				rdr, err := rc.BlobGet(ctx, r, l.Digest)
+				rdr, err := rc.BlobGet(ctx, r, l)
 				if err != nil {
 					return err
 				}
@@ -263,7 +267,7 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("more than one matching layer found, add filters or specify output dir")
 		}
 		// pull blob, write to stdout
-		rdr, err := rc.BlobGet(ctx, r, layers[0].Digest)
+		rdr, err := rc.BlobGet(ctx, r, layers[0])
 		if err != nil {
 			return err
 		}
@@ -326,7 +330,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	}
 	configDigest := digest.FromBytes(configBytes)
 	// push config to registry
-	_, _, err = rc.BlobPut(ctx, r, configDigest, bytes.NewReader(configBytes), int64(len(configBytes)))
+	_, err = rc.BlobPut(ctx, r, types.Descriptor{Digest: configDigest, Size: int64(len(configBytes))}, bytes.NewReader(configBytes))
 	if err != nil {
 		return err
 	}
@@ -398,7 +402,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 					},
 				})
 				// if blob already exists, skip Put
-				bRdr, err := rc.BlobHead(ctx, r, d)
+				bRdr, err := rc.BlobHead(ctx, r, types.Descriptor{Digest: d})
 				if err == nil {
 					bRdr.Close()
 					return nil
@@ -408,7 +412,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 				if err != nil {
 					return err
 				}
-				_, _, err = rc.BlobPut(ctx, r, d, rdr, l)
+				_, err = rc.BlobPut(ctx, r, types.Descriptor{Digest: d, Size: l}, rdr)
 				if err != nil {
 					return err
 				}
@@ -424,15 +428,12 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 		if len(artifactOpts.artifactMT) > 0 {
 			mt = artifactOpts.artifactMT[0]
 		}
-		d, l, err := rc.BlobPut(ctx, r, "", os.Stdin, 0)
+		d, err := rc.BlobPut(ctx, r, types.Descriptor{}, os.Stdin)
 		if err != nil {
 			return err
 		}
-		m.Layers = append(m.Layers, types.Descriptor{
-			MediaType: mt,
-			Digest:    d,
-			Size:      l,
-		})
+		d.MediaType = mt
+		m.Layers = append(m.Layers, d)
 	}
 
 	// generate manifest

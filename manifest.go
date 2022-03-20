@@ -4,9 +4,25 @@ import (
 	"context"
 
 	"github.com/regclient/regclient/scheme"
+	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
 )
+
+type manifestOpt struct {
+	d types.Descriptor
+}
+
+// ManifestOpts define options for the Manifest* commands
+type ManifestOpts func(*manifestOpt)
+
+// ManifestWithDesc includes the descriptor for ManifestGet.
+// This is used to automatically extract a Data field if available.
+func ManifestWithDesc(d types.Descriptor) ManifestOpts {
+	return func(opts *manifestOpt) {
+		opts.d = d
+	}
+}
 
 // ManifestDelete removes a manifest, including all tags pointing to that registry
 // The reference must include the digest to delete (see TagDelete for deleting a tag)
@@ -20,7 +36,22 @@ func (rc *RegClient) ManifestDelete(ctx context.Context, r ref.Ref) error {
 }
 
 // ManifestGet retrieves a manifest
-func (rc *RegClient) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest, error) {
+func (rc *RegClient) ManifestGet(ctx context.Context, r ref.Ref, opts ...ManifestOpts) (manifest.Manifest, error) {
+	opt := manifestOpt{}
+	for _, fn := range opts {
+		fn(&opt)
+	}
+	if opt.d.Digest != "" {
+		r.Digest = opt.d.Digest.String()
+		data, err := opt.d.GetData()
+		if err == nil {
+			return manifest.New(
+				manifest.WithDesc(opt.d),
+				manifest.WithRaw(data),
+				manifest.WithRef(r),
+			)
+		}
+	}
 	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
 		return nil, err

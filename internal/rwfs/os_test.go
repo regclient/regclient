@@ -14,5 +14,25 @@ func TestOS(t *testing.T) {
 	}
 	testRWFS(t, fs)
 
-	// TODO: attempt to escape tempdir
+	fsOS := OSNew("")
+	f, err := fsOS.Open("..")
+	if err != nil {
+		t.Errorf("failed opening relative dir: %v", err)
+	} else {
+		defer f.Close()
+		fi, err := f.Stat()
+		if err != nil {
+			t.Errorf("failed stat on relative dir: %v", err)
+		}
+		if !fi.IsDir() {
+			t.Errorf("relative dir is not a directory")
+		}
+	}
+	// attempt to escape tempdir
+	fsCur := OSNew(".")
+	f, err = fsCur.Open("..")
+	if err == nil {
+		t.Errorf("opened relative dir")
+		defer f.Close()
+	}
 }

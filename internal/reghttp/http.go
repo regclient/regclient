@@ -19,6 +19,10 @@ import (
 	"sync"
 	"time"
 
+	// crypto libraries included for go-digest
+	_ "crypto/sha256"
+	_ "crypto/sha512"
+
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/auth"
@@ -52,6 +56,7 @@ type clientHost struct {
 	backoffCur   int
 	backoffUntil time.Time
 	config       *config.Host
+	httpClient   *http.Client
 	auth         map[string]auth.Auth
 	newAuth      func() auth.Auth
 	mu           sync.Mutex
@@ -395,7 +400,10 @@ func (resp *clientResp) Next() error {
 
 			// update http client for insecure requests and root certs
 			httpClient := *c.httpClient
-			if h.config.TLS == config.TLSInsecure || len(c.rootCAPool) > 0 || len(c.rootCADirs) > 0 {
+			if h.httpClient != nil {
+				// if we have previously setup a http client for this host, reuse it
+				httpClient = *h.httpClient
+			} else if h.config.TLS == config.TLSInsecure || len(c.rootCAPool) > 0 || len(c.rootCADirs) > 0 || h.config.RegCert != "" {
 				if httpClient.Transport == nil {
 					httpClient.Transport = &http.Transport{}
 				}
@@ -410,7 +418,7 @@ func (resp *clientResp) Next() error {
 					if h.config.TLS == config.TLSInsecure {
 						tlsc.InsecureSkipVerify = true
 					} else {
-						rootPool, err := makeRootPool(c.rootCAPool, c.rootCADirs, h.config.Hostname)
+						rootPool, err := makeRootPool(c.rootCAPool, c.rootCADirs, h.config.Hostname, h.config.RegCert)
 						if err != nil {
 							c.log.WithFields(logrus.Fields{
 								"err": err,
@@ -422,6 +430,8 @@ func (resp *clientResp) Next() error {
 					t.TLSClientConfig = tlsc
 					httpClient.Transport = t
 				}
+				// cache the resulting client
+				h.httpClient = &httpClient
 			}
 
 			// send request
@@ -698,7 +708,7 @@ func HTTPError(statusCode int) error {
 	}
 }
 
-func makeRootPool(rootCAPool [][]byte, rootCADirs []string, hostname string) (*x509.CertPool, error) {
+func makeRootPool(rootCAPool [][]byte, rootCADirs []string, hostname string, hostcert string) (*x509.CertPool, error) {
 	pool, err := x509.SystemCertPool()
 	if err != nil {
 		return nil, err
@@ -731,6 +741,11 @@ func makeRootPool(rootCAPool [][]byte, rootCADirs []string, hostname string) (*x
 					return nil, fmt.Errorf("failed to import cert from %s", f)
 				}
 			}
+		}
+	}
+	if hostcert != "" {
+		if ok := pool.AppendCertsFromPEM([]byte(hostcert)); !ok {
+			return nil, fmt.Errorf("failed to load host specific ca (%s): %s", hostname, hostcert)
 		}
 	}
 	return pool, nil
