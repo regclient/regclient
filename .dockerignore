@@ -4,6 +4,7 @@
 !config/
 !embed/
 !internal/
+!mod/
 !pkg/
 !regclient/
 !scheme/
