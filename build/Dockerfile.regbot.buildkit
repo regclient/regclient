@@ -66,7 +66,7 @@ COPY --link cmd/regbot/lua/ /lua/
 FROM ${REGISTRY}/library/alpine:${ALPINE_VER} as release-alpine
 COPY --link --from=build /etc/passwd /etc/group /etc/
 COPY --link --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --link --from=build --chown=appuser /home/appuser /home/appuser
+COPY --from=build --chown=appuser /home/appuser /home/appuser
 COPY --link --from=docker-cred-ecr-login /usr/local/bin/docker-credential-* /usr/local/bin/
 COPY --link --from=docker-cred-gcr /usr/local/bin/docker-credential-* /usr/local/bin/
 COPY --link --from=build /src/bin/regbot /usr/local/bin/regbot
@@ -93,7 +93,7 @@ LABEL maintainer="" \
 FROM scratch as release-scratch
 COPY --link --from=build /etc/passwd /etc/group /etc/
 COPY --link --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --link --from=build --chown=appuser /home/appuser/ /home/appuser/
+COPY --from=build --chown=appuser /home/appuser/ /home/appuser/
 COPY --link --from=build /src/bin/regbot /regbot
 COPY --link --from=lua-mods /lua/ /lua-mods/
 ENV LUA_PATH="?;?.lua;/lua-user/?;/lua-user/?.lua;/lua-mods/?;/lua-mods/?.lua"
