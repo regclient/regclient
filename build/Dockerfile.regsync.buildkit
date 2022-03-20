@@ -55,7 +55,7 @@ RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
 FROM ${REGISTRY}/library/alpine:${ALPINE_VER} as release-alpine
 COPY --link --from=build /etc/passwd /etc/group /etc/
 COPY --link --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --link --from=build --chown=appuser /home/appuser /home/appuser
+COPY --link --from=build --chown=appuser /home/appuser/ /home/appuser/
 COPY --link --from=docker-cred-ecr-login /usr/local/bin/docker-credential-* /usr/local/bin/
 COPY --link --from=docker-cred-gcr /usr/local/bin/docker-credential-* /usr/local/bin/
 COPY --link --from=build /src/bin/regsync /usr/local/bin/regsync
@@ -80,7 +80,7 @@ LABEL maintainer="" \
 FROM scratch as release-scratch
 COPY --link --from=build /etc/passwd /etc/group /etc/
 COPY --link --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --link --from=build --chown=appuser /home/appuser /home/appuser
+COPY --link --from=build --chown=appuser /home/appuser/ /home/appuser/
 COPY --link --from=build /src/bin/regsync /regsync
 USER appuser
 ENTRYPOINT [ "/regsync" ]

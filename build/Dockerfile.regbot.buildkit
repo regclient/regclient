@@ -93,9 +93,9 @@ LABEL maintainer="" \
 FROM scratch as release-scratch
 COPY --link --from=build /etc/passwd /etc/group /etc/
 COPY --link --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --link --from=build --chown=appuser /home/appuser /home/appuser
+COPY --link --from=build --chown=appuser /home/appuser/ /home/appuser/
 COPY --link --from=build /src/bin/regbot /regbot
-COPY --link --from=lua-mods /lua /lua-mods
+COPY --link --from=lua-mods /lua/ /lua-mods/
 ENV LUA_PATH="?;?.lua;/lua-user/?;/lua-user/?.lua;/lua-mods/?;/lua-mods/?.lua"
 USER appuser
 ENTRYPOINT [ "/regbot" ]
