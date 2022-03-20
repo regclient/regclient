@@ -23,18 +23,23 @@ func (o *OCIDir) TagDelete(ctx context.Context, r ref.Ref) error {
 	if err != nil {
 		return fmt.Errorf("failed to read index: %w", err)
 	}
+	changed := false
 	for i, desc := range index.Manifests {
 		if t, ok := desc.Annotations[aRefName]; ok && t == r.Tag {
 			// remove matching entry from index
 			index.Manifests = append(index.Manifests[:i], index.Manifests[i+1:]...)
-			o.refMod(r)
+			changed = true
 		}
+	}
+	if !changed {
+		return fmt.Errorf("failed deleting %s: %w", r.CommonName(), types.ErrNotFound)
 	}
 	// push manifest back out
 	err = o.writeIndex(r, index)
 	if err != nil {
 		return fmt.Errorf("failed to write index: %w", err)
 	}
+	o.refMod(r)
 	return nil
 }
 

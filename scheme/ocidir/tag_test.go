@@ -2,9 +2,11 @@ package ocidir
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/regclient/regclient/internal/rwfs"
+	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -48,8 +50,13 @@ func TestTag(t *testing.T) {
 
 	t.Run("TagDelete", func(t *testing.T) {
 		exTags := []string{"v0.3"}
-		rCp.Tag = "latest"
+		rCp.Tag = "missing"
 		err := oMem.TagDelete(ctx, rCp)
+		if err == nil || !errors.Is(err, types.ErrNotFound) {
+			t.Errorf("deleting missing tag %s: %v", rCp.CommonName(), err)
+		}
+		rCp.Tag = "latest"
+		err = oMem.TagDelete(ctx, rCp)
 		if err != nil {
 			t.Errorf("failed to delete tag %s: %v", rCp.CommonName(), err)
 		}
