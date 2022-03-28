@@ -539,6 +539,10 @@ func (b *BearerHandler) addScope(scope string) error {
 	replaced := false
 	for i, cur := range b.scopes {
 		// extend an existing scope with more actions
+		if cur == scope {
+			// nothing has changed, return early
+			return nil
+		}
 		if strings.HasPrefix(scope, cur+",") {
 			b.scopes[i] = scope
 			replaced = true
@@ -725,9 +729,7 @@ func (b *BearerHandler) validateResponse(resp *http.Response) error {
 		b.token.ExpiresIn = minTokenLife
 	}
 
-	if b.token.IssuedAt.IsZero() {
-		b.token.IssuedAt = time.Now().UTC()
-	}
+	b.token.IssuedAt = time.Now().UTC()
 
 	// AccessToken and Token should be the same and we use Token elsewhere
 	if b.token.AccessToken != "" {
