@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/regclient/regclient/internal/reqresp"
+	"github.com/sirupsen/logrus"
 )
 
 func TestParseAuthHeader(t *testing.T) {
@@ -287,4 +288,179 @@ func TestAuth(t *testing.T) {
 		})
 	}
 
+}
+
+func TestBearer(t *testing.T) {
+	useragent := "regclient/test"
+	user := "user"
+	pass := "testpass"
+	token1Resp, _ := json.Marshal(BearerToken{
+		Token:        "token1",
+		ExpiresIn:    900,
+		IssuedAt:     time.Now().Add(-900 * time.Second), // testing time skew handling
+		Scope:        "repository:reponame:pull",
+		RefreshToken: "refresh-token-value",
+	})
+	tokenPassForm := url.Values{}
+	tokenPassForm.Set("scope", "repository:reponame:pull")
+	tokenPassForm.Set("service", "test")
+	tokenPassForm.Set("client_id", useragent)
+	tokenPassForm.Set("grant_type", "password")
+	tokenPassForm.Set("username", user)
+	tokenPassForm.Set("password", pass)
+	tokenPassBody := tokenPassForm.Encode()
+	tokenRefreshForm := url.Values{}
+	tokenRefreshForm.Set("scope", "repository:reponame:pull")
+	tokenRefreshForm.Set("service", "test")
+	tokenRefreshForm.Set("client_id", useragent)
+	tokenRefreshForm.Set("grant_type", "refresh_token")
+	tokenRefreshForm.Set("refresh_token", "refresh-token-value")
+	tokenRefreshBody := tokenRefreshForm.Encode()
+	token2Resp, _ := json.Marshal(BearerToken{
+		Token:        "token2",
+		ExpiresIn:    10,                                // testing short expiration
+		IssuedAt:     time.Now().Add(900 * time.Second), // testing time skew handling
+		Scope:        "repository:reponame:pull,push",
+		RefreshToken: "refresh-token-value",
+	})
+	token2PassForm := url.Values{}
+	token2PassForm.Set("scope", "repository:reponame:pull,push")
+	token2PassForm.Set("service", "test")
+	token2PassForm.Set("client_id", useragent)
+	token2PassForm.Set("grant_type", "password")
+	token2PassForm.Set("username", user)
+	token2PassForm.Set("password", pass)
+	token2PassBody := token2PassForm.Encode()
+	rrs := []reqresp.ReqResp{
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "req token1",
+				Method: "POST",
+				Path:   "/tokens",
+				Body:   []byte(tokenPassBody),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: 200,
+				Body:   token1Resp,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "req token1 refresh",
+				Method: "POST",
+				Path:   "/tokens",
+				Body:   []byte(tokenRefreshBody),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: 200,
+				Body:   token1Resp,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "req token2",
+				Method: "POST",
+				Path:   "/tokens",
+				Body:   []byte(token2PassBody),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: 200,
+				Body:   token2Resp,
+			},
+		},
+	}
+	ts := httptest.NewServer(reqresp.NewHandler(t, rrs))
+	defer ts.Close()
+	tsURL, _ := url.Parse(ts.URL)
+	tsHost := tsURL.Host
+	bearer := NewBearerHandler(&http.Client{}, useragent, tsHost,
+		Cred{User: user, Password: pass},
+		&logrus.Logger{},
+	).(*BearerHandler)
+
+	// handle token1, verify expired token gets current time and isn't expired
+	err := bearer.AddScope("repository:reponame:pull")
+	if err != nil {
+		t.Errorf("failed adding scope: %v", err)
+	}
+	c, err := ParseAuthHeader(
+		`Bearer realm="` + tsURL.String() +
+			`/tokens",service="test"` +
+			`,scope="repository:reponame:pull"`)
+	if err != nil {
+		t.Errorf("failed on parse challenge 1: %v", err)
+	}
+	err = bearer.ProcessChallenge(c[0])
+	if err != nil {
+		t.Errorf("failed on response to token1: %v", err)
+	}
+	resp1, err := bearer.GenerateAuth()
+	if err != nil {
+		t.Errorf("failed to generate auth response1: %v", err)
+	}
+	if resp1 != "Bearer token1" {
+		t.Errorf("token1 is invalid, expected %s, received %s", "Bearer token1", resp1)
+	}
+	if bearer.isExpired() {
+		t.Errorf("token1 is already expired")
+	}
+
+	// send a second request without another challenge
+	err = bearer.AddScope("repository:reponame:pull")
+	if err != nil && !errors.Is(err, ErrNoNewChallenge) {
+		t.Errorf("failed adding scope: %v", err)
+	}
+	resp1a, err := bearer.GenerateAuth()
+	if err != nil {
+		t.Errorf("failed to generate auth response1 (rerun): %v", err)
+	}
+	if resp1a != "Bearer token1" {
+		t.Errorf("token1 (rerun) is invalid, expected %s, received %s", "Bearer token1", resp1a)
+	}
+	if bearer.isExpired() {
+		t.Errorf("token1 (rerun) is already expired")
+	}
+
+	// send a third request with same challenge after token expires
+	bearer.token.IssuedAt = time.Now().Add(-900 * time.Second)
+	err = bearer.AddScope("repository:reponame:pull")
+	if err != nil && !errors.Is(err, ErrNoNewChallenge) {
+		t.Errorf("failed adding scope: %v", err)
+	}
+	err = bearer.ProcessChallenge(c[0])
+	if err != nil {
+		t.Errorf("failed reprocess challenge on expired token: %v", err)
+	}
+	resp1b, err := bearer.GenerateAuth()
+	if err != nil {
+		t.Errorf("failed to generate auth response1 (expired): %v", err)
+	}
+	if resp1b != "Bearer token1" {
+		t.Errorf("token1 (expired) is invalid, expected %s, received %s", "Bearer token1", resp1b)
+	}
+	if bearer.isExpired() {
+		t.Errorf("token1 (expired) is already expired")
+	}
+
+	// send a request for a new scope
+	err = bearer.AddScope("repository:reponame:pull,push")
+	if err != nil {
+		t.Errorf("failed adding scope: %v", err)
+	}
+	resp2, err := bearer.GenerateAuth()
+	if err != nil {
+		t.Errorf("failed to generate auth response2 (push): %v", err)
+	}
+	if resp2 != "Bearer token2" {
+		t.Errorf("token2 (push) is invalid, expected %s, received %s", "Bearer token2", resp2)
+	}
+	if bearer.isExpired() {
+		t.Errorf("token2 (push) is already expired")
+	}
+	if bearer.token.IssuedAt.After(time.Now().UTC()) {
+		t.Errorf("token2 (push) is after current time")
+	}
+	if bearer.token.ExpiresIn < minTokenLife {
+		t.Errorf("token2 (push) expires early, expected %d, received %d", minTokenLife, bearer.token.ExpiresIn)
+	}
 }
