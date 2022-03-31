@@ -112,7 +112,7 @@ func (r *rrHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		}
 		return
 	}
-	r.t.Errorf("Unhandled request: %v", req)
+	r.t.Errorf("Unhandled request: %v, body: %s", req, reqBody)
 	rw.WriteHeader(http.StatusInternalServerError)
 	rw.Write([]byte("Unsupported request"))
 }

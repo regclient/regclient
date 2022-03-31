@@ -527,10 +527,11 @@ func NewBearerHandler(client *http.Client, clientID, host string, cred Cred, log
 
 // AddScope appends a new scope if it doesn't already exist
 func (b *BearerHandler) AddScope(scope string) error {
-	existingScope := b.scopeExists(scope)
-
-	if existingScope && (b.token.Token == "" || !b.isExpired()) {
-		return ErrNoNewChallenge
+	if b.scopeExists(scope) {
+		if b.token.Token == "" || !b.isExpired() {
+			return ErrNoNewChallenge
+		}
+		return nil
 	}
 	return b.addScope(scope)
 }
@@ -715,17 +716,24 @@ func (b *BearerHandler) validateResponse(resp *http.Response) error {
 		return ErrUnauthorized
 	}
 
+	// decode response and if successful, update token
 	decoder := json.NewDecoder(resp.Body)
-
-	if err := decoder.Decode(&b.token); err != nil {
+	decoded := BearerToken{}
+	if err := decoder.Decode(&decoded); err != nil {
 		return err
 	}
+	b.token = decoded
 
 	if b.token.ExpiresIn < minTokenLife {
 		b.token.ExpiresIn = minTokenLife
 	}
 
-	if b.token.IssuedAt.IsZero() {
+	// If token is already expired, it was sent with a zero value or
+	// there may be a clock skew between the client and auth server.
+	// Also handle cases of remote time in the future.
+	// But if remote time is slightly in the past, leave as is so token
+	// expires here before the server.
+	if b.isExpired() || b.token.IssuedAt.After(time.Now()) {
 		b.token.IssuedAt = time.Now().UTC()
 	}
 
