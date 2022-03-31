@@ -20,8 +20,7 @@ func WithConfigTimestampFromLabel(label string) Opts {
 			if !ok {
 				return fmt.Errorf("label not found: %s", label)
 			}
-			t := time.Time{}
-			t, err = time.Parse(time.RFC3339, tl)
+			t, err := time.Parse(time.RFC3339, tl)
 			if err != nil {
 				// TODO: add fallbacks
 				return fmt.Errorf("could not parse time %s from %s: %w", tl, label, err)
