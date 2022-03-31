@@ -59,8 +59,6 @@ The following functions have been added in addition to the defaults available in
     Returns current time object, e.g. `{{ $t := time.Now }}{{printf "%d%d%d" $t.Year $t.Month $t.Day}}`.
   - `time.Parse`:
     Parses string using layout into time object, e.g. `{{ $t := time.Parse "2006-01-02" "2020-06-07"}}`.
-- `title`:
-  Makes the first letter of each word uppercase.
 - `upper`:
   Converts a string to uppercase.
 
