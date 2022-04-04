@@ -10,7 +10,7 @@ ifneq ($(shell git status --porcelain 2>/dev/null),)
 endif
 VCS_TAG:=$(shell git describe --tags --abbrev=0 2>/dev/null || true)
 LD_FLAGS=-s -w -extldflags -static
-GO_BUILD_FLAGS=-ldflags "$(LD_FLAGS)" -tags nolegacy
+GO_BUILD_FLAGS=-trimpath -ldflags "$(LD_FLAGS)" -tags nolegacy
 DOCKERFILE_EXT:=$(shell if docker build --help 2>/dev/null | grep -q -- '--progress'; then echo ".buildkit"; fi)
 DOCKER_ARGS=--build-arg "VCS_REF=$(VCS_REF)"
 GOPATH:=$(shell go env GOPATH)
