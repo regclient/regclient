@@ -708,7 +708,7 @@ func (rc *RegClient) imageImportOCIAddHandler(ctx context.Context, ref ref.Ref, 
 		}
 		// start recursively processing manifests starting with the index
 		// there's no need to push the index.json by digest, it will be pushed by tag if needed
-		err = rc.imageImportOCIHandleManifest(ctx, ref, trd.ociManifest, trd, false)
+		err = rc.imageImportOCIHandleManifest(ctx, ref, trd.ociManifest, trd, false, false)
 		if err != nil {
 			return err
 		}
@@ -753,7 +753,7 @@ func (rc *RegClient) imageImportOCIAddHandler(ctx context.Context, ref ref.Ref, 
 }
 
 // imageImportOCIHandleManifest recursively processes index and manifest entries from an OCI layout tar
-func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.Ref, m manifest.Manifest, trd *tarReadData, push bool) error {
+func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.Ref, m manifest.Manifest, trd *tarReadData, push bool, child bool) error {
 	// cache the manifest to avoid needing to pull again later, this is used if index.json is a wrapper around some other manifest
 	trd.manifests[m.GetDescriptor().Digest] = m
 
@@ -774,7 +774,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 					if err != nil {
 						return err
 					}
-					return rc.imageImportOCIHandleManifest(ctx, ref, md, trd, true)
+					return rc.imageImportOCIHandleManifest(ctx, ref, md, trd, true, !push)
 				case types.MediaTypeDocker2ImageConfig, types.MediaTypeOCI1ImageConfig,
 					types.MediaTypeDocker2Layer, types.MediaTypeOCI1Layer, types.MediaTypeOCI1LayerGzip,
 					types.MediaTypeBuildkitCacheConfig:
@@ -784,7 +784,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 					// attempt manifest import, fall back to blob import
 					md, err := manifest.New(manifest.WithDesc(d), manifest.WithRaw(b))
 					if err == nil {
-						return rc.imageImportOCIHandleManifest(ctx, ref, md, trd, true)
+						return rc.imageImportOCIHandleManifest(ctx, ref, md, trd, true, !push)
 					}
 					return rc.imageImportBlob(ctx, ref, d, trd)
 				}
@@ -802,7 +802,12 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 		var d types.Descriptor
 		if len(dl) == 1 {
 			d = dl[0]
+		} else if ref.Digest != "" {
+			d.Digest = digest.Digest(ref.Digest)
 		} else {
+			if ref.Tag == "" {
+				ref.Tag = "latest"
+			}
 			// if more than one digest is in the index, use the first matching tag
 			for _, cur := range dl {
 				if cur.Annotations[annotationRefName] == ref.Tag {
@@ -871,7 +876,11 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 			if err == nil {
 				return nil
 			}
-			return rc.ManifestPut(ctx, mRef, m)
+			opts := []scheme.ManifestOpts{}
+			if child {
+				opts = append(opts, scheme.WithManifestChild())
+			}
+			return rc.ManifestPut(ctx, mRef, m, opts...)
 		})
 	}
 	trd.handleAdded = true
