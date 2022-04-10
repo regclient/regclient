@@ -33,7 +33,7 @@ func TestTag(t *testing.T) {
 	rCp := r
 
 	t.Run("TagList", func(t *testing.T) {
-		exTags := []string{"latest", "v0.3", "v0.3.10"}
+		exTags := []string{"broken", "latest", "v0.3", "v0.3.10"}
 		tl, err := oMem.TagList(ctx, r)
 		if err != nil {
 			t.Errorf("failed to retrieve tag list: %v", err)
@@ -49,7 +49,7 @@ func TestTag(t *testing.T) {
 	})
 
 	t.Run("TagDelete", func(t *testing.T) {
-		exTags := []string{"v0.3"}
+		exTags := []string{"broken", "v0.3"}
 		rCp.Tag = "missing"
 		err := oMem.TagDelete(ctx, rCp)
 		if err == nil || !errors.Is(err, types.ErrNotFound) {

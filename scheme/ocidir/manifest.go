@@ -2,6 +2,7 @@ package ocidir
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -108,24 +109,53 @@ func (o *OCIDir) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest,
 func (o *OCIDir) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest, error) {
 	index, err := o.readIndex(r)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to read oci index: %w", err)
 	}
-	var desc types.Descriptor
 	if r.Digest == "" && r.Tag == "" {
 		r.Tag = "latest"
 	}
-	for _, im := range index.Manifests {
-		if r.Digest != "" && im.Digest.String() == r.Digest {
-			desc = im
-		} else if name, ok := im.Annotations[aRefName]; ok && name == r.Tag {
-			desc = im
-			break
+	desc, err := indexGet(index, r)
+	if err != nil {
+		if r.Digest != "" {
+			desc.Digest = digest.Digest(r.Digest)
+		} else {
+			return nil, err
 		}
 	}
-	if desc.Digest == "" || desc.MediaType == "" {
+	if desc.Digest == "" {
 		return nil, types.ErrNotFound
 	}
-
+	// verify underlying file exists
+	file := path.Join(r.Path, "blobs", desc.Digest.Algorithm().String(), desc.Digest.Encoded())
+	fi, err := rwfs.Stat(o.fs, file)
+	if err != nil || fi.IsDir() {
+		return nil, types.ErrNotFound
+	}
+	// if missing, set media type on desc
+	if desc.MediaType == "" {
+		raw, err := rwfs.ReadFile(o.fs, file)
+		if err != nil {
+			return nil, err
+		}
+		mt := struct {
+			MediaType     string        `json:"mediaType,omitempty"`
+			SchemaVersion int           `json:"schemaVersion,omitempty"`
+			Signatures    []interface{} `json:"signatures,omitempty"`
+		}{}
+		err = json.Unmarshal(raw, &mt)
+		if err != nil {
+			return nil, err
+		}
+		if mt.MediaType != "" {
+			desc.MediaType = mt.MediaType
+			desc.Size = int64(len(raw))
+		} else if mt.SchemaVersion == 1 && len(mt.Signatures) > 0 {
+			desc.MediaType = types.MediaTypeDocker1ManifestSigned
+		} else if mt.SchemaVersion == 1 {
+			desc.MediaType = types.MediaTypeDocker1Manifest
+			desc.Size = int64(len(raw))
+		}
+	}
 	return manifest.New(
 		manifest.WithRef(r),
 		manifest.WithDesc(desc),

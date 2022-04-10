@@ -32,6 +32,22 @@ func TestManifest(t *testing.T) {
 		t.Errorf("manifest head: %v", err)
 		return
 	}
+	// manifest head on a child digest
+	rh, err := ref.New("ocidir://testdata/regctl@sha256:41770c110431b0ffc5f577aa44968bfbfd79e92eb0929e37f006179fd4aeddcc")
+	if err != nil {
+		t.Errorf("failed to parse ref %s: %v", rs, err)
+	}
+	_, err = o.ManifestHead(ctx, rh)
+	if err != nil {
+		t.Errorf("manifest head failed on child digest: %v", err)
+		return
+	}
+	rh.Digest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	_, err = o.ManifestHead(ctx, rh)
+	if err == nil {
+		t.Errorf("manifest head succeeded on missing digest: %s", rh.CommonName())
+		return
+	}
 	// manifest list
 	ml, err := o.ManifestGet(ctx, r)
 	if err != nil {
