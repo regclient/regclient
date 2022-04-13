@@ -63,7 +63,7 @@ limit itself if you have less than 100 pulls remaining on your account.
 export HUB_USER=your_username
 mkdir -p ${HOME}/.docker
 echo "your_hub_password" >${HOME}/.docker/hub_token
-docker container run -it --rm --net registry \
+docker container run -i --rm --net registry \
   -v "$(pwd)/regsync.yml:/home/appuser/regsync.yml:ro" \
   -v "${HOME}/.docker/hub_token:/home/appuser/.docker/hub_token:ro" \
   -e "HUB_USER" \
@@ -91,7 +91,7 @@ see is when a new image gets pulled.
 
 Now you can run images from your registry or build new images with the above base:
 
-`docker container run -it --rm localhost:5000/library/busybox echo hello world`
+`docker container run -i --rm localhost:5000/library/busybox echo hello world`
 
 In your Dockerfile, you can adjust the registry with a build arg:
 
@@ -123,8 +123,11 @@ Push to your local registry:
 ```shell
 cat >regctl <<EOF
 #!/bin/sh
-
-docker container run -it --rm --net host \\
+opts=""
+case "\$*" in
+  "registry login"*) opts="-t";;
+esac
+docker container run \$opts -i --rm --net host \\
   -u "\$(id -u):\$(id -g)" -e HOME -v \$HOME:\$HOME \\
   -v /etc/docker/certs.d:/etc/docker/certs.d:ro \\
   regclient/regctl:latest "\$@"
