@@ -92,6 +92,7 @@ LABEL maintainer="" \
       org.opencontainers.image.description=""
 
 FROM scratch as release-scratch
+ADD  --link build/root.tgz /
 COPY --link --from=build /etc/passwd /etc/group /etc/
 COPY --link --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --link --from=build --chown=1000:1000 /home/appuser/ /home/appuser/
