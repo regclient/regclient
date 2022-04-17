@@ -203,7 +203,22 @@ sync:
   Any field beginning with `x-` is considered a user extension and will not be parsed in current or future versions of the project.
   These are useful for integrating your own tooling, or setting values for yaml anchors and aliases.
 
+## Templates
+
 [Go templates](https://golang.org/pkg/text/template/) are used to expand values in `registry`, `user`, `pass`, `regcert`, `source`, `target`, and `backup`.
+
+The `source` and `target` templates support the following objects:
+
+- `.Sync`: Values from the current sync step
+  - `.Sync.Source`: Source
+  - `.Sync.Target`: Target
+  - `.Sync.Type`: Type
+  - `.Sync.Backup`: Backup
+  - `.Sync.Interval`: Interval
+  - `.Sync.Schedule`: Schedule
+
+Note that `source` is expanded before `target`, and both are expanded before `backup`.
+
 The `backup` template supports the following objects:
 
 - `.Ref`: Reference object about to be overwritten
@@ -211,12 +226,12 @@ The `backup` template supports the following objects:
   - `.Ref.Registry`: Registry name
   - `.Ref.Repository`: Repository
   - `.Ref.Tag`: Tag
-- `.Step`: Values from the current step
-  - `.Step.Source`: Source
-  - `.Step.Target`: Target
-  - `.Step.Type`: Type
-  - `.Step.Backup`: Backup
-  - `.Step.Interval`: Interval
-  - `.Step.Schedule`: Schedule
+- `.Sync`: Values from the current sync step
+  - `.Sync.Source`: Source
+  - `.Sync.Target`: Target
+  - `.Sync.Type`: Type
+  - `.Sync.Backup`: Backup
+  - `.Sync.Interval`: Interval
+  - `.Sync.Schedule`: Schedule
 
 See [Template Functions](README.md#Template-Functions) for more details on the custom functions available in templates.
