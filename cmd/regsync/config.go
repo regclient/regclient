@@ -185,6 +185,9 @@ func ConfigLoadFile(filename string) (*Config, error) {
 
 // expand templates in various parts of the config
 func configExpandTemplates(c *Config) error {
+	dataSync := struct {
+		Sync ConfigSync
+	}{}
 	for i := range c.Creds {
 		val, err := template.String(c.Creds[i].Registry, nil)
 		if err != nil {
@@ -208,12 +211,14 @@ func configExpandTemplates(c *Config) error {
 		c.Creds[i].RegCert = val
 	}
 	for i := range c.Sync {
-		val, err := template.String(c.Sync[i].Source, nil)
+		dataSync.Sync = c.Sync[i]
+		val, err := template.String(c.Sync[i].Source, dataSync)
 		if err != nil {
 			return err
 		}
 		c.Sync[i].Source = val
-		val, err = template.String(c.Sync[i].Target, nil)
+		dataSync.Sync.Source = val
+		val, err = template.String(c.Sync[i].Target, dataSync)
 		if err != nil {
 			return err
 		}

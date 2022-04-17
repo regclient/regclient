@@ -705,7 +705,8 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 		data := struct {
 			Ref  ref.Ref
 			Step ConfigSync
-		}{Ref: tgt, Step: s}
+			Sync ConfigSync
+		}{Ref: tgt, Step: s, Sync: s}
 		backupStr, err := template.String(s.Backup, data)
 		if err != nil {
 			log.WithFields(logrus.Fields{
