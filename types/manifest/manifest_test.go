@@ -46,7 +46,10 @@ var (
 						"digest": "sha256:9767ed5c27ebed39ff76afe979043e52dc7714c78d1dda8a8581965e06be2535",
 						"size": 3535944
 				}
-			]
+			],
+			"annotations": {
+				"org.example.test": "hello world"
+			}
 		}
 	`)
 	rawDockerSchema2List = []byte(`
@@ -119,8 +122,11 @@ var (
 					"os": "linux"
 				}
 			}
-		]
-	}
+			],
+			"annotations": {
+				"org.example.test": "hello world"
+			}
+		}
 	`)
 	rawAmbiguousOCI = []byte(`
 		{
@@ -157,7 +163,10 @@ var (
 						"os": "linux"
 					}
 				}
-			]
+			],
+			"annotations": {
+				"org.example.test": "hello world"
+			}
 		}
 	`)
 	rawOCIImage = []byte(`
@@ -196,7 +205,10 @@ var (
 						"os": "linux"
 					}
 				}
-			]
+			],
+			"annotations": {
+				"org.example.test": "hello world"
+			}
 		}
 	`)
 	rawOCIIndex = []byte(`
@@ -235,7 +247,10 @@ var (
 						"os": "linux"
 					}
 				}
-			]
+			],
+			"annotations": {
+				"org.example.test": "hello world"
+			}
 		}
 	`)
 	// signed schemas are white space sensitive, contents here must be indented with 3 spaces, no tabs
@@ -702,6 +717,19 @@ func TestModify(t *testing.T) {
 		t.Errorf("failed to unmarshal OCI index json: %v", err)
 		return
 	}
+	if manifestDockerSchema2.Annotations == nil || manifestDockerSchema2.Annotations["org.example.test"] != "hello world" {
+		t.Errorf("annotation missing from docker manifest")
+	}
+	if manifestDockerSchema2List.Annotations == nil || manifestDockerSchema2List.Annotations["org.example.test"] != "hello world" {
+		t.Errorf("annotation missing from docker manifest list")
+	}
+	if manifestOCIImage.Annotations == nil || manifestOCIImage.Annotations["org.example.test"] != "hello world" {
+		t.Errorf("annotation missing from oci image")
+	}
+	if manifestOCIIndex.Annotations == nil || manifestOCIIndex.Annotations["org.example.test"] != "hello world" {
+		t.Errorf("annotation missing from oci index")
+	}
+
 	t.Run("BadIndex", func(t *testing.T) {
 		_, err = OCIIndexFromAny(manifestDockerSchema2)
 		if err == nil {
