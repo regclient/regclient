@@ -17,4 +17,8 @@ type ManifestList struct {
 
 	// Config references the image configuration as a blob.
 	Manifests []types.Descriptor `json:"manifests"`
+
+	// Annotations contains arbitrary metadata for the image index.
+	// Note, this is not a defined docker schema2 field.
+	Annotations map[string]string `json:"annotations,omitempty"`
 }

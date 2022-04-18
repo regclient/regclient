@@ -222,6 +222,7 @@ func OCIIndexFromAny(orig interface{}) (v1.Index, error) {
 	switch orig := orig.(type) {
 	case schema2.ManifestList:
 		ociI.Manifests = orig.Manifests
+		ociI.Annotations = orig.Annotations
 	case v1.Index:
 		ociI = orig
 	default:
@@ -247,6 +248,7 @@ func OCIIndexToAny(ociI v1.Index, origP interface{}) error {
 	case schema2.ManifestList:
 		orig.Versioned = schema2.ManifestListSchemaVersion
 		orig.Manifests = ociI.Manifests
+		orig.Annotations = ociI.Annotations
 		rv.Set(reflect.ValueOf(orig))
 	case v1.Index:
 		rv.Set(reflect.ValueOf(ociI))
@@ -265,6 +267,7 @@ func OCIManifestFromAny(orig interface{}) (v1.Manifest, error) {
 	case schema2.Manifest:
 		ociM.Config = orig.Config
 		ociM.Layers = orig.Layers
+		ociM.Annotations = orig.Annotations
 	case v1.Manifest:
 		ociM = orig
 	default:
@@ -292,6 +295,7 @@ func OCIManifestToAny(ociM v1.Manifest, origP interface{}) error {
 		orig.Versioned = schema2.ManifestSchemaVersion
 		orig.Config = ociM.Config
 		orig.Layers = ociM.Layers
+		orig.Annotations = ociM.Annotations
 		rv.Set(reflect.ValueOf(orig))
 	case v1.Manifest:
 		rv.Set(reflect.ValueOf(ociM))

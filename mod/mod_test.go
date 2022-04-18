@@ -82,6 +82,13 @@ func TestMod(t *testing.T) {
 			ref: "ocidir://testrepo:v1",
 		},
 		{
+			name: "Delete Annotation",
+			opts: []Opts{
+				WithAnnotation("org.example.version", ""),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
 			name: "Add Base Annotations",
 			opts: []Opts{
 				WithAnnotationOCIBase(bRef, bDig),
