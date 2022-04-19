@@ -33,4 +33,6 @@ done
 # create a digest tag from v3 pointing to v1
 v1_dig="$(regctl image digest ocidir://testrepo:v1)"
 v1_dig=${v1_dig#*:}
-regctl image copy ocidir://testrepo:v3 "ocidir://testrepo:sha256-${v1_dig}.meta"
+v3_dig="$(regctl image digest ocidir://testrepo:v3)"
+v3_shortdig="$(echo ${v3_dig#*:} | cut -b1-16)"
+regctl image copy ocidir://testrepo:v3 "ocidir://testrepo:sha256-${v1_dig}.${v3_shortdig}.meta"
