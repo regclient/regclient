@@ -81,6 +81,7 @@ func TestManifest(t *testing.T) {
 	if err != nil {
 		t.Errorf("config: %v", err)
 	}
+
 	// test manifest put to a memfs
 	fm := rwfs.MemNew()
 	om := New(WithFS(fm))
@@ -181,4 +182,38 @@ func TestManifest(t *testing.T) {
 	if err == nil {
 		t.Errorf("succeeded getting deleted tag %s: %v", r.Tag, err)
 	}
+
+	// push a dup tag
+	r11 := r
+	r11.Tag = "v1.1"
+	err = o.ManifestPut(ctx, r11, ml)
+	if err != nil {
+		t.Errorf("failed pushing manifest: %v", err)
+	}
+	// push by digest
+	rd := r
+	rd.Tag = ""
+	rd.Digest = ml.GetDescriptor().Digest.String()
+	err = o.ManifestPut(ctx, rd, ml)
+	if err != nil {
+		t.Errorf("failed pushing manifest: %v", err)
+	}
+	// push second tag
+	r12 := r
+	r12.Tag = "v1.2"
+	err = o.ManifestPut(ctx, r12, ml)
+	if err != nil {
+		t.Errorf("failed pushing manifest: %v", err)
+	}
+	err = o.Close(ctx, r)
+	if err != nil {
+		t.Errorf("failed closing: %v", err)
+	}
+	o = New(WithFS(fsMem))
+	// verify original tag has not been deleted
+	_, err = o.ManifestHead(ctx, r11)
+	if err != nil {
+		t.Errorf("could not query manifest after pushing dup tag")
+	}
+
 }
