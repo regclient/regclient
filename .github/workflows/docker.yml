@@ -75,10 +75,10 @@ jobs:
         echo "::set-output name=regbot_cache_alpine::${REGBOT_GHCR_IMAGE}:buildcache-alpine"
         echo "::set-output name=regctl_image_hub::${REGCTL_HUB_IMAGE}"
         echo "::set-output name=regctl_image_ghcr::${REGCTL_GHCR_IMAGE}"
-        echo "::set-output name=regbot_image_hub::${REGBOT_HUB_IMAGE}"
-        echo "::set-output name=regbot_image_ghcr::${REGBOT_GHCR_IMAGE}"
         echo "::set-output name=regsync_image_hub::${REGSYNC_HUB_IMAGE}"
         echo "::set-output name=regsync_image_ghcr::${REGSYNC_GHCR_IMAGE}"
+        echo "::set-output name=regbot_image_hub::${REGBOT_HUB_IMAGE}"
+        echo "::set-output name=regbot_image_ghcr::${REGBOT_GHCR_IMAGE}"
         echo "::set-output name=regctl_tags_scratch::${REGCTL_TAGS_SCRATCH}"
         echo "::set-output name=regctl_tags_alpine::${REGCTL_TAGS_ALPINE}"
         echo "::set-output name=regsync_tags_scratch::${REGSYNC_TAGS_SCRATCH}"
@@ -243,15 +243,15 @@ jobs:
         # experimental support needed for GitHub OIDC signing
         COSIGN_EXPERIMENTAL: "true"
       run: |
-        cosign sign ${{ steps.prep.regctl_image_hub }}@${{ steps.build-regctl-scratch.outputs.digest }}
-        cosign sign ${{ steps.prep.regctl_image_hub }}@${{ steps.build-regctl-alpine.outputs.digest }}
-        cosign sign ${{ steps.prep.regctl_image_ghcr }}@${{ steps.build-regctl-scratch.outputs.digest }}
-        cosign sign ${{ steps.prep.regctl_image_ghcr }}@${{ steps.build-regctl-alpine.outputs.digest }}
-        cosign sign ${{ steps.prep.regbot_image_hub }}@${{ steps.build-regbot-scratch.outputs.digest }}
-        cosign sign ${{ steps.prep.regbot_image_hub }}@${{ steps.build-regbot-alpine.outputs.digest }}
-        cosign sign ${{ steps.prep.regbot_image_ghcr }}@${{ steps.build-regbot-scratch.outputs.digest }}
-        cosign sign ${{ steps.prep.regbot_image_ghcr }}@${{ steps.build-regbot-alpine.outputs.digest }}
-        cosign sign ${{ steps.prep.regsync_image_hub }}@${{ steps.build-regsync-scratch.outputs.digest }}
-        cosign sign ${{ steps.prep.regsync_image_hub }}@${{ steps.build-regsync-alpine.outputs.digest }}
-        cosign sign ${{ steps.prep.regsync_image_ghcr }}@${{ steps.build-regsync-scratch.outputs.digest }}
-        cosign sign ${{ steps.prep.regsync_image_ghcr }}@${{ steps.build-regsync-alpine.outputs.digest }}
+        cosign sign ${{ steps.prep.outputs.regctl_image_hub }}@${{ steps.build-regctl-scratch.outputs.digest }}
+        cosign sign ${{ steps.prep.outputs.regctl_image_hub }}@${{ steps.build-regctl-alpine.outputs.digest }}
+        cosign sign ${{ steps.prep.outputs.regctl_image_ghcr }}@${{ steps.build-regctl-scratch.outputs.digest }}
+        cosign sign ${{ steps.prep.outputs.regctl_image_ghcr }}@${{ steps.build-regctl-alpine.outputs.digest }}
+        cosign sign ${{ steps.prep.outputs.regsync_image_hub }}@${{ steps.build-regsync-scratch.outputs.digest }}
+        cosign sign ${{ steps.prep.outputs.regsync_image_hub }}@${{ steps.build-regsync-alpine.outputs.digest }}
+        cosign sign ${{ steps.prep.outputs.regsync_image_ghcr }}@${{ steps.build-regsync-scratch.outputs.digest }}
+        cosign sign ${{ steps.prep.outputs.regsync_image_ghcr }}@${{ steps.build-regsync-alpine.outputs.digest }}
+        cosign sign ${{ steps.prep.outputs.regbot_image_hub }}@${{ steps.build-regbot-scratch.outputs.digest }}
+        cosign sign ${{ steps.prep.outputs.regbot_image_hub }}@${{ steps.build-regbot-alpine.outputs.digest }}
+        cosign sign ${{ steps.prep.outputs.regbot_image_ghcr }}@${{ steps.build-regbot-scratch.outputs.digest }}
+        cosign sign ${{ steps.prep.outputs.regbot_image_ghcr }}@${{ steps.build-regbot-alpine.outputs.digest }}
