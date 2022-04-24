@@ -15,6 +15,11 @@ jobs:
   docker:
     name: Docker
     runs-on: ubuntu-latest
+    permissions:
+      # id-token is used by cosign's OIDC based signing
+      # https://blog.chainguard.dev/zero-friction-keyless-signing-with-github-actions/
+      # TODO: make token conditional: "${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' && 'write' || 'none' }}"
+      id-token: 'write'
     steps:
     - name: Prepare
       id: prep
@@ -68,6 +73,12 @@ jobs:
         echo "::set-output name=regsync_cache_alpine::${REGSYNC_GHCR_IMAGE}:buildcache-alpine"
         echo "::set-output name=regbot_cache_scratch::${REGBOT_GHCR_IMAGE}:buildcache-scratch"
         echo "::set-output name=regbot_cache_alpine::${REGBOT_GHCR_IMAGE}:buildcache-alpine"
+        echo "::set-output name=regctl_image_hub::${REGCTL_HUB_IMAGE}"
+        echo "::set-output name=regctl_image_ghcr::${REGCTL_GHCR_IMAGE}"
+        echo "::set-output name=regbot_image_hub::${REGBOT_HUB_IMAGE}"
+        echo "::set-output name=regbot_image_ghcr::${REGBOT_GHCR_IMAGE}"
+        echo "::set-output name=regsync_image_hub::${REGSYNC_HUB_IMAGE}"
+        echo "::set-output name=regsync_image_ghcr::${REGSYNC_GHCR_IMAGE}"
         echo "::set-output name=regctl_tags_scratch::${REGCTL_TAGS_SCRATCH}"
         echo "::set-output name=regctl_tags_alpine::${REGCTL_TAGS_ALPINE}"
         echo "::set-output name=regsync_tags_scratch::${REGSYNC_TAGS_SCRATCH}"
@@ -87,7 +98,10 @@ jobs:
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v1
-     
+
+    - name: Install cosign
+      uses: sigstore/cosign-installer@main
+    
     - name: Login to DockerHub
       if: github.repository_owner == 'regclient'
       uses: docker/login-action@v1 
@@ -105,6 +119,7 @@ jobs:
 
     - name: Build and push regctl scratch
       uses: docker/build-push-action@v2
+      id: build-regctl-scratch
       with:
         context: .
         file: ./build/Dockerfile.regctl.buildkit
@@ -124,6 +139,7 @@ jobs:
 
     - name: Build and push regctl alpine
       uses: docker/build-push-action@v2
+      id: build-regctl-alpine
       with:
         context: .
         file: ./build/Dockerfile.regctl.buildkit
@@ -143,6 +159,7 @@ jobs:
 
     - name: Build and push regsync scratch
       uses: docker/build-push-action@v2
+      id: build-regsync-scratch
       with:
         context: .
         file: ./build/Dockerfile.regsync.buildkit
@@ -162,6 +179,7 @@ jobs:
 
     - name: Build and push regsync alpine
       uses: docker/build-push-action@v2
+      id: build-regsync-alpine
       with:
         context: .
         file: ./build/Dockerfile.regsync.buildkit
@@ -181,6 +199,7 @@ jobs:
 
     - name: Build and push regbot scratch
       uses: docker/build-push-action@v2
+      id: build-regbot-scratch
       with:
         context: .
         file: ./build/Dockerfile.regbot.buildkit
@@ -200,6 +219,7 @@ jobs:
 
     - name: Build and push regbot alpine
       uses: docker/build-push-action@v2
+      id: build-regbot-alpine
       with:
         context: .
         file: ./build/Dockerfile.regbot.buildkit
@@ -216,3 +236,22 @@ jobs:
           org.opencontainers.image.source=${{ github.repositoryUrl }}
           org.opencontainers.image.version=${{ steps.prep.outputs.version }}
           org.opencontainers.image.revision=${{ github.sha }}
+
+    - name: Sign the container image
+      if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
+      env:
+        # experimental support needed for GitHub OIDC signing
+        COSIGN_EXPERIMENTAL: "true"
+      run: |
+        cosign sign ${{ steps.prep.regctl_image_hub }}@${{ steps.build-regctl-scratch.outputs.digest }}
+        cosign sign ${{ steps.prep.regctl_image_hub }}@${{ steps.build-regctl-alpine.outputs.digest }}
+        cosign sign ${{ steps.prep.regctl_image_ghcr }}@${{ steps.build-regctl-scratch.outputs.digest }}
+        cosign sign ${{ steps.prep.regctl_image_ghcr }}@${{ steps.build-regctl-alpine.outputs.digest }}
+        cosign sign ${{ steps.prep.regbot_image_hub }}@${{ steps.build-regbot-scratch.outputs.digest }}
+        cosign sign ${{ steps.prep.regbot_image_hub }}@${{ steps.build-regbot-alpine.outputs.digest }}
+        cosign sign ${{ steps.prep.regbot_image_ghcr }}@${{ steps.build-regbot-scratch.outputs.digest }}
+        cosign sign ${{ steps.prep.regbot_image_ghcr }}@${{ steps.build-regbot-alpine.outputs.digest }}
+        cosign sign ${{ steps.prep.regsync_image_hub }}@${{ steps.build-regsync-scratch.outputs.digest }}
+        cosign sign ${{ steps.prep.regsync_image_hub }}@${{ steps.build-regsync-alpine.outputs.digest }}
+        cosign sign ${{ steps.prep.regsync_image_ghcr }}@${{ steps.build-regsync-scratch.outputs.digest }}
+        cosign sign ${{ steps.prep.regsync_image_ghcr }}@${{ steps.build-regsync-alpine.outputs.digest }}
