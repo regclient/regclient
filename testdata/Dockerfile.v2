@@ -1,0 +1,9 @@
+FROM scratch
+
+COPY layer1.txt /layer1
+ARG  arg=value
+COPY layer2.txt /layer2
+ARG  arg_label=value
+LABEL arg_label=${arg_label}
+LABEL version=2
+VOLUME /volume

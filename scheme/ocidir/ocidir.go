@@ -223,11 +223,10 @@ func indexSet(index *v1.Index, r ref.Ref, d types.Descriptor) error {
 	// search for existing
 	for i := range index.Manifests {
 		var name string
-		var ok bool
-		if r.Tag != "" && index.Manifests[i].Annotations != nil {
-			name, ok = index.Manifests[i].Annotations[aRefName]
+		if index.Manifests[i].Annotations != nil {
+			name = index.Manifests[i].Annotations[aRefName]
 		}
-		if (index.Manifests[i].Digest == d.Digest && !ok) || (ok && name == r.Tag) {
+		if (name == "" && index.Manifests[i].Digest == d.Digest) || (r.Tag != "" && name == r.Tag) {
 			index.Manifests[i] = d
 			pos = i
 			break
@@ -237,11 +236,12 @@ func indexSet(index *v1.Index, r ref.Ref, d types.Descriptor) error {
 		// existing entry was replaced, remove any dup entries
 		for i := len(index.Manifests) - 1; i > pos; i-- {
 			var name string
-			var ok bool
-			if r.Tag != "" && index.Manifests[i].Annotations != nil {
-				name, ok = index.Manifests[i].Annotations[aRefName]
+			if index.Manifests[i].Annotations != nil {
+				name = index.Manifests[i].Annotations[aRefName]
 			}
-			if (index.Manifests[i].Digest == d.Digest && !ok) || (ok && name == r.Tag) {
+			// prune entries without any tag and a matching digest
+			// or entries with a matching tag
+			if (name == "" && index.Manifests[i].Digest == d.Digest) || (r.Tag != "" && name == r.Tag) {
 				index.Manifests = append(index.Manifests[:i], index.Manifests[i+1:]...)
 			}
 		}

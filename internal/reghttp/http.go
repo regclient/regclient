@@ -405,7 +405,7 @@ func (resp *clientResp) Next() error {
 				httpClient = *h.httpClient
 			} else if h.config.TLS == config.TLSInsecure || len(c.rootCAPool) > 0 || len(c.rootCADirs) > 0 || h.config.RegCert != "" {
 				if httpClient.Transport == nil {
-					httpClient.Transport = &http.Transport{}
+					httpClient.Transport = http.DefaultTransport.(*http.Transport).Clone()
 				}
 				t, ok := httpClient.Transport.(*http.Transport)
 				if ok {

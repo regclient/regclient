@@ -1,5 +1,6 @@
 *
 !.git/
+!build/root.tgz
 !cmd/
 !config/
 !embed/

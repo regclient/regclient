@@ -49,7 +49,6 @@ var tmplFuncs = gotemplate.FuncMap{
 	"lower":       strings.ToLower,
 	"split":       strings.Split,
 	"time":        func() *TimeFuncs { return &TimeFuncs{} },
-	"title":       strings.Title,
 	"upper":       strings.ToUpper,
 }
 

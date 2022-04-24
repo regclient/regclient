@@ -214,9 +214,11 @@ the registry.
 
 ```shell
 cat >regctl <<EOF
-#!/bin/sh
-
-docker container run -it --rm --net host \\
+opts=""
+case "\$*" in
+  "registry login"*) opts="-t";;
+esac
+docker container run \$opts -i --rm --net host \\
   -u "\$(id -u):\$(id -g)" -e HOME -v \$HOME:\$HOME \\
   -v /etc/docker/certs.d:/etc/docker/certs.d:ro \\
   regclient/regctl:latest "\$@"
@@ -270,7 +272,7 @@ token.
 export HUB_USER=your_hub_username
 mkdir -p ${HOME}/.docker
 echo "your_hub_password" >${HOME}/.docker/hub_token
-docker container run -it --rm --net registry \
+docker container run -i --rm --net registry \
   -e "HUB_USER" \
   -v "${HOME}/.docker/hub_token:/var/run/secrets/hub_token:ro" \
   -v "$(pwd)/regbot.yml:/home/appuser/regbot.yml" \
@@ -285,7 +287,7 @@ automatically rate limit itself if you have less than the specified pulls
 remaining on your account.
 
 ```shell
-docker container run -it --rm --net registry \
+docker container run -i --rm --net registry \
   -e "HUB_USER" \
   -v "${HOME}/.docker/hub_token:/var/run/secrets/hub_token:ro" \
   -v "$(pwd)/regbot.yml:/home/appuser/regbot.yml" \

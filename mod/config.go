@@ -3,11 +3,52 @@ package mod
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/types/ref"
 )
+
+// WithBuildArgRm removes a build arg from the config history
+func WithBuildArgRm(arg string, value *regexp.Regexp) Opts {
+	return func(dc *dagConfig) {
+		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(ctx context.Context, rc *regclient.RegClient, r ref.Ref, doc *dagOCIConfig) error {
+			changed := false
+			oc := doc.oc.GetConfig()
+			argexp := regexp.MustCompile(fmt.Sprintf(`^ARG %s(=.*|)$`,
+				regexp.QuoteMeta(arg)))
+			runexp := regexp.MustCompile(fmt.Sprintf(`^RUN \|([0-9]+) (.*)%s=%s(.*)$`,
+				regexp.QuoteMeta(arg), value.String()))
+			for i := len(oc.History) - 1; i >= 0; i-- {
+				if argexp.MatchString(oc.History[i].CreatedBy) && oc.History[i].EmptyLayer {
+					// delete empty build arg history entry
+					oc.History = append(oc.History[:i], oc.History[i+1:]...)
+					changed = true
+				} else if match := runexp.FindStringSubmatch(oc.History[i].CreatedBy); len(match) == 4 {
+					// delete arg from run steps
+					count, err := strconv.Atoi(match[1])
+					if err != nil {
+						return fmt.Errorf("failed parsing history \"%s\": %w", oc.History[i].CreatedBy, err)
+					}
+					if count == 1 && len(match[2]) == 0 {
+						oc.History[i].CreatedBy = fmt.Sprintf("RUN %s", match[3])
+					} else {
+						oc.History[i].CreatedBy = fmt.Sprintf("RUN |%d %s%s", count-1, match[2], match[3])
+					}
+					changed = true
+				}
+
+			}
+			if changed {
+				doc.oc.SetConfig(oc)
+				doc.modified = true
+			}
+			return nil
+		})
+	}
+}
 
 // WithConfigTimestampFromLabel sets the max timestamp in the config to match a label value
 func WithConfigTimestampFromLabel(label string) Opts {
@@ -20,8 +61,7 @@ func WithConfigTimestampFromLabel(label string) Opts {
 			if !ok {
 				return fmt.Errorf("label not found: %s", label)
 			}
-			t := time.Time{}
-			t, err = time.Parse(time.RFC3339, tl)
+			t, err := time.Parse(time.RFC3339, tl)
 			if err != nil {
 				// TODO: add fallbacks
 				return fmt.Errorf("could not parse time %s from %s: %w", tl, label, err)

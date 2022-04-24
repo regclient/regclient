@@ -21,4 +21,8 @@ type Manifest struct {
 	// Layers lists descriptors for the layers referenced by the
 	// configuration.
 	Layers []types.Descriptor `json:"layers"`
+
+	// Annotations contains arbitrary metadata for the image index.
+	// Note, this is not a defined docker schema2 field.
+	Annotations map[string]string `json:"annotations,omitempty"`
 }

@@ -19,43 +19,59 @@ import (
 
 func TestManifest(t *testing.T) {
 	ctx := context.Background()
-	f := rwfs.OSNew("")
-	o := New(WithFS(f))
-	rs := "ocidir://testdata/regctl:latest"
+	// copy testdata images into memory
+	fsOS := rwfs.OSNew("")
+	fsMem := rwfs.MemNew()
+	err := rwfs.CopyRecursive(fsOS, "../../testdata", fsMem, ".")
+	if err != nil {
+		t.Errorf("failed to setup memfs copy: %v", err)
+		return
+	}
+	o := New(WithFS(fsMem))
+	rs := "ocidir://testrepo:v1"
 	r, err := ref.New(rs)
 	if err != nil {
 		t.Errorf("failed to parse ref %s: %v", rs, err)
+		return
 	}
 	// manifest head
 	_, err = o.ManifestHead(ctx, r)
 	if err != nil {
 		t.Errorf("manifest head: %v", err)
-		return
 	}
 	// manifest list
 	ml, err := o.ManifestGet(ctx, r)
 	if err != nil {
 		t.Errorf("manifest get: %v", err)
 	}
-	if manifest.GetMediaType(ml) != types.MediaTypeDocker2ManifestList {
-		t.Errorf("manifest mt, expected %s, received %s", types.MediaTypeDocker2ManifestList, manifest.GetMediaType(ml))
+	if manifest.GetMediaType(ml) != types.MediaTypeOCI1ManifestList {
+		t.Errorf("manifest mt, expected %s, received %s", types.MediaTypeOCI1ManifestList, manifest.GetMediaType(ml))
 	}
 	if !ml.IsList() {
 		t.Errorf("expected manifest list")
-		return
 	}
 	dl, err := ml.GetManifestList()
 	if err != nil || len(dl) < 1 {
 		t.Errorf("descriptor list (%d): %v", len(dl), err)
-		return
 	}
-	// image manifest
+	// manifest head on a child digest
 	rs = fmt.Sprintf("%s@%s", rs, dl[0].Digest)
 	r, err = ref.New(rs)
 	if err != nil {
 		t.Errorf("failed to parse ref %s: %v", rs, err)
 		return
 	}
+	_, err = o.ManifestHead(ctx, r)
+	if err != nil {
+		t.Errorf("manifest head failed on child digest: %v", err)
+	}
+	rMissing := r
+	rMissing.Digest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	_, err = o.ManifestHead(ctx, rMissing)
+	if err == nil {
+		t.Errorf("manifest head succeeded on missing digest: %s", rMissing.CommonName())
+	}
+	// image manifest
 	m, err := o.ManifestGet(ctx, r)
 	if err != nil {
 		t.Errorf("manifest get: %v", err)
@@ -64,8 +80,8 @@ func TestManifest(t *testing.T) {
 	_, err = m.GetConfig()
 	if err != nil {
 		t.Errorf("config: %v", err)
-		return
 	}
+
 	// test manifest put to a memfs
 	fm := rwfs.MemNew()
 	om := New(WithFS(fm))
@@ -73,7 +89,7 @@ func TestManifest(t *testing.T) {
 	if err != nil {
 		t.Errorf("manifest put: %v", err)
 	}
-	fh, err := fm.Open("testdata/regctl/" + imageLayoutFile)
+	fh, err := fm.Open("testrepo/" + imageLayoutFile)
 	if err != nil {
 		t.Errorf("open oci-layout: %v", err)
 		return
@@ -114,11 +130,10 @@ func TestManifest(t *testing.T) {
 	if err != nil {
 		t.Errorf("tag list tags: %v", err)
 	}
-	if len(tlt) != 1 || tlt[0] != "latest" {
-		t.Errorf("tag list, expected latest, received %v", tlt)
+	if len(tlt) != 1 || tlt[0] != "v1" {
+		t.Errorf("tag list, expected v1, received %v", tlt)
 	}
 	// test manifest delete
-	t.Logf("deleting %s", r.CommonName())
 	err = om.ManifestDelete(ctx, r)
 	if err != nil {
 		t.Errorf("failed to delete tag: %v", err)
@@ -137,6 +152,68 @@ func TestManifest(t *testing.T) {
 	err = om.ManifestDelete(ctx, r)
 	if err == nil {
 		t.Errorf("deleted tag twice")
+	}
+
+	// test tag delete on v1 and v2
+	r.Digest = ""
+	r.Tag = "v1"
+	mh1, err := o.ManifestHead(ctx, r)
+	if err != nil {
+		t.Errorf("failed getting %s manifest head: %v", r.Tag, err)
+	}
+	err = o.TagDelete(ctx, r)
+	if err != nil {
+		t.Errorf("failed deleting tag %s: %v", r.Tag, err)
+	}
+	err = o.Close(ctx, r)
+	if err != nil {
+		t.Errorf("failed closing: %v", err)
+	}
+	// verify digest for v1 still exists but v2 has been deleted
+	mh1D := mh1.GetDescriptor().Digest
+	fh, err = fsMem.Open(path.Join(r.Path, "blobs", mh1D.Algorithm().String(), mh1D.Encoded()))
+	if err == nil {
+		t.Errorf("manifest blob exists for %s: %v", r.Tag, err)
+		fh.Close()
+	}
+	// verify v1 tag removed
+	o = New(WithFS(fsMem))
+	_, err = o.ManifestHead(ctx, r)
+	if err == nil {
+		t.Errorf("succeeded getting deleted tag %s: %v", r.Tag, err)
+	}
+
+	// push a dup tag
+	r11 := r
+	r11.Tag = "v1.1"
+	err = o.ManifestPut(ctx, r11, ml)
+	if err != nil {
+		t.Errorf("failed pushing manifest: %v", err)
+	}
+	// push by digest
+	rd := r
+	rd.Tag = ""
+	rd.Digest = ml.GetDescriptor().Digest.String()
+	err = o.ManifestPut(ctx, rd, ml)
+	if err != nil {
+		t.Errorf("failed pushing manifest: %v", err)
+	}
+	// push second tag
+	r12 := r
+	r12.Tag = "v1.2"
+	err = o.ManifestPut(ctx, r12, ml)
+	if err != nil {
+		t.Errorf("failed pushing manifest: %v", err)
+	}
+	err = o.Close(ctx, r)
+	if err != nil {
+		t.Errorf("failed closing: %v", err)
+	}
+	o = New(WithFS(fsMem))
+	// verify original tag has not been deleted
+	_, err = o.ManifestHead(ctx, r11)
+	if err != nil {
+		t.Errorf("could not query manifest after pushing dup tag")
 	}
 
 }

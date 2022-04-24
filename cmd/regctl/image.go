@@ -208,6 +208,34 @@ func init() {
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
+			vs := strings.SplitN(val, "=", 2)
+			if len(vs) != 2 {
+				return fmt.Errorf("arg must be in the format \"name=value\"")
+			}
+			imageOpts.modOpts = append(imageOpts.modOpts,
+				mod.WithBuildArgRm(vs[0], regexp.MustCompile(regexp.QuoteMeta(vs[1]))))
+			return nil
+		},
+	}, "buildarg-rm", "", `delete a build arg`)
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "string",
+		f: func(val string) error {
+			vs := strings.SplitN(val, "=", 2)
+			if len(vs) != 2 {
+				return fmt.Errorf("arg must be in the format \"name=regex\"")
+			}
+			value, err := regexp.Compile(vs[1])
+			if err != nil {
+				return fmt.Errorf("regexp value is invalid: %w", err)
+			}
+			imageOpts.modOpts = append(imageOpts.modOpts,
+				mod.WithBuildArgRm(vs[0], value))
+			return nil
+		},
+	}, "buildarg-rm-regex", "", `delete a build arg with a regex value`)
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "string",
+		f: func(val string) error {
 			t, err := time.Parse(time.RFC3339, val)
 			if err != nil {
 				return fmt.Errorf("time must be formatted %s: %w", time.RFC3339, err)
@@ -291,6 +319,13 @@ func init() {
 			return nil
 		},
 	}, "layer-rm-index", "", `delete a layer from an image (index begins at 0)`)
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "string",
+		f: func(val string) error {
+			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithLayerStripFile(val))
+			return nil
+		},
+	}, "layer-strip-file", "", `delete a file or directory from all layers`)
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {

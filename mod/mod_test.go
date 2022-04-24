@@ -82,6 +82,13 @@ func TestMod(t *testing.T) {
 			ref: "ocidir://testrepo:v1",
 		},
 		{
+			name: "Delete Annotation",
+			opts: []Opts{
+				WithAnnotation("org.example.version", ""),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
 			name: "Add Base Annotations",
 			opts: []Opts{
 				WithAnnotationOCIBase(bRef, bDig),
@@ -173,7 +180,7 @@ func TestMod(t *testing.T) {
 		{
 			name: "Layer Trim By Created RE",
 			opts: []Opts{
-				WithLayerRmCreatedBy(*regexp.MustCompile("^COPY test2.txt /layer2")),
+				WithLayerRmCreatedBy(*regexp.MustCompile("^COPY layer2.txt /layer2")),
 			},
 			ref: "ocidir://testrepo:v3",
 		},
@@ -236,6 +243,28 @@ func TestMod(t *testing.T) {
 				WithData(2048),
 			},
 			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Build arg rm",
+			opts: []Opts{
+				WithBuildArgRm("arg_label", regexp.MustCompile("arg_for_[a-z]*")),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Build arg with value rm",
+			opts: []Opts{
+				WithBuildArgRm("arg_label", regexp.MustCompile("arg_for_[a-z]*")),
+			},
+			ref: "ocidir://testrepo:v2",
+		},
+		{
+			name: "Build arg missing",
+			opts: []Opts{
+				WithBuildArgRm("no_such_arg", regexp.MustCompile("no_such_value")),
+			},
+			ref:      "ocidir://testrepo:v1",
+			wantSame: true,
 		},
 	}
 

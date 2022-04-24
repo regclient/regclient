@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"text/tabwriter"
 
 	// crypto libraries included for go-digest
@@ -124,6 +125,18 @@ func (m *oci1Manifest) MarshalPretty() ([]byte, error) {
 	}
 	fmt.Fprintf(tw, "MediaType:\t%s\n", m.desc.MediaType)
 	fmt.Fprintf(tw, "Digest:\t%s\n", m.desc.Digest.String())
+	if m.Annotations != nil && len(m.Annotations) > 0 {
+		fmt.Fprintf(tw, "Annotations:\t\n")
+		keys := make([]string, 0, len(m.Annotations))
+		for k := range m.Annotations {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, name := range keys {
+			val := m.Annotations[name]
+			fmt.Fprintf(tw, "  %s:\t%s\n", name, val)
+		}
+	}
 	var total int64
 	for _, d := range m.Layers {
 		total += d.Size
@@ -160,7 +173,13 @@ func (m *oci1Index) MarshalPretty() ([]byte, error) {
 	fmt.Fprintf(tw, "Digest:\t%s\n", m.desc.Digest.String())
 	if m.Annotations != nil && len(m.Annotations) > 0 {
 		fmt.Fprintf(tw, "Annotations:\t\n")
-		for name, val := range m.Annotations {
+		keys := make([]string, 0, len(m.Annotations))
+		for k := range m.Annotations {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, name := range keys {
+			val := m.Annotations[name]
 			fmt.Fprintf(tw, "  %s:\t%s\n", name, val)
 		}
 	}
