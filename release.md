@@ -1,35 +1,50 @@
-# Release v0.4.1
+# Release v0.4.2
 
 Breaking Changes:
 
-- Blob methods have been updated to use a descriptor instead of the digest and size.
-  ([PR 173][pr-173])
+- Format templates no longer support `title`.
+  ([PR 194][pr-194])
 
 New Features:
 
-- Allow the user-agent to be overridden.
-  ([PR 172][pr-172])
-- Support the Data field in the descriptor on manifest and blob gets.
-  ([PR 174][pr-174])
-- Added image modification functionality.
-  ([PR 182][pr-182])
+- Add the ability to remove buildarg from image history.
+  ([PR 207][pr-207])
+- regsync now supports the `.Sync` template variable on source and target.
+  ([PR 208][pr-208])
+- Add support for annotations on docker2 schemas.
+  ([PR 209][pr-209])
+- Adding image signing with cosign.
+  ([PR 212][pr-212])
 
 Bug Fixes:
 
-- Fix an issue with dangling references in the `ocidir` `index.json`.
-  ([PR 176][pr-176])
-- Fix handling of relative paths in `ocidir`.
-  ([PR 177][pr-177])
-- Fix handling of `/etc/docker/certs.d`.
-  ([PR 179][pr-179])
-- Fix handling of registry CA configuration.
-  ([PR 180][pr-180])
+- Fix handling of http_proxy and https_proxy.
+  ([PR 197][pr-197])
+- manifest head on an ocidir with a digest no longer succeeds if manifest is missing.
+  ([PR 199][pr-199])
+- image export of manifest list to ocidir should only define parent manifest in `index.json`.
+  ([PR 200][pr-200])
+- Add `/tmp` directory to scratch images.
+  ([PR 205][pr-205])
+- Handle multiple tags pointing to the same digest in ocidir.
+  ([PR 211][pr-211])
 
-[pr-172]: https://github.com/regclient/regclient/pull/172
-[pr-173]: https://github.com/regclient/regclient/pull/173
-[pr-174]: https://github.com/regclient/regclient/pull/174
-[pr-176]: https://github.com/regclient/regclient/pull/176
-[pr-177]: https://github.com/regclient/regclient/pull/177
-[pr-179]: https://github.com/regclient/regclient/pull/179
-[pr-180]: https://github.com/regclient/regclient/pull/180
-[pr-182]: https://github.com/regclient/regclient/pull/182
+Other Changes:
+
+- Upgrade to Go 1.17.
+  ([PR 193][pr-193])
+- Go build now runs with `-trimpath`.
+  ([PR 196][pr-196])
+
+[pr-193]: https://github.com/regclient/regclient/pull/193
+[pr-194]: https://github.com/regclient/regclient/pull/194
+[pr-196]: https://github.com/regclient/regclient/pull/196
+[pr-197]: https://github.com/regclient/regclient/pull/197
+[pr-199]: https://github.com/regclient/regclient/pull/199
+[pr-200]: https://github.com/regclient/regclient/pull/200
+[pr-205]: https://github.com/regclient/regclient/pull/205
+[pr-207]: https://github.com/regclient/regclient/pull/207
+[pr-208]: https://github.com/regclient/regclient/pull/208
+[pr-209]: https://github.com/regclient/regclient/pull/209
+[pr-211]: https://github.com/regclient/regclient/pull/211
+[pr-212]: https://github.com/regclient/regclient/pull/212
