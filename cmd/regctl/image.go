@@ -265,7 +265,7 @@ func init() {
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
-			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithExposeAdd(val))
+			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithExposeRm(val))
 			return nil
 		},
 	}, "expose-rm", "", `delete an exposed port`)
@@ -373,7 +373,7 @@ func init() {
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
-			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithVolumeAdd(val))
+			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithVolumeRm(val))
 			return nil
 		},
 	}, "volume-rm", "", `delete a volume definition`)
@@ -530,6 +530,7 @@ func runImageMod(cmd *cobra.Command, args []string) error {
 			}
 		} else {
 			rNew = r
+			rNew.Digest = ""
 			rNew.Tag = imageOpts.create
 		}
 	} else if imageOpts.replace {
