@@ -210,8 +210,10 @@ func Apply(ctx context.Context, rc *regclient.RegClient, r ref.Ref, opts ...Opts
 	if err != nil {
 		return rMod, err
 	}
-	rMod.Digest = string(dm.newDesc.Digest)
-	rMod.Tag = ""
+	if dm.mod == replaced {
+		rMod.Digest = string(dm.newDesc.Digest)
+		rMod.Tag = ""
+	}
 	return rMod, nil
 }
 
