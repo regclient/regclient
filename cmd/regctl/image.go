@@ -158,6 +158,7 @@ func init() {
 
 	imageModCmd.Flags().StringVarP(&imageOpts.create, "create", "", "", "Create tag")
 	imageModCmd.Flags().BoolVarP(&imageOpts.replace, "replace", "", false, "Replace tag (ignored when \"create\" is used)")
+	// most image mod flags are order dependent, so they are added using VarP/VarPF to append to modOpts
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
@@ -283,7 +284,7 @@ func init() {
 			return nil
 		},
 	}, "label", "", `set an label (name=value)`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	flagLabelAnnot := imageModCmd.Flags().VarPF(&modFlagFunc{
 		t: "bool",
 		f: func(val string) error {
 			b, err := strconv.ParseBool(val)
@@ -296,6 +297,7 @@ func init() {
 			return nil
 		},
 	}, "label-to-annotation", "", `set annotations from labels`)
+	flagLabelAnnot.NoOptDefVal = "true"
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
@@ -350,7 +352,7 @@ func init() {
 			return nil
 		},
 	}, "time-max", "", `max timestamp for both the config and layers`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	flagOCI := imageModCmd.Flags().VarPF(&modFlagFunc{
 		t: "bool",
 		f: func(val string) error {
 			b, err := strconv.ParseBool(val)
@@ -363,6 +365,7 @@ func init() {
 			return nil
 		},
 	}, "to-oci", "", `convert to OCI media types`)
+	flagOCI.NoOptDefVal = "true"
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
@@ -590,6 +593,10 @@ func runImageRateLimit(cmd *cobra.Command, args []string) error {
 type modFlagFunc struct {
 	f func(string) error
 	t string
+}
+
+func (m *modFlagFunc) IsBoolFlag() bool {
+	return m.t == "bool"
 }
 
 func (m *modFlagFunc) String() string {
