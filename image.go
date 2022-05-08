@@ -71,10 +71,11 @@ type tarWriteData struct {
 }
 
 type imageOpt struct {
-	forceRecursive bool
-	digestTags     bool
-	platforms      []string
-	tagList        []string
+	forceRecursive  bool
+	includeExternal bool
+	digestTags      bool
+	platforms       []string
+	tagList         []string
 }
 
 // ImageOpts define options for the Image* commands
@@ -84,6 +85,13 @@ type ImageOpts func(*imageOpt)
 func ImageWithForceRecursive() ImageOpts {
 	return func(opts *imageOpt) {
 		opts.forceRecursive = true
+	}
+}
+
+// ImageWithIncludeExternal attempts to copy every manifest and blob even if parent manifests already exist.
+func ImageWithIncludeExternal() ImageOpts {
+	return func(opts *imageOpt) {
+		opts.includeExternal = true
 	}
 }
 
@@ -213,7 +221,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					// known manifest media type
 					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, entry, true, opt)
 				case types.MediaTypeDocker2ImageConfig, types.MediaTypeOCI1ImageConfig,
-					types.MediaTypeDocker2Layer, types.MediaTypeOCI1Layer, types.MediaTypeOCI1LayerGzip,
+					types.MediaTypeDocker2LayerGzip, types.MediaTypeOCI1Layer, types.MediaTypeOCI1LayerGzip,
 					types.MediaTypeBuildkitCacheConfig:
 					// known blob media type
 					err = rc.BlobCopy(ctx, entrySrc, entryTgt, entry)
@@ -265,7 +273,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 				return err
 			}
 			for _, layerSrc := range l {
-				if len(layerSrc.URLs) > 0 {
+				if len(layerSrc.URLs) > 0 && !opt.includeExternal {
 					// skip blobs where the URLs are defined, these aren't hosted and won't be pulled from the source
 					rc.log.WithFields(logrus.Fields{
 						"source":        refSrc.Reference,
@@ -681,7 +689,7 @@ func (rc *RegClient) imageImportDockerAddLayerHandlers(ctx context.Context, ref 
 				if od, ok := trd.dockerManifestList[0].LayerSources[d.Digest]; ok {
 					trd.dockerManifest.Layers[i] = od
 				} else {
-					d.MediaType = types.MediaTypeDocker2Layer
+					d.MediaType = types.MediaTypeDocker2LayerGzip
 					trd.dockerManifest.Layers[i] = d
 				}
 				return nil
@@ -776,7 +784,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 					}
 					return rc.imageImportOCIHandleManifest(ctx, ref, md, trd, true, !push)
 				case types.MediaTypeDocker2ImageConfig, types.MediaTypeOCI1ImageConfig,
-					types.MediaTypeDocker2Layer, types.MediaTypeOCI1Layer, types.MediaTypeOCI1LayerGzip,
+					types.MediaTypeDocker2LayerGzip, types.MediaTypeOCI1Layer, types.MediaTypeOCI1LayerGzip,
 					types.MediaTypeBuildkitCacheConfig:
 					// known blob media types
 					return rc.imageImportBlob(ctx, ref, d, trd)

@@ -57,6 +57,31 @@ func (reg *Reg) BlobGet(ctx context.Context, r ref.Ref, d types.Descriptor) (blo
 		},
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
+	if err != nil && len(d.URLs) > 0 {
+		for _, curURL := range d.URLs {
+			// fallback for external blobs
+			var u *url.URL
+			u, err = url.Parse(curURL)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse external url \"%s\": %w", curURL, err)
+			}
+			req = &reghttp.Req{
+				Host: r.Registry,
+				APIs: map[string]reghttp.ReqAPI{
+					"": {
+						Method:     "GET",
+						Repository: r.Repository,
+						DirectURL:  u,
+					},
+				},
+				NoMirrors: true,
+			}
+			resp, err = reg.reghttp.Do(ctx, req)
+			if err == nil {
+				break
+			}
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get blob, digest %s, ref %s: %w", d.Digest.String(), r.CommonName(), err)
 	}
@@ -89,6 +114,31 @@ func (reg *Reg) BlobHead(ctx context.Context, r ref.Ref, d types.Descriptor) (bl
 		},
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
+	if err != nil && len(d.URLs) > 0 {
+		for _, curURL := range d.URLs {
+			// fallback for external blobs
+			var u *url.URL
+			u, err = url.Parse(curURL)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse external url \"%s\": %w", curURL, err)
+			}
+			req = &reghttp.Req{
+				Host: r.Registry,
+				APIs: map[string]reghttp.ReqAPI{
+					"": {
+						Method:     "HEAD",
+						Repository: r.Repository,
+						DirectURL:  u,
+					},
+				},
+				NoMirrors: true,
+			}
+			resp, err = reg.reghttp.Do(ctx, req)
+			if err == nil {
+				break
+			}
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to request blob head, digest %s, ref %s: %w", d.Digest.String(), r.CommonName(), err)
 	}

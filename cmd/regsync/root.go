@@ -759,6 +759,9 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 	if s.ForceRecursive != nil && *s.ForceRecursive {
 		opts = append(opts, regclient.ImageWithForceRecursive())
 	}
+	if s.IncludeExternal != nil && *s.IncludeExternal {
+		opts = append(opts, regclient.ImageWithIncludeExternal())
+	}
 	if len(s.Platforms) > 0 {
 		opts = append(opts, regclient.ImageWithPlatforms(s.Platforms))
 	}

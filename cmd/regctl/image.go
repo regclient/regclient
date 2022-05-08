@@ -114,22 +114,24 @@ The other values may be 0 if not provided by the registry.`,
 }
 
 var imageOpts struct {
-	create         string
-	forceRecursive bool
-	format         string
-	digestTags     bool
-	list           bool
-	modOpts        []mod.Opts
-	platform       string
-	platforms      []string
-	replace        bool
-	requireList    bool
+	create          string
+	forceRecursive  bool
+	format          string
+	includeExternal bool
+	digestTags      bool
+	list            bool
+	modOpts         []mod.Opts
+	platform        string
+	platforms       []string
+	replace         bool
+	requireList     bool
 }
 
 func init() {
 	imageOpts.modOpts = []mod.Opts{}
 
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.forceRecursive, "force-recursive", "", false, "Force recursive copy of image, repairs missing nested blobs and manifests")
+	imageCopyCmd.Flags().BoolVarP(&imageOpts.includeExternal, "include-external", "", false, "Include external layers")
 	imageCopyCmd.Flags().StringArrayVarP(&imageOpts.platforms, "platforms", "", []string{}, "Copy only specific platforms, registry validation must be disabled")
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.digestTags, "digest-tags", "", false, "Include digest tags (\"sha256-<digest>.*\") when copying manifests")
 	// platforms should be treated as experimental since it will break many registries
@@ -270,6 +272,20 @@ func init() {
 			return nil
 		},
 	}, "expose-rm", "", `delete an exposed port`)
+	flagExtURLsRm := imageModCmd.Flags().VarPF(&modFlagFunc{
+		t: "bool",
+		f: func(val string) error {
+			b, err := strconv.ParseBool(val)
+			if err != nil {
+				return fmt.Errorf("unable to parse value %s: %w", val, err)
+			}
+			if b {
+				imageOpts.modOpts = append(imageOpts.modOpts, mod.WithExternalURLsRm())
+			}
+			return nil
+		},
+	}, "external-urls-rm", "", `remove external url references from layers (first copy image with "--include-external")`)
+	flagExtURLsRm.NoOptDefVal = "true"
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
@@ -419,6 +435,9 @@ func runImageCopy(cmd *cobra.Command, args []string) error {
 	opts := []regclient.ImageOpts{}
 	if imageOpts.forceRecursive {
 		opts = append(opts, regclient.ImageWithForceRecursive())
+	}
+	if imageOpts.includeExternal {
+		opts = append(opts, regclient.ImageWithIncludeExternal())
 	}
 	if imageOpts.digestTags {
 		opts = append(opts, regclient.ImageWithDigestTags())

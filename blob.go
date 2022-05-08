@@ -15,6 +15,8 @@ import (
 // If the blob already exists in the target, the copy is skipped
 // A server side cross repository blob mount is attempted
 func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor) error {
+	tDesc := d
+	tDesc.URLs = []string{} // ignore URLs when pushing to target
 	// for the same repository, there's nothing to copy
 	if ref.EqualRepository(refSrc, refTgt) {
 		rc.log.WithFields(logrus.Fields{
@@ -25,7 +27,7 @@ func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Re
 		return nil
 	}
 	// check if layer already exists
-	if _, err := rc.BlobHead(ctx, refTgt, d); err == nil {
+	if _, err := rc.BlobHead(ctx, refTgt, tDesc); err == nil {
 		rc.log.WithFields(logrus.Fields{
 			"tgt":    refTgt.Reference,
 			"digest": d,
