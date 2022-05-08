@@ -171,9 +171,10 @@ func (s *Sandbox) imageCopy(ls *lua.LState) int {
 	tgt := s.checkReference(ls, 2)
 	opts := []regclient.ImageOpts{}
 	lOpts := struct {
-		DigestTags     bool     `json:"digestTags"`
-		ForceRecursive bool     `json:"forceRecursive"`
-		Platforms      []string `json:"platforms"`
+		DigestTags      bool     `json:"digestTags"`
+		ForceRecursive  bool     `json:"forceRecursive"`
+		IncludeExternal bool     `json:"includeExternal"`
+		Platforms       []string `json:"platforms"`
 	}{}
 	if ls.GetTop() == 3 {
 		err := go2lua.Import(ls, ls.Get(3), &lOpts, lOpts)
@@ -186,6 +187,9 @@ func (s *Sandbox) imageCopy(ls *lua.LState) int {
 		if lOpts.ForceRecursive {
 			opts = append(opts, regclient.ImageWithForceRecursive())
 		}
+		if lOpts.IncludeExternal {
+			opts = append(opts, regclient.ImageWithIncludeExternal())
+		}
 		if len(lOpts.Platforms) > 0 {
 			opts = append(opts, regclient.ImageWithPlatforms(lOpts.Platforms))
 		}
@@ -195,12 +199,13 @@ func (s *Sandbox) imageCopy(ls *lua.LState) int {
 		defer s.sem.Release(1)
 	}
 	s.log.WithFields(logrus.Fields{
-		"script":         s.name,
-		"source":         src.r.CommonName(),
-		"target":         tgt.r.CommonName(),
-		"digestTags":     lOpts.DigestTags,
-		"forceRecursive": lOpts.ForceRecursive,
-		"dry-run":        s.dryRun,
+		"script":          s.name,
+		"source":          src.r.CommonName(),
+		"target":          tgt.r.CommonName(),
+		"digestTags":      lOpts.DigestTags,
+		"forceRecursive":  lOpts.ForceRecursive,
+		"includeExternal": lOpts.IncludeExternal,
+		"dry-run":         s.dryRun,
 	}).Info("Copy image")
 	if s.dryRun {
 		return 0

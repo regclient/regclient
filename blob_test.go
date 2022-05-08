@@ -737,4 +737,5 @@ func TestBlobPut(t *testing.T) {
 
 	})
 
+	// TODO: Test BlobCopy, with and without external URLs
 }

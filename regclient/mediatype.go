@@ -16,7 +16,7 @@ var (
 	MediaTypeOCI1Manifest          = types.MediaTypeOCI1Manifest
 	MediaTypeOCI1ManifestList      = types.MediaTypeOCI1ManifestList
 	MediaTypeOCI1ImageConfig       = types.MediaTypeOCI1ImageConfig
-	MediaTypeDocker2Layer          = types.MediaTypeDocker2Layer
+	MediaTypeDocker2Layer          = types.MediaTypeDocker2LayerGzip
 	MediaTypeOCI1Layer             = types.MediaTypeOCI1Layer
 	MediaTypeOCI1LayerGzip         = types.MediaTypeOCI1LayerGzip
 	MediaTypeBuildkitCacheConfig   = types.MediaTypeBuildkitCacheConfig

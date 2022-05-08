@@ -75,17 +75,18 @@ func credsToRCHost(c ConfigCreds) config.Host {
 
 // ConfigDefaults is uses for general options and defaults for ConfigSync entries
 type ConfigDefaults struct {
-	Backup         string          `yaml:"backup" json:"backup"`
-	Interval       time.Duration   `yaml:"interval" json:"interval"`
-	Schedule       string          `yaml:"schedule" json:"schedule"`
-	RateLimit      ConfigRateLimit `yaml:"ratelimit" json:"ratelimit"`
-	Parallel       int             `yaml:"parallel" json:"parallel"`
-	DigestTags     *bool           `yaml:"digestTags" json:"digestTags"`
-	ForceRecursive *bool           `yaml:"forceRecursive" json:"forceRecursive"`
-	MediaTypes     []string        `yaml:"mediaTypes" json:"mediaTypes"`
-	SkipDockerConf bool            `yaml:"skipDockerConfig" json:"skipDockerConfig"`
-	Hooks          ConfigHooks     `yaml:"hooks" json:"hooks"`
-	UserAgent      string          `yaml:"userAgent" json:"userAgent"`
+	Backup          string          `yaml:"backup" json:"backup"`
+	Interval        time.Duration   `yaml:"interval" json:"interval"`
+	Schedule        string          `yaml:"schedule" json:"schedule"`
+	RateLimit       ConfigRateLimit `yaml:"ratelimit" json:"ratelimit"`
+	Parallel        int             `yaml:"parallel" json:"parallel"`
+	DigestTags      *bool           `yaml:"digestTags" json:"digestTags"`
+	ForceRecursive  *bool           `yaml:"forceRecursive" json:"forceRecursive"`
+	IncludeExternal *bool           `yaml:"includeExternal" json:"includeExternal"`
+	MediaTypes      []string        `yaml:"mediaTypes" json:"mediaTypes"`
+	SkipDockerConf  bool            `yaml:"skipDockerConfig" json:"skipDockerConfig"`
+	Hooks           ConfigHooks     `yaml:"hooks" json:"hooks"`
+	UserAgent       string          `yaml:"userAgent" json:"userAgent"`
 }
 
 // ConfigRateLimit is for rate limit settings
@@ -96,20 +97,21 @@ type ConfigRateLimit struct {
 
 // ConfigSync defines a source/target repository to sync
 type ConfigSync struct {
-	Source         string          `yaml:"source" json:"source"`
-	Target         string          `yaml:"target" json:"target"`
-	Type           string          `yaml:"type" json:"type"`
-	Tags           ConfigTags      `yaml:"tags" json:"tags"`
-	DigestTags     *bool           `yaml:"digestTags" json:"digestTags"`
-	Platform       string          `yaml:"platform" json:"platform"`
-	Platforms      []string        `yaml:"platforms" json:"platforms"`
-	ForceRecursive *bool           `yaml:"forceRecursive" json:"forceRecursive"`
-	Backup         string          `yaml:"backup" json:"backup"`
-	Interval       time.Duration   `yaml:"interval" json:"interval"`
-	Schedule       string          `yaml:"schedule" json:"schedule"`
-	RateLimit      ConfigRateLimit `yaml:"ratelimit" json:"ratelimit"`
-	MediaTypes     []string        `yaml:"mediaTypes" json:"mediaTypes"`
-	Hooks          ConfigHooks     `yaml:"hooks" json:"hooks"`
+	Source          string          `yaml:"source" json:"source"`
+	Target          string          `yaml:"target" json:"target"`
+	Type            string          `yaml:"type" json:"type"`
+	Tags            ConfigTags      `yaml:"tags" json:"tags"`
+	DigestTags      *bool           `yaml:"digestTags" json:"digestTags"`
+	Platform        string          `yaml:"platform" json:"platform"`
+	Platforms       []string        `yaml:"platforms" json:"platforms"`
+	ForceRecursive  *bool           `yaml:"forceRecursive" json:"forceRecursive"`
+	IncludeExternal *bool           `yaml:"includeExternal" json:"includeExternal"`
+	Backup          string          `yaml:"backup" json:"backup"`
+	Interval        time.Duration   `yaml:"interval" json:"interval"`
+	Schedule        string          `yaml:"schedule" json:"schedule"`
+	RateLimit       ConfigRateLimit `yaml:"ratelimit" json:"ratelimit"`
+	MediaTypes      []string        `yaml:"mediaTypes" json:"mediaTypes"`
+	Hooks           ConfigHooks     `yaml:"hooks" json:"hooks"`
 }
 
 // ConfigTags is an allow and deny list of tag regex strings
@@ -260,6 +262,10 @@ func syncSetDefaults(s *ConfigSync, d ConfigDefaults) {
 	if s.ForceRecursive == nil {
 		b := (d.ForceRecursive != nil && *d.ForceRecursive)
 		s.ForceRecursive = &b
+	}
+	if s.IncludeExternal == nil {
+		b := (d.IncludeExternal != nil && *d.IncludeExternal)
+		s.IncludeExternal = &b
 	}
 	if s.Hooks.Pre == nil && d.Hooks.Pre != nil {
 		s.Hooks.Pre = d.Hooks.Pre
