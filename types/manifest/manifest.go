@@ -75,9 +75,9 @@ func New(opts ...Opts) (Manifest, error) {
 		if c.desc.MediaType == "" {
 			c.desc.MediaType = mc.header.Get("Content-Type")
 		}
-		if mc.desc.Size == 0 {
+		if c.desc.Size == 0 {
 			cl, _ := strconv.Atoi(mc.header.Get("Content-Length"))
-			mc.desc.Size = int64(cl)
+			c.desc.Size = int64(cl)
 		}
 		if c.desc.Digest == "" {
 			c.desc.Digest, _ = digest.Parse(mc.header.Get("Docker-Content-Digest"))
