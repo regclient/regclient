@@ -380,6 +380,23 @@ func TestNew(t *testing.T) {
 			wantE: nil,
 		},
 		{
+			name: "Header Request",
+			opts: []Opts{
+				WithRef(r),
+				WithHeader(http.Header{
+					"Content-Type":          []string{types.MediaTypeDocker2Manifest},
+					"Content-Length":        []string{fmt.Sprintf("%d", len(rawDockerSchema2))},
+					"Docker-Content-Digest": []string{digestDockerSchema2.String()},
+				}),
+			},
+			wantDesc: types.Descriptor{
+				MediaType: types.MediaTypeDocker2Manifest,
+				Size:      int64(len(rawDockerSchema2)),
+				Digest:    digestDockerSchema2,
+			},
+			wantE: nil,
+		},
+		{
 			name: "Docker Schema 1 Signed",
 			opts: []Opts{
 				WithRef(r),
