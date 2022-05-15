@@ -35,11 +35,23 @@ type docker2ManifestList struct {
 	schema2.ManifestList
 }
 
+func (m *docker2Manifest) GetAnnotations() (map[string]string, error) {
+	if !m.manifSet {
+		return nil, fmt.Errorf("manifest is not set")
+	}
+	return m.Annotations, nil
+}
 func (m *docker2Manifest) GetConfig() (types.Descriptor, error) {
 	return m.Config, nil
 }
 func (m *docker2Manifest) GetConfigDigest() (digest.Digest, error) {
 	return m.Config.Digest, nil
+}
+func (m *docker2ManifestList) GetAnnotations() (map[string]string, error) {
+	if !m.manifSet {
+		return nil, fmt.Errorf("manifest is not set")
+	}
+	return m.Annotations, nil
 }
 func (m *docker2ManifestList) GetConfig() (types.Descriptor, error) {
 	return types.Descriptor{}, wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
@@ -197,6 +209,27 @@ func (m *docker2ManifestList) MarshalPretty() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+func (m *docker2Manifest) SetAnnotation(key, val string) error {
+	if !m.manifSet {
+		return fmt.Errorf("manifest is not set")
+	}
+	if m.Annotations == nil {
+		m.Annotations = map[string]string{}
+	}
+	m.Annotations[key] = val
+	return m.updateDesc()
+}
+func (m *docker2ManifestList) SetAnnotation(key, val string) error {
+	if !m.manifSet {
+		return fmt.Errorf("manifest is not set")
+	}
+	if m.Annotations == nil {
+		m.Annotations = map[string]string{}
+	}
+	m.Annotations[key] = val
+	return m.updateDesc()
+}
+
 func (m *docker2Manifest) SetOrig(origIn interface{}) error {
 	orig, ok := origIn.(schema2.Manifest)
 	if !ok {
@@ -206,20 +239,9 @@ func (m *docker2Manifest) SetOrig(origIn interface{}) error {
 		// TODO: error?
 		orig.MediaType = types.MediaTypeDocker2Manifest
 	}
-	mj, err := json.Marshal(orig)
-	if err != nil {
-		return err
-	}
 	m.manifSet = true
-	m.rawBody = mj
-	m.desc = types.Descriptor{
-		MediaType: types.MediaTypeDocker2Manifest,
-		Digest:    digest.FromBytes(mj),
-		Size:      int64(len(mj)),
-	}
 	m.Manifest = orig
-
-	return nil
+	return m.updateDesc()
 }
 
 func (m *docker2ManifestList) SetOrig(origIn interface{}) error {
@@ -231,18 +253,35 @@ func (m *docker2ManifestList) SetOrig(origIn interface{}) error {
 		// TODO: error?
 		orig.MediaType = types.MediaTypeDocker2ManifestList
 	}
-	mj, err := json.Marshal(orig)
+	m.manifSet = true
+	m.ManifestList = orig
+	return m.updateDesc()
+}
+
+func (m *docker2Manifest) updateDesc() error {
+	mj, err := json.Marshal(m.Manifest)
 	if err != nil {
 		return err
 	}
-	m.manifSet = true
+	m.rawBody = mj
+	m.desc = types.Descriptor{
+		MediaType: types.MediaTypeDocker2Manifest,
+		Digest:    digest.FromBytes(mj),
+		Size:      int64(len(mj)),
+	}
+	return nil
+}
+func (m *docker2ManifestList) updateDesc() error {
+	mj, err := json.Marshal(m.ManifestList)
+	if err != nil {
+		return err
+	}
 	m.rawBody = mj
 	m.desc = types.Descriptor{
 		MediaType: types.MediaTypeDocker2ManifestList,
 		Digest:    digest.FromBytes(mj),
 		Size:      int64(len(mj)),
 	}
-	m.ManifestList = orig
-
 	return nil
+
 }

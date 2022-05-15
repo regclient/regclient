@@ -27,6 +27,7 @@ import (
 // Manifest interface is implemented by all supported manifests but
 // many calls are only supported by certain underlying media types.
 type Manifest interface {
+	GetAnnotations() (map[string]string, error)
 	GetConfig() (types.Descriptor, error)
 	GetDescriptor() types.Descriptor
 	GetLayers() ([]types.Descriptor, error)
@@ -38,6 +39,7 @@ type Manifest interface {
 	MarshalJSON() ([]byte, error)
 	RawBody() ([]byte, error)
 	RawHeaders() (http.Header, error)
+	SetAnnotation(key, val string) error
 	SetOrig(interface{}) error
 
 	GetConfigDigest() (digest.Digest, error)                         // TODO: deprecate

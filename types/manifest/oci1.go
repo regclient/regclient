@@ -35,11 +35,23 @@ type oci1Index struct {
 	v1.Index
 }
 
+func (m *oci1Manifest) GetAnnotations() (map[string]string, error) {
+	if !m.manifSet {
+		return nil, fmt.Errorf("manifest is not set")
+	}
+	return m.Annotations, nil
+}
 func (m *oci1Manifest) GetConfig() (types.Descriptor, error) {
 	return m.Config, nil
 }
 func (m *oci1Manifest) GetConfigDigest() (digest.Digest, error) {
 	return m.Config.Digest, nil
+}
+func (m *oci1Index) GetAnnotations() (map[string]string, error) {
+	if !m.manifSet {
+		return nil, fmt.Errorf("manifest is not set")
+	}
+	return m.Annotations, nil
 }
 func (m *oci1Index) GetConfig() (types.Descriptor, error) {
 	return types.Descriptor{}, wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
@@ -201,6 +213,27 @@ func (m *oci1Index) MarshalPretty() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+func (m *oci1Manifest) SetAnnotation(key, val string) error {
+	if !m.manifSet {
+		return fmt.Errorf("manifest is not set")
+	}
+	if m.Annotations == nil {
+		m.Annotations = map[string]string{}
+	}
+	m.Annotations[key] = val
+	return m.updateDesc()
+}
+func (m *oci1Index) SetAnnotation(key, val string) error {
+	if !m.manifSet {
+		return fmt.Errorf("manifest is not set")
+	}
+	if m.Annotations == nil {
+		m.Annotations = map[string]string{}
+	}
+	m.Annotations[key] = val
+	return m.updateDesc()
+}
+
 func (m *oci1Manifest) SetOrig(origIn interface{}) error {
 	orig, ok := origIn.(v1.Manifest)
 	if !ok {
@@ -210,20 +243,10 @@ func (m *oci1Manifest) SetOrig(origIn interface{}) error {
 		// TODO: error?
 		orig.MediaType = types.MediaTypeOCI1Manifest
 	}
-	mj, err := json.Marshal(orig)
-	if err != nil {
-		return err
-	}
 	m.manifSet = true
-	m.rawBody = mj
-	m.desc = types.Descriptor{
-		MediaType: types.MediaTypeOCI1Manifest,
-		Digest:    digest.FromBytes(mj),
-		Size:      int64(len(mj)),
-	}
 	m.Manifest = orig
 
-	return nil
+	return m.updateDesc()
 }
 
 func (m *oci1Index) SetOrig(origIn interface{}) error {
@@ -235,18 +258,36 @@ func (m *oci1Index) SetOrig(origIn interface{}) error {
 		// TODO: error?
 		orig.MediaType = types.MediaTypeOCI1ManifestList
 	}
-	mj, err := json.Marshal(orig)
+	m.manifSet = true
+	m.Index = orig
+
+	return m.updateDesc()
+}
+
+func (m *oci1Manifest) updateDesc() error {
+	mj, err := json.Marshal(m.Manifest)
 	if err != nil {
 		return err
 	}
-	m.manifSet = true
+	m.rawBody = mj
+	m.desc = types.Descriptor{
+		MediaType: types.MediaTypeOCI1Manifest,
+		Digest:    digest.FromBytes(mj),
+		Size:      int64(len(mj)),
+	}
+	return nil
+}
+func (m *oci1Index) updateDesc() error {
+	mj, err := json.Marshal(m.Index)
+	if err != nil {
+		return err
+	}
 	m.rawBody = mj
 	m.desc = types.Descriptor{
 		MediaType: types.MediaTypeOCI1ManifestList,
 		Digest:    digest.FromBytes(mj),
 		Size:      int64(len(mj)),
 	}
-	m.Index = orig
-
 	return nil
+
 }
