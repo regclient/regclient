@@ -9,6 +9,7 @@ import (
 	"github.com/regclient/regclient/types/blob"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
+	"github.com/regclient/regclient/types/referrer"
 	"github.com/regclient/regclient/types/tag"
 )
 
@@ -36,6 +37,11 @@ type API interface {
 	ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest, error)
 	// ManifestPut sends a manifest to the repository
 	ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest, opts ...ManifestOpts) error
+
+	// ReferrerList returns a list of referrers to a given reference
+	ReferrerList(ctx context.Context, r ref.Ref, opts ...ReferrerOpts) (referrer.ReferrerList, error)
+	// ReferrerPut pushes a new referrer to a given reference
+	ReferrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest) error
 
 	// TagDelete removes a tag from the repository
 	TagDelete(ctx context.Context, r ref.Ref) error
@@ -67,6 +73,21 @@ type ManifestOpts func(*ManifestConfig)
 func WithManifestChild() ManifestOpts {
 	return func(config *ManifestConfig) {
 		config.Child = true
+	}
+}
+
+// ReferrerConfig is used by schemes to import ReferrerOpts
+type ReferrerConfig struct {
+	ForceGet bool
+}
+
+// ReferrerOpts is used to set options on referrer APIs
+type ReferrerOpts func(*ReferrerConfig)
+
+// WithReferrerForceGet forces a Get request to populate annotations when processing remote tags for referrers
+func WithReferrerForceGet() ReferrerOpts {
+	return func(config *ReferrerConfig) {
+		config.ForceGet = true
 	}
 }
 
