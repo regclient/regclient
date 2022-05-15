@@ -15,6 +15,8 @@ import (
 
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/pkg/archive"
+	"github.com/regclient/regclient/pkg/template"
+	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	v1 "github.com/regclient/regclient/types/oci/v1"
@@ -55,6 +57,16 @@ var artifactGetCmd = &cobra.Command{
 	ValidArgs: []string{}, // do not auto complete repository/tag
 	RunE:      runArtifactGet,
 }
+var artifactListCmd = &cobra.Command{
+	Use:     "list <reference>",
+	Aliases: []string{"pull"},
+	// TODO: remove experimental label when stable
+	Short:     "EXPERIMENTAL: list artifacts that refer to the given reference",
+	Long:      `List artifacts that refer to the given reference.`,
+	Args:      cobra.ExactArgs(1),
+	ValidArgs: []string{}, // do not auto complete repository/tag
+	RunE:      runArtifactList,
+}
 var artifactPutCmd = &cobra.Command{
 	Use:       "put <reference>",
 	Aliases:   []string{"push"},
@@ -71,7 +83,10 @@ var artifactOpts struct {
 	artifactMT   []string
 	configFile   string
 	configMT     string
+	forceGet     bool
+	format       string
 	outputDir    string
+	refers       bool
 	stripDirs    bool
 }
 
@@ -85,6 +100,9 @@ func init() {
 	artifactGetCmd.Flags().StringVarP(&artifactOpts.outputDir, "output", "o", "", "Output directory for multiple artifacts")
 	artifactGetCmd.Flags().BoolVarP(&artifactOpts.stripDirs, "strip-dirs", "", false, "Strip directories from filenames in output dir")
 
+	artifactListCmd.Flags().BoolVarP(&artifactOpts.forceGet, "force-get", "", false, "Force get of manifests to populate annotations")
+	artifactListCmd.Flags().StringVarP(&artifactOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+
 	artifactPutCmd.Flags().StringArrayVarP(&artifactOpts.annotations, "annotation", "", []string{}, "Annotation to include on manifest")
 	artifactPutCmd.Flags().StringArrayVarP(&artifactOpts.artifactFile, "file", "f", []string{}, "Artifact filename")
 	artifactPutCmd.Flags().StringArrayVarP(&artifactOpts.artifactMT, "media-type", "m", []string{}, "Set the artifact media-type")
@@ -96,9 +114,12 @@ func init() {
 	artifactPutCmd.RegisterFlagCompletionFunc("config-media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return configKnownTypes, cobra.ShellCompDirectiveNoFileComp
 	})
+	// TODO: remove experimental label when stable
+	artifactPutCmd.Flags().BoolVarP(&artifactOpts.refers, "refers", "", false, "EXPERIMENTAL: Create a referrer to the reference")
 	artifactPutCmd.Flags().BoolVarP(&artifactOpts.stripDirs, "strip-dirs", "", false, "Strip directories from filenames in artifact")
 
 	artifactCmd.AddCommand(artifactGetCmd)
+	artifactCmd.AddCommand(artifactListCmd)
 	artifactCmd.AddCommand(artifactPutCmd)
 	rootCmd.AddCommand(artifactCmd)
 }
@@ -278,6 +299,38 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func runArtifactList(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+
+	// validate inputs
+	r, err := ref.New(args[0])
+	if err != nil {
+		return err
+	}
+
+	rc := newRegClient()
+	defer rc.Close(ctx, r)
+
+	referrerOpts := []scheme.ReferrerOpts{}
+	if artifactOpts.forceGet {
+		referrerOpts = append(referrerOpts, scheme.WithReferrerForceGet())
+	}
+
+	rl, err := rc.RefererrList(ctx, r, referrerOpts...)
+	if err != nil {
+		return err
+	}
+	switch artifactOpts.format {
+	case "raw":
+		artifactOpts.format = "{{ range $key,$vals := .Manifest.RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .Manifest.RawBody}}"
+	case "rawBody", "raw-body", "body":
+		artifactOpts.format = "{{printf \"%s\" .Manifest.RawBody}}"
+	case "rawHeaders", "raw-headers", "headers":
+		artifactOpts.format = "{{ range $key,$vals := .Manifest.RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
+	}
+	return template.Writer(os.Stdout, artifactOpts.format, rl)
+}
+
 func runArtifactPut(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 
@@ -301,10 +354,11 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 
 	// init empty manifest
 	m := v1.Manifest{
+		Versioned:   v1.ManifestSchemaVersion,
+		MediaType:   types.MediaTypeOCI1Manifest,
 		Layers:      []types.Descriptor{},
 		Annotations: map[string]string{},
 	}
-	m.SchemaVersion = 2 // OCI bumped to match docker schema
 	// include annotations
 	for _, a := range artifactOpts.annotations {
 		aSplit := strings.SplitN(a, "=", 2)
@@ -318,6 +372,14 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	// setup regclient
 	rc := newRegClient()
 	defer rc.Close(ctx, r)
+
+	if artifactOpts.refers {
+		rmh, err := rc.ManifestHead(ctx, r)
+		if err != nil {
+			return fmt.Errorf("unable to find referenced manifest: %w", err)
+		}
+		m.Refers = rmh.GetDescriptor()
+	}
 
 	// read config, or initialize to an empty json config
 	configBytes := []byte("{}")
@@ -443,10 +505,9 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	}
 
 	// push manifest
-	err = rc.ManifestPut(ctx, r, mm)
-	if err != nil {
-		return err
+	if artifactOpts.refers {
+		return rc.ReferrerPut(ctx, r, mm)
+	} else {
+		return rc.ManifestPut(ctx, r, mm)
 	}
-
-	return nil
 }
