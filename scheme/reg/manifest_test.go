@@ -225,4 +225,5 @@ func TestManifest(t *testing.T) {
 			return
 		}
 	})
+	// TODO: test ManifestPut
 }
