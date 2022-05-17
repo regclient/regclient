@@ -432,7 +432,7 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url
 			// write chunk
 			header := http.Header{
 				"Content-Type":  {"application/octet-stream"},
-				"Content-Range": {fmt.Sprintf("%d-%d", chunkStart, chunkStart+int64(chunkSize))},
+				"Content-Range": {fmt.Sprintf("%d-%d", chunkStart, chunkStart+int64(chunkSize)-1)},
 			}
 			req := &reghttp.Req{
 				Host: r.Registry,
@@ -492,8 +492,7 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url
 	}
 
 	header := http.Header{
-		"Content-Type":  {"application/octet-stream"},
-		"Content-Range": {fmt.Sprintf("%d-%d", chunkStart, chunkStart)},
+		"Content-Type": {"application/octet-stream"},
 	}
 	req := &reghttp.Req{
 		Host: r.Registry,
