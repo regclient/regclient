@@ -109,7 +109,10 @@ func New(opts ...Opt) *RegClient {
 		ocidir.WithFS(rc.fs),
 	)
 
-	rc.log.Debug("regclient initialized")
+	rc.log.WithFields(logrus.Fields{
+		"VCSRef": VCSRef,
+		"VCSTag": VCSTag,
+	}).Debug("regclient initialized")
 
 	return &rc
 }
@@ -317,8 +320,7 @@ func setupVCSVars() {
 		VCSTag string
 	}{}
 
-	// regclient only looks for releases, individual binaries will look at their local directories
-	verB, err := embedFS.ReadFile("embed/release.json")
+	verB, err := embedFS.ReadFile("embed/version.json")
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return
 	}
