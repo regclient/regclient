@@ -330,7 +330,6 @@ func TestBlobPut(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Range":          {"bytes=0-0"},
 					"Location":       {uuid1.String()},
 				},
 			},
@@ -374,7 +373,6 @@ func TestBlobPut(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Range":          {"bytes=0-0"},
 					"Location":       {uuid2.String()},
 				},
 			},
@@ -392,7 +390,6 @@ func TestBlobPut(t *testing.T) {
 				},
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Content-Range":  {fmt.Sprintf("%d-%d", blobLen, blobLen)},
 					"Content-Type":   {"application/octet-stream"},
 				},
 			},
@@ -441,7 +438,7 @@ func TestBlobPut(t *testing.T) {
 				},
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", blobLen-blobChunk)},
-					"Content-Range":  {fmt.Sprintf("%d-%d", blobChunk, blobLen)},
+					"Content-Range":  {fmt.Sprintf("%d-%d", blobChunk, blobLen-1)},
 					"Content-Type":   {"application/octet-stream"},
 				},
 				Body: blob2[blobChunk:],
@@ -450,7 +447,7 @@ func TestBlobPut(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
-					"Range":          {fmt.Sprintf("bytes=0-%d", blobLen)},
+					"Range":          {fmt.Sprintf("bytes=0-%d", blobLen-1)},
 					"Location":       {uuid2.String() + "?chunk=3"},
 				},
 			},
@@ -465,7 +462,7 @@ func TestBlobPut(t *testing.T) {
 				Query:    map[string][]string{},
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", blobChunk)},
-					"Content-Range":  {fmt.Sprintf("0-%d", blobChunk)},
+					"Content-Range":  {fmt.Sprintf("0-%d", blobChunk-1)},
 					"Content-Type":   {"application/octet-stream"},
 				},
 				Body: blob2[0:blobChunk],
@@ -474,7 +471,7 @@ func TestBlobPut(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
-					"Range":          {fmt.Sprintf("bytes=0-%d", blobChunk)},
+					"Range":          {fmt.Sprintf("bytes=0-%d", blobChunk-1)},
 					"Location":       {uuid2.String() + "?chunk=2"},
 				},
 			},
@@ -517,7 +514,6 @@ func TestBlobPut(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Range":          {"bytes=0-0"},
 					"Location":       {uuid3.String()},
 				},
 			},
@@ -535,7 +531,6 @@ func TestBlobPut(t *testing.T) {
 				},
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Content-Range":  {fmt.Sprintf("%d-%d", blobLen3, blobLen3)},
 					"Content-Type":   {"application/octet-stream"},
 				},
 			},
@@ -584,7 +579,7 @@ func TestBlobPut(t *testing.T) {
 				},
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", blobLen3-blobChunk)},
-					"Content-Range":  {fmt.Sprintf("%d-%d", blobChunk, blobLen3)},
+					"Content-Range":  {fmt.Sprintf("%d-%d", blobChunk, blobLen3-1)},
 					"Content-Type":   {"application/octet-stream"},
 				},
 				Body: blob3[blobChunk:],
@@ -593,7 +588,7 @@ func TestBlobPut(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
-					"Range":          {fmt.Sprintf("bytes=0-%d", blobLen3)},
+					"Range":          {fmt.Sprintf("bytes=0-%d", blobLen3-1)},
 					"Location":       {uuid3.String() + "?chunk=3"},
 				},
 			},
@@ -608,7 +603,7 @@ func TestBlobPut(t *testing.T) {
 				Query:    map[string][]string{},
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", blobChunk)},
-					"Content-Range":  {fmt.Sprintf("0-%d", blobChunk)},
+					"Content-Range":  {fmt.Sprintf("0-%d", blobChunk-1)},
 					"Content-Type":   {"application/octet-stream"},
 				},
 				Body: blob3[0:blobChunk],
@@ -617,7 +612,7 @@ func TestBlobPut(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
-					"Range":          {fmt.Sprintf("bytes=0-%d", blobChunk)},
+					"Range":          {fmt.Sprintf("bytes=0-%d", blobChunk-1)},
 					"Location":       {uuid3.String() + "?chunk=2"},
 				},
 			},
