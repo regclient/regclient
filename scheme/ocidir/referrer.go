@@ -63,9 +63,13 @@ func (o *OCIDir) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Ref
 			if err != nil {
 				return rl, fmt.Errorf("failed to lookup tag in referrers: %s: %w", rt.CommonName(), err)
 			}
+			mCurAnnot, ok := mCur.(manifest.Annotator)
+			if !ok {
+				return rl, fmt.Errorf("manifest does not support annotations: %w", types.ErrUnsupportedMediaType)
+			}
 			d := mCur.GetDescriptor()
 			// pull up annotations
-			d.Annotations, err = mCur.GetAnnotations()
+			d.Annotations, err = mCurAnnot.GetAnnotations()
 			if err != nil {
 				return rl, fmt.Errorf("failed to pull up annotations: %w", err)
 			}

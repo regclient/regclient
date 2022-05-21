@@ -32,17 +32,11 @@ type docker1SignedManifest struct {
 	schema1.SignedManifest
 }
 
-func (m *docker1Manifest) GetAnnotations() (map[string]string, error) {
-	return nil, wraperr.New(fmt.Errorf("annotations not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
-}
 func (m *docker1Manifest) GetConfig() (types.Descriptor, error) {
 	return types.Descriptor{}, wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 func (m *docker1Manifest) GetConfigDigest() (digest.Digest, error) {
 	return "", wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
-}
-func (m *docker1SignedManifest) GetAnnotations() (map[string]string, error) {
-	return nil, wraperr.New(fmt.Errorf("annotations not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 func (m *docker1SignedManifest) GetConfig() (types.Descriptor, error) {
 	return types.Descriptor{}, wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
@@ -129,13 +123,6 @@ func (m *docker1SignedManifest) MarshalPretty() ([]byte, error) {
 	enc.SetIndent("", "  ")
 	enc.Encode(m.SignedManifest)
 	return buf.Bytes(), nil
-}
-
-func (m *docker1Manifest) SetAnnotation(key, val string) error {
-	return wraperr.New(fmt.Errorf("annotations not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
-}
-func (m *docker1SignedManifest) SetAnnotation(key, val string) error {
-	return wraperr.New(fmt.Errorf("annotations not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
 }
 
 func (m *docker1Manifest) SetOrig(origIn interface{}) error {

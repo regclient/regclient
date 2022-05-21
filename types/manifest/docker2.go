@@ -99,6 +99,13 @@ func (m *docker2ManifestList) GetPlatformList() ([]*platform.Platform, error) {
 	return getPlatformList(dl)
 }
 
+func (m *docker2Manifest) GetRefers() (types.Descriptor, error) {
+	if !m.manifSet {
+		return types.Descriptor{}, wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
+	}
+	return m.Manifest.Refers, nil
+}
+
 func (m *docker2Manifest) MarshalJSON() ([]byte, error) {
 	if !m.manifSet {
 		return []byte{}, wraperr.New(fmt.Errorf("manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
@@ -255,6 +262,14 @@ func (m *docker2ManifestList) SetOrig(origIn interface{}) error {
 	}
 	m.manifSet = true
 	m.ManifestList = orig
+	return m.updateDesc()
+}
+
+func (m *docker2Manifest) SetRefers(d types.Descriptor) error {
+	if !m.manifSet {
+		return wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
+	}
+	m.Manifest.Refers = d
 	return m.updateDesc()
 }
 

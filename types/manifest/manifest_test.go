@@ -253,6 +253,27 @@ var (
 			}
 		}
 	`)
+	rawOCI1Artifact = []byte(`
+		{
+			"schemaVersion": 2,
+			"mediaType": "application/vnd.oci.artifact.manifest.v1+json",
+			"blobs": [
+				{
+					"mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+					"size": 657696,
+					"digest": "sha256:b49b96595fd4bd6de7cb7253fe5e89d242d0eb4f993b2b8280c0581c3a62ddc2"
+				},
+				{
+					"mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+					"size": 127,
+					"digest": "sha256:250c06f7c38e52dc77e5c7586c3e40280dc7ff9bb9007c396e06d96736cf8542"
+				}
+			],
+			"annotations": {
+				"org.example.test": "hello world"
+			}
+		}
+	`)
 	// signed schemas are white space sensitive, contents here must be indented with 3 spaces, no tabs
 	rawDockerSchema1Signed = []byte(`
 {
@@ -303,12 +324,14 @@ var (
 	digestDockerSchema1Signed, _ = digest.Parse("sha256:f3ef067962554c3352dc0c659ca563f73cc396fe0dea2a2c23a7964c6290f782")
 	digestOCIImage               = digest.FromBytes(rawOCIImage)
 	digestOCIIndex               = digest.FromBytes(rawOCIIndex)
+	digestOCIArtifact            = digest.FromBytes(rawOCI1Artifact)
 )
 
 func TestNew(t *testing.T) {
 	r, _ := ref.New("localhost:5000/test:latest")
 	var manifestDockerSchema2, manifestInvalid schema2.Manifest
 	var manifestDockerSchema1Signed schema1.SignedManifest
+	var manifestOCIArtifact v1.ArtifactManifest
 	err := json.Unmarshal(rawDockerSchema2, &manifestDockerSchema2)
 	if err != nil {
 		t.Fatalf("failed to unmarshal docker schema2 json: %v", err)
@@ -317,17 +340,25 @@ func TestNew(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to unmarshal docker schema2 json: %v", err)
 	}
+	err = json.Unmarshal(rawOCI1Artifact, &manifestOCIArtifact)
+	if err != nil {
+		t.Fatalf("failed to unmarshal OCI Artifact json: %v", err)
+	}
 	manifestInvalid.MediaType = types.MediaTypeOCI1Manifest
 	err = json.Unmarshal(rawDockerSchema1Signed, &manifestDockerSchema1Signed)
 	if err != nil {
 		t.Fatalf("failed to unmarshal docker schema1 signed json: %v", err)
 	}
 	var tests = []struct {
-		name     string
-		opts     []Opts
-		wantR    ref.Ref
-		wantDesc types.Descriptor
-		wantE    error
+		name      string
+		opts      []Opts
+		wantR     ref.Ref
+		wantDesc  types.Descriptor
+		wantE     error
+		testAnnot bool
+		hasAnnot  bool
+		testRefer bool
+		hasRefer  bool
 	}{
 		{
 			name:  "empty",
@@ -348,7 +379,11 @@ func TestNew(t *testing.T) {
 				Size:      int64(len(rawDockerSchema2)),
 				Digest:    digestDockerSchema2,
 			},
-			wantE: nil,
+			wantE:     nil,
+			testAnnot: true,
+			testRefer: true,
+			hasAnnot:  true,
+			hasRefer:  true,
 		},
 		{
 			name: "Docker Schema 2 Manifest full desc",
@@ -365,7 +400,11 @@ func TestNew(t *testing.T) {
 				Size:      int64(len(rawDockerSchema2)),
 				Digest:    digestDockerSchema2,
 			},
-			wantE: nil,
+			testAnnot: true,
+			testRefer: true,
+			wantE:     nil,
+			hasAnnot:  true,
+			hasRefer:  true,
 		},
 		{
 			name: "Docker Schema 2 List from Http",
@@ -377,7 +416,26 @@ func TestNew(t *testing.T) {
 					"Docker-Content-Digest": []string{digestDockerSchema2List.String()},
 				}),
 			},
-			wantE: nil,
+			wantE:     nil,
+			testAnnot: true,
+			testRefer: true,
+			hasAnnot:  true,
+		},
+		{
+			name: "OCI Artifact from Http",
+			opts: []Opts{
+				WithRef(r),
+				WithRaw(rawOCI1Artifact),
+				WithHeader(http.Header{
+					"Content-Type":          []string{types.MediaTypeOCI1Artifact},
+					"Docker-Content-Digest": []string{digestOCIArtifact.String()},
+				}),
+			},
+			wantE:     nil,
+			testAnnot: true,
+			testRefer: true,
+			hasAnnot:  true,
+			hasRefer:  true,
 		},
 		{
 			name: "Header Request",
@@ -405,7 +463,9 @@ func TestNew(t *testing.T) {
 					MediaType: types.MediaTypeDocker1ManifestSigned,
 				}),
 			},
-			wantE: nil,
+			wantE:     nil,
+			testAnnot: true,
+			testRefer: true,
 		},
 		{
 			name: "Docker Schema 1 Signed Manifest",
@@ -506,7 +566,22 @@ func TestNew(t *testing.T) {
 			opts: []Opts{
 				WithOrig(manifestDockerSchema2),
 			},
-			wantE: nil,
+			wantE:     nil,
+			testAnnot: true,
+			testRefer: true,
+			hasAnnot:  true,
+			hasRefer:  true,
+		},
+		{
+			name: "OCI Artifact Orig",
+			opts: []Opts{
+				WithOrig(manifestOCIArtifact),
+			},
+			wantE:     nil,
+			testAnnot: true,
+			testRefer: true,
+			hasAnnot:  true,
+			hasRefer:  true,
 		},
 		{
 			name: "Docker Schema1 Signed Orig",
@@ -530,6 +605,11 @@ func TestNew(t *testing.T) {
 		// - test retrieving config descriptor from image
 		// - test if manifest is set
 		// - test raw body
+	}
+	rDesc := types.Descriptor{
+		MediaType: types.MediaTypeOCI1Manifest,
+		Size:      1234,
+		Digest:    digest.FromString("test referrer"),
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -564,7 +644,48 @@ func TestNew(t *testing.T) {
 			if tt.wantDesc.MediaType != "" && GetMediaType(m) != tt.wantDesc.MediaType {
 				t.Errorf("media type mismatch, expected %s, received %s", tt.wantDesc.MediaType, GetMediaType(m))
 			}
-
+			if tt.testAnnot {
+				mr, ok := m.(Annotator)
+				if tt.hasAnnot {
+					if !ok {
+						t.Errorf("manifest does not support annotations")
+					}
+					err = mr.SetAnnotation("testkey", "testval")
+					if err != nil {
+						t.Errorf("failed setting annotation: %v", err)
+					}
+					getAnnot, err := mr.GetAnnotations()
+					if err != nil {
+						t.Errorf("failed getting annotations: %v", err)
+					}
+					if getAnnot["testkey"] != "testval" {
+						t.Errorf("annotation testkey missing, expected testval, received map %v", getAnnot)
+					}
+				} else if ok {
+					t.Errorf("manifest supports annotations")
+				}
+			}
+			if tt.testRefer {
+				mr, ok := m.(Referrer)
+				if tt.hasRefer {
+					if !ok {
+						t.Errorf("manifest does not support referrer")
+					}
+					err = mr.SetRefers(rDesc)
+					if err != nil {
+						t.Errorf("failed setting referrer: %v", err)
+					}
+					getDesc, err := mr.GetRefers()
+					if err != nil {
+						t.Errorf("failed getting referrer: %v", err)
+					}
+					if getDesc.MediaType != rDesc.MediaType || getDesc.Digest != rDesc.Digest {
+						t.Errorf("referrer did not match, expected %v, received %v", rDesc, getDesc)
+					}
+				} else if ok {
+					t.Errorf("manifest supports referrer")
+				}
+			}
 		})
 	}
 }

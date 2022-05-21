@@ -27,7 +27,6 @@ import (
 // Manifest interface is implemented by all supported manifests but
 // many calls are only supported by certain underlying media types.
 type Manifest interface {
-	GetAnnotations() (map[string]string, error)
 	GetConfig() (types.Descriptor, error)
 	GetDescriptor() types.Descriptor
 	GetLayers() ([]types.Descriptor, error)
@@ -39,7 +38,6 @@ type Manifest interface {
 	MarshalJSON() ([]byte, error)
 	RawBody() ([]byte, error)
 	RawHeaders() (http.Header, error)
-	SetAnnotation(key, val string) error
 	SetOrig(interface{}) error
 
 	GetConfigDigest() (digest.Digest, error)                         // TODO: deprecate
@@ -49,6 +47,16 @@ type Manifest interface {
 	GetPlatformList() ([]*platform.Platform, error)                  // TODO: deprecate
 	GetRateLimit() types.RateLimit                                   // TODO: deprecate
 	HasRateLimit() bool                                              // TODO: deprecate
+}
+
+type Annotator interface {
+	GetAnnotations() (map[string]string, error)
+	SetAnnotation(key, val string) error
+}
+
+type Referrer interface {
+	GetRefers() (types.Descriptor, error)
+	SetRefers(types.Descriptor) error
 }
 
 type manifestConfig struct {
@@ -375,6 +383,13 @@ func fromOrig(c common, orig interface{}) (Manifest, error) {
 			common: c,
 			Index:  orig.(v1.Index),
 		}
+	case v1.ArtifactManifest:
+		mt = mOrig.MediaType
+		c.desc.MediaType = types.MediaTypeOCI1Artifact
+		m = &oci1Artifact{
+			common:           c,
+			ArtifactManifest: mOrig,
+		}
 	default:
 		return nil, fmt.Errorf("unsupported type to convert to a manifest: %T", orig)
 	}
@@ -466,6 +481,13 @@ func fromCommon(c common) (Manifest, error) {
 			mt = mOrig.MediaType
 		}
 		m = &oci1Index{common: c, Index: mOrig}
+	case types.MediaTypeOCI1Artifact:
+		var mOrig v1.ArtifactManifest
+		if len(c.rawBody) > 0 {
+			err = json.Unmarshal(c.rawBody, &mOrig)
+			mt = mOrig.MediaType
+		}
+		m = &oci1Artifact{common: c, ArtifactManifest: mOrig}
 	default:
 		return nil, fmt.Errorf("%w: \"%s\"", types.ErrUnsupportedMediaType, c.desc.MediaType)
 	}
