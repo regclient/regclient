@@ -80,7 +80,11 @@ func (reg *Reg) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Refe
 					return rl, fmt.Errorf("failed to pull manifest: %s: %w", rt.CommonName(), err)
 				}
 				d = mCur.GetDescriptor()
-				d.Annotations, err = mCur.GetAnnotations()
+				mCurAnnot, ok := mCur.(manifest.Annotator)
+				if !ok {
+					return rl, fmt.Errorf("manifest does not support annotations: %w", types.ErrUnsupportedMediaType)
+				}
+				d.Annotations, err = mCurAnnot.GetAnnotations()
 				if err != nil {
 					return rl, fmt.Errorf("failed pulling up annotations: %s: %w", rt.CommonName(), err)
 				}
@@ -153,7 +157,11 @@ func (reg *Reg) referrerListExtAPI(ctx context.Context, r ref.Ref) (referrer.Ref
 	if err != nil {
 		return rl, err
 	}
-	rl.Annotations, err = m.GetAnnotations()
+	mAnnot, ok := m.(manifest.Annotator)
+	if !ok {
+		return rl, fmt.Errorf("manifest does not support annotations: %w", types.ErrUnsupportedMediaType)
+	}
+	rl.Annotations, err = mAnnot.GetAnnotations()
 	if err != nil {
 		return rl, err
 	}
@@ -171,40 +179,46 @@ func (reg *Reg) ReferrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest)
 	if r.Digest == "" {
 		r.Digest = mRef.GetDescriptor().Digest.String()
 	}
-	// TODO: support artifact media type
 	mRawOrig, err := m.RawBody()
 	if err != nil {
 		return err
 	}
 	mDigOrig := m.GetDescriptor().Digest
-	mOrig := m.GetOrig()
-	ociM, err := manifest.OCIManifestFromAny(mOrig)
-	if err != nil {
-		return fmt.Errorf("failed to convert to manifest: %w", err)
-	}
 	// set annotations and refers field in manifest
 	refType := ""
-	if ociM.Annotations != nil && ociM.Annotations[annotType] != "" {
-		refType = ociM.Annotations[annotType]
+	mAnnot, ok := m.(manifest.Annotator)
+	if !ok {
+		return fmt.Errorf("manifest does not support annotations: %w", types.ErrUnsupportedMediaType)
 	}
-	if ociM.Refers.MediaType != mRef.GetDescriptor().MediaType || ociM.Refers.Digest != mRef.GetDescriptor().Digest || ociM.Refers.Size != mRef.GetDescriptor().Size {
+	annot, err := mAnnot.GetAnnotations()
+	if err != nil {
+		return err
+	}
+	if annot != nil && annot[annotType] != "" {
+		refType = annot[annotType]
+	}
+	mRefer, ok := m.(manifest.Referrer)
+	if !ok {
+		return fmt.Errorf("manifest does not support refers: %w", types.ErrUnsupportedMediaType)
+	}
+	refers, err := mRefer.GetRefers()
+	if err != nil {
+		return err
+	}
+	// validate/set referrer descriptor
+	if refers.MediaType != mRef.GetMediaType() || refers.Digest != mRef.GetDigest() || refers.Size != mRef.GetDescriptor().Size {
 		reg.log.WithFields(logrus.Fields{
-			"old MT":   ociM.Refers.MediaType,
+			"old MT":   refers.MediaType,
 			"new MT":   mRef.GetDescriptor().MediaType,
-			"old Dig":  ociM.Refers.Digest.String(),
+			"old Dig":  refers.Digest.String(),
 			"new Dig":  mRef.GetDescriptor().Digest.String(),
-			"old Size": ociM.Refers.Size,
+			"old Size": refers.Size,
 			"new Size": mRef.GetDescriptor().Size,
 		}).Debug("refers field updated")
-		ociM.Refers = mRef.GetDescriptor()
-	}
-	err = manifest.OCIManifestToAny(ociM, &mOrig)
-	if err != nil {
-		return err
-	}
-	err = m.SetOrig(mOrig)
-	if err != nil {
-		return err
+		err = mRefer.SetRefers(mRef.GetDescriptor())
+		if err != nil {
+			return err
+		}
 	}
 	mRawNew, err := m.RawBody()
 	if err != nil {

@@ -30,6 +30,10 @@ const (
 	defaultMTLayer  = "application/octet-stream"
 )
 
+var manifestKnownTypes = []string{
+	types.MediaTypeOCI1Manifest,
+	types.MediaTypeOCI1Artifact,
+}
 var artifactKnownTypes = []string{
 	"application/octet-stream",
 	"application/tar+gzip",
@@ -85,6 +89,7 @@ var artifactOpts struct {
 	configMT     string
 	forceGet     bool
 	format       string
+	manifestMT   string
 	outputDir    string
 	refers       bool
 	stripDirs    bool
@@ -113,6 +118,10 @@ func init() {
 	artifactPutCmd.Flags().StringVarP(&artifactOpts.configMT, "config-media-type", "", "", "Config media-type")
 	artifactPutCmd.RegisterFlagCompletionFunc("config-media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return configKnownTypes, cobra.ShellCompDirectiveNoFileComp
+	})
+	artifactPutCmd.Flags().StringVarP(&artifactOpts.manifestMT, "manifest-media-type", "", types.MediaTypeOCI1Manifest, "Manifest media-type")
+	artifactPutCmd.RegisterFlagCompletionFunc("manifest-media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return manifestKnownTypes, cobra.ShellCompDirectiveNoFileComp
 	})
 	// TODO: remove experimental label when stable
 	artifactPutCmd.Flags().BoolVarP(&artifactOpts.refers, "refers", "", false, "EXPERIMENTAL: Create a referrer to the reference")
@@ -333,6 +342,17 @@ func runArtifactList(cmd *cobra.Command, args []string) error {
 
 func runArtifactPut(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
+	mOpts := []manifest.Opts{}
+	hasConfig := false
+
+	switch artifactOpts.manifestMT {
+	case types.MediaTypeOCI1Artifact:
+		hasConfig = false
+	case "", types.MediaTypeOCI1Manifest:
+		hasConfig = true
+	default:
+		return fmt.Errorf("unsupported manifest media type: %s", artifactOpts.manifestMT)
+	}
 
 	// validate inputs
 	r, err := ref.New(args[0])
@@ -352,20 +372,14 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 		artifactOpts.configMT = defaultMTConfig
 	}
 
-	// init empty manifest
-	m := v1.Manifest{
-		Versioned:   v1.ManifestSchemaVersion,
-		MediaType:   types.MediaTypeOCI1Manifest,
-		Layers:      []types.Descriptor{},
-		Annotations: map[string]string{},
-	}
 	// include annotations
+	annotations := map[string]string{}
 	for _, a := range artifactOpts.annotations {
 		aSplit := strings.SplitN(a, "=", 2)
 		if len(aSplit) == 1 {
-			m.Annotations[aSplit[0]] = ""
+			annotations[aSplit[0]] = ""
 		} else {
-			m.Annotations[aSplit[0]] = aSplit[1]
+			annotations[aSplit[0]] = aSplit[1]
 		}
 	}
 
@@ -373,36 +387,43 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	rc := newRegClient()
 	defer rc.Close(ctx, r)
 
+	refDesc := types.Descriptor{}
 	if artifactOpts.refers {
 		rmh, err := rc.ManifestHead(ctx, r)
 		if err != nil {
 			return fmt.Errorf("unable to find referenced manifest: %w", err)
 		}
-		m.Refers = rmh.GetDescriptor()
+		refDesc = rmh.GetDescriptor()
 	}
 
 	// read config, or initialize to an empty json config
-	configBytes := []byte("{}")
-	if artifactOpts.configFile != "" {
-		var err error
-		configBytes, err = os.ReadFile(artifactOpts.configFile)
+	confDesc := types.Descriptor{}
+	if hasConfig {
+		configBytes := []byte("{}")
+		if artifactOpts.configFile != "" {
+			var err error
+			configBytes, err = os.ReadFile(artifactOpts.configFile)
+			if err != nil {
+				return err
+			}
+		}
+		configDigest := digest.FromBytes(configBytes)
+		// push config to registry
+		_, err = rc.BlobPut(ctx, r, types.Descriptor{Digest: configDigest, Size: int64(len(configBytes))}, bytes.NewReader(configBytes))
 		if err != nil {
 			return err
 		}
-	}
-	configDigest := digest.FromBytes(configBytes)
-	// push config to registry
-	_, err = rc.BlobPut(ctx, r, types.Descriptor{Digest: configDigest, Size: int64(len(configBytes))}, bytes.NewReader(configBytes))
-	if err != nil {
-		return err
-	}
-	// save config descriptor to manifest
-	m.Config = types.Descriptor{
-		MediaType: artifactOpts.configMT,
-		Digest:    configDigest,
-		Size:      int64(len(configBytes)),
+		// save config descriptor to manifest
+		confDesc = types.Descriptor{
+			MediaType: artifactOpts.configMT,
+			Digest:    configDigest,
+			Size:      int64(len(configBytes)),
+		}
+	} else if artifactOpts.configFile != "" {
+		return fmt.Errorf("config is not supported with media type %s", artifactOpts.manifestMT)
 	}
 
+	blobs := []types.Descriptor{}
 	if len(artifactOpts.artifactFile) > 0 {
 		// if files were passed
 		for i, f := range artifactOpts.artifactFile {
@@ -455,7 +476,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 						af = fSplit[len(fSplit)-2] + "/"
 					}
 				}
-				m.Layers = append(m.Layers, types.Descriptor{
+				blobs = append(blobs, types.Descriptor{
 					MediaType: mt,
 					Digest:    d,
 					Size:      l,
@@ -495,11 +516,32 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		d.MediaType = mt
-		m.Layers = append(m.Layers, d)
+		blobs = append(blobs, d)
+	}
+
+	if artifactOpts.manifestMT == types.MediaTypeOCI1Artifact {
+		m := v1.ArtifactManifest{
+			Versioned:   v1.ArtifactSchemaVersion,
+			MediaType:   types.MediaTypeOCI1Artifact,
+			Blobs:       blobs,
+			Annotations: annotations,
+			Refers:      refDesc,
+		}
+		mOpts = append(mOpts, manifest.WithOrig(m))
+	} else {
+		m := v1.Manifest{
+			Versioned:   v1.ManifestSchemaVersion,
+			MediaType:   types.MediaTypeOCI1Manifest,
+			Config:      confDesc,
+			Layers:      blobs,
+			Annotations: annotations,
+			Refers:      refDesc,
+		}
+		mOpts = append(mOpts, manifest.WithOrig(m))
 	}
 
 	// generate manifest
-	mm, err := manifest.New(manifest.WithOrig(m))
+	mm, err := manifest.New(mOpts...)
 	if err != nil {
 		return err
 	}
