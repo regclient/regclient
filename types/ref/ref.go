@@ -100,6 +100,9 @@ func New(parse string) (Ref, error) {
 		if ret.Tag == "" && ret.Digest == "" {
 			ret.Tag = "latest"
 		}
+		if ret.Repository == "" {
+			return Ref{}, fmt.Errorf("invalid reference \"%s\"", path)
+		}
 
 	case "ocidir", "ocifile":
 		matchPath := pathRE.FindStringSubmatch(path)
