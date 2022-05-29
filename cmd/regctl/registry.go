@@ -56,6 +56,7 @@ the contents of the file, e.g. --cacert "$(cat reg-ca.crt)"`,
 }
 var registryOpts struct {
 	user, pass           string // login opts
+	credHelper           string
 	hostname, pathPrefix string
 	cacert, tls          string // set opts
 	mirrors              []string
@@ -73,6 +74,7 @@ func init() {
 	registryLoginCmd.RegisterFlagCompletionFunc("user", completeArgNone)
 	registryLoginCmd.RegisterFlagCompletionFunc("pass", completeArgNone)
 
+	registrySetCmd.Flags().StringVarP(&registryOpts.credHelper, "cred-helper", "", "", "Credential helper (full binary name, including docker-credential- prefix)")
 	registrySetCmd.Flags().StringVarP(&registryOpts.cacert, "cacert", "", "", "CA Certificate (not a filename, use \"$(cat ca.pem)\" to use a file)")
 	registrySetCmd.Flags().StringVarP(&registryOpts.tls, "tls", "", "", "TLS (enabled, insecure, disabled)")
 	registrySetCmd.Flags().StringVarP(&registryOpts.hostname, "hostname", "", "", "Hostname or ip with port")
@@ -285,6 +287,9 @@ func runRegistrySet(cmd *cobra.Command, args []string) error {
 			"name": name,
 			"dns":  registryOpts.dns,
 		}).Warn("DNS flag is deprecated, use hostname and mirrors instead")
+	}
+	if flagChanged(cmd, "cred-helper") {
+		h.CredHelper = registryOpts.credHelper
 	}
 	if flagChanged(cmd, "tls") {
 		if err := h.TLS.UnmarshalText([]byte(registryOpts.tls)); err != nil {

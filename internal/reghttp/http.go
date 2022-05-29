@@ -688,7 +688,8 @@ func (ch *clientHost) AuthCreds() func(h string) auth.Cred {
 		return auth.DefaultCredsFn
 	}
 	return func(h string) auth.Cred {
-		return auth.Cred{User: ch.config.User, Password: ch.config.Pass, Token: ch.config.Token}
+		hCred := ch.config.GetCred()
+		return auth.Cred{User: hCred.User, Password: hCred.Password, Token: hCred.Token}
 	}
 }
 

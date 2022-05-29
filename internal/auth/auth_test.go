@@ -374,7 +374,7 @@ func TestBearer(t *testing.T) {
 	tsURL, _ := url.Parse(ts.URL)
 	tsHost := tsURL.Host
 	bearer := NewBearerHandler(&http.Client{}, useragent, tsHost,
-		Cred{User: user, Password: pass},
+		func(h string) Cred { return Cred{User: user, Password: pass} },
 		&logrus.Logger{},
 	).(*BearerHandler)
 
