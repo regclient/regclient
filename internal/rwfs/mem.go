@@ -201,6 +201,104 @@ func (o *MemFS) Remove(name string) error {
 	}
 }
 
+// Rename moves a file or directory to a new name
+func (o *MemFS) Rename(oldName, newName string) error {
+	dirOld, fileOld := path.Split(oldName)
+	memDirOld, err := o.getDir(dirOld)
+	if err != nil {
+		return &fs.PathError{
+			Op:   "rename",
+			Path: oldName,
+			Err:  err,
+		}
+	}
+	dirNew, fileNew := path.Split(newName)
+	memDirNew, err := o.getDir(dirNew)
+	if err != nil {
+		return &fs.PathError{
+			Op:   "rename",
+			Path: newName,
+			Err:  err,
+		}
+	}
+	childOld, okOld := memDirOld.child[fileOld]
+	if !okOld {
+		return &fs.PathError{
+			Op:   "rename",
+			Path: oldName,
+			Err:  fs.ErrNotExist,
+		}
+	}
+	childNew, okNew := memDirNew.child[fileNew]
+
+	switch vOld := childOld.(type) {
+	case *MemFile:
+		// source is a file
+		if !okNew {
+			// new name doesn't already exist
+			memDirNew.child[fileNew] = vOld
+		} else {
+			switch childNew.(type) {
+			case *MemFile:
+				// replacing a file
+				memDirNew.child[fileNew] = vOld
+			case *MemDir:
+				// reject for now, raise an issue if this should be allowed
+				return &fs.PathError{
+					Op:   "rename",
+					Path: newName,
+					Err:  fs.ErrExist,
+				}
+			default:
+				return &fs.PathError{
+					Op:   "rename",
+					Path: newName,
+					Err:  fs.ErrInvalid,
+				}
+			}
+		}
+	case *MemDir:
+		// source is a directory
+		if !okNew {
+			// new name doesn't already exist, move folder
+			memDirNew.child[fileNew] = vOld
+		} else {
+			switch childNew.(type) {
+			case *MemFile:
+				// copy directory to a file, invalid
+				return &fs.PathError{
+					Op:   "rename",
+					Path: newName,
+					Err:  fs.ErrExist,
+				}
+			case *MemDir:
+				// copy a directory to a directory
+				// for now consider this invalid, raise an issue with a scenario to permit
+				return &fs.PathError{
+					Op:   "rename",
+					Path: newName,
+					Err:  fs.ErrExist,
+				}
+			default:
+				return &fs.PathError{
+					Op:   "rename",
+					Path: newName,
+					Err:  fs.ErrInvalid,
+				}
+			}
+		}
+	default:
+		return &fs.PathError{
+			Op:   "remove",
+			Path: oldName,
+			Err:  fs.ErrInvalid,
+		}
+	}
+	// remove old directory entry
+	delete(memDirOld.child, fileOld)
+	return nil
+}
+
 func (o *MemFS) Sub(name string) (*MemFS, error) {
 	if name == "." {
 		return o, nil

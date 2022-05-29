@@ -5,6 +5,8 @@ import (
 	"io"
 	"io/fs"
 	"path"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -534,6 +536,65 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		}
 	})
 
+	t.Run("copy", func(t *testing.T) {
+		err := CopyRecursive(rwfs, "nested", rwfs, "copy")
+		if err != nil {
+			t.Errorf("CopyRecursive to copy dir failed: %v", err)
+		}
+		fi, err := Stat(rwfs, "copy/dir/file")
+		if err != nil {
+			t.Errorf("file not copied: %v", err)
+		}
+		if fi.IsDir() {
+			t.Errorf("file appears to be a directory")
+		}
+		curMemFS := MemNew()
+		err = CopyRecursive(rwfs, ".", curMemFS, ".")
+		if err != nil {
+			t.Errorf("CopyRecursive to memfs failed: %v", err)
+		}
+		fi, err = Stat(rwfs, exNestedFile)
+		if err != nil {
+			t.Errorf("file not copied: %v", err)
+		}
+		if fi.IsDir() {
+			t.Errorf("file appears to be a directory")
+		}
+	})
+
+	t.Run("rename", func(t *testing.T) {
+		err := rwfs.Rename("nested", "renamed")
+		if err != nil {
+			t.Errorf("failed renaming: %v", err)
+		}
+		_, err = Stat(rwfs, "nested")
+		if err == nil {
+			t.Errorf("nested exists after rename")
+		}
+		fi, err := Stat(rwfs, "renamed")
+		if err != nil {
+			t.Errorf("renamed folder not found: %v", err)
+		}
+		if !fi.IsDir() {
+			t.Errorf("renamed folder is not a directory")
+		}
+		err = rwfs.Rename("renamed", "nested")
+		if err != nil {
+			t.Errorf("failed renaming back: %v", err)
+		}
+		fi, err = Stat(rwfs, "nested")
+		if err != nil {
+			t.Errorf("nested not recreated after rename: %v", err)
+		}
+		if !fi.IsDir() {
+			t.Errorf("nested is not a directory after rename")
+		}
+		_, err = Stat(rwfs, "renamed")
+		if err == nil {
+			t.Errorf("renamed exists after rename")
+		}
+	})
+
 	t.Run("remove", func(t *testing.T) {
 		err := rwfs.Remove(".")
 		if err == nil {
@@ -559,6 +620,28 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		if err == nil {
 			t.Errorf("open succeeded after deleting %s", exNestedDir)
 			fh.Close()
+		}
+	})
+
+	t.Run("CreateTemp", func(t *testing.T) {
+		err := MkdirAll(rwfs, "tempdir", 0700)
+		if err != nil {
+			t.Errorf("failed creating tempdir: %v", err)
+		}
+		fh, err := CreateTemp(rwfs, "tempdir", "tempfile")
+		if err != nil {
+			t.Errorf("failed creating temp file: %v", err)
+			return
+		}
+		defer fh.Close()
+		fhStat, err := fh.Stat()
+		if err != nil {
+			t.Errorf("stat failed: %v", err)
+		}
+		tmpName := filepath.Join("tempdir", fhStat.Name())
+		defer rwfs.Remove(tmpName)
+		if !strings.HasPrefix(fhStat.Name(), "tempfile") {
+			t.Errorf("filename prefix mismatch, expected tempfile, received name %s", fhStat.Name())
 		}
 	})
 }
