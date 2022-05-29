@@ -765,7 +765,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 	// cache the manifest to avoid needing to pull again later, this is used if index.json is a wrapper around some other manifest
 	trd.manifests[m.GetDescriptor().Digest] = m
 
-	handleManifest := func(d types.Descriptor) {
+	handleManifest := func(d types.Descriptor, child bool) {
 		filename := tarOCILayoutDescPath(d)
 		if !trd.processed[filename] && trd.handlers[filename] == nil {
 			trd.handlers[filename] = func(header *tar.Header, trd *tarReadData) error {
@@ -782,7 +782,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 					if err != nil {
 						return err
 					}
-					return rc.imageImportOCIHandleManifest(ctx, ref, md, trd, true, !push)
+					return rc.imageImportOCIHandleManifest(ctx, ref, md, trd, true, child)
 				case types.MediaTypeDocker2ImageConfig, types.MediaTypeOCI1ImageConfig,
 					types.MediaTypeDocker2LayerGzip, types.MediaTypeOCI1Layer, types.MediaTypeOCI1LayerGzip,
 					types.MediaTypeBuildkitCacheConfig:
@@ -792,7 +792,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 					// attempt manifest import, fall back to blob import
 					md, err := manifest.New(manifest.WithDesc(d), manifest.WithRaw(b))
 					if err == nil {
-						return rc.imageImportOCIHandleManifest(ctx, ref, md, trd, true, !push)
+						return rc.imageImportOCIHandleManifest(ctx, ref, md, trd, true, child)
 					}
 					return rc.imageImportBlob(ctx, ref, d, trd)
 				}
@@ -827,7 +827,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 		if d.Digest.String() == "" {
 			return fmt.Errorf("could not find requested tag in index.json, %s", ref.Tag)
 		}
-		handleManifest(d)
+		handleManifest(d, false)
 		// add a finish step to tag the selected digest
 		trd.finish = append(trd.finish, func() error {
 			mRef, ok := trd.manifests[d.Digest]
@@ -843,7 +843,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 			return err
 		}
 		for _, d := range dl {
-			handleManifest(d)
+			handleManifest(d, true)
 		}
 	} else {
 		// else if a single image/manifest
