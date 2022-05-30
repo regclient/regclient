@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"testing"
+
+	"github.com/regclient/regclient/internal/conffile"
 )
 
 func TestDocker(t *testing.T) {
@@ -59,5 +61,16 @@ func TestDocker(t *testing.T) {
 				t.Errorf("user mismatch, expect %s, received %s", tt.expectPass, cred.Password)
 			}
 		})
+	}
+}
+
+func TestLoadMissing(t *testing.T) {
+	cf := conffile.New(conffile.WithFullname("testdata/missing.json"))
+	h, err := dockerParse(cf)
+	if err != nil {
+		t.Errorf("error encountered when parsing missing file: %v", err)
+	}
+	if len(h) > 0 {
+		t.Errorf("hosts returned from missing file")
 	}
 }

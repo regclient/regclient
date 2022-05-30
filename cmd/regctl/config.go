@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
+	"io/fs"
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/conffile"
@@ -103,7 +103,7 @@ func ConfigLoadDefault() (*Config, error) {
 		return nil, fmt.Errorf("failed to define config file")
 	}
 	c, err := ConfigLoadConfFile(cf)
-	if err != nil && os.IsNotExist(err) {
+	if err != nil && errors.Is(err, fs.ErrNotExist) {
 		// do not error on file not found
 		c := ConfigNew()
 		c.Filename = cf.Name()
