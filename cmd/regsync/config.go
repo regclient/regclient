@@ -28,49 +28,9 @@ func init() {
 // Config is parsed configuration file for regsync
 type Config struct {
 	Version  int            `yaml:"version" json:"version"`
-	Creds    []ConfigCreds  `yaml:"creds" json:"creds"`
+	Creds    []config.Host  `yaml:"creds" json:"creds"`
 	Defaults ConfigDefaults `yaml:"defaults" json:"defaults"`
 	Sync     []ConfigSync   `yaml:"sync" json:"sync"`
-}
-
-// ConfigCreds allows the registry login to be passed in the config rather than from Docker
-type ConfigCreds struct {
-	Registry   string            `yaml:"registry" json:"registry"`
-	Hostname   string            `yaml:"hostname" json:"hostname"`
-	User       string            `yaml:"user" json:"user"`
-	Pass       string            `yaml:"pass" json:"pass"`
-	Token      string            `yaml:"token" json:"token"`
-	TLS        config.TLSConf    `yaml:"tls" json:"tls"`
-	Scheme     string            `yaml:"scheme" json:"scheme"` // TODO: eventually delete
-	RegCert    string            `yaml:"regcert" json:"regcert"`
-	PathPrefix string            `yaml:"pathPrefix" json:"pathPrefix"`
-	Mirrors    []string          `yaml:"mirrors" json:"mirrors"`
-	Priority   uint              `yaml:"priority" json:"priority"`
-	RepoAuth   bool              `yaml:"repoAuth" json:"repoAuth"`
-	API        string            `yaml:"api" json:"api"`
-	APIOpts    map[string]string `yaml:"apiOpts" json:"apiOpts"`
-	BlobChunk  int64             `yaml:"blobChunk" json:"blobChunk"`
-	BlobMax    int64             `yaml:"blobMax" json:"blobMax"`
-}
-
-func credsToRCHost(c ConfigCreds) config.Host {
-	return config.Host{
-		Name:       c.Registry,
-		Hostname:   c.Hostname,
-		User:       c.User,
-		Pass:       c.Pass,
-		Token:      c.Token,
-		TLS:        c.TLS,
-		RegCert:    c.RegCert,
-		PathPrefix: c.PathPrefix,
-		Mirrors:    c.Mirrors,
-		Priority:   c.Priority,
-		RepoAuth:   c.RepoAuth,
-		API:        c.API,
-		APIOpts:    c.APIOpts,
-		BlobChunk:  c.BlobChunk,
-		BlobMax:    c.BlobMax,
-	}
 }
 
 // ConfigDefaults is uses for general options and defaults for ConfigSync entries
@@ -136,7 +96,7 @@ type ConfigHook struct {
 // ConfigNew creates an empty configuration
 func ConfigNew() *Config {
 	c := Config{
-		Creds: []ConfigCreds{},
+		Creds: []config.Host{},
 		Sync:  []ConfigSync{},
 	}
 	return &c
@@ -191,11 +151,11 @@ func configExpandTemplates(c *Config) error {
 		Sync ConfigSync
 	}{}
 	for i := range c.Creds {
-		val, err := template.String(c.Creds[i].Registry, nil)
+		val, err := template.String(c.Creds[i].Name, nil)
 		if err != nil {
 			return err
 		}
-		c.Creds[i].Registry = val
+		c.Creds[i].Name = val
 		val, err = template.String(c.Creds[i].User, nil)
 		if err != nil {
 			return err
