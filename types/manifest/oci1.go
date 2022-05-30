@@ -145,15 +145,15 @@ func (m *oci1Manifest) MarshalJSON() ([]byte, error) {
 
 	return json.Marshal((m.Manifest))
 }
-func (m *oci1Manifest) GetRefers() (types.Descriptor, error) {
+func (m *oci1Manifest) GetRefers() (*types.Descriptor, error) {
 	if !m.manifSet {
-		return types.Descriptor{}, wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
+		return nil, wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
 	}
 	return m.Manifest.Refers, nil
 }
-func (m *oci1Artifact) GetRefers() (types.Descriptor, error) {
+func (m *oci1Artifact) GetRefers() (*types.Descriptor, error) {
 	if !m.manifSet {
-		return types.Descriptor{}, wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
+		return nil, wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
 	}
 	return m.ArtifactManifest.Refers, nil
 }
@@ -369,14 +369,14 @@ func (m *oci1Index) SetOrig(origIn interface{}) error {
 	return m.updateDesc()
 }
 
-func (m *oci1Artifact) SetRefers(d types.Descriptor) error {
+func (m *oci1Artifact) SetRefers(d *types.Descriptor) error {
 	if !m.manifSet {
 		return wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
 	}
 	m.ArtifactManifest.Refers = d
 	return m.updateDesc()
 }
-func (m *oci1Manifest) SetRefers(d types.Descriptor) error {
+func (m *oci1Manifest) SetRefers(d *types.Descriptor) error {
 	if !m.manifSet {
 		return wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
 	}

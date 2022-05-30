@@ -77,7 +77,7 @@ func TestReferrer(t *testing.T) {
 			},
 		},
 		Annotations: artifactAnnot,
-		Refers: types.Descriptor{
+		Refers: &types.Descriptor{
 			MediaType: types.MediaTypeDocker2Manifest,
 			Size:      int64(mLen),
 			Digest:    mDigest,

@@ -658,7 +658,7 @@ func TestNew(t *testing.T) {
 					if err != nil {
 						t.Errorf("failed getting annotations: %v", err)
 					}
-					if getAnnot["testkey"] != "testval" {
+					if getAnnot == nil || getAnnot["testkey"] != "testval" {
 						t.Errorf("annotation testkey missing, expected testval, received map %v", getAnnot)
 					}
 				} else if ok {
@@ -671,7 +671,7 @@ func TestNew(t *testing.T) {
 					if !ok {
 						t.Errorf("manifest does not support referrer")
 					}
-					err = mr.SetRefers(rDesc)
+					err = mr.SetRefers(&rDesc)
 					if err != nil {
 						t.Errorf("failed setting referrer: %v", err)
 					}
@@ -679,7 +679,7 @@ func TestNew(t *testing.T) {
 					if err != nil {
 						t.Errorf("failed getting referrer: %v", err)
 					}
-					if getDesc.MediaType != rDesc.MediaType || getDesc.Digest != rDesc.Digest {
+					if getDesc == nil || getDesc.MediaType != rDesc.MediaType || getDesc.Digest != rDesc.Digest {
 						t.Errorf("referrer did not match, expected %v, received %v", rDesc, getDesc)
 					}
 				} else if ok {

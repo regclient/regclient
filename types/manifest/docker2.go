@@ -99,9 +99,9 @@ func (m *docker2ManifestList) GetPlatformList() ([]*platform.Platform, error) {
 	return getPlatformList(dl)
 }
 
-func (m *docker2Manifest) GetRefers() (types.Descriptor, error) {
+func (m *docker2Manifest) GetRefers() (*types.Descriptor, error) {
 	if !m.manifSet {
-		return types.Descriptor{}, wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
+		return nil, wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
 	}
 	return m.Manifest.Refers, nil
 }
@@ -265,7 +265,7 @@ func (m *docker2ManifestList) SetOrig(origIn interface{}) error {
 	return m.updateDesc()
 }
 
-func (m *docker2Manifest) SetRefers(d types.Descriptor) error {
+func (m *docker2Manifest) SetRefers(d *types.Descriptor) error {
 	if !m.manifSet {
 		return wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
 	}
