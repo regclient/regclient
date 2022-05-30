@@ -387,13 +387,14 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	rc := newRegClient()
 	defer rc.Close(ctx, r)
 
-	refDesc := types.Descriptor{}
+	var refDesc *types.Descriptor
 	if artifactOpts.refers {
 		rmh, err := rc.ManifestHead(ctx, r)
 		if err != nil {
 			return fmt.Errorf("unable to find referenced manifest: %w", err)
 		}
-		refDesc = rmh.GetDescriptor()
+		d := rmh.GetDescriptor()
+		refDesc = &d
 	}
 
 	// read config, or initialize to an empty json config

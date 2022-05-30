@@ -55,6 +55,7 @@ func TestReferrer(t *testing.T) {
 		annotType:  aType,
 		extraAnnot: extraValue,
 	}
+	mDesc := m.GetDescriptor()
 	artifact := v1.Manifest{
 		Versioned: v1.ManifestSchemaVersion,
 		MediaType: types.MediaTypeOCI1Manifest,
@@ -71,7 +72,7 @@ func TestReferrer(t *testing.T) {
 			},
 		},
 		Annotations: artifactAnnot,
-		Refers:      m.GetDescriptor(),
+		Refers:      &mDesc,
 	}
 	artifactM, err := manifest.New(manifest.WithOrig(artifact))
 	if err != nil {

@@ -55,8 +55,8 @@ type Annotator interface {
 }
 
 type Referrer interface {
-	GetRefers() (types.Descriptor, error)
-	SetRefers(types.Descriptor) error
+	GetRefers() (*types.Descriptor, error)
+	SetRefers(*types.Descriptor) error
 }
 
 type manifestConfig struct {

@@ -206,16 +206,9 @@ func (reg *Reg) ReferrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest)
 		return err
 	}
 	// validate/set referrer descriptor
-	if refers.MediaType != mRef.GetMediaType() || refers.Digest != mRef.GetDigest() || refers.Size != mRef.GetDescriptor().Size {
-		reg.log.WithFields(logrus.Fields{
-			"old MT":   refers.MediaType,
-			"new MT":   mRef.GetDescriptor().MediaType,
-			"old Dig":  refers.Digest.String(),
-			"new Dig":  mRef.GetDescriptor().Digest.String(),
-			"old Size": refers.Size,
-			"new Size": mRef.GetDescriptor().Size,
-		}).Debug("refers field updated")
-		err = mRefer.SetRefers(mRef.GetDescriptor())
+	mRefDesc := mRef.GetDescriptor()
+	if refers == nil || refers.MediaType != mRefDesc.MediaType || refers.Digest != mRefDesc.Digest || refers.Size != mRefDesc.Size {
+		err = mRefer.SetRefers(&mRefDesc)
 		if err != nil {
 			return err
 		}

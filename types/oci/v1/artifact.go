@@ -22,7 +22,7 @@ type ArtifactManifest struct {
 	Blobs []types.Descriptor `json:"blobs"`
 
 	// Refers indicates this manifest references another manifest
-	Refers types.Descriptor `json:"refers,omitempty"`
+	Refers *types.Descriptor `json:"refers,omitempty"`
 
 	// Annotations contains arbitrary metadata for the artifact manifest.
 	Annotations map[string]string `json:"annotations,omitempty"`

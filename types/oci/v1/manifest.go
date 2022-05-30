@@ -28,5 +28,5 @@ type Manifest struct {
 	Annotations map[string]string `json:"annotations,omitempty"`
 
 	// Refers indicates this manifest references another manifest
-	Refers types.Descriptor `json:"refers,omitempty"`
+	Refers *types.Descriptor `json:"refers,omitempty"`
 }
