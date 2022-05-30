@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"strings"
 
 	"github.com/regclient/regclient/internal/conffile"
@@ -63,7 +64,9 @@ func DockerLoad() ([]Host, error) {
 // parse from io.Reader to []Host
 func dockerParse(cf *conffile.File) ([]Host, error) {
 	rdr, err := cf.Open()
-	if err != nil {
+	if err != nil && errors.Is(err, fs.ErrNotExist) {
+		return []Host{}, nil
+	} else if err != nil {
 		return nil, err
 	}
 	defer rdr.Close()
