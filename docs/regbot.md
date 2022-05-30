@@ -84,7 +84,7 @@ scripts:
   - `registry`:
     Hostname and port of the registry server used in image references.
     Use `docker.io` for Docker Hub.
-    Note for parsing image names, a registry name must have a `.` or `:` to distinguish it from a path on Docker Hub.
+    Note for parsing image names, a registry name must have a `.`, `:`, or be set to `localhost` to distinguish it from a path on Docker Hub.
   - `hostname`:
     Optional DNS name and port for the registry server, the default is the registry name.
     This allows multiple registry names to point to the same server with different configurations.
@@ -93,6 +93,13 @@ scripts:
     Username
   - `pass`:
     Password
+  - `credHelper`:
+    Name of a credential helper, typically in the form `docker-credential-name`.
+    The alpine based docker image includes `docker-credential-ecr-login` and `docker-credential-gcr`.
+  - `credExpire`:
+    Duration to use a credential from a `credHelper`.
+    This defaults to 1 hour.
+    Use the [Go `time.Duration`](https://pkg.go.dev/time#ParseDuration) syntax when setting, e.g. `1h15m` or `30s`.
   - `tls`:
     Whether TLS is enabled/verified.
     Values include "enabled" (default), "insecure", or "disabled".

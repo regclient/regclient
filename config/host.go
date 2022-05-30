@@ -36,7 +36,7 @@ const (
 )
 
 var (
-	defaultExpire          = time.Minute * 5
+	defaultExpire          = time.Hour * 1
 	defaultCredHelperRetry = time.Second * 5
 )
 
@@ -93,7 +93,7 @@ func (t *TLSConf) UnmarshalText(b []byte) error {
 
 // Host struct contains host specific settings
 type Host struct {
-	Name        string            `json:"-" yaml:"-"`                             // internal use, name of the host
+	Name        string            `json:"-" yaml:"registry,omitempty"`            // name of the host, read from yaml, not written in json
 	Scheme      string            `json:"scheme,omitempty" yaml:"scheme"`         // TODO: deprecate, delete
 	TLS         TLSConf           `json:"tls,omitempty" yaml:"tls"`               // enabled, disabled, insecure
 	RegCert     string            `json:"regcert,omitempty" yaml:"regcert"`       // public pem cert of registry

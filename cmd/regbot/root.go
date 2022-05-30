@@ -280,10 +280,10 @@ func loadConf() error {
 	for _, host := range conf.Creds {
 		if host.Scheme != "" {
 			log.WithFields(logrus.Fields{
-				"name": host.Registry,
+				"name": host.Name,
 			}).Warn("Scheme is deprecated, for http set TLS to disabled")
 		}
-		rcHosts = append(rcHosts, credsToRCHost(host))
+		rcHosts = append(rcHosts, host)
 	}
 	if len(rcHosts) > 0 {
 		rcOpts = append(rcOpts, regclient.WithConfigHosts(rcHosts))
