@@ -325,7 +325,7 @@ func runArtifactList(cmd *cobra.Command, args []string) error {
 		referrerOpts = append(referrerOpts, scheme.WithReferrerForceGet())
 	}
 
-	rl, err := rc.RefererrList(ctx, r, referrerOpts...)
+	rl, err := rc.ReferrerList(ctx, r, referrerOpts...)
 	if err != nil {
 		return err
 	}

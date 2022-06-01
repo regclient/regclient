@@ -75,6 +75,7 @@ type imageOpt struct {
 	includeExternal bool
 	digestTags      bool
 	platforms       []string
+	referrers       bool
 	tagList         []string
 }
 
@@ -109,6 +110,14 @@ func ImageWithDigestTags() ImageOpts {
 func ImageWithPlatforms(p []string) ImageOpts {
 	return func(opts *imageOpt) {
 		opts.platforms = p
+	}
+}
+
+// ImageWithReferrers recursively includes images that refer to this.
+// EXPERIMENTAL: referrers implementation is considered experimental.
+func ImageWithReferrers() ImageOpts {
+	return func(opts *imageOpt) {
+		opts.referrers = true
 	}
 }
 
@@ -352,6 +361,44 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					}).Warn("Failed to copy digest-tag")
 					return err
 				}
+			}
+		}
+	}
+
+	// experimental support for referrers
+	if opt.referrers {
+		rl, err := rc.ReferrerList(ctx, refSrc)
+		if err != nil {
+			return err
+		}
+		for _, rDesc := range rl.Descriptors {
+			rRefSrc := refSrc
+			rRefSrc.Tag = ""
+			rRefSrc.Digest = rDesc.Digest.String()
+			rRefTgt := refTgt
+			rRefTgt.Tag = ""
+			rRefTgt.Digest = rDesc.Digest.String()
+			err = rc.imageCopyOpt(ctx, rRefSrc, rRefTgt, rDesc, false, opt)
+			if err != nil {
+				rc.log.WithFields(logrus.Fields{
+					"digest": rDesc.Digest.String(),
+					"src":    rRefSrc.CommonName(),
+					"tgt":    rRefTgt.CommonName(),
+				}).Warn("Failed to copy referrer")
+				return err
+			}
+			refM, err := rc.ManifestGet(ctx, rRefSrc)
+			if err != nil {
+				rc.log.WithFields(logrus.Fields{
+					"digest": rDesc.Digest.String(),
+					"src":    rRefSrc.CommonName(),
+					"tgt":    rRefTgt.CommonName(),
+				}).Warn("Failed to copy referrer")
+				return err
+			}
+			err = rc.ReferrerPut(ctx, rRefTgt, refM)
+			if err != nil {
+				return err
 			}
 		}
 	}

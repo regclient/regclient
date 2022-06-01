@@ -9,8 +9,8 @@ import (
 	"github.com/regclient/regclient/types/referrer"
 )
 
-// RefererrList retrieves a manifest
-func (rc *RegClient) RefererrList(ctx context.Context, r ref.Ref, opts ...scheme.ReferrerOpts) (referrer.ReferrerList, error) {
+// ReferrerList retrieves a manifest
+func (rc *RegClient) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.ReferrerOpts) (referrer.ReferrerList, error) {
 	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
 		return referrer.ReferrerList{}, err
