@@ -123,6 +123,7 @@ var imageOpts struct {
 	modOpts         []mod.Opts
 	platform        string
 	platforms       []string
+	referrers       bool
 	replace         bool
 	requireList     bool
 }
@@ -134,6 +135,7 @@ func init() {
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.includeExternal, "include-external", "", false, "Include external layers")
 	imageCopyCmd.Flags().StringArrayVarP(&imageOpts.platforms, "platforms", "", []string{}, "Copy only specific platforms, registry validation must be disabled")
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.digestTags, "digest-tags", "", false, "Include digest tags (\"sha256-<digest>.*\") when copying manifests")
+	imageCopyCmd.Flags().BoolVarP(&imageOpts.referrers, "referrers", "", false, "Experimental: Include referrers")
 	// platforms should be treated as experimental since it will break many registries
 	imageCopyCmd.Flags().MarkHidden("platforms")
 
@@ -441,6 +443,9 @@ func runImageCopy(cmd *cobra.Command, args []string) error {
 	}
 	if imageOpts.digestTags {
 		opts = append(opts, regclient.ImageWithDigestTags())
+	}
+	if imageOpts.referrers {
+		opts = append(opts, regclient.ImageWithReferrers())
 	}
 	if len(imageOpts.platforms) > 0 {
 		opts = append(opts, regclient.ImageWithPlatforms(imageOpts.platforms))
