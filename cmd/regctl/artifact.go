@@ -394,7 +394,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("unable to find referenced manifest: %w", err)
 		}
 		d := rmh.GetDescriptor()
-		refDesc = &d
+		refDesc = &types.Descriptor{MediaType: d.MediaType, Digest: d.Digest, Size: d.Size}
 	}
 
 	// read config, or initialize to an empty json config
