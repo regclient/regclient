@@ -224,6 +224,14 @@ func (m *oci1Manifest) MarshalPretty() ([]byte, error) {
 			return []byte{}, err
 		}
 	}
+	if m.Refers != nil {
+		fmt.Fprintf(tw, "\t\n")
+		fmt.Fprintf(tw, "Refers:\t\n")
+		err := m.Refers.MarshalPrettyTW(tw, "  ")
+		if err != nil {
+			return []byte{}, err
+		}
+	}
 	tw.Flush()
 	return buf.Bytes(), nil
 }
@@ -300,6 +308,14 @@ func (m *oci1Artifact) MarshalPretty() ([]byte, error) {
 	for _, d := range m.Blobs {
 		fmt.Fprintf(tw, "\t\n")
 		err := d.MarshalPrettyTW(tw, "  ")
+		if err != nil {
+			return []byte{}, err
+		}
+	}
+	if m.Refers != nil {
+		fmt.Fprintf(tw, "\t\n")
+		fmt.Fprintf(tw, "Refers:\t\n")
+		err := m.Refers.MarshalPrettyTW(tw, "  ")
 		if err != nil {
 			return []byte{}, err
 		}

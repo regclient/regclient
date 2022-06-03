@@ -372,31 +372,31 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 			return err
 		}
 		for _, rDesc := range rl.Descriptors {
-			rRefSrc := refSrc
-			rRefSrc.Tag = ""
-			rRefSrc.Digest = rDesc.Digest.String()
-			rRefTgt := refTgt
-			rRefTgt.Tag = ""
-			rRefTgt.Digest = rDesc.Digest.String()
-			err = rc.imageCopyOpt(ctx, rRefSrc, rRefTgt, rDesc, false, opt)
+			referSrc := refSrc
+			referSrc.Tag = ""
+			referSrc.Digest = rDesc.Digest.String()
+			referTgt := refTgt
+			referTgt.Tag = ""
+			referTgt.Digest = rDesc.Digest.String()
+			err = rc.imageCopyOpt(ctx, referSrc, referTgt, rDesc, true, opt)
 			if err != nil {
 				rc.log.WithFields(logrus.Fields{
 					"digest": rDesc.Digest.String(),
-					"src":    rRefSrc.CommonName(),
-					"tgt":    rRefTgt.CommonName(),
+					"src":    referSrc.CommonName(),
+					"tgt":    referTgt.CommonName(),
 				}).Warn("Failed to copy referrer")
 				return err
 			}
-			refM, err := rc.ManifestGet(ctx, rRefSrc)
+			referM, err := rc.ManifestGet(ctx, referTgt)
 			if err != nil {
 				rc.log.WithFields(logrus.Fields{
 					"digest": rDesc.Digest.String(),
-					"src":    rRefSrc.CommonName(),
-					"tgt":    rRefTgt.CommonName(),
+					"src":    referSrc.CommonName(),
+					"tgt":    referTgt.CommonName(),
 				}).Warn("Failed to copy referrer")
 				return err
 			}
-			err = rc.ReferrerPut(ctx, rRefTgt, refM)
+			err = rc.ReferrerPut(ctx, refTgt, referM)
 			if err != nil {
 				return err
 			}
