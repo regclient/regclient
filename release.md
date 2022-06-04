@@ -1,50 +1,38 @@
-# Release v0.4.2
+# Release v0.4.3
 
 Breaking Changes:
 
-- Format templates no longer support `title`.
-  ([PR 194][pr-194])
+- Media type variable for docker image layers has been renamed ([PR 220][pr-220])
 
 New Features:
 
-- Add the ability to remove buildarg from image history.
-  ([PR 207][pr-207])
-- regsync now supports the `.Sync` template variable on source and target.
-  ([PR 208][pr-208])
-- Add support for annotations on docker2 schemas.
-  ([PR 209][pr-209])
-- Adding image signing with cosign.
-  ([PR 212][pr-212])
+- Improve handling of external URLs ([PR 220][pr-220])
+- Call credential helpers only when needed ([PR 234][pr-234])
+- Support credential helpers directly in regsync and regbot ([PR 238][pr-238])
+- Allow pushing artifacts and manifest by digest ([PR 242][pr-242])
 
 Bug Fixes:
 
-- Fix handling of http_proxy and https_proxy.
-  ([PR 197][pr-197])
-- manifest head on an ocidir with a digest no longer succeeds if manifest is missing.
-  ([PR 199][pr-199])
-- image export of manifest list to ocidir should only define parent manifest in `index.json`.
-  ([PR 200][pr-200])
-- Add `/tmp` directory to scratch images.
-  ([PR 205][pr-205])
-- Handle multiple tags pointing to the same digest in ocidir.
-  ([PR 211][pr-211])
+- regctl image mod args for expose and volume rm actually rm ([PR 216][pr-216])
+- manifest head request now set the descriptor size correctly ([PR 222][pr-222])
+- Fix for chunked uploads ([PR 228][pr-228])
+- Fix image import from a multi-platform image to an ocidir:// layout ([PR 235][pr-235])
 
 Other Changes:
 
-- Upgrade to Go 1.17.
-  ([PR 193][pr-193])
-- Go build now runs with `-trimpath`.
-  ([PR 196][pr-196])
+- Adding experimental support for OCI referrers ([PR 225][pr-225])
+- Adds experimental referrer support to regctl artifact commands ([PR 226][pr-226])
+- Experimental: adding support for OCI artifact media type ([PR 229][pr-229])
+- Switch to internal processing of docker config.json ([PR 234][pr-234])
 
-[pr-193]: https://github.com/regclient/regclient/pull/193
-[pr-194]: https://github.com/regclient/regclient/pull/194
-[pr-196]: https://github.com/regclient/regclient/pull/196
-[pr-197]: https://github.com/regclient/regclient/pull/197
-[pr-199]: https://github.com/regclient/regclient/pull/199
-[pr-200]: https://github.com/regclient/regclient/pull/200
-[pr-205]: https://github.com/regclient/regclient/pull/205
-[pr-207]: https://github.com/regclient/regclient/pull/207
-[pr-208]: https://github.com/regclient/regclient/pull/208
-[pr-209]: https://github.com/regclient/regclient/pull/209
-[pr-211]: https://github.com/regclient/regclient/pull/211
-[pr-212]: https://github.com/regclient/regclient/pull/212
+[pr-216]: https://github.com/regclient/regclient/pull/216
+[pr-220]: https://github.com/regclient/regclient/pull/220
+[pr-222]: https://github.com/regclient/regclient/pull/222
+[pr-225]: https://github.com/regclient/regclient/pull/225
+[pr-226]: https://github.com/regclient/regclient/pull/226
+[pr-228]: https://github.com/regclient/regclient/pull/228
+[pr-229]: https://github.com/regclient/regclient/pull/229
+[pr-234]: https://github.com/regclient/regclient/pull/234
+[pr-235]: https://github.com/regclient/regclient/pull/235
+[pr-238]: https://github.com/regclient/regclient/pull/238
+[pr-242]: https://github.com/regclient/regclient/pull/242
