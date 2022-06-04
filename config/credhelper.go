@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"time"
 )
 
 // cred helper wraps a command
@@ -49,15 +48,21 @@ func (ch *credHelper) get(host *Host) error {
 	outB, err := ch.run("get", hostIn)
 	if err != nil {
 		outS := strings.TrimSpace(string(outB))
-		return fmt.Errorf("error getting credentials: %s: %v", outS, err)
+		return fmt.Errorf("error getting credentials, output: %s, error: %v", outS, err)
 	}
 	err = json.NewDecoder(bytes.NewReader(outB)).Decode(&credOut)
 	if err != nil {
 		return fmt.Errorf("error reading credentials: %w", err)
 	}
-	host.User = credOut.Username
-	host.Pass = credOut.Secret
-	host.credRefresh = time.Now().Add(time.Duration(host.CredExpire))
+	if credOut.Username == tokenUser {
+		host.User = ""
+		host.Pass = ""
+		host.Token = credOut.Secret
+	} else {
+		host.User = credOut.Username
+		host.Pass = credOut.Secret
+		host.Token = ""
+	}
 	return nil
 }
 
