@@ -85,10 +85,12 @@ var artifactOpts struct {
 	annotations  []string
 	artifactFile []string
 	artifactMT   []string
+	byDigest     bool
 	configFile   string
 	configMT     string
 	forceGet     bool
-	format       string
+	formatList   string
+	formatPut    string
 	manifestMT   string
 	outputDir    string
 	refers       bool
@@ -106,10 +108,12 @@ func init() {
 	artifactGetCmd.Flags().BoolVarP(&artifactOpts.stripDirs, "strip-dirs", "", false, "Strip directories from filenames in output dir")
 
 	artifactListCmd.Flags().BoolVarP(&artifactOpts.forceGet, "force-get", "", false, "Force get of manifests to populate annotations")
-	artifactListCmd.Flags().StringVarP(&artifactOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+	artifactListCmd.Flags().StringVarP(&artifactOpts.formatList, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 
 	artifactPutCmd.Flags().StringArrayVarP(&artifactOpts.annotations, "annotation", "", []string{}, "Annotation to include on manifest")
+	artifactPutCmd.Flags().BoolVarP(&artifactOpts.byDigest, "by-digest", "", false, "Push manifest by digest instead of tag")
 	artifactPutCmd.Flags().StringArrayVarP(&artifactOpts.artifactFile, "file", "f", []string{}, "Artifact filename")
+	artifactPutCmd.Flags().StringVarP(&artifactOpts.formatPut, "format", "", "", "Format output with go template syntax")
 	artifactPutCmd.Flags().StringArrayVarP(&artifactOpts.artifactMT, "media-type", "m", []string{}, "Set the artifact media-type")
 	artifactPutCmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return artifactKnownTypes, cobra.ShellCompDirectiveNoFileComp
@@ -329,15 +333,15 @@ func runArtifactList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	switch artifactOpts.format {
+	switch artifactOpts.formatList {
 	case "raw":
-		artifactOpts.format = "{{ range $key,$vals := .Manifest.RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .Manifest.RawBody}}"
+		artifactOpts.formatList = "{{ range $key,$vals := .Manifest.RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .Manifest.RawBody}}"
 	case "rawBody", "raw-body", "body":
-		artifactOpts.format = "{{printf \"%s\" .Manifest.RawBody}}"
+		artifactOpts.formatList = "{{printf \"%s\" .Manifest.RawBody}}"
 	case "rawHeaders", "raw-headers", "headers":
-		artifactOpts.format = "{{ range $key,$vals := .Manifest.RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
+		artifactOpts.formatList = "{{ range $key,$vals := .Manifest.RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
-	return template.Writer(os.Stdout, artifactOpts.format, rl)
+	return template.Writer(os.Stdout, artifactOpts.formatList, rl)
 }
 
 func runArtifactPut(cmd *cobra.Command, args []string) error {
@@ -547,10 +551,28 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if artifactOpts.byDigest {
+		r.Tag = ""
+		r.Digest = mm.GetDescriptor().Digest.String()
+	}
+
 	// push manifest
 	if artifactOpts.refers {
-		return rc.ReferrerPut(ctx, r, mm)
+		err = rc.ReferrerPut(ctx, r, mm)
 	} else {
-		return rc.ManifestPut(ctx, r, mm)
+		err = rc.ManifestPut(ctx, r, mm)
 	}
+	if err != nil {
+		return err
+	}
+
+	result := struct {
+		Manifest manifest.Manifest
+	}{
+		Manifest: mm,
+	}
+	if artifactOpts.byDigest && artifactOpts.formatPut == "" {
+		artifactOpts.formatPut = "{{ printf \"%s\\n\" .Manifest.GetDescriptor.Digest }}"
+	}
+	return template.Writer(os.Stdout, artifactOpts.formatPut, result)
 }

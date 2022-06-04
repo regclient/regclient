@@ -410,29 +410,30 @@ func fromCommon(c common) (Manifest, error) {
 	var m Manifest
 	var mt string
 	origDigest := c.desc.Digest
-	// compute/verify digest
+	// extract common data from from rawBody
 	if len(c.rawBody) > 0 {
 		c.manifSet = true
+		// extract media type from body if needed
+		if c.desc.MediaType == "" {
+			mt := struct {
+				MediaType     string        `json:"mediaType,omitempty"`
+				SchemaVersion int           `json:"schemaVersion,omitempty"`
+				Signatures    []interface{} `json:"signatures,omitempty"`
+			}{}
+			err = json.Unmarshal(c.rawBody, &mt)
+			if mt.MediaType != "" {
+				c.desc.MediaType = mt.MediaType
+			} else if mt.SchemaVersion == 1 && len(mt.Signatures) > 0 {
+				c.desc.MediaType = types.MediaTypeDocker1ManifestSigned
+			} else if mt.SchemaVersion == 1 {
+				c.desc.MediaType = types.MediaTypeDocker1Manifest
+			}
+		}
+		// compute digest
 		if c.desc.MediaType != types.MediaTypeDocker1ManifestSigned {
 			d := digest.FromBytes(c.rawBody)
 			c.desc.Digest = d
 			c.desc.Size = int64(len(c.rawBody))
-		}
-	}
-	// extract media type from body if needed
-	if c.desc.MediaType == "" && len(c.rawBody) > 0 {
-		mt := struct {
-			MediaType     string        `json:"mediaType,omitempty"`
-			SchemaVersion int           `json:"schemaVersion,omitempty"`
-			Signatures    []interface{} `json:"signatures,omitempty"`
-		}{}
-		err = json.Unmarshal(c.rawBody, &mt)
-		if mt.MediaType != "" {
-			c.desc.MediaType = mt.MediaType
-		} else if mt.SchemaVersion == 1 && len(mt.Signatures) > 0 {
-			c.desc.MediaType = types.MediaTypeDocker1ManifestSigned
-		} else if mt.SchemaVersion == 1 {
-			c.desc.MediaType = types.MediaTypeDocker1Manifest
 		}
 	}
 	switch c.desc.MediaType {

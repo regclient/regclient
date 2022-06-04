@@ -368,9 +368,6 @@ func TestNew(t *testing.T) {
 			name: "Docker Schema 2 Manifest",
 			opts: []Opts{
 				WithRef(r),
-				WithDesc(types.Descriptor{
-					MediaType: types.MediaTypeDocker2Manifest,
-				}),
 				WithRaw(rawDockerSchema2),
 			},
 			wantR: r,
@@ -459,9 +456,6 @@ func TestNew(t *testing.T) {
 			opts: []Opts{
 				WithRef(r),
 				WithRaw(rawDockerSchema1Signed),
-				WithDesc(types.Descriptor{
-					MediaType: types.MediaTypeDocker1ManifestSigned,
-				}),
 			},
 			wantE:     nil,
 			testAnnot: true,

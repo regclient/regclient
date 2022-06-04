@@ -65,12 +65,14 @@ var manifestPutCmd = &cobra.Command{
 }
 
 var manifestOpts struct {
+	byDigest      bool
+	contentType   string
+	forceTagDeref bool
+	format        string
+	formatPut     string
 	list          bool
 	platform      string
 	requireList   bool
-	format        string
-	contentType   string
-	forceTagDeref bool
 }
 
 func init() {
@@ -90,9 +92,10 @@ func init() {
 	manifestGetCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 	manifestGetCmd.Flags().MarkHidden("list")
 
+	manifestPutCmd.Flags().BoolVarP(&manifestOpts.byDigest, "by-digest", "", false, "Push manifest by digest instead of tag")
 	manifestPutCmd.Flags().StringVarP(&manifestOpts.contentType, "content-type", "t", "", "Specify content-type (e.g. application/vnd.docker.distribution.manifest.v2+json)")
-	manifestPutCmd.MarkFlagRequired("content-type")
 	manifestPutCmd.RegisterFlagCompletionFunc("content-type", completeArgMediaTypeManifest)
+	manifestPutCmd.Flags().StringVarP(&manifestOpts.formatPut, "format", "", "", "Format output with go template syntax")
 
 	manifestCmd.AddCommand(manifestDeleteCmd)
 	manifestCmd.AddCommand(manifestDigestCmd)
@@ -307,16 +310,36 @@ func runManifestPut(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	rcM, err := manifest.New(
+	opts := []manifest.Opts{
 		manifest.WithRef(r),
 		manifest.WithRaw(raw),
-		manifest.WithDesc(types.Descriptor{
+	}
+	if manifestOpts.contentType != "" {
+		opts = append(opts, manifest.WithDesc(types.Descriptor{
 			MediaType: manifestOpts.contentType,
-		}),
-	)
+		}))
+	}
+	rcM, err := manifest.New(opts...)
+	if err != nil {
+		return err
+	}
+	if manifestOpts.byDigest {
+		r.Tag = ""
+		r.Digest = rcM.GetDescriptor().Digest.String()
+	}
+
+	err = rc.ManifestPut(ctx, r, rcM)
 	if err != nil {
 		return err
 	}
 
-	return rc.ManifestPut(ctx, r, rcM)
+	result := struct {
+		Manifest manifest.Manifest
+	}{
+		Manifest: rcM,
+	}
+	if manifestOpts.byDigest && manifestOpts.formatPut == "" {
+		manifestOpts.formatPut = "{{ printf \"%s\\n\" .Manifest.GetDescriptor.Digest }}"
+	}
+	return template.Writer(os.Stdout, manifestOpts.formatPut, result)
 }
