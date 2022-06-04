@@ -679,9 +679,9 @@ func (b *BearerHandler) tryPost() error {
 	if b.token.RefreshToken != "" {
 		form.Set("grant_type", "refresh_token")
 		form.Set("refresh_token", b.token.RefreshToken)
-	} else if cred.Token != "" { // TODO: verify identity token works as a refresh token
+	} else if cred.Token != "" {
 		form.Set("grant_type", "refresh_token")
-		form.Set("refresh_token", b.token.RefreshToken)
+		form.Set("refresh_token", cred.Token)
 	} else if cred.User != "" && cred.Password != "" {
 		form.Set("grant_type", "password")
 		form.Set("username", cred.User)

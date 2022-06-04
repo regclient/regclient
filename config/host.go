@@ -33,6 +33,8 @@ const (
 	DockerRegistryAuth = "https://index.docker.io/v1/"
 	// DockerRegistryDNS is the host to connect to for Hub
 	DockerRegistryDNS = "registry-1.docker.io"
+	// tokenUser is the username returned by credential helpers that indicates the password is an identity token
+	tokenUser = "<token>"
 )
 
 var (
@@ -165,6 +167,8 @@ func (host *Host) refreshHelper() {
 	err := ch.get(host)
 	if err != nil {
 		host.credRefresh = time.Now().Add(defaultCredHelperRetry)
+	} else {
+		host.credRefresh = time.Now().Add(time.Duration(host.CredExpire))
 	}
 }
 
@@ -182,6 +186,18 @@ func (host *Host) Merge(newHost Host, log *logrus.Logger) error {
 	if host.Name == "" {
 		// only set the name if it's not initialized, this shouldn't normally change
 		host.Name = newHost.Name
+	}
+
+	if newHost.CredHelper == "" && (newHost.Pass != "" || host.Token != "") {
+		// unset existing cred helper for user/pass or token
+		host.CredHelper = ""
+		host.CredExpire = 0
+	}
+	if newHost.CredHelper != "" && newHost.User == "" && newHost.Pass == "" && newHost.Token == "" {
+		// unset existing user/pass/token for cred helper
+		host.User = ""
+		host.Pass = ""
+		host.Token = ""
 	}
 
 	if newHost.User != "" {

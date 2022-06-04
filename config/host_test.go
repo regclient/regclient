@@ -87,6 +87,16 @@ func TestConfig(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to merge blank host with exHostCredHelper: %v", err)
 	}
+	exMergeHostHelper := exHost
+	err = (&exMergeHostHelper).Merge(exHostCredHelper, nil)
+	if err != nil {
+		t.Errorf("failed to merge ex host with cred helper: %v", err)
+	}
+	exMergeHelperHost := exHostCredHelper
+	err = (&exMergeHelperHost).Merge(exHost, nil)
+	if err != nil {
+		t.Errorf("failed to merge ex cred helper with host: %v", err)
+	}
 
 	// verify fields in each
 	tests := []struct {
@@ -222,6 +232,46 @@ func TestConfig(t *testing.T) {
 			credExpect: Cred{
 				User:     "hello",
 				Password: "world",
+			},
+		},
+		{
+			name: "exMergeHostHelper",
+			host: exMergeHostHelper,
+			hostExpect: Host{
+				TLS:        TLSInsecure,
+				Hostname:   "testhost.example.com",
+				CredHelper: "docker-credential-test",
+				CredExpire: timejson.Duration(time.Hour),
+				Priority:   42,
+				BlobChunk:  123456,
+				BlobMax:    999999,
+				APIOpts:    map[string]string{"disableHead": "true"},
+				PathPrefix: "hub",
+				Mirrors:    []string{"host1.example.com", "host2.example.com"},
+			},
+			credExpect: Cred{
+				User:     "hello",
+				Password: "world",
+			},
+		},
+		{
+			name: "exMergeHelperHost",
+			host: exMergeHelperHost,
+			hostExpect: Host{
+				TLS:        TLSEnabled,
+				Hostname:   "host.example.com",
+				User:       "user-ex",
+				Pass:       "secret",
+				Priority:   42,
+				BlobChunk:  123456,
+				BlobMax:    999999,
+				APIOpts:    map[string]string{"disableHead": "true"},
+				PathPrefix: "hub",
+				Mirrors:    []string{"host1.example.com", "host2.example.com"},
+			},
+			credExpect: Cred{
+				User:     "user-ex",
+				Password: "secret",
 			},
 		},
 	}

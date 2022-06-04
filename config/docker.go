@@ -142,7 +142,7 @@ func dockerAuthToHost(name string, conf dockerConfig, auth dockerAuthConfig) (Ho
 		TLS:        tls,
 		User:       auth.Username,
 		Pass:       auth.Password,
-		Token:      auth.IdentityToken, // TODO: verify token can be used
+		Token:      auth.IdentityToken,
 		CredHelper: helper,
 	}, nil
 }
