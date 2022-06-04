@@ -178,6 +178,7 @@ This is also useful for analyzing multi-platform manifest lists to see what plat
 
 The `put` command uploads the manifest to the registry.
 This can be used to create or modify an image.
+The format option includes `.Manifest` which supports methods from [manifest.Manifest](https://pkg.go.dev/github.com/regclient/regclient/types/manifest#Manifest).
 
 ## Blob Commands
 
@@ -262,37 +263,39 @@ Each file should have a media type passed in the same order on the command line.
 A single file may be pushed using stdin.
 The config json may also be pushed, and have it's own media type.
 To set annotations on the manifest, use `--annotation name=value`, and repeat the flag for additional annotations.
+The format option includes `.Manifest` which supports methods from [manifest.Manifest](https://pkg.go.dev/github.com/regclient/regclient/types/manifest#Manifest).
 
 The following demonstrates uploading a simple artifact from stdin/stdout:
 
 ```shell
 $ regctl artifact put \
   --annotation demo=true --annotation format=oci \
+  --format '{{ .Manifest.GetDescriptor.Digest }}' \
   localhost:5000/artifact:demo <<EOF
 Test artifact from regctl.
 This follows the OCI artifact format
 EOF
+sha256:36484d44383fc9ffd34be11da4a617a96cb06b912c98114bfdb6ad2dddd443e2
 
 $ regctl manifest get localhost:5000/artifact:demo
-{
-  "schemaVersion": 2,
-  "config": {
-    "mediaType": "application/vnd.unknown.config.v1+json",
-    "digest": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
-    "size": 2
-  },
-  "layers": [
-    {
-      "mediaType": "application/octet-stream",
-      "digest": "sha256:7f8028bb058b780630dcd31cde93cb3efe96d60108ffbfe2727e4e76fdf4c9dc",
-      "size": 64
-    }
-  ],
-  "annotations": {
-    "demo": "true",
-    "format": "oci"
-  }
-}
+Name:        localhost:5000/artifact:demo
+MediaType:   application/vnd.oci.image.manifest.v1+json
+Digest:      sha256:36484d44383fc9ffd34be11da4a617a96cb06b912c98114bfdb6ad2dddd443e2
+Annotations: 
+  demo:      true
+  format:    oci
+Total Size:  64B
+             
+Config:      
+  Digest:    sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
+  MediaType: application/vnd.unknown.config.v1+json
+  Size:      2B
+             
+Layers:      
+             
+  Digest:    sha256:7f8028bb058b780630dcd31cde93cb3efe96d60108ffbfe2727e4e76fdf4c9dc
+  MediaType: application/octet-stream
+  Size:      64B
 
 $ regctl artifact get localhost:5000/artifact:demo
 Test artifact from regctl.

@@ -331,10 +331,10 @@ func loadConf() error {
 	for _, host := range conf.Creds {
 		if host.Scheme != "" {
 			log.WithFields(logrus.Fields{
-				"name": host.Registry,
+				"name": host.Name,
 			}).Warn("Scheme is deprecated, for http set TLS to disabled")
 		}
-		rcHosts = append(rcHosts, credsToRCHost(host))
+		rcHosts = append(rcHosts, host)
 	}
 	if len(rcHosts) > 0 {
 		rcOpts = append(rcOpts, regclient.WithConfigHosts(rcHosts))
@@ -758,6 +758,9 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 	}
 	if s.ForceRecursive != nil && *s.ForceRecursive {
 		opts = append(opts, regclient.ImageWithForceRecursive())
+	}
+	if s.IncludeExternal != nil && *s.IncludeExternal {
+		opts = append(opts, regclient.ImageWithIncludeExternal())
 	}
 	if len(s.Platforms) > 0 {
 		opts = append(opts, regclient.ImageWithPlatforms(s.Platforms))

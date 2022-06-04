@@ -5,6 +5,7 @@ import (
 
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient"
+	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
 )
@@ -170,6 +171,72 @@ func WithLabelToAnnotation() Opts {
 				if !ok || cur != value {
 					ociOM.Annotations[name] = value
 					changed = true
+				}
+			}
+			if !changed {
+				return nil
+			}
+			err = manifest.OCIManifestToAny(ociOM, &om)
+			if err != nil {
+				return err
+			}
+			err = dm.m.SetOrig(om)
+			if err != nil {
+				return err
+			}
+			dm.newDesc = dm.m.GetDescriptor()
+			dm.mod = replaced
+			return nil
+		})
+	}
+}
+
+// WithExternalURLsRm strips external URLs from descriptors and adjusts media type to match
+func WithExternalURLsRm() Opts {
+	return func(dc *dagConfig) {
+		dc.stepsManifest = append(dc.stepsManifest, func(ctx context.Context, rc *regclient.RegClient, r ref.Ref, dm *dagManifest) error {
+			if dm.mod == deleted {
+				return nil
+			}
+			changed := false
+			if dm.m.IsList() {
+				return nil
+			}
+			om := dm.m.GetOrig()
+			ociOM, err := manifest.OCIManifestFromAny(om)
+			if err != nil {
+				return err
+			}
+			// strip layers from image
+			for i := range ociOM.Layers {
+				if len(ociOM.Layers[i].URLs) > 0 {
+					ociOM.Layers[i].URLs = []string{}
+					mt := ociOM.Layers[i].MediaType
+					switch mt {
+					case types.MediaTypeDocker2ForeignLayer:
+						mt = types.MediaTypeDocker2LayerGzip
+					case types.MediaTypeOCI1ForeignLayer:
+						mt = types.MediaTypeOCI1Layer
+					case types.MediaTypeOCI1ForeignLayerGzip:
+						mt = types.MediaTypeOCI1LayerGzip
+					case types.MediaTypeOCI1ForeignLayerZstd:
+						mt = types.MediaTypeOCI1LayerZstd
+					}
+					ociOM.Layers[i].MediaType = mt
+					changed = true
+				}
+			}
+			// also strip from dag so other steps don't skip the external layer
+			for i, dl := range dm.layers {
+				if dl.mod == deleted {
+					continue
+				}
+				if dl.newDesc.Digest == "" && len(dl.desc.URLs) > 0 {
+					dl.newDesc = dl.desc
+				}
+				if len(dl.newDesc.URLs) > 0 {
+					dl.newDesc.URLs = []string{}
+					dm.layers[i] = dl
 				}
 			}
 			if !changed {

@@ -38,7 +38,7 @@ func TestManifest(t *testing.T) {
 		},
 		Layers: []types.Descriptor{
 			{
-				MediaType: types.MediaTypeDocker2Layer,
+				MediaType: types.MediaTypeDocker2LayerGzip,
 				Size:      8,
 				Digest:    digest2,
 			},
@@ -225,4 +225,5 @@ func TestManifest(t *testing.T) {
 			return
 		}
 	})
+	// TODO: test ManifestPut
 }

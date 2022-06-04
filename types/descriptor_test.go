@@ -18,7 +18,7 @@ func TestDescriptorData(t *testing.T) {
 		{
 			name: "No Data",
 			d: Descriptor{
-				MediaType: MediaTypeDocker2Layer,
+				MediaType: MediaTypeDocker2LayerGzip,
 				Size:      941,
 				Digest:    digest.Digest("sha256:f6e2d7fa40092cf3d9817bf6ff54183d68d108a47fdf5a5e476c612626c80e14"),
 			},

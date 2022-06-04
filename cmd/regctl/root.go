@@ -134,7 +134,8 @@ func newRegClient() *regclient.RegClient {
 
 	rcHosts := []config.Host{}
 	for name, host := range conf.Hosts {
-		rcHosts = append(rcHosts, configHostToRCHost(name, *host))
+		host.Name = name
+		rcHosts = append(rcHosts, *host)
 	}
 	if len(rcHosts) > 0 {
 		rcOpts = append(rcOpts, regclient.WithConfigHosts(rcHosts))

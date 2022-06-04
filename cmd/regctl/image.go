@@ -114,24 +114,28 @@ The other values may be 0 if not provided by the registry.`,
 }
 
 var imageOpts struct {
-	create         string
-	forceRecursive bool
-	format         string
-	digestTags     bool
-	list           bool
-	modOpts        []mod.Opts
-	platform       string
-	platforms      []string
-	replace        bool
-	requireList    bool
+	create          string
+	forceRecursive  bool
+	format          string
+	includeExternal bool
+	digestTags      bool
+	list            bool
+	modOpts         []mod.Opts
+	platform        string
+	platforms       []string
+	referrers       bool
+	replace         bool
+	requireList     bool
 }
 
 func init() {
 	imageOpts.modOpts = []mod.Opts{}
 
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.forceRecursive, "force-recursive", "", false, "Force recursive copy of image, repairs missing nested blobs and manifests")
+	imageCopyCmd.Flags().BoolVarP(&imageOpts.includeExternal, "include-external", "", false, "Include external layers")
 	imageCopyCmd.Flags().StringArrayVarP(&imageOpts.platforms, "platforms", "", []string{}, "Copy only specific platforms, registry validation must be disabled")
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.digestTags, "digest-tags", "", false, "Include digest tags (\"sha256-<digest>.*\") when copying manifests")
+	imageCopyCmd.Flags().BoolVarP(&imageOpts.referrers, "referrers", "", false, "Experimental: Include referrers")
 	// platforms should be treated as experimental since it will break many registries
 	imageCopyCmd.Flags().MarkHidden("platforms")
 
@@ -158,6 +162,7 @@ func init() {
 
 	imageModCmd.Flags().StringVarP(&imageOpts.create, "create", "", "", "Create tag")
 	imageModCmd.Flags().BoolVarP(&imageOpts.replace, "replace", "", false, "Replace tag (ignored when \"create\" is used)")
+	// most image mod flags are order dependent, so they are added using VarP/VarPF to append to modOpts
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
@@ -265,10 +270,24 @@ func init() {
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
-			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithExposeAdd(val))
+			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithExposeRm(val))
 			return nil
 		},
 	}, "expose-rm", "", `delete an exposed port`)
+	flagExtURLsRm := imageModCmd.Flags().VarPF(&modFlagFunc{
+		t: "bool",
+		f: func(val string) error {
+			b, err := strconv.ParseBool(val)
+			if err != nil {
+				return fmt.Errorf("unable to parse value %s: %w", val, err)
+			}
+			if b {
+				imageOpts.modOpts = append(imageOpts.modOpts, mod.WithExternalURLsRm())
+			}
+			return nil
+		},
+	}, "external-urls-rm", "", `remove external url references from layers (first copy image with "--include-external")`)
+	flagExtURLsRm.NoOptDefVal = "true"
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
@@ -283,7 +302,7 @@ func init() {
 			return nil
 		},
 	}, "label", "", `set an label (name=value)`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	flagLabelAnnot := imageModCmd.Flags().VarPF(&modFlagFunc{
 		t: "bool",
 		f: func(val string) error {
 			b, err := strconv.ParseBool(val)
@@ -296,6 +315,7 @@ func init() {
 			return nil
 		},
 	}, "label-to-annotation", "", `set annotations from labels`)
+	flagLabelAnnot.NoOptDefVal = "true"
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
@@ -350,7 +370,7 @@ func init() {
 			return nil
 		},
 	}, "time-max", "", `max timestamp for both the config and layers`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	flagOCI := imageModCmd.Flags().VarPF(&modFlagFunc{
 		t: "bool",
 		f: func(val string) error {
 			b, err := strconv.ParseBool(val)
@@ -363,6 +383,7 @@ func init() {
 			return nil
 		},
 	}, "to-oci", "", `convert to OCI media types`)
+	flagOCI.NoOptDefVal = "true"
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
@@ -373,7 +394,7 @@ func init() {
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
-			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithVolumeAdd(val))
+			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithVolumeRm(val))
 			return nil
 		},
 	}, "volume-rm", "", `delete a volume definition`)
@@ -417,8 +438,14 @@ func runImageCopy(cmd *cobra.Command, args []string) error {
 	if imageOpts.forceRecursive {
 		opts = append(opts, regclient.ImageWithForceRecursive())
 	}
+	if imageOpts.includeExternal {
+		opts = append(opts, regclient.ImageWithIncludeExternal())
+	}
 	if imageOpts.digestTags {
 		opts = append(opts, regclient.ImageWithDigestTags())
+	}
+	if imageOpts.referrers {
+		opts = append(opts, regclient.ImageWithReferrers())
 	}
 	if len(imageOpts.platforms) > 0 {
 		opts = append(opts, regclient.ImageWithPlatforms(imageOpts.platforms))
@@ -530,6 +557,7 @@ func runImageMod(cmd *cobra.Command, args []string) error {
 			}
 		} else {
 			rNew = r
+			rNew.Digest = ""
 			rNew.Tag = imageOpts.create
 		}
 	} else if imageOpts.replace {
@@ -589,6 +617,10 @@ func runImageRateLimit(cmd *cobra.Command, args []string) error {
 type modFlagFunc struct {
 	f func(string) error
 	t string
+}
+
+func (m *modFlagFunc) IsBoolFlag() bool {
+	return m.t == "bool"
 }
 
 func (m *modFlagFunc) String() string {

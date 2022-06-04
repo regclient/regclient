@@ -21,7 +21,7 @@ const (
 	MediaTypeOCI1Manifest          = topTypes.MediaTypeOCI1Manifest
 	MediaTypeOCI1ManifestList      = topTypes.MediaTypeOCI1ManifestList
 	MediaTypeOCI1ImageConfig       = topTypes.MediaTypeOCI1ImageConfig
-	MediaTypeDocker2Layer          = topTypes.MediaTypeDocker2Layer
+	MediaTypeDocker2Layer          = topTypes.MediaTypeDocker2LayerGzip
 	MediaTypeOCI1Layer             = topTypes.MediaTypeOCI1Layer
 	MediaTypeOCI1LayerGzip         = topTypes.MediaTypeOCI1LayerGzip
 	MediaTypeBuildkitCacheConfig   = topTypes.MediaTypeBuildkitCacheConfig

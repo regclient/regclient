@@ -2,10 +2,18 @@ package config
 
 import (
 	"encoding/json"
+	"os"
 	"testing"
+	"time"
+
+	"github.com/regclient/regclient/internal/timejson"
 )
 
 func TestConfig(t *testing.T) {
+	curPath := os.Getenv("PATH")
+	os.Setenv("PATH", "testdata"+string(os.PathListSeparator)+curPath)
+	defer os.Setenv("PATH", curPath)
+
 	// generate new/blank
 	blankHostP := HostNew()
 
@@ -34,14 +42,22 @@ func TestConfig(t *testing.T) {
 		"user": "user-ex3",
 		"pass": "secret3",
 		"pathPrefix": "hub3",
-		"mirrors": ["host3.example.com"],
+		"mirrors": ["testhost.example.com"],
 		"priority": 42,
 		"apiOpts": {"disableHead": "false", "unknownOpt": "3"},
 		"blobChunk": 333333,
 		"blobMax": 333333
 	}
 	`
-	var exHost, exHost2 Host
+	exJSONCredHelper := `
+	{
+	  "tls": "insecure",
+		"hostname": "testhost.example.com",
+		"credHelper": "docker-credential-test",
+		"credExpire": "1h0m0s"
+	}
+	`
+	var exHost, exHost2, exHostCredHelper Host
 	err := json.Unmarshal([]byte(exJSON), &exHost)
 	if err != nil {
 		t.Errorf("failed unmarshaling exJson: %v", err)
@@ -49,6 +65,10 @@ func TestConfig(t *testing.T) {
 	err = json.Unmarshal([]byte(exJSON2), &exHost2)
 	if err != nil {
 		t.Errorf("failed unmarshaling exJson2: %v", err)
+	}
+	err = json.Unmarshal([]byte(exJSONCredHelper), &exHostCredHelper)
+	if err != nil {
+		t.Errorf("failed unmarshaling exJsonCredHelper: %v", err)
 	}
 
 	// merge blank with json
@@ -62,12 +82,28 @@ func TestConfig(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to merge ex host with exHost2: %v", err)
 	}
+	exMergeCredHelper := *blankHostP
+	err = (&exMergeCredHelper).Merge(exHostCredHelper, nil)
+	if err != nil {
+		t.Errorf("failed to merge blank host with exHostCredHelper: %v", err)
+	}
+	exMergeHostHelper := exHost
+	err = (&exMergeHostHelper).Merge(exHostCredHelper, nil)
+	if err != nil {
+		t.Errorf("failed to merge ex host with cred helper: %v", err)
+	}
+	exMergeHelperHost := exHostCredHelper
+	err = (&exMergeHelperHost).Merge(exHost, nil)
+	if err != nil {
+		t.Errorf("failed to merge ex cred helper with host: %v", err)
+	}
 
 	// verify fields in each
 	tests := []struct {
 		name       string
 		host       Host
 		hostExpect Host
+		credExpect Cred
 	}{
 		{
 			name: "blank",
@@ -76,6 +112,7 @@ func TestConfig(t *testing.T) {
 				TLS:     TLSEnabled,
 				APIOpts: map[string]string{},
 			},
+			credExpect: Cred{},
 		},
 		{
 			name: "empty",
@@ -85,6 +122,7 @@ func TestConfig(t *testing.T) {
 				Hostname: "host.example.org",
 				APIOpts:  map[string]string{},
 			},
+			credExpect: Cred{},
 		},
 		{
 			name: "exHost",
@@ -101,6 +139,10 @@ func TestConfig(t *testing.T) {
 				PathPrefix: "hub",
 				Mirrors:    []string{"host1.example.com", "host2.example.com"},
 			},
+			credExpect: Cred{
+				User:     "user-ex",
+				Password: "secret",
+			},
 		},
 		{
 			name: "exHost2",
@@ -111,11 +153,30 @@ func TestConfig(t *testing.T) {
 				User:       "user-ex3",
 				Pass:       "secret3",
 				PathPrefix: "hub3",
-				Mirrors:    []string{"host3.example.com"},
+				Mirrors:    []string{"testhost.example.com"},
 				Priority:   42,
 				APIOpts:    map[string]string{"disableHead": "false", "unknownOpt": "3"},
 				BlobChunk:  333333,
 				BlobMax:    333333,
+			},
+			credExpect: Cred{
+				User:     "user-ex3",
+				Password: "secret3",
+			},
+		},
+		{
+			name: "exHostCredHelper",
+			host: exHostCredHelper,
+			hostExpect: Host{
+				TLS:        TLSInsecure,
+				Hostname:   "testhost.example.com",
+				CredHelper: "docker-credential-test",
+				CredExpire: timejson.Duration(time.Hour),
+				APIOpts:    map[string]string{},
+			},
+			credExpect: Cred{
+				User:     "hello",
+				Password: "world",
 			},
 		},
 		{
@@ -133,6 +194,10 @@ func TestConfig(t *testing.T) {
 				PathPrefix: "hub",
 				Mirrors:    []string{"host1.example.com", "host2.example.com"},
 			},
+			credExpect: Cred{
+				User:     "user-ex",
+				Password: "secret",
+			},
 		},
 		{
 			name: "mergeHost2",
@@ -143,11 +208,70 @@ func TestConfig(t *testing.T) {
 				User:       "user-ex3",
 				Pass:       "secret3",
 				PathPrefix: "hub3",
-				Mirrors:    []string{"host3.example.com"},
+				Mirrors:    []string{"testhost.example.com"},
 				Priority:   42,
 				APIOpts:    map[string]string{"disableHead": "false", "unknownOpt": "3"},
 				BlobChunk:  333333,
 				BlobMax:    333333,
+			},
+			credExpect: Cred{
+				User:     "user-ex3",
+				Password: "secret3",
+			},
+		},
+		{
+			name: "mergeHostCredHelper",
+			host: exMergeCredHelper,
+			hostExpect: Host{
+				TLS:        TLSInsecure,
+				Hostname:   "testhost.example.com",
+				CredHelper: "docker-credential-test",
+				CredExpire: timejson.Duration(time.Hour),
+				APIOpts:    map[string]string{},
+			},
+			credExpect: Cred{
+				User:     "hello",
+				Password: "world",
+			},
+		},
+		{
+			name: "exMergeHostHelper",
+			host: exMergeHostHelper,
+			hostExpect: Host{
+				TLS:        TLSInsecure,
+				Hostname:   "testhost.example.com",
+				CredHelper: "docker-credential-test",
+				CredExpire: timejson.Duration(time.Hour),
+				Priority:   42,
+				BlobChunk:  123456,
+				BlobMax:    999999,
+				APIOpts:    map[string]string{"disableHead": "true"},
+				PathPrefix: "hub",
+				Mirrors:    []string{"host1.example.com", "host2.example.com"},
+			},
+			credExpect: Cred{
+				User:     "hello",
+				Password: "world",
+			},
+		},
+		{
+			name: "exMergeHelperHost",
+			host: exMergeHelperHost,
+			hostExpect: Host{
+				TLS:        TLSEnabled,
+				Hostname:   "host.example.com",
+				User:       "user-ex",
+				Pass:       "secret",
+				Priority:   42,
+				BlobChunk:  123456,
+				BlobMax:    999999,
+				APIOpts:    map[string]string{"disableHead": "true"},
+				PathPrefix: "hub",
+				Mirrors:    []string{"host1.example.com", "host2.example.com"},
+			},
+			credExpect: Cred{
+				User:     "user-ex",
+				Password: "secret",
 			},
 		},
 	}
@@ -174,6 +298,12 @@ func TestConfig(t *testing.T) {
 			}
 			if tt.host.Token != tt.hostExpect.Token {
 				t.Errorf("token field mismatch, expected %s, found %s", tt.hostExpect.Token, tt.host.Token)
+			}
+			if tt.host.CredHelper != tt.hostExpect.CredHelper {
+				t.Errorf("credHelper field mismatch, expected %s, found %s", tt.hostExpect.CredHelper, tt.host.CredHelper)
+			}
+			if tt.host.CredExpire != tt.hostExpect.CredExpire {
+				t.Errorf("credExCredExpire field mismatch, expected %s, found %s", time.Duration(tt.hostExpect.CredExpire).String(), time.Duration(tt.host.CredExpire).String())
 			}
 			if tt.host.PathPrefix != tt.hostExpect.PathPrefix {
 				t.Errorf("pathPrefix field mismatch, expected %s, found %s", tt.hostExpect.PathPrefix, tt.host.PathPrefix)
@@ -204,6 +334,16 @@ func TestConfig(t *testing.T) {
 						t.Errorf("apiOpts field %s mismatch, expected %s, found %s", i, tt.hostExpect.APIOpts[i], tt.host.APIOpts[i])
 					}
 				}
+			}
+			cred := tt.host.GetCred()
+			if tt.credExpect.User != cred.User {
+				t.Errorf("cred user field mismatch, expected %s, found %s", tt.credExpect.User, cred.User)
+			}
+			if tt.credExpect.Password != cred.Password {
+				t.Errorf("cred password field mismatch, expected %s, found %s", tt.credExpect.Password, cred.Password)
+			}
+			if tt.credExpect.Token != cred.Token {
+				t.Errorf("cred token field mismatch, expected %s, found %s", tt.credExpect.Token, cred.Token)
 			}
 		})
 	}

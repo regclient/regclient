@@ -5,8 +5,11 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"math/rand"
 	"os"
 	"path"
+	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -32,7 +35,12 @@ type RWFile interface {
 	fs.File
 	WFile
 }
+type RWPerms interface {
+	Chmod(filename string, mode fs.FileMode) error
+	Chown(filename string, uid, gid int) error
+}
 
+// WriteFS is an interface for a writable filesystem
 type WriteFS interface {
 	// Create creates a new file
 	Create(string) (WFile, error)
@@ -42,8 +50,11 @@ type WriteFS interface {
 	OpenFile(string, int, fs.FileMode) (RWFile, error)
 	// Remove removes the named file or (empty) directory.
 	Remove(string) error
+	// Rename moves a file or directory to a new name
+	Rename(oldName, newName string) error
 }
 
+// WFile is the interface for a writable file
 type WFile interface {
 	// Close closes the open file
 	Close() error
@@ -104,8 +115,40 @@ func CopyRecursive(srcFS fs.FS, srcName string, destFS RWFS, destName string) er
 	return nil
 }
 
-// TODO: add MakeTemp func
+// CreateTemp returns a temp file
+func CreateTemp(rwfs RWFS, dir, pattern string) (RWFile, error) {
+	ct, ok := rwfs.(interface {
+		CreateTemp(dir, pattern string) (RWFile, error)
+	})
+	if ok {
+		return ct.CreateTemp(dir, pattern)
+	}
+	if dir == "" {
+		dir = os.TempDir()
+	}
+	prefix, suffix := pattern, ""
+	i := strings.LastIndex(pattern, "*")
+	if i >= 0 {
+		prefix, suffix = pattern[:i], pattern[i+1:]
+	}
+	prefix = filepath.Join(dir, prefix)
+	try := 0
+	for {
+		rnd := strconv.FormatUint(rand.Uint64(), 10)
+		name := prefix + rnd + suffix
+		f, err := rwfs.OpenFile(name, O_RDWR|O_CREATE|O_EXCL, 0600)
+		if err != nil && errors.Is(err, fs.ErrExist) {
+			try++
+			if try < 10000 {
+				continue
+			}
+			return nil, &fs.PathError{Op: "createtemp", Path: prefix + "*" + suffix, Err: fs.ErrExist}
+		}
+		return f, err
+	}
+}
 
+// MkdirAll creates a directory, including all parent directories
 func MkdirAll(rwfs RWFS, name string, perm fs.FileMode) error {
 	parts := strings.Split(name, "/")
 	prefix := ""
@@ -151,6 +194,7 @@ func MkdirAll(rwfs RWFS, name string, perm fs.FileMode) error {
 
 // TODO: add Rename func
 
+// Stat returns the FileInfo for a specified file
 func Stat(rfs fs.FS, name string) (fs.FileInfo, error) {
 	fh, err := rfs.Open(name)
 	if err != nil {
@@ -164,10 +208,12 @@ func Stat(rfs fs.FS, name string) (fs.FileInfo, error) {
 	return fi, nil
 }
 
+// ReadFile returns the file contents
 func ReadFile(rfs fs.FS, name string) ([]byte, error) {
 	return fs.ReadFile(rfs, name)
 }
 
+// WriteFile replaces or creates a file with the specified contents
 func WriteFile(wfs WriteFS, name string, data []byte, perm fs.FileMode) error {
 	// replace os flags?
 	f, err := wfs.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)

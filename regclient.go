@@ -7,13 +7,10 @@ import (
 	"errors"
 	"io/fs"
 	"io/ioutil"
-	"strings"
 	"time"
 
 	"fmt"
-	"os"
 
-	dockercfg "github.com/docker/cli/cli/config"
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/scheme"
@@ -109,7 +106,10 @@ func New(opts ...Opt) *RegClient {
 		ocidir.WithFS(rc.fs),
 	)
 
-	rc.log.Debug("regclient initialized")
+	rc.log.WithFields(logrus.Fields{
+		"VCSRef": VCSRef,
+		"VCSTag": VCSTag,
+	}).Debug("regclient initialized")
 
 	return &rc
 }
@@ -130,54 +130,21 @@ func WithDockerCerts() Opt {
 // This changes the default value from the config file, and should be added after the config file is loaded
 func WithDockerCreds() Opt {
 	return func(rc *RegClient) {
-		err := rc.loadDockerCreds()
+		configHosts, err := config.DockerLoad()
 		if err != nil {
 			rc.log.WithFields(logrus.Fields{
 				"err": err,
 			}).Warn("Failed to load docker creds")
+			return
 		}
+		rc.hostLoad("docker", configHosts)
 	}
 }
 
 // WithConfigHosts adds a list of config host settings
 func WithConfigHosts(configHosts []config.Host) Opt {
 	return func(rc *RegClient) {
-		if len(configHosts) == 0 {
-			return
-		}
-		for _, configHost := range configHosts {
-			if configHost.Name == "" {
-				// TODO: should this error, warn, or fall back to hostname?
-				continue
-			}
-			if configHost.Name == DockerRegistry || configHost.Name == DockerRegistryDNS || configHost.Name == DockerRegistryAuth {
-				configHost.Name = DockerRegistry
-				if configHost.Hostname == "" || configHost.Hostname == DockerRegistry || configHost.Hostname == DockerRegistryAuth {
-					configHost.Hostname = DockerRegistryDNS
-				}
-			}
-			tls, _ := configHost.TLS.MarshalText()
-			rc.log.WithFields(logrus.Fields{
-				"name":       configHost.Name,
-				"user":       configHost.User,
-				"hostname":   configHost.Hostname,
-				"repoAuth":   configHost.RepoAuth,
-				"tls":        string(tls),
-				"pathPrefix": configHost.PathPrefix,
-				"mirrors":    configHost.Mirrors,
-				"api":        configHost.API,
-				"blobMax":    configHost.BlobMax,
-				"blobChunk":  configHost.BlobChunk,
-			}).Debug("Loading host config")
-			err := rc.hostSet(configHost)
-			if err != nil {
-				rc.log.WithFields(logrus.Fields{
-					"host":  configHost.Name,
-					"user":  configHost.User,
-					"error": err,
-				}).Warn("Failed to update host config")
-			}
-		}
+		rc.hostLoad("host", configHosts)
 	}
 }
 
@@ -228,67 +195,41 @@ func WithUserAgent(ua string) Opt {
 	}
 }
 
-func (rc *RegClient) loadDockerCreds() error {
-	conffile := dockercfg.LoadDefaultConfigFile(os.Stderr)
-	creds, err := conffile.GetAllCredentials()
-	if err != nil {
-		return fmt.Errorf("failed to load docker creds %s", err)
-	}
-	for name, cred := range creds {
-		if (cred.Username == "" || cred.Password == "") && cred.IdentityToken == "" {
-			rc.log.WithFields(logrus.Fields{
-				"name": name,
-			}).Debug("Docker cred: Skipping empty pass and token")
+func (rc *RegClient) hostLoad(src string, hosts []config.Host) {
+	for _, configHost := range hosts {
+		if configHost.Name == "" {
+			// TODO: should this error, warn, or fall back to hostname?
 			continue
 		}
-		// Docker Hub is a special case
-		if name == DockerRegistryAuth {
-			name = DockerRegistry
-			cred.ServerAddress = DockerRegistryDNS
-		}
-		// handle names with a scheme included (https://registry.example.com)
-		tls := config.TLSEnabled
-		i := strings.Index(name, "://")
-		if i > 0 {
-			scheme := name[:i]
-			if name == cred.ServerAddress {
-				cred.ServerAddress = name[i+3:]
-			}
-			name = name[i+3:]
-			if scheme == "http" {
-				tls = config.TLSDisabled
+		if configHost.Name == DockerRegistry || configHost.Name == DockerRegistryDNS || configHost.Name == DockerRegistryAuth {
+			configHost.Name = DockerRegistry
+			if configHost.Hostname == "" || configHost.Hostname == DockerRegistry || configHost.Hostname == DockerRegistryAuth {
+				configHost.Hostname = DockerRegistryDNS
 			}
 		}
-		if cred.ServerAddress == "" {
-			cred.ServerAddress = name
-		}
-		tlsB, _ := tls.MarshalText()
+		tls, _ := configHost.TLS.MarshalText()
 		rc.log.WithFields(logrus.Fields{
-			"name":      name,
-			"host":      cred.ServerAddress,
-			"tls":       string(tlsB),
-			"user":      cred.Username,
-			"pass-set":  cred.Password != "",
-			"token-set": cred.IdentityToken != "",
-		}).Debug("Loading docker cred")
-		err = rc.hostSet(config.Host{
-			Name:     name,
-			Hostname: cred.ServerAddress,
-			TLS:      tls,
-			User:     cred.Username,
-			Pass:     cred.Password,
-			Token:    cred.IdentityToken, // TODO: verify token can be used
-		})
+			"name":       configHost.Name,
+			"user":       configHost.User,
+			"hostname":   configHost.Hostname,
+			"helper":     configHost.CredHelper,
+			"repoAuth":   configHost.RepoAuth,
+			"tls":        string(tls),
+			"pathPrefix": configHost.PathPrefix,
+			"mirrors":    configHost.Mirrors,
+			"api":        configHost.API,
+			"blobMax":    configHost.BlobMax,
+			"blobChunk":  configHost.BlobChunk,
+		}).Debugf("Loading %s config", src)
+		err := rc.hostSet(configHost)
 		if err != nil {
-			// treat each of these as non-fatal
 			rc.log.WithFields(logrus.Fields{
-				"registry": name,
-				"user":     cred.Username,
-				"error":    err,
-			}).Warn("Failed to use docker credential")
+				"host":  configHost.Name,
+				"user":  configHost.User,
+				"error": err,
+			}).Warn("Failed to update host config")
 		}
 	}
-	return nil
 }
 
 func (rc *RegClient) hostSet(newHost config.Host) error {
@@ -317,8 +258,7 @@ func setupVCSVars() {
 		VCSTag string
 	}{}
 
-	// regclient only looks for releases, individual binaries will look at their local directories
-	verB, err := embedFS.ReadFile("embed/release.json")
+	verB, err := embedFS.ReadFile("embed/version.json")
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return
 	}

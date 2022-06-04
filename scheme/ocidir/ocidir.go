@@ -31,18 +31,18 @@ type OCIDir struct {
 	mu      sync.Mutex
 }
 
-type config struct {
+type ociConf struct {
 	fs  rwfs.RWFS
 	gc  bool
 	log *logrus.Logger
 }
 
 // Opts are used for passing options to ocidir
-type Opts func(*config)
+type Opts func(*ociConf)
 
 // New creates a new OCIDir with options
 func New(opts ...Opts) *OCIDir {
-	conf := config{
+	conf := ociConf{
 		log: &logrus.Logger{Out: ioutil.Discard},
 		gc:  true,
 	}
@@ -61,7 +61,7 @@ func New(opts ...Opts) *OCIDir {
 // The default is to use the OS, this can be used to sandbox within a folder
 // This can also be used to pass an in-memory filesystem for testing or special use cases
 func WithFS(fs rwfs.RWFS) Opts {
-	return func(c *config) {
+	return func(c *ociConf) {
 		c.fs = fs
 	}
 }
@@ -69,7 +69,7 @@ func WithFS(fs rwfs.RWFS) Opts {
 // WithGC configures the garbage collection setting
 // This defaults to enabled
 func WithGC(gc bool) Opts {
-	return func(c *config) {
+	return func(c *ociConf) {
 		c.gc = gc
 	}
 }
@@ -77,7 +77,7 @@ func WithGC(gc bool) Opts {
 // WithLog provides a logrus logger
 // By default logging is disabled
 func WithLog(log *logrus.Logger) Opts {
-	return func(c *config) {
+	return func(c *ociConf) {
 		c.log = log
 	}
 }

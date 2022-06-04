@@ -172,6 +172,17 @@ func TestRef(t *testing.T) {
 			wantE:      nil,
 		},
 		{
+			name:       "Localhost registry with port",
+			ref:        "localhost:5000/group/image:v42",
+			scheme:     "reg",
+			registry:   "localhost:5000",
+			repository: "group/image",
+			tag:        "v42",
+			digest:     "",
+			path:       "",
+			wantE:      nil,
+		},
+		{
 			name:       "ip address registry",
 			ref:        "127.0.0.1:5000/image:v42",
 			scheme:     "reg",
@@ -328,6 +339,11 @@ func TestRef(t *testing.T) {
 			name:  "invalid ocidir digest",
 			ref:   "ocidir://filename@sha256:abcd",
 			wantE: fmt.Errorf(`invalid path for scheme "ocidir": filename@sha256:abcd`),
+		},
+		{
+			name:  "localhost missing repo",
+			ref:   "localhost:5000",
+			wantE: fmt.Errorf(`invalid reference "localhost:5000"`),
 		},
 	}
 

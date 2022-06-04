@@ -148,6 +148,14 @@ func TestMod(t *testing.T) {
 			wantSame: true,
 		},
 		{
+			name: "External layer remove unchanged",
+			opts: []Opts{
+				WithExternalURLsRm(),
+			},
+			ref:      "ocidir://testrepo:v1",
+			wantSame: true,
+		},
+		{
 			name: "Layer Timestamp Missing Label",
 			opts: []Opts{
 				WithLayerTimestampFromLabel("missing"),

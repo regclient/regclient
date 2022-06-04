@@ -94,3 +94,17 @@ func DetectCompression(head []byte) CompressType {
 	}
 	return CompressNone
 }
+
+func (ct CompressType) String() string {
+	switch ct {
+	case CompressNone:
+		return "none"
+	case CompressBzip2:
+		return "bzip2"
+	case CompressGzip:
+		return "gzip"
+	case CompressXz:
+		return "xz"
+	}
+	return "unknown"
+}

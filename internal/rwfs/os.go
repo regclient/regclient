@@ -28,12 +28,42 @@ func OSNew(base string) *OSFS {
 	}
 }
 
+func (o *OSFS) Chmod(name string, mode fs.FileMode) error {
+	file, err := o.join("chmod", name)
+	if err != nil {
+		return err
+	}
+	return os.Chmod(file, mode)
+}
+
+func (o *OSFS) Chown(name string, uid, gid int) error {
+	file, err := o.join("chown", name)
+	if err != nil {
+		return err
+	}
+	return os.Chown(file, uid, gid)
+}
+
 func (o *OSFS) Create(name string) (WFile, error) {
 	file, err := o.join("create", name)
 	if err != nil {
 		return nil, err
 	}
 	fh, err := os.Create(file)
+	if err != nil {
+		return nil, err
+	}
+	return &OSFile{
+		File: fh,
+	}, nil
+}
+
+func (o *OSFS) CreateTemp(dir, pattern string) (RWFile, error) {
+	dir, err := o.join("createtemp", dir)
+	if err != nil {
+		return nil, err
+	}
+	fh, err := os.CreateTemp(dir, pattern)
 	if err != nil {
 		return nil, err
 	}
@@ -94,6 +124,19 @@ func (o *OSFS) Remove(name string) error {
 		return err
 	}
 	return os.Remove(full)
+}
+
+// Rename moves a file or directory to a new name
+func (o *OSFS) Rename(oldName, newName string) error {
+	oldFile, err := o.join("rename", oldName)
+	if err != nil {
+		return err
+	}
+	newFile, err := o.join("rename", newName)
+	if err != nil {
+		return err
+	}
+	return os.Rename(oldFile, newFile)
 }
 
 func (o *OSFS) Sub(name string) (*OSFS, error) {

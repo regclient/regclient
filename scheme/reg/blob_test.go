@@ -25,6 +25,7 @@ import (
 
 func TestBlobGet(t *testing.T) {
 	blobRepo := "/proj/repo"
+	externalRepo := "/proj/external"
 	privateRepo := "/proj/private"
 	ctx := context.Background()
 	// include a random blob
@@ -66,6 +67,58 @@ func TestBlobGet(t *testing.T) {
 					"Content-Length":        {fmt.Sprintf("%d", blobLen)},
 					"Content-Type":          {"application/octet-stream"},
 					"Docker-Content-Digest": {d1.String()},
+				},
+			},
+		},
+		// head
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "external direct HEAD for d1",
+				Method: "HEAD",
+				Path:   "/v2" + externalRepo + "/blobs/" + d1.String(),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusNotFound,
+			},
+		},
+		// get
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "external direct GET for d1",
+				Method: "GET",
+				Path:   "/v2" + externalRepo + "/blobs/" + d1.String(),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusNotFound,
+			},
+		}, // external head
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "external HEAD for d1",
+				Method: "HEAD",
+				Path:   "/external/" + d1.String(),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", blobLen)},
+					"Content-Type":   {"application/octet-stream"},
+				},
+			},
+		},
+		// external get
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "external GET for d1",
+				Method: "GET",
+				Path:   "/external/" + d1.String(),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Body:   blob1,
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", blobLen)},
+					"Content-Type":   {"application/octet-stream"},
 				},
 			},
 		},
@@ -212,6 +265,44 @@ func TestBlobGet(t *testing.T) {
 		defer br.Close()
 		if br.GetDescriptor().Size != int64(blobLen) {
 			t.Errorf("Failed comparing blob length")
+		}
+	})
+
+	// Test successful blob
+	t.Run("External Get", func(t *testing.T) {
+		r, err := ref.New(tsURL.Host + externalRepo)
+		if err != nil {
+			t.Errorf("Failed creating ref: %v", err)
+		}
+		br, err := reg.BlobGet(ctx, r, types.Descriptor{Digest: d1, URLs: []string{tsURL.Scheme + "://" + tsURL.Host + "/external/" + d1.String()}})
+		if err != nil {
+			t.Errorf("Failed running external BlobGet: %v", err)
+			return
+		}
+		defer br.Close()
+		brBlob, err := ioutil.ReadAll(br)
+		if err != nil {
+			t.Errorf("Failed reading external blob: %v", err)
+			return
+		}
+		if !bytes.Equal(blob1, brBlob) {
+			t.Errorf("External blob does not match")
+		}
+	})
+
+	t.Run("External Head", func(t *testing.T) {
+		r, err := ref.New(tsURL.Host + externalRepo)
+		if err != nil {
+			t.Errorf("Failed creating ref: %v", err)
+		}
+		br, err := reg.BlobHead(ctx, r, types.Descriptor{Digest: d1, URLs: []string{tsURL.Scheme + "://" + tsURL.Host + "/external/" + d1.String()}})
+		if err != nil {
+			t.Errorf("Failed running external BlobHead: %v", err)
+			return
+		}
+		defer br.Close()
+		if br.GetDescriptor().Size != int64(blobLen) {
+			t.Errorf("Failed comparing external blob length")
 		}
 	})
 
@@ -362,7 +453,6 @@ func TestBlobPut(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Range":          {"bytes=0-0"},
 					"Location":       {fmt.Sprintf("http://%s/v2%s/blobs/uploads/%s", blobHost, blobRepo, uuid1.String())},
 				},
 			},
@@ -398,7 +488,6 @@ func TestBlobPut(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Range":          {"bytes=0-0"},
 					"Location":       {uuid2.String()},
 				},
 			},
@@ -416,7 +505,6 @@ func TestBlobPut(t *testing.T) {
 				},
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Content-Range":  {fmt.Sprintf("%d-%d", blobLen, blobLen)},
 					"Content-Type":   {"application/octet-stream"},
 				},
 			},
@@ -465,7 +553,7 @@ func TestBlobPut(t *testing.T) {
 				},
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", blobLen-blobChunk)},
-					"Content-Range":  {fmt.Sprintf("%d-%d", blobChunk, blobLen)},
+					"Content-Range":  {fmt.Sprintf("%d-%d", blobChunk, blobLen-1)},
 					"Content-Type":   {"application/octet-stream"},
 				},
 				Body: blob2[blobChunk:],
@@ -489,7 +577,7 @@ func TestBlobPut(t *testing.T) {
 				Query:    map[string][]string{},
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", blobChunk)},
-					"Content-Range":  {fmt.Sprintf("0-%d", blobChunk)},
+					"Content-Range":  {fmt.Sprintf("0-%d", blobChunk-1)},
 					"Content-Type":   {"application/octet-stream"},
 				},
 				Body: blob2[0:blobChunk],
@@ -498,7 +586,7 @@ func TestBlobPut(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
-					"Range":          {fmt.Sprintf("bytes=0-%d", blobChunk)},
+					"Range":          {fmt.Sprintf("bytes=0-%d", blobChunk-1)},
 					"Location":       {uuid2.String() + "?chunk=2"},
 				},
 			},
@@ -541,7 +629,6 @@ func TestBlobPut(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Range":          {"bytes=0-0"},
 					"Location":       {uuid3.String()},
 				},
 			},
@@ -559,7 +646,6 @@ func TestBlobPut(t *testing.T) {
 				},
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Content-Range":  {fmt.Sprintf("%d-%d", blobLen3, blobLen3)},
 					"Content-Type":   {"application/octet-stream"},
 				},
 			},
@@ -608,7 +694,7 @@ func TestBlobPut(t *testing.T) {
 				},
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", blobLen3-blobChunk)},
-					"Content-Range":  {fmt.Sprintf("%d-%d", blobChunk, blobLen3)},
+					"Content-Range":  {fmt.Sprintf("%d-%d", blobChunk, blobLen3-1)},
 					"Content-Type":   {"application/octet-stream"},
 				},
 				Body: blob3[blobChunk:],
@@ -617,7 +703,7 @@ func TestBlobPut(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
-					"Range":          {fmt.Sprintf("bytes=0-%d", blobLen3)},
+					"Range":          {fmt.Sprintf("bytes=0-%d", blobLen3-1)},
 					"Location":       {uuid3.String() + "?chunk=3"},
 				},
 			},
@@ -632,7 +718,7 @@ func TestBlobPut(t *testing.T) {
 				Query:    map[string][]string{},
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", blobChunk)},
-					"Content-Range":  {fmt.Sprintf("0-%d", blobChunk)},
+					"Content-Range":  {fmt.Sprintf("0-%d", blobChunk-1)},
 					"Content-Type":   {"application/octet-stream"},
 				},
 				Body: blob3[0:blobChunk],
@@ -641,7 +727,7 @@ func TestBlobPut(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
-					"Range":          {fmt.Sprintf("bytes=0-%d", blobChunk)},
+					"Range":          {fmt.Sprintf("bytes=0-%d", blobChunk-1)},
 					"Location":       {uuid3.String() + "?chunk=2"},
 				},
 			},

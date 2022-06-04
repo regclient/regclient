@@ -49,6 +49,16 @@ type Manifest interface {
 	HasRateLimit() bool                                              // TODO: deprecate
 }
 
+type Annotator interface {
+	GetAnnotations() (map[string]string, error)
+	SetAnnotation(key, val string) error
+}
+
+type Referrer interface {
+	GetRefers() (*types.Descriptor, error)
+	SetRefers(*types.Descriptor) error
+}
+
 type manifestConfig struct {
 	r      ref.Ref
 	desc   types.Descriptor
@@ -75,9 +85,9 @@ func New(opts ...Opts) (Manifest, error) {
 		if c.desc.MediaType == "" {
 			c.desc.MediaType = mc.header.Get("Content-Type")
 		}
-		if mc.desc.Size == 0 {
+		if c.desc.Size == 0 {
 			cl, _ := strconv.Atoi(mc.header.Get("Content-Length"))
-			mc.desc.Size = int64(cl)
+			c.desc.Size = int64(cl)
 		}
 		if c.desc.Digest == "" {
 			c.desc.Digest, _ = digest.Parse(mc.header.Get("Docker-Content-Digest"))
@@ -373,6 +383,13 @@ func fromOrig(c common, orig interface{}) (Manifest, error) {
 			common: c,
 			Index:  orig.(v1.Index),
 		}
+	case v1.ArtifactManifest:
+		mt = mOrig.MediaType
+		c.desc.MediaType = types.MediaTypeOCI1Artifact
+		m = &oci1Artifact{
+			common:           c,
+			ArtifactManifest: mOrig,
+		}
 	default:
 		return nil, fmt.Errorf("unsupported type to convert to a manifest: %T", orig)
 	}
@@ -393,29 +410,30 @@ func fromCommon(c common) (Manifest, error) {
 	var m Manifest
 	var mt string
 	origDigest := c.desc.Digest
-	// compute/verify digest
+	// extract common data from from rawBody
 	if len(c.rawBody) > 0 {
 		c.manifSet = true
+		// extract media type from body if needed
+		if c.desc.MediaType == "" {
+			mt := struct {
+				MediaType     string        `json:"mediaType,omitempty"`
+				SchemaVersion int           `json:"schemaVersion,omitempty"`
+				Signatures    []interface{} `json:"signatures,omitempty"`
+			}{}
+			err = json.Unmarshal(c.rawBody, &mt)
+			if mt.MediaType != "" {
+				c.desc.MediaType = mt.MediaType
+			} else if mt.SchemaVersion == 1 && len(mt.Signatures) > 0 {
+				c.desc.MediaType = types.MediaTypeDocker1ManifestSigned
+			} else if mt.SchemaVersion == 1 {
+				c.desc.MediaType = types.MediaTypeDocker1Manifest
+			}
+		}
+		// compute digest
 		if c.desc.MediaType != types.MediaTypeDocker1ManifestSigned {
 			d := digest.FromBytes(c.rawBody)
 			c.desc.Digest = d
 			c.desc.Size = int64(len(c.rawBody))
-		}
-	}
-	// extract media type from body if needed
-	if c.desc.MediaType == "" && len(c.rawBody) > 0 {
-		mt := struct {
-			MediaType     string        `json:"mediaType,omitempty"`
-			SchemaVersion int           `json:"schemaVersion,omitempty"`
-			Signatures    []interface{} `json:"signatures,omitempty"`
-		}{}
-		err = json.Unmarshal(c.rawBody, &mt)
-		if mt.MediaType != "" {
-			c.desc.MediaType = mt.MediaType
-		} else if mt.SchemaVersion == 1 && len(mt.Signatures) > 0 {
-			c.desc.MediaType = types.MediaTypeDocker1ManifestSigned
-		} else if mt.SchemaVersion == 1 {
-			c.desc.MediaType = types.MediaTypeDocker1Manifest
 		}
 	}
 	switch c.desc.MediaType {
@@ -464,6 +482,13 @@ func fromCommon(c common) (Manifest, error) {
 			mt = mOrig.MediaType
 		}
 		m = &oci1Index{common: c, Index: mOrig}
+	case types.MediaTypeOCI1Artifact:
+		var mOrig v1.ArtifactManifest
+		if len(c.rawBody) > 0 {
+			err = json.Unmarshal(c.rawBody, &mOrig)
+			mt = mOrig.MediaType
+		}
+		m = &oci1Artifact{common: c, ArtifactManifest: mOrig}
 	default:
 		return nil, fmt.Errorf("%w: \"%s\"", types.ErrUnsupportedMediaType, c.desc.MediaType)
 	}

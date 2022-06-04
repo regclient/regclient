@@ -75,7 +75,7 @@ type Handler interface {
 }
 
 // HandlerBuild is used to make a new handler for a specific authType and URL
-type HandlerBuild func(client *http.Client, clientID, host string, cred Cred, log *logrus.Logger) Handler
+type HandlerBuild func(client *http.Client, clientID, host string, credFn CredsFn, log *logrus.Logger) Handler
 
 // Opts configures options for NewAuth
 type Opts func(*auth)
@@ -234,7 +234,7 @@ func (a *auth) HandleResponse(resp *http.Response) error {
 			a.hs[host] = map[string]Handler{}
 		}
 		if _, ok := a.hs[host][c.authType]; !ok {
-			h := a.hbs[c.authType](a.httpClient, a.clientID, host, a.credsFn(host), a.log)
+			h := a.hbs[c.authType](a.httpClient, a.clientID, host, a.credsFn, a.log)
 			if h == nil {
 				continue
 			}
@@ -453,15 +453,17 @@ func ParseAuthHeader(ah string) ([]Challenge, error) {
 
 // BasicHandler supports Basic auth type requests
 type BasicHandler struct {
-	realm string
-	cred  Cred
+	realm   string
+	host    string
+	credsFn CredsFn
 }
 
 // NewBasicHandler creates a new BasicHandler
-func NewBasicHandler(client *http.Client, clientID, host string, cred Cred, log *logrus.Logger) Handler {
+func NewBasicHandler(client *http.Client, clientID, host string, credsFn CredsFn, log *logrus.Logger) Handler {
 	return &BasicHandler{
-		realm: "",
-		cred:  cred,
+		realm:   "",
+		host:    host,
+		credsFn: credsFn,
 	}
 }
 
@@ -484,10 +486,11 @@ func (b *BasicHandler) ProcessChallenge(c Challenge) error {
 
 // GenerateAuth for BasicHandler generates base64 encoded user/pass for a host
 func (b *BasicHandler) GenerateAuth() (string, error) {
-	if b.cred.User == "" || b.cred.Password == "" {
+	cred := b.credsFn(b.host)
+	if cred.User == "" || cred.Password == "" {
 		return "", ErrNotFound
 	}
-	auth := base64.StdEncoding.EncodeToString([]byte(b.cred.User + ":" + b.cred.Password))
+	auth := base64.StdEncoding.EncodeToString([]byte(cred.User + ":" + cred.Password))
 	return fmt.Sprintf("Basic %s", auth), nil
 }
 
@@ -496,7 +499,8 @@ type BearerHandler struct {
 	client         *http.Client
 	clientID       string
 	realm, service string
-	cred           Cred
+	host           string
+	credsFn        CredsFn
 	scopes         []string
 	token          BearerToken
 	log            *logrus.Logger
@@ -513,11 +517,12 @@ type BearerToken struct {
 }
 
 // NewBearerHandler creates a new BearerHandler
-func NewBearerHandler(client *http.Client, clientID, host string, cred Cred, log *logrus.Logger) Handler {
+func NewBearerHandler(client *http.Client, clientID, host string, credsFn CredsFn, log *logrus.Logger) Handler {
 	return &BearerHandler{
 		client:   client,
 		clientID: clientID,
-		cred:     cred,
+		host:     host,
+		credsFn:  credsFn,
 		realm:    "",
 		service:  "",
 		scopes:   []string{},
@@ -627,6 +632,7 @@ func (b *BearerHandler) isExpired() bool {
 
 // tryGet requests a new token with a GET request
 func (b *BearerHandler) tryGet() error {
+	cred := b.credsFn(b.host)
 	req, err := http.NewRequest("GET", b.realm, nil)
 	if err != nil {
 		return err
@@ -643,9 +649,9 @@ func (b *BearerHandler) tryGet() error {
 		reqParams.Add("scope", s)
 	}
 
-	if b.cred.User != "" && b.cred.Password != "" {
-		reqParams.Add("account", b.cred.User)
-		req.SetBasicAuth(b.cred.User, b.cred.Password)
+	if cred.User != "" && cred.Password != "" {
+		reqParams.Add("account", cred.User)
+		req.SetBasicAuth(cred.User, cred.Password)
 	}
 
 	req.URL.RawQuery = reqParams.Encode()
@@ -661,6 +667,7 @@ func (b *BearerHandler) tryGet() error {
 
 // tryPost requests a new token via a POST request
 func (b *BearerHandler) tryPost() error {
+	cred := b.credsFn(b.host)
 	form := url.Values{}
 	if len(b.scopes) > 0 {
 		form.Set("scope", strings.Join(b.scopes, " "))
@@ -672,13 +679,13 @@ func (b *BearerHandler) tryPost() error {
 	if b.token.RefreshToken != "" {
 		form.Set("grant_type", "refresh_token")
 		form.Set("refresh_token", b.token.RefreshToken)
-	} else if b.cred.Token != "" { // TODO: verify identity token works as a refresh token
+	} else if cred.Token != "" {
 		form.Set("grant_type", "refresh_token")
-		form.Set("refresh_token", b.token.RefreshToken)
-	} else if b.cred.User != "" && b.cred.Password != "" {
+		form.Set("refresh_token", cred.Token)
+	} else if cred.User != "" && cred.Password != "" {
 		form.Set("grant_type", "password")
-		form.Set("username", b.cred.User)
-		form.Set("password", b.cred.Password)
+		form.Set("username", cred.User)
+		form.Set("password", cred.Password)
 	}
 
 	req, err := http.NewRequest("POST", b.realm, strings.NewReader(form.Encode()))
@@ -750,7 +757,8 @@ type JWTHubHandler struct {
 	client   *http.Client
 	clientID string
 	realm    string
-	cred     Cred
+	host     string
+	credsFn  CredsFn
 	jwt      string
 }
 
@@ -765,13 +773,14 @@ type jwtHubResp struct {
 }
 
 // NewJWTHandler creates a new JWTHandler
-func NewJWTHandler(client *http.Client, clientID, host string, cred Cred, log *logrus.Logger) Handler {
+func NewJWTHandler(client *http.Client, clientID, host string, credsFn CredsFn, log *logrus.Logger) Handler {
 	// JWT handler is only tested against Hub, and the API is Hub specific
 	if host == "hub.docker.com" {
 		return &JWTHubHandler{
 			client:   client,
 			clientID: clientID,
-			cred:     cred,
+			host:     host,
+			credsFn:  credsFn,
 			realm:    "https://hub.docker.com/v2/users/login",
 		}
 	}
@@ -785,16 +794,17 @@ func (j *JWTHubHandler) AddScope(scope string) error {
 
 // ProcessChallenge handles WWW-Authenticate header for JWT auth on Docker Hub
 func (j *JWTHubHandler) ProcessChallenge(c Challenge) error {
+	cred := j.credsFn(j.host)
 	// use token if provided
-	if j.cred.Token != "" {
-		j.jwt = j.cred.Token
+	if cred.Token != "" {
+		j.jwt = cred.Token
 		return nil
 	}
 
 	// send a login request to hub
 	bodyBytes, err := json.Marshal(jwtHubPost{
-		User: j.cred.User,
-		Pass: j.cred.Password,
+		User: cred.User,
+		Pass: cred.Password,
 	})
 	if err != nil {
 		return err

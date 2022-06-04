@@ -1,0 +1,13 @@
+{
+  "auths": {
+    "localhost:5001": {
+      "auth": "aGVsbG86ZG9ja2Vy"
+    },
+    "hub-tool-token": {
+      "identitytoken": "MTIzNDUK"
+    }
+  },
+  "credHelpers": {
+    "testhost.example.com": "test"
+  }
+}

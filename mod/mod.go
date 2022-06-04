@@ -83,7 +83,8 @@ func Apply(ctx context.Context, rc *regclient.RegClient, r ref.Ref, opts ...Opts
 	}
 	if len(dc.stepsLayer) > 0 || len(dc.stepsLayerFile) > 0 {
 		err = dagWalkLayers(dm, func(dl *dagLayer) (*dagLayer, error) {
-			if dl.mod == deleted {
+			if dl.mod == deleted || len(dl.desc.URLs) > 0 {
+				// skip deleted or external layers
 				return dl, nil
 			}
 			br, err := rc.BlobGet(ctx, r, dl.desc)
@@ -118,7 +119,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, r ref.Ref, opts ...Opts
 				var gw *gzip.Writer
 				digRaw := digest.Canonical.Digester() // raw/compressed digest
 				digUC := digest.Canonical.Digester()  // uncompressed digest
-				if dl.desc.MediaType == types.MediaTypeDocker2Layer || dl.desc.MediaType == types.MediaTypeOCI1LayerGzip {
+				if dl.desc.MediaType == types.MediaTypeDocker2LayerGzip || dl.desc.MediaType == types.MediaTypeOCI1LayerGzip {
 					cw := io.MultiWriter(fh, digRaw.Hash())
 					gw = gzip.NewWriter(cw)
 					defer gw.Close()
@@ -210,8 +211,10 @@ func Apply(ctx context.Context, rc *regclient.RegClient, r ref.Ref, opts ...Opts
 	if err != nil {
 		return rMod, err
 	}
-	rMod.Digest = string(dm.newDesc.Digest)
-	rMod.Tag = ""
+	if dm.mod == replaced {
+		rMod.Digest = string(dm.newDesc.Digest)
+		rMod.Tag = ""
+	}
 	return rMod, nil
 }
 
@@ -244,7 +247,7 @@ func WithManifestToOCI() Opts {
 					return err
 				}
 				for i, l := range ociM.Layers {
-					if l.MediaType == types.MediaTypeDocker2Layer {
+					if l.MediaType == types.MediaTypeDocker2LayerGzip {
 						ociM.Layers[i].MediaType = types.MediaTypeOCI1LayerGzip
 					}
 				}

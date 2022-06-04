@@ -11,18 +11,30 @@ const (
 	MediaTypeDocker2ManifestList = "application/vnd.docker.distribution.manifest.list.v2+json"
 	// MediaTypeDocker2ImageConfig is for the configuration json object media type
 	MediaTypeDocker2ImageConfig = "application/vnd.docker.container.image.v1+json"
+	// MediaTypeOCI1Artifact OCI v1 artifact media type (EXPERIMENTAL)
+	MediaTypeOCI1Artifact = "application/vnd.oci.artifact.manifest.v1+json"
 	// MediaTypeOCI1Manifest OCI v1 manifest media type
 	MediaTypeOCI1Manifest = "application/vnd.oci.image.manifest.v1+json"
 	// MediaTypeOCI1ManifestList OCI v1 manifest list media type
 	MediaTypeOCI1ManifestList = "application/vnd.oci.image.index.v1+json"
 	// MediaTypeOCI1ImageConfig OCI v1 configuration json object media type
 	MediaTypeOCI1ImageConfig = "application/vnd.oci.image.config.v1+json"
-	// MediaTypeDocker2Layer is the default compressed layer for docker schema2
-	MediaTypeDocker2Layer = "application/vnd.docker.image.rootfs.diff.tar.gzip"
+	// MediaTypeDocker2LayerGzip is the default compressed layer for docker schema2
+	MediaTypeDocker2LayerGzip = "application/vnd.docker.image.rootfs.diff.tar.gzip"
+	// MediaTypeDocker2ForeignLayer is the default compressed layer for foreign layers in docker schema2
+	MediaTypeDocker2ForeignLayer = "application/vnd.docker.image.rootfs.foreign.diff.tar.gzip"
 	// MediaTypeOCI1Layer is the uncompressed layer for OCIv1
 	MediaTypeOCI1Layer = "application/vnd.oci.image.layer.v1.tar"
 	// MediaTypeOCI1LayerGzip is the gzip compressed layer for OCI v1
 	MediaTypeOCI1LayerGzip = "application/vnd.oci.image.layer.v1.tar+gzip"
+	// MediaTypeOCI1LayerZstd is the zstd compressed layer for OCI v1
+	MediaTypeOCI1LayerZstd = "application/vnd.oci.image.layer.v1.tar+zstd"
+	// MediaTypeOCI1ForeignLayer is the foreign layer for OCI v1
+	MediaTypeOCI1ForeignLayer = "application/vnd.oci.image.layer.nondistributable.v1.tar"
+	// MediaTypeOCI1ForeignLayerGzip is the gzip compressed foreign layer for OCI v1
+	MediaTypeOCI1ForeignLayerGzip = "application/vnd.oci.image.layer.nondistributable.v1.tar+gzip"
+	// MediaTypeOCI1ForeignLayerZstd is the zstd compressed foreign layer for OCI v1
+	MediaTypeOCI1ForeignLayerZstd = "application/vnd.oci.image.layer.nondistributable.v1.tar+zstd"
 	// MediaTypeBuildkitCacheConfig is used by buildkit cache images
 	MediaTypeBuildkitCacheConfig = "application/vnd.buildkit.cacheconfig.v0"
 )

@@ -1,14 +1,16 @@
 //go:build !windows
 // +build !windows
 
-package main
+package conffile
 
 import (
-	"os"
+	"io/fs"
 	"syscall"
 )
 
-func getFileOwner(stat os.FileInfo) (int, int, error) {
+const homeEnv = "HOME"
+
+func getFileOwner(stat fs.FileInfo) (int, int, error) {
 	var uid, gid int
 	if sysstat, ok := stat.Sys().(*syscall.Stat_t); ok {
 		uid = int(sysstat.Uid)

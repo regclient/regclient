@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
+	"github.com/regclient/regclient/internal/timejson"
 	"github.com/sirupsen/logrus"
 )
 
@@ -31,6 +33,13 @@ const (
 	DockerRegistryAuth = "https://index.docker.io/v1/"
 	// DockerRegistryDNS is the host to connect to for Hub
 	DockerRegistryDNS = "registry-1.docker.io"
+	// tokenUser is the username returned by credential helpers that indicates the password is an identity token
+	tokenUser = "<token>"
+)
+
+var (
+	defaultExpire          = time.Hour * 1
+	defaultCredHelperRetry = time.Second * 5
 )
 
 // MarshalJSON converts to a json string using MarshalText
@@ -86,25 +95,32 @@ func (t *TLSConf) UnmarshalText(b []byte) error {
 
 // Host struct contains host specific settings
 type Host struct {
-	Name       string            `json:"-"`
-	Scheme     string            `json:"scheme,omitempty"` // TODO: deprecate, delete
-	TLS        TLSConf           `json:"tls,omitempty"`
-	RegCert    string            `json:"regcert,omitempty"`
-	ClientCert string            `json:"clientcert,omitempty"`
-	ClientKey  string            `json:"clientkey,omitempty"`
-	DNS        []string          `json:"dns,omitempty"`      // TODO: remove slice, single string, or remove entirely?
-	Hostname   string            `json:"hostname,omitempty"` // replaces DNS array with single string
-	User       string            `json:"user,omitempty"`
-	Pass       string            `json:"pass,omitempty"`
-	Token      string            `json:"token,omitempty"`
-	PathPrefix string            `json:"pathPrefix,omitempty"` // used for mirrors defined within a repository namespace
-	Mirrors    []string          `json:"mirrors,omitempty"`    // list of other Host Names to use as mirrors
-	Priority   uint              `json:"priority,omitempty"`   // priority when sorting mirrors, higher priority attempted first
-	RepoAuth   bool              `json:"repoAuth,omitempty"`   // tracks a separate auth per repo
-	API        string            `json:"api,omitempty"`        // experimental: registry API to use
-	APIOpts    map[string]string `json:"apiOpts,omitempty"`    // options for APIs
-	BlobChunk  int64             `json:"blobChunk,omitempty"`  // size of each blob chunk
-	BlobMax    int64             `json:"blobMax,omitempty"`    // threshold to switch to chunked upload, -1 to disable, 0 for regclient.blobMaxPut
+	Name        string            `json:"-" yaml:"registry,omitempty"`            // name of the host, read from yaml, not written in json
+	Scheme      string            `json:"scheme,omitempty" yaml:"scheme"`         // TODO: deprecate, delete
+	TLS         TLSConf           `json:"tls,omitempty" yaml:"tls"`               // enabled, disabled, insecure
+	RegCert     string            `json:"regcert,omitempty" yaml:"regcert"`       // public pem cert of registry
+	ClientCert  string            `json:"clientcert,omitempty" yaml:"clientcert"` // public pem cert for client (mTLS)
+	ClientKey   string            `json:"clientkey,omitempty" yaml:"clientkey"`   // private pem cert for client (mTLS)
+	DNS         []string          `json:"dns,omitempty" yaml:"dns"`               // TODO: remove slice, single string, or remove entirely?
+	Hostname    string            `json:"hostname,omitempty" yaml:"hostname"`     // replaces DNS array with single string
+	User        string            `json:"user,omitempty" yaml:"user"`             // username, not used with credHelper
+	Pass        string            `json:"pass,omitempty" yaml:"pass"`             // password, not used with credHelper
+	Token       string            `json:"token,omitempty" yaml:"token"`           // token, experimental for specific APIs
+	CredHelper  string            `json:"credHelper,omitempty" yaml:"credHelper"` // credential helper command for requesting logins
+	CredExpire  timejson.Duration `json:"credExpire,omitempty" yaml:"credExpire"` // time until credential expires
+	credRefresh time.Time         `json:"-" yaml:"-"`                             // internal use, when to refresh credentials
+	PathPrefix  string            `json:"pathPrefix,omitempty" yaml:"pathPrefix"` // used for mirrors defined within a repository namespace
+	Mirrors     []string          `json:"mirrors,omitempty" yaml:"mirrors"`       // list of other Host Names to use as mirrors
+	Priority    uint              `json:"priority,omitempty" yaml:"priority"`     // priority when sorting mirrors, higher priority attempted first
+	RepoAuth    bool              `json:"repoAuth,omitempty" yaml:"repoAuth"`     // tracks a separate auth per repo
+	API         string            `json:"api,omitempty" yaml:"api"`               // experimental: registry API to use
+	APIOpts     map[string]string `json:"apiOpts,omitempty" yaml:"apiOpts"`       // options for APIs
+	BlobChunk   int64             `json:"blobChunk,omitempty" yaml:"blobChunk"`   // size of each blob chunk
+	BlobMax     int64             `json:"blobMax,omitempty" yaml:"blobMax"`       // threshold to switch to chunked upload, -1 to disable, 0 for regclient.blobMaxPut
+}
+
+type Cred struct {
+	User, Password, Token string
 }
 
 // HostNew creates a default Host entry
@@ -131,6 +147,31 @@ func HostNewName(host string) *Host {
 	return &h
 }
 
+func (host *Host) GetCred() Cred {
+	// refresh from credHelper if needed
+	if host.CredHelper != "" && (host.credRefresh.IsZero() || time.Now().After(host.credRefresh)) {
+		host.refreshHelper()
+	}
+	return Cred{User: host.User, Password: host.Pass, Token: host.Token}
+}
+
+func (host *Host) refreshHelper() {
+	if host.CredHelper == "" {
+		return
+	}
+	if host.CredExpire <= 0 {
+		host.CredExpire = timejson.Duration(defaultExpire)
+	}
+	// run a cred helper, calling get method
+	ch := newCredHelper(host.CredHelper, map[string]string{})
+	err := ch.get(host)
+	if err != nil {
+		host.credRefresh = time.Now().Add(defaultCredHelperRetry)
+	} else {
+		host.credRefresh = time.Now().Add(time.Duration(host.CredExpire))
+	}
+}
+
 // Merge adds fields from a new config host entry
 func (host *Host) Merge(newHost Host, log *logrus.Logger) error {
 	name := newHost.Name
@@ -145,6 +186,18 @@ func (host *Host) Merge(newHost Host, log *logrus.Logger) error {
 	if host.Name == "" {
 		// only set the name if it's not initialized, this shouldn't normally change
 		host.Name = newHost.Name
+	}
+
+	if newHost.CredHelper == "" && (newHost.Pass != "" || host.Token != "") {
+		// unset existing cred helper for user/pass or token
+		host.CredHelper = ""
+		host.CredExpire = 0
+	}
+	if newHost.CredHelper != "" && newHost.User == "" && newHost.Pass == "" && newHost.Token == "" {
+		// unset existing user/pass/token for cred helper
+		host.User = ""
+		host.Pass = ""
+		host.Token = ""
 	}
 
 	if newHost.User != "" {
@@ -174,6 +227,28 @@ func (host *Host) Merge(newHost Host, log *logrus.Logger) error {
 			}).Warn("Changing login token for registry")
 		}
 		host.Token = newHost.Token
+	}
+
+	if newHost.CredHelper != "" {
+		if host.CredHelper != "" && host.CredHelper != newHost.CredHelper {
+			log.WithFields(logrus.Fields{
+				"host": name,
+				"orig": host.CredHelper,
+				"new":  newHost.CredHelper,
+			}).Warn("Changing credential helper for registry")
+		}
+		host.CredHelper = newHost.CredHelper
+	}
+
+	if newHost.CredExpire != 0 {
+		if host.CredExpire != 0 && host.CredExpire != newHost.CredExpire {
+			log.WithFields(logrus.Fields{
+				"host": name,
+				"orig": host.CredExpire,
+				"new":  newHost.CredExpire,
+			}).Warn("Changing credential expire for registry")
+		}
+		host.CredExpire = newHost.CredExpire
 	}
 
 	if newHost.TLS != TLSUndefined {

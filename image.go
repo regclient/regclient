@@ -71,10 +71,12 @@ type tarWriteData struct {
 }
 
 type imageOpt struct {
-	forceRecursive bool
-	digestTags     bool
-	platforms      []string
-	tagList        []string
+	forceRecursive  bool
+	includeExternal bool
+	digestTags      bool
+	platforms       []string
+	referrers       bool
+	tagList         []string
 }
 
 // ImageOpts define options for the Image* commands
@@ -84,6 +86,13 @@ type ImageOpts func(*imageOpt)
 func ImageWithForceRecursive() ImageOpts {
 	return func(opts *imageOpt) {
 		opts.forceRecursive = true
+	}
+}
+
+// ImageWithIncludeExternal attempts to copy every manifest and blob even if parent manifests already exist.
+func ImageWithIncludeExternal() ImageOpts {
+	return func(opts *imageOpt) {
+		opts.includeExternal = true
 	}
 }
 
@@ -101,6 +110,14 @@ func ImageWithDigestTags() ImageOpts {
 func ImageWithPlatforms(p []string) ImageOpts {
 	return func(opts *imageOpt) {
 		opts.platforms = p
+	}
+}
+
+// ImageWithReferrers recursively includes images that refer to this.
+// EXPERIMENTAL: referrers implementation is considered experimental.
+func ImageWithReferrers() ImageOpts {
+	return func(opts *imageOpt) {
+		opts.referrers = true
 	}
 }
 
@@ -213,7 +230,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					// known manifest media type
 					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, entry, true, opt)
 				case types.MediaTypeDocker2ImageConfig, types.MediaTypeOCI1ImageConfig,
-					types.MediaTypeDocker2Layer, types.MediaTypeOCI1Layer, types.MediaTypeOCI1LayerGzip,
+					types.MediaTypeDocker2LayerGzip, types.MediaTypeOCI1Layer, types.MediaTypeOCI1LayerGzip,
 					types.MediaTypeBuildkitCacheConfig:
 					// known blob media type
 					err = rc.BlobCopy(ctx, entrySrc, entryTgt, entry)
@@ -265,7 +282,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 				return err
 			}
 			for _, layerSrc := range l {
-				if len(layerSrc.URLs) > 0 {
+				if len(layerSrc.URLs) > 0 && !opt.includeExternal {
 					// skip blobs where the URLs are defined, these aren't hosted and won't be pulled from the source
 					rc.log.WithFields(logrus.Fields{
 						"source":        refSrc.Reference,
@@ -344,6 +361,44 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					}).Warn("Failed to copy digest-tag")
 					return err
 				}
+			}
+		}
+	}
+
+	// experimental support for referrers
+	if opt.referrers {
+		rl, err := rc.ReferrerList(ctx, refSrc)
+		if err != nil {
+			return err
+		}
+		for _, rDesc := range rl.Descriptors {
+			referSrc := refSrc
+			referSrc.Tag = ""
+			referSrc.Digest = rDesc.Digest.String()
+			referTgt := refTgt
+			referTgt.Tag = ""
+			referTgt.Digest = rDesc.Digest.String()
+			err = rc.imageCopyOpt(ctx, referSrc, referTgt, rDesc, true, opt)
+			if err != nil {
+				rc.log.WithFields(logrus.Fields{
+					"digest": rDesc.Digest.String(),
+					"src":    referSrc.CommonName(),
+					"tgt":    referTgt.CommonName(),
+				}).Warn("Failed to copy referrer")
+				return err
+			}
+			referM, err := rc.ManifestGet(ctx, referTgt)
+			if err != nil {
+				rc.log.WithFields(logrus.Fields{
+					"digest": rDesc.Digest.String(),
+					"src":    referSrc.CommonName(),
+					"tgt":    referTgt.CommonName(),
+				}).Warn("Failed to copy referrer")
+				return err
+			}
+			err = rc.ReferrerPut(ctx, refTgt, referM)
+			if err != nil {
+				return err
 			}
 		}
 	}
@@ -681,7 +736,7 @@ func (rc *RegClient) imageImportDockerAddLayerHandlers(ctx context.Context, ref 
 				if od, ok := trd.dockerManifestList[0].LayerSources[d.Digest]; ok {
 					trd.dockerManifest.Layers[i] = od
 				} else {
-					d.MediaType = types.MediaTypeDocker2Layer
+					d.MediaType = types.MediaTypeDocker2LayerGzip
 					trd.dockerManifest.Layers[i] = d
 				}
 				return nil
@@ -757,7 +812,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 	// cache the manifest to avoid needing to pull again later, this is used if index.json is a wrapper around some other manifest
 	trd.manifests[m.GetDescriptor().Digest] = m
 
-	handleManifest := func(d types.Descriptor) {
+	handleManifest := func(d types.Descriptor, child bool) {
 		filename := tarOCILayoutDescPath(d)
 		if !trd.processed[filename] && trd.handlers[filename] == nil {
 			trd.handlers[filename] = func(header *tar.Header, trd *tarReadData) error {
@@ -774,9 +829,9 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 					if err != nil {
 						return err
 					}
-					return rc.imageImportOCIHandleManifest(ctx, ref, md, trd, true, !push)
+					return rc.imageImportOCIHandleManifest(ctx, ref, md, trd, true, child)
 				case types.MediaTypeDocker2ImageConfig, types.MediaTypeOCI1ImageConfig,
-					types.MediaTypeDocker2Layer, types.MediaTypeOCI1Layer, types.MediaTypeOCI1LayerGzip,
+					types.MediaTypeDocker2LayerGzip, types.MediaTypeOCI1Layer, types.MediaTypeOCI1LayerGzip,
 					types.MediaTypeBuildkitCacheConfig:
 					// known blob media types
 					return rc.imageImportBlob(ctx, ref, d, trd)
@@ -784,7 +839,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 					// attempt manifest import, fall back to blob import
 					md, err := manifest.New(manifest.WithDesc(d), manifest.WithRaw(b))
 					if err == nil {
-						return rc.imageImportOCIHandleManifest(ctx, ref, md, trd, true, !push)
+						return rc.imageImportOCIHandleManifest(ctx, ref, md, trd, true, child)
 					}
 					return rc.imageImportBlob(ctx, ref, d, trd)
 				}
@@ -819,7 +874,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 		if d.Digest.String() == "" {
 			return fmt.Errorf("could not find requested tag in index.json, %s", ref.Tag)
 		}
-		handleManifest(d)
+		handleManifest(d, false)
 		// add a finish step to tag the selected digest
 		trd.finish = append(trd.finish, func() error {
 			mRef, ok := trd.manifests[d.Digest]
@@ -835,7 +890,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 			return err
 		}
 		for _, d := range dl {
-			handleManifest(d)
+			handleManifest(d, true)
 		}
 	} else {
 		// else if a single image/manifest
