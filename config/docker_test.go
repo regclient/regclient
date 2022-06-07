@@ -28,22 +28,32 @@ func TestDocker(t *testing.T) {
 		hostMap[h.Name] = &h
 	}
 	tests := []struct {
-		name       string
-		hostname   string
-		expectUser string
-		expectPass string
+		name             string
+		hostname         string
+		expectUser       string
+		expectPass       string
+		expectCredHelper string
+		expectTLS        TLSConf
+		expectHostname   string
 	}{
 		{
-			name:       "testhost",
-			hostname:   "testhost.example.com",
-			expectUser: "hello",
-			expectPass: "world",
+			name:             "testhost",
+			hostname:         "testhost.example.com",
+			expectCredHelper: "docker-credential-test",
+			expectHostname:   "testhost.example.com",
 		},
 		{
-			name:       "localhost:5001",
-			hostname:   "localhost:5001",
-			expectUser: "hello",
-			expectPass: "docker",
+			name:           "localhost:5001",
+			hostname:       "localhost:5001",
+			expectUser:     "hello",
+			expectPass:     "docker",
+			expectHostname: "localhost:5001",
+		},
+		{
+			name:             "docker.io",
+			hostname:         DockerRegistry,
+			expectCredHelper: "docker-credential-hub",
+			expectHostname:   DockerRegistryDNS,
 		},
 	}
 	for _, tt := range tests {
@@ -53,12 +63,14 @@ func TestDocker(t *testing.T) {
 				t.Errorf("host not found: %s", tt.hostname)
 				return
 			}
-			cred := h.GetCred()
-			if tt.expectUser != cred.User {
-				t.Errorf("user mismatch, expect %s, received %s", tt.expectUser, cred.User)
+			if tt.expectUser != h.User {
+				t.Errorf("user mismatch, expect %s, received %s", tt.expectUser, h.User)
 			}
-			if tt.expectPass != cred.Password {
-				t.Errorf("user mismatch, expect %s, received %s", tt.expectPass, cred.Password)
+			if tt.expectPass != h.Pass {
+				t.Errorf("pass mismatch, expect %s, received %s", tt.expectPass, h.Pass)
+			}
+			if tt.expectCredHelper != h.CredHelper {
+				t.Errorf("credh helper mismatch, expect %s, received %s", tt.expectCredHelper, h.CredHelper)
 			}
 		})
 	}

@@ -8,6 +8,7 @@
     }
   },
   "credHelpers": {
-    "testhost.example.com": "test"
+    "testhost.example.com": "test",
+    "https://index.docker.io/v1/": "hub"
   }
 }
