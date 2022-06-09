@@ -35,12 +35,14 @@ func TestDocker(t *testing.T) {
 		expectCredHelper string
 		expectTLS        TLSConf
 		expectHostname   string
+		expectCredHost   string
 	}{
 		{
 			name:             "testhost",
 			hostname:         "testhost.example.com",
 			expectCredHelper: "docker-credential-test",
 			expectHostname:   "testhost.example.com",
+			expectTLS:        TLSEnabled,
 		},
 		{
 			name:           "localhost:5001",
@@ -48,12 +50,23 @@ func TestDocker(t *testing.T) {
 			expectUser:     "hello",
 			expectPass:     "docker",
 			expectHostname: "localhost:5001",
+			expectTLS:      TLSEnabled,
 		},
 		{
 			name:             "docker.io",
 			hostname:         DockerRegistry,
-			expectCredHelper: "docker-credential-hub",
+			expectCredHelper: "docker-credential-test",
 			expectHostname:   DockerRegistryDNS,
+			expectTLS:        TLSEnabled,
+			expectCredHost:   DockerRegistryAuth,
+		},
+		{
+			name:             "http.example.com",
+			hostname:         "http.example.com",
+			expectCredHelper: "docker-credential-test",
+			expectHostname:   "http.example.com",
+			expectTLS:        TLSDisabled,
+			expectCredHost:   "http://http.example.com/",
 		},
 	}
 	for _, tt := range tests {
@@ -69,8 +82,16 @@ func TestDocker(t *testing.T) {
 			if tt.expectPass != h.Pass {
 				t.Errorf("pass mismatch, expect %s, received %s", tt.expectPass, h.Pass)
 			}
+			if tt.expectTLS != h.TLS {
+				eTLS, _ := tt.expectTLS.MarshalText()
+				hTLS, _ := h.TLS.MarshalText()
+				t.Errorf("tls mismatch, expect %s, received %s", eTLS, hTLS)
+			}
 			if tt.expectCredHelper != h.CredHelper {
-				t.Errorf("credh helper mismatch, expect %s, received %s", tt.expectCredHelper, h.CredHelper)
+				t.Errorf("cred helper mismatch, expect %s, received %s", tt.expectCredHelper, h.CredHelper)
+			}
+			if tt.expectCredHost != h.CredHost {
+				t.Errorf("cred host mismatch, expect %s, received %s", tt.expectCredHost, h.CredHost)
 			}
 		})
 	}

@@ -84,12 +84,12 @@ func dockerParse(cf *conffile.File) ([]Host, error) {
 	}
 	// also include default entries for credential helpers
 	for name, helper := range dc.CredentialHelpers {
-		h := dockerNameNormalize(name)
+		h := HostNewName(name)
 		h.CredHelper = dockerHelperPre + helper
 		if _, ok := dc.AuthConfigs[h.Name]; ok {
 			continue // skip fields with auth config
 		}
-		hosts = append(hosts, h)
+		hosts = append(hosts, *h)
 	}
 	return hosts, nil
 }
@@ -113,34 +113,12 @@ func dockerAuthToHost(name string, conf dockerConfig, auth dockerAuthConfig) (Ho
 		return Host{}, fmt.Errorf("no credentials found for %s", name)
 	}
 
-	h := dockerNameNormalize(name)
+	h := HostNewName(name)
 	h.User = auth.Username
 	h.Pass = auth.Password
 	h.Token = auth.IdentityToken
 	h.CredHelper = helper
-	return h, nil
-}
-
-func dockerNameNormalize(name string) Host {
-	h := HostNewName(name)
-	// Docker Hub is a special case
-	if name == DockerRegistryAuth {
-		h.Name = DockerRegistry
-		h.Hostname = DockerRegistryDNS
-		return *h
-	}
-	// handle http/https prefix
-	i := strings.Index(name, "://")
-	if i > 0 {
-		scheme := name[:i]
-		name = name[i+3:]
-		if scheme == "http" {
-			h.TLS = TLSDisabled
-		}
-	}
-	h.Name = name
-	h.Hostname = name
-	return *h
+	return *h, nil
 }
 
 func decodeAuth(authStr string) (string, string, error) {

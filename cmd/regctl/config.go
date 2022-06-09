@@ -30,15 +30,6 @@ type Config struct {
 	IncDockerCert *bool                   `json:"incDockerCert,omitempty"`
 }
 
-// ConfigHostNew creates a default Host entry
-func ConfigHostNew() *config.Host {
-	h := config.Host{
-		TLS:     config.TLSEnabled,
-		APIOpts: map[string]string{},
-	}
-	return &h
-}
-
 // ConfigNew creates an empty configuration
 func ConfigNew() *Config {
 	c := Config{
@@ -73,12 +64,17 @@ func ConfigLoadConfFile(cf *conffile.File) (*Config, error) {
 		if c.Hosts[h].TLS == config.TLSUndefined {
 			c.Hosts[h].TLS = config.TLSEnabled
 		}
-		if h == config.DockerRegistryDNS || h == config.DockerRegistry {
+		if h == config.DockerRegistryDNS || h == config.DockerRegistry || h == config.DockerRegistryAuth {
+			// Docker Hub
 			c.Hosts[h].Name = config.DockerRegistry
 			if c.Hosts[h].Hostname == h {
 				c.Hosts[h].Hostname = config.DockerRegistryDNS
 			}
+			if c.Hosts[h].CredHost == h {
+				c.Hosts[h].CredHost = config.DockerRegistryAuth
+			}
 		}
+		// ensure key matches Name
 		if c.Hosts[h].Name != h {
 			c.Hosts[c.Hosts[h].Name] = c.Hosts[h]
 			delete(c.Hosts, h)

@@ -40,7 +40,11 @@ type credStore struct {
 }
 
 func (ch *credHelper) get(host *Host) error {
-	hostIn := strings.NewReader(host.Hostname)
+	hostname := host.Hostname
+	if host.CredHost != "" {
+		hostname = host.CredHost
+	}
+	hostIn := strings.NewReader(hostname)
 	credOut := credStore{
 		Username: host.User,
 		Secret:   host.Pass,

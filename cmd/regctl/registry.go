@@ -166,19 +166,20 @@ func runRegistryLogin(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	reader := bufio.NewReader(os.Stdin)
-	if len(args) < 1 || args[0] == regclient.DockerRegistry || args[0] == regclient.DockerRegistryAuth {
-		args = []string{regclient.DockerRegistryDNS}
+	if len(args) < 1 {
+		args = []string{regclient.DockerRegistry}
 	}
-	h, ok := c.Hosts[args[0]]
-	if !ok {
-		h = &config.Host{}
-		c.Hosts[args[0]] = h
+	h := config.HostNewName(args[0])
+	if curH, ok := c.Hosts[h.Name]; ok {
+		h = curH
+	} else {
+		c.Hosts[h.Name] = h
 	}
 	if flagChanged(cmd, "user") {
 		h.User = registryOpts.user
 	} else {
 		// prompt for username
+		reader := bufio.NewReader(os.Stdin)
 		defUser := ""
 		if h.User != "" {
 			defUser = " [" + h.User + "]"
@@ -203,6 +204,7 @@ func runRegistryLogin(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("unable to read from tty (resolve by using \"-p\" flag, or winpty on Windows): %w", err)
 		}
 		passwd := strings.TrimSpace(string(pass))
+		fmt.Print("\n")
 		if passwd != "" {
 			h.Pass = passwd
 		} else {
@@ -234,19 +236,22 @@ func runRegistryLogout(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(args) < 1 || args[0] == regclient.DockerRegistry || args[0] == regclient.DockerRegistryAuth {
-		args = []string{regclient.DockerRegistryDNS}
+	if len(args) < 1 {
+		args = []string{regclient.DockerRegistry}
 	}
-	h, ok := c.Hosts[args[0]]
-	if !ok {
+	h := config.HostNewName(args[0])
+	if curH, ok := c.Hosts[h.Name]; ok {
+		h = curH
+	} else {
 		log.WithFields(logrus.Fields{
-			"registry": args[0],
+			"registry": h.Name,
 		}).Warn("No configuration/credentials found")
 		return nil
 	}
 	h.User = ""
 	h.Pass = ""
 	h.Token = ""
+	// TODO: add credHelper calls to erase a password
 	err = c.ConfigSave()
 	if err != nil {
 		return err
@@ -263,28 +268,24 @@ func runRegistrySet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	var name string
-	if len(args) < 1 || args[0] == regclient.DockerRegistryDNS || args[0] == regclient.DockerRegistryAuth {
-		name = regclient.DockerRegistry
+	if len(args) < 1 {
+		args = []string{regclient.DockerRegistry}
+	}
+	h := config.HostNewName(args[0])
+	if curH, ok := c.Hosts[h.Name]; ok {
+		h = curH
 	} else {
-		name = args[0]
+		c.Hosts[h.Name] = h
 	}
-	h, ok := c.Hosts[name]
-	if !ok {
-		h = config.HostNew()
-		h.Hostname = name
-		c.Hosts[name] = h
-	}
-
 	if flagChanged(cmd, "scheme") {
 		log.WithFields(logrus.Fields{
-			"name":   name,
+			"name":   h.Name,
 			"scheme": registryOpts.scheme,
 		}).Warn("Scheme flag is deprecated, for http set tls to disabled")
 	}
 	if flagChanged(cmd, "dns") {
 		log.WithFields(logrus.Fields{
-			"name": name,
+			"name": h.Name,
 			"dns":  registryOpts.dns,
 		}).Warn("DNS flag is deprecated, use hostname and mirrors instead")
 	}
@@ -342,7 +343,7 @@ func runRegistrySet(cmd *cobra.Command, args []string) error {
 	}
 
 	log.WithFields(logrus.Fields{
-		"name": name,
+		"name": h.Name,
 	}).Info("Registry configuration updated/set")
 	return nil
 }
