@@ -9,7 +9,8 @@ func TestCredHelper(t *testing.T) {
 	tests := []struct {
 		name        string
 		host        string
-		credhelper  string
+		credHelper  string
+		credHost    string
 		expectUser  string
 		expectPass  string
 		expectToken string
@@ -18,19 +19,35 @@ func TestCredHelper(t *testing.T) {
 		{
 			name:       "user/pass",
 			host:       "testhost.example.com",
-			credhelper: "docker-credential-test",
+			credHelper: "docker-credential-test",
 			expectUser: "hello",
 			expectPass: "world",
 		},
 		{
 			name:        "token",
 			host:        "testtoken.example.com",
-			credhelper:  "docker-credential-test",
+			credHelper:  "docker-credential-test",
 			expectToken: "deadbeefcafe",
 		},
 		{
+			name:       DockerRegistry,
+			host:       DockerRegistryDNS,
+			credHost:   DockerRegistryAuth,
+			credHelper: "docker-credential-test",
+			expectUser: "hubuser",
+			expectPass: "password123",
+		},
+		{
+			name:       "http.example.com",
+			host:       "http.example.com",
+			credHost:   "http://http.example.com/",
+			credHelper: "docker-credential-test",
+			expectUser: "hello",
+			expectPass: "universe",
+		},
+		{
 			name:       "missing helper",
-			credhelper: "./testdata/docker-credential-missing",
+			credHelper: "./testdata/docker-credential-missing",
 			expectErr:  true,
 		},
 	}
@@ -40,8 +57,9 @@ func TestCredHelper(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := HostNewName(tt.host)
-			h.CredHelper = tt.credhelper
-			ch := newCredHelper(tt.credhelper, map[string]string{})
+			h.CredHelper = tt.credHelper
+			h.CredHost = tt.credHost
+			ch := newCredHelper(tt.credHelper, map[string]string{})
 			err := ch.get(h)
 			if tt.expectErr {
 				if err == nil {
