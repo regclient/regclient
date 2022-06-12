@@ -13,10 +13,11 @@ import (
 )
 
 type ReferrerList struct {
-	Ref         ref.Ref            `json:"ref"`
-	Descriptors []types.Descriptor `json:"descriptors"`
-	Annotations map[string]string  `json:"annotations,omitempty"`
-	Manifest    manifest.Manifest  `json:"-"`
+	Ref         ref.Ref            `json:"ref"`                   // reference queried
+	Descriptors []types.Descriptor `json:"descriptors"`           // descriptors found in Index
+	Annotations map[string]string  `json:"annotations,omitempty"` // annotations extracted from Index
+	Manifest    manifest.Manifest  `json:"-"`                     // returned OCI Index
+	Tags        []string           `json:"-"`                     // tags matched when fetching referrers
 }
 
 // MarshalPretty is used for printPretty template formatting

@@ -40,7 +40,7 @@ func (o *OCIDir) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Ref
 		return rl, fmt.Errorf("failed to parse digest for referrers: %w", err)
 	}
 	// TODO: add support for filter on type
-	re, err := regexp.Compile(fmt.Sprintf(`^%s-%s\.(?:([0-9a-f]*)\.|)(.*)$`, regexp.QuoteMeta(dig.Algorithm().String()), regexp.QuoteMeta(dig.Hex())))
+	re, err := regexp.Compile(fmt.Sprintf(`^%s-%s\.([0-9a-f]{16})(?:\.([a-z0-9]*)|)$`, regexp.QuoteMeta(dig.Algorithm().String()), regexp.QuoteMeta(stringMax(dig.Hex(), 64))))
 	if err != nil {
 		return rl, fmt.Errorf("failed to compile regexp for referrers: %w", err)
 	}
@@ -50,28 +50,43 @@ func (o *OCIDir) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Ref
 	}
 	ociM := v1.Index{
 		Versioned: v1.IndexSchemaVersion,
+		MediaType: types.MediaTypeOCI1ManifestList,
 		Manifests: []types.Descriptor{},
 	}
+	foundDigests := map[string]bool{}
+	tags := []string{}
 
 	for _, t := range tl.Tags {
-		if re.MatchString(t) {
-			// for each matching entry, add a descriptor in the generated index
+		match := re.FindStringSubmatch(t)
+		if match != nil {
+			// for each matching entry, make a head request on the tag to build a descriptor for the generated index
 			rt := r
 			rt.Digest = ""
 			rt.Tag = t
 			mCur, err := o.ManifestGet(ctx, rt)
 			if err != nil {
-				return rl, fmt.Errorf("failed to lookup tag in referrers: %s: %w", rt.CommonName(), err)
+				return rl, fmt.Errorf("failed to pull manifest: %s: %w", rt.CommonName(), err)
+			}
+			d := mCur.GetDescriptor()
+			// reject unsupported media types
+			if d.MediaType != types.MediaTypeOCI1Manifest && d.MediaType != types.MediaTypeOCI1Artifact {
+				continue
+			}
+			tags = append(tags, t)
+			// ignore multiple matching tags
+			if foundDigests[d.Digest.String()] {
+				continue
+			} else {
+				foundDigests[d.Digest.String()] = true
 			}
 			mCurAnnot, ok := mCur.(manifest.Annotator)
 			if !ok {
 				return rl, fmt.Errorf("manifest does not support annotations: %w", types.ErrUnsupportedMediaType)
 			}
-			d := mCur.GetDescriptor()
 			// pull up annotations
 			d.Annotations, err = mCurAnnot.GetAnnotations()
 			if err != nil {
-				return rl, fmt.Errorf("failed to pull up annotations: %w", err)
+				return rl, fmt.Errorf("failed pulling up annotations: %s: %w", rt.CommonName(), err)
 			}
 			ociM.Manifests = append(ociM.Manifests, d)
 		}
@@ -83,6 +98,7 @@ func (o *OCIDir) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Ref
 	rl.Manifest = mRet
 	rl.Descriptors = ociM.Manifests
 	rl.Annotations = ociM.Annotations
+	rl.Tags = tags
 
 	return rl, nil
 }

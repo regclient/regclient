@@ -322,55 +322,14 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 		}
 	}
 
-	// lookup digest tags to include artifacts with image
-	if opt.digestTags {
-		if len(opt.tagList) == 0 {
-			tl, err := rc.TagList(ctx, refSrc)
-			if err != nil {
-				rc.log.WithFields(logrus.Fields{
-					"source": refSrc.Reference,
-					"err":    err,
-				}).Warn("Failed to list tags for digest-tag copy")
-				return err
-			}
-			tags, err := tl.GetTags()
-			if err != nil {
-				rc.log.WithFields(logrus.Fields{
-					"source": refSrc.Reference,
-					"err":    err,
-				}).Warn("Failed to list tags for digest-tag copy")
-				return err
-			}
-			opt.tagList = tags
-		}
-		prefix := fmt.Sprintf("%s-%s", m.GetDescriptor().Digest.Algorithm(), m.GetDescriptor().Digest.Encoded())
-		for _, tag := range opt.tagList {
-			if strings.HasPrefix(tag, prefix) {
-				refTagSrc := refSrc
-				refTagSrc.Tag = tag
-				refTagSrc.Digest = ""
-				refTagTgt := refTgt
-				refTagTgt.Tag = tag
-				refTagTgt.Digest = ""
-				err = rc.imageCopyOpt(ctx, refTagSrc, refTagTgt, types.Descriptor{}, false, opt)
-				if err != nil {
-					rc.log.WithFields(logrus.Fields{
-						"tag": tag,
-						"src": refTagSrc.CommonName(),
-						"tgt": refTagTgt.CommonName(),
-					}).Warn("Failed to copy digest-tag")
-					return err
-				}
-			}
-		}
-	}
-
 	// experimental support for referrers
+	referTags := []string{}
 	if opt.referrers {
 		rl, err := rc.ReferrerList(ctx, refSrc)
 		if err != nil {
 			return err
 		}
+		referTags = append(referTags, rl.Tags...)
 		for _, rDesc := range rl.Descriptors {
 			referSrc := refSrc
 			referSrc.Tag = ""
@@ -399,6 +358,55 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 			err = rc.ReferrerPut(ctx, refTgt, referM)
 			if err != nil {
 				return err
+			}
+		}
+	}
+
+	// lookup digest tags to include artifacts with image
+	if opt.digestTags {
+		if len(opt.tagList) == 0 {
+			tl, err := rc.TagList(ctx, refSrc)
+			if err != nil {
+				rc.log.WithFields(logrus.Fields{
+					"source": refSrc.Reference,
+					"err":    err,
+				}).Warn("Failed to list tags for digest-tag copy")
+				return err
+			}
+			tags, err := tl.GetTags()
+			if err != nil {
+				rc.log.WithFields(logrus.Fields{
+					"source": refSrc.Reference,
+					"err":    err,
+				}).Warn("Failed to list tags for digest-tag copy")
+				return err
+			}
+			opt.tagList = tags
+		}
+		prefix := fmt.Sprintf("%s-%s", m.GetDescriptor().Digest.Algorithm(), m.GetDescriptor().Digest.Encoded())
+		for _, tag := range opt.tagList {
+			if strings.HasPrefix(tag, prefix) {
+				// skip referrers that were copied above
+				for _, referTag := range referTags {
+					if referTag == tag {
+						continue
+					}
+				}
+				refTagSrc := refSrc
+				refTagSrc.Tag = tag
+				refTagSrc.Digest = ""
+				refTagTgt := refTgt
+				refTagTgt.Tag = tag
+				refTagTgt.Digest = ""
+				err = rc.imageCopyOpt(ctx, refTagSrc, refTagTgt, types.Descriptor{}, false, opt)
+				if err != nil {
+					rc.log.WithFields(logrus.Fields{
+						"tag": tag,
+						"src": refTagSrc.CommonName(),
+						"tgt": refTagTgt.CommonName(),
+					}).Warn("Failed to copy digest-tag")
+					return err
+				}
 			}
 		}
 	}
