@@ -12,8 +12,11 @@ import (
 
 // test New
 func TestNew(t *testing.T) {
-	testEnvVar, testEnvVal := "TEST_CONFFILE_NEW", "./test-filename.json"
-	os.Setenv(testEnvVar, testEnvVal)
+	testEnvFileVar, testEnvFileVal := "TEST_CONFFILE_NEW", "./test-filename.json"
+	os.Setenv(testEnvFileVar, testEnvFileVal)
+	testEnvDirVar, testEnvDirVal := "TEST_CONFDIR_NEW", "./test-dirname"
+	os.Setenv(testEnvFileVar, testEnvFileVal)
+	os.Setenv(testEnvDirVar, testEnvDirVal)
 	testEnvUnset := "TEST_CONFFILE_NEW_UNSET"
 	os.Unsetenv(testEnvUnset)
 	hd := homedir()
@@ -31,7 +34,7 @@ func TestNew(t *testing.T) {
 			name: "fullname override",
 			opts: []Opt{
 				WithDirName(".config", "file.json"),
-				WithEnv(testEnvVar),
+				WithEnvFile(testEnvFileVar),
 				WithFullname("/tmp/conf.json"),
 			},
 			expectName: "/tmp/conf.json",
@@ -44,12 +47,20 @@ func TestNew(t *testing.T) {
 			expectName: "/tmp/conf.json",
 		},
 		{
-			name: "env override",
+			name: "env file override",
 			opts: []Opt{
 				WithDirName(".config", "file.json"),
-				WithEnv(testEnvVar),
+				WithEnvFile(testEnvFileVar),
 			},
-			expectName: testEnvVal,
+			expectName: testEnvFileVal,
+		},
+		{
+			name: "env dir override",
+			opts: []Opt{
+				WithDirName(".config", "file.json"),
+				WithEnvDir(testEnvDirVar, "file.json"),
+			},
+			expectName: filepath.Join(testEnvDirVal, "file.json"),
 		},
 		{
 			name: "dir name",
@@ -62,7 +73,7 @@ func TestNew(t *testing.T) {
 			name: "env unset",
 			opts: []Opt{
 				WithDirName(".config", "file.json"),
-				WithEnv(testEnvUnset),
+				WithEnvFile(testEnvUnset),
 			},
 			expectName: filepath.Join(hd, ".config", "file.json"),
 		},

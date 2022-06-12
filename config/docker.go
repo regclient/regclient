@@ -57,7 +57,7 @@ type dockerAuthConfig struct {
 }
 
 func DockerLoad() ([]Host, error) {
-	cf := conffile.New(conffile.WithDirName(dockerDir, dockerConfFile), conffile.WithEnv(dockerEnv))
+	cf := conffile.New(conffile.WithDirName(dockerDir, dockerConfFile), conffile.WithEnvDir(dockerEnv, dockerConfFile))
 	return dockerParse(cf)
 }
 

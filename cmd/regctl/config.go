@@ -94,7 +94,7 @@ func ConfigLoadFile(filename string) (*Config, error) {
 
 // ConfigLoadDefault loads the config from the (default) filename
 func ConfigLoadDefault() (*Config, error) {
-	cf := conffile.New(conffile.WithDirName(ConfigDir, ConfigFilename), conffile.WithEnv(ConfigEnv))
+	cf := conffile.New(conffile.WithDirName(ConfigDir, ConfigFilename), conffile.WithEnvFile(ConfigEnv))
 	if cf == nil {
 		return nil, fmt.Errorf("failed to define config file")
 	}

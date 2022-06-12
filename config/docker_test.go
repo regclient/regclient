@@ -12,7 +12,7 @@ func TestDocker(t *testing.T) {
 	os.Setenv("PATH", "testdata"+string(os.PathListSeparator)+curPath)
 	defer os.Setenv("PATH", curPath)
 	curDockerConf := os.Getenv(dockerEnv)
-	os.Setenv(dockerEnv, "testdata/docker-config.json")
+	os.Setenv(dockerEnv, "testdata")
 	if curDockerConf != "" {
 		defer os.Setenv(dockerEnv, curDockerConf)
 	} else {
