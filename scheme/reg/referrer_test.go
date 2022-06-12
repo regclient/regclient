@@ -30,6 +30,7 @@ func TestReferrer(t *testing.T) {
 	repoPath := "/proj"
 	tagV1 := "v1"
 	aType := "sbom"
+	bType := "notbom"
 	extraAnnot := "org.opencontainers.artifact.sbom.format"
 	extraValue := "SPDX json"
 	digest1 := digest.FromString("example1")
@@ -123,11 +124,13 @@ func TestReferrer(t *testing.T) {
 	fullLen := len(fullBody)
 	// tag listing
 	tagNoAPI := fmt.Sprintf("%s-%s.%s.%s", mDigest.Algorithm().String(), mDigest.Hex(), artifactM.GetDescriptor().Digest.Hex()[:16], aType)
+	tagNoAPI2 := fmt.Sprintf("%s-%s.%s.%s", mDigest.Algorithm().String(), mDigest.Hex(), artifactM.GetDescriptor().Digest.Hex()[:16], bType)
 	tagListNoAPIData := tag.DockerList{
 		Name: repoPath,
 		Tags: []string{
 			"v1",
 			tagNoAPI,
+			tagNoAPI2,
 		},
 	}
 	tagListNoAPI, err := json.Marshal(tagListNoAPIData)
@@ -217,6 +220,37 @@ func TestReferrer(t *testing.T) {
 				Name:   "Head tag",
 				Method: "HEAD",
 				Path:   "/v2" + repoPath + "/manifests/" + tagNoAPI,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", len(artifactBody))},
+					"Content-Type":          []string{types.MediaTypeOCI1Manifest},
+					"Docker-Content-Digest": []string{artifactM.GetDescriptor().Digest.String()},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "Get tag",
+				Method: "GET",
+				Path:   "/v2" + repoPath + "/manifests/" + tagNoAPI2,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", len(artifactBody))},
+					"Content-Type":          []string{types.MediaTypeOCI1Manifest},
+					"Docker-Content-Digest": []string{artifactM.GetDescriptor().Digest.String()},
+				},
+				Body: artifactBody,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "Head tag",
+				Method: "HEAD",
+				Path:   "/v2" + repoPath + "/manifests/" + tagNoAPI2,
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusOK,
@@ -375,6 +409,12 @@ func TestReferrer(t *testing.T) {
 			rl.Descriptors[0].Size != int64(len(artifactBody)) ||
 			rl.Descriptors[0].Digest != artifactM.GetDescriptor().Digest {
 			t.Errorf("returned descriptor mismatch: %v", rl.Descriptors[0])
+		}
+		if len(rl.Descriptors) > 1 && rl.Descriptors[0].Digest == rl.Descriptors[1].Digest {
+			t.Errorf("descriptor list is not de-duplicated")
+		}
+		if len(rl.Tags) < 2 || rl.Tags[0] != tagNoAPI || rl.Tags[1] != tagNoAPI2 {
+			t.Errorf("tag list missing entries, received: %v", rl.Tags)
 		}
 	})
 	t.Run("List NoAPI - get annotations", func(t *testing.T) {
