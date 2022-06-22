@@ -153,6 +153,14 @@ func (r Ref) CommonName() string {
 	return cn
 }
 
+// IsZero returns true if ref is unset
+func (r *Ref) IsZero() bool {
+	if r.Scheme == "" && r.Registry == "" && r.Repository == "" && r.Path == "" && r.Tag == "" && r.Digest == "" {
+		return true
+	}
+	return false
+}
+
 // EqualRegistry compares the registry between two references
 func EqualRegistry(a, b Ref) bool {
 	if a.Scheme != b.Scheme {
