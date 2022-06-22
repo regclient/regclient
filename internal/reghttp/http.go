@@ -403,35 +403,6 @@ func (resp *clientResp) Next() error {
 			if h.httpClient != nil {
 				// if we have previously setup a http client for this host, reuse it
 				httpClient = *h.httpClient
-			} else if h.config.TLS == config.TLSInsecure || len(c.rootCAPool) > 0 || len(c.rootCADirs) > 0 || h.config.RegCert != "" {
-				if httpClient.Transport == nil {
-					httpClient.Transport = http.DefaultTransport.(*http.Transport).Clone()
-				}
-				t, ok := httpClient.Transport.(*http.Transport)
-				if ok {
-					var tlsc *tls.Config
-					if t.TLSClientConfig != nil {
-						tlsc = t.TLSClientConfig.Clone()
-					} else {
-						tlsc = &tls.Config{}
-					}
-					if h.config.TLS == config.TLSInsecure {
-						tlsc.InsecureSkipVerify = true
-					} else {
-						rootPool, err := makeRootPool(c.rootCAPool, c.rootCADirs, h.config.Hostname, h.config.RegCert)
-						if err != nil {
-							c.log.WithFields(logrus.Fields{
-								"err": err,
-							}).Warn("failed to setup CA pool")
-						} else {
-							tlsc.RootCAs = rootPool
-						}
-					}
-					t.TLSClientConfig = tlsc
-					httpClient.Transport = t
-				}
-				// cache the resulting client
-				h.httpClient = &httpClient
 			}
 
 			// send request
@@ -657,11 +628,48 @@ func (c *Client) getHost(host string) *clientHost {
 	if h.auth == nil {
 		h.auth = map[string]auth.Auth{}
 	}
+
+	// update http client for insecure requests and root certs
+	httpClient := *c.httpClient
+	if h.httpClient != nil {
+		// if we have previously setup a http client for this host, reuse it
+		httpClient = *h.httpClient
+	} else if h.config.TLS == config.TLSInsecure || len(c.rootCAPool) > 0 || len(c.rootCADirs) > 0 || h.config.RegCert != "" {
+		if httpClient.Transport == nil {
+			httpClient.Transport = http.DefaultTransport.(*http.Transport).Clone()
+		}
+		t, ok := httpClient.Transport.(*http.Transport)
+		if ok {
+			var tlsc *tls.Config
+			if t.TLSClientConfig != nil {
+				tlsc = t.TLSClientConfig.Clone()
+			} else {
+				tlsc = &tls.Config{}
+			}
+			if h.config.TLS == config.TLSInsecure {
+				tlsc.InsecureSkipVerify = true
+			} else {
+				rootPool, err := makeRootPool(c.rootCAPool, c.rootCADirs, h.config.Hostname, h.config.RegCert)
+				if err != nil {
+					c.log.WithFields(logrus.Fields{
+						"err": err,
+					}).Warn("failed to setup CA pool")
+				} else {
+					tlsc.RootCAs = rootPool
+				}
+			}
+			t.TLSClientConfig = tlsc
+			httpClient.Transport = t
+		}
+		// cache the resulting client
+		h.httpClient = &httpClient
+	}
+
 	if h.newAuth == nil {
 		h.newAuth = func() auth.Auth {
 			return auth.NewAuth(
 				auth.WithLog(c.log),
-				auth.WithHTTPClient(c.httpClient),
+				auth.WithHTTPClient(&httpClient),
 				auth.WithCreds(h.AuthCreds()),
 				auth.WithClientID(c.userAgent),
 			)
