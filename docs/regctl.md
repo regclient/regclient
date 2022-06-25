@@ -239,6 +239,11 @@ The `put` command uploads a blob to the registry.
 The digest of the blob is output.
 Note that blobs should be referenced by a manifest to avoid garbage collection.
 
+The `--format` option to `put` has the following variables available:
+
+- `.Digest`: digest of the pushed blob
+- `.Size`: size of the pushed blob
+
 ## Artifact Commands
 
 The artifact command works with OCI artifacts.
