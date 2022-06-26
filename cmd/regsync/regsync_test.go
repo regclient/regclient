@@ -10,11 +10,12 @@ import (
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/internal/rwfs"
+	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/ref"
 	"golang.org/x/sync/semaphore"
 )
 
-func TestRegsync(t *testing.T) {
+func TestRegsyncOnce(t *testing.T) {
 	ctx := context.Background()
 	boolTrue := true
 	// setup sample source with an in-memory ocidir directory
@@ -329,6 +330,114 @@ func TestRegsync(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProcess(t *testing.T) {
+	ctx := context.Background()
+	// setup sample source with an in-memory ocidir directory
+	fsOS := rwfs.OSNew("")
+	fsMem := rwfs.MemNew()
+	err := rwfs.CopyRecursive(fsOS, "testdata", fsMem, ".")
+	if err != nil {
+		t.Errorf("failed to setup memfs copy: %v", err)
+		return
+	}
+	// setup various globals normally done by loadConf
+	rc = regclient.New(regclient.WithFS(fsMem))
+	cs := ConfigSync{
+		Source: "ocidir://testrepo",
+		Target: "ocidir://testdest",
+		Type:   "repository",
+	}
+	syncSetDefaults(&cs, conf.Defaults)
+
+	tests := []struct {
+		name         string
+		src          string
+		tgt          string
+		action       string
+		expErr       error
+		checkTgtEq   bool
+		checkTgtDiff bool
+	}{
+		{
+			name:   "empty",
+			expErr: types.ErrNotFound,
+		},
+		{
+			name:         "check v1",
+			src:          "v1",
+			tgt:          "tgt",
+			action:       "check",
+			checkTgtDiff: true,
+		},
+		{
+			name:       "copy v1",
+			src:        "v1",
+			tgt:        "tgt",
+			action:     "copy",
+			checkTgtEq: true,
+		},
+		{
+			name:         "missing only on v2",
+			src:          "v2",
+			tgt:          "tgt",
+			action:       "missing",
+			checkTgtDiff: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			src, err := ref.New(cs.Source)
+			if err != nil {
+				t.Errorf("failed to create src ref: %v", err)
+				return
+			}
+			tgt, err := ref.New(cs.Target)
+			if err != nil {
+				t.Errorf("failed to create tgt ref: %v", err)
+				return
+			}
+			src.Tag = tt.src
+			tgt.Tag = tt.tgt
+			err = cs.processRef(ctx, src, tgt, tt.action)
+			// validate err
+			if tt.expErr != nil {
+				if err == nil {
+					t.Errorf("process did not fail")
+				} else if !errors.Is(err, tt.expErr) && err.Error() != tt.expErr.Error() {
+					t.Errorf("unexpected error on process: %v, expected %v", err, tt.expErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("unexpected error on process: %v", err)
+				return
+			}
+			if tt.checkTgtEq || tt.checkTgtDiff {
+				mSrc, err := rc.ManifestHead(ctx, src)
+				if err != nil {
+					t.Errorf("error fetching src: %v", err)
+				}
+				mTgt, err := rc.ManifestHead(ctx, tgt)
+				if err != nil && tt.checkTgtEq {
+					t.Errorf("error fetching tgt: %v", err)
+				}
+				if tt.checkTgtEq {
+					if mTgt == nil || mSrc.GetDescriptor().Digest != mTgt.GetDescriptor().Digest {
+						t.Errorf("source and target mismatch")
+					}
+				}
+				if tt.checkTgtDiff {
+					if mTgt != nil && mSrc.GetDescriptor().Digest == mTgt.GetDescriptor().Digest {
+						t.Errorf("source and target match")
+					}
+				}
+			}
+		})
+	}
+
 }
 
 func TestConfigRead(t *testing.T) {
