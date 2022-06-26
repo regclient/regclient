@@ -44,9 +44,10 @@ is the digest of the blob.`,
 }
 
 var blobOpts struct {
-	format string
-	mt     string
-	digest string
+	format    string
+	formatPut string
+	mt        string
+	digest    string
 }
 
 func init() {
@@ -62,6 +63,7 @@ func init() {
 
 	blobPutCmd.Flags().StringVarP(&blobOpts.mt, "content-type", "", "", "Set the requested content type (deprecated)")
 	blobPutCmd.Flags().StringVarP(&blobOpts.digest, "digest", "", "", "Set the expected digest")
+	blobPutCmd.Flags().StringVarP(&blobOpts.formatPut, "format", "", "{{println .Digest}}", "Format output with go template syntax")
 	blobPutCmd.RegisterFlagCompletionFunc("content-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{
 			"application/octet-stream",
@@ -126,7 +128,6 @@ func runBlobPut(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	rc := newRegClient()
-	defer rc.Close(ctx, r)
 
 	if blobOpts.mt != "" {
 		log.WithFields(logrus.Fields{
@@ -152,5 +153,5 @@ func runBlobPut(cmd *cobra.Command, args []string) error {
 		Size:   dOut.Size,
 	}
 
-	return template.Writer(os.Stdout, blobOpts.format, result)
+	return template.Writer(os.Stdout, blobOpts.formatPut, result)
 }
