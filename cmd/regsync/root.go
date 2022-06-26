@@ -241,6 +241,27 @@ func runServer(cmd *cobra.Command, args []string) error {
 					mainErr = err
 				}
 			})
+			// immediately copy any images that are missing from target
+			if conf.Defaults.Parallel > 0 {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					err := s.process(ctx, "missing")
+					if err != nil {
+						if mainErr == nil {
+							mainErr = err
+						}
+						return
+					}
+				}()
+			} else {
+				err := s.process(ctx, "missing")
+				if err != nil {
+					if mainErr == nil {
+						mainErr = err
+					}
+				}
+			}
 		} else {
 			log.WithFields(logrus.Fields{
 				"source": s.Source,
@@ -249,6 +270,8 @@ func runServer(cmd *cobra.Command, args []string) error {
 			}).Error("No schedule or interval found, ignoring")
 		}
 	}
+	// wait for any initial copies to finish before scheduling
+	wg.Wait()
 	c.Start()
 	// wait on interrupt signal
 	sig := make(chan os.Signal, 1)
@@ -578,6 +601,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 		return err
 	}
 	mTgt, err := rc.ManifestHead(ctx, tgt)
+	tgtExists := (err == nil)
 	tgtMatches := false
 	if err == nil && manifest.GetDigest(mSrc).String() == manifest.GetDigest(mTgt).String() {
 		tgtMatches = true
@@ -589,7 +613,13 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 		}).Debug("Image matches")
 		return nil
 	}
-	tgtExists := (err == nil)
+	if tgtExists && action == "missing" {
+		log.WithFields(logrus.Fields{
+			"source": src.CommonName(),
+			"target": tgt.CommonName(),
+		}).Debug("target exists")
+		return nil
+	}
 
 	// skip when source manifest is an unsupported type
 	smt := manifest.GetMediaType(mSrc)
