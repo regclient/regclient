@@ -245,6 +245,30 @@ func (m *docker2ManifestList) SetAnnotation(key, val string) error {
 	return m.updateDesc()
 }
 
+func (m *docker2Manifest) SetConfig(d types.Descriptor) error {
+	if !m.manifSet {
+		return fmt.Errorf("manifest is not set")
+	}
+	m.Config = d
+	return m.updateDesc()
+}
+
+func (m *docker2Manifest) SetLayers(dl []types.Descriptor) error {
+	if !m.manifSet {
+		return fmt.Errorf("manifest is not set")
+	}
+	m.Layers = dl
+	return m.updateDesc()
+}
+
+func (m *docker2ManifestList) SetManifestList(dl []types.Descriptor) error {
+	if !m.manifSet {
+		return fmt.Errorf("manifest is not set")
+	}
+	m.Manifests = dl
+	return m.updateDesc()
+}
+
 func (m *docker2Manifest) SetOrig(origIn interface{}) error {
 	orig, ok := origIn.(schema2.Manifest)
 	if !ok {

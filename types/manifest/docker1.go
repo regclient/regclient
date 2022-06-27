@@ -125,6 +125,22 @@ func (m *docker1SignedManifest) MarshalPretty() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+func (m *docker1Manifest) SetConfig(d types.Descriptor) error {
+	return wraperr.New(fmt.Errorf("set methods not supported for for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+}
+
+func (m *docker1SignedManifest) SetConfig(d types.Descriptor) error {
+	return wraperr.New(fmt.Errorf("set methods not supported for for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+}
+
+func (m *docker1Manifest) SetLayers(dl []types.Descriptor) error {
+	return wraperr.New(fmt.Errorf("set methods not supported for for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+}
+
+func (m *docker1SignedManifest) SetLayers(dl []types.Descriptor) error {
+	return wraperr.New(fmt.Errorf("set methods not supported for for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+}
+
 func (m *docker1Manifest) SetOrig(origIn interface{}) error {
 	orig, ok := origIn.(schema1.Manifest)
 	if !ok {

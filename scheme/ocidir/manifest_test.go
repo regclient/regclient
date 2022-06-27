@@ -50,7 +50,12 @@ func TestManifest(t *testing.T) {
 	if !ml.IsList() {
 		t.Errorf("expected manifest list")
 	}
-	dl, err := ml.GetManifestList()
+	mli, ok := ml.(manifest.Indexer)
+	if !ok {
+		t.Errorf("manifest doesn't support index methods")
+		return
+	}
+	dl, err := mli.GetManifestList()
 	if err != nil || len(dl) < 1 {
 		t.Errorf("descriptor list (%d): %v", len(dl), err)
 	}
@@ -77,7 +82,12 @@ func TestManifest(t *testing.T) {
 		t.Errorf("manifest get: %v", err)
 		return
 	}
-	_, err = m.GetConfig()
+	mi, ok := m.(manifest.Imager)
+	if !ok {
+		t.Errorf("manifest doesn't support image methods")
+		return
+	}
+	_, err = mi.GetConfig()
 	if err != nil {
 		t.Errorf("config: %v", err)
 	}

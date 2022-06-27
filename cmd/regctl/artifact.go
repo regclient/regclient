@@ -163,10 +163,14 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	mi, ok := mm.(manifest.Imager)
+	if !ok {
+		return fmt.Errorf("manifest does not support image methods%.0w", types.ErrUnsupportedMediaType)
+	}
 
 	// if config-file defined, create file as writer, perform a blob get
 	if artifactOpts.configFile != "" {
-		d, err := mm.GetConfig()
+		d, err := mi.GetConfig()
 		if err != nil {
 			return err
 		}
@@ -184,7 +188,7 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 	}
 
 	// get list of layers
-	layers, err := mm.GetLayers()
+	layers, err := mi.GetLayers()
 	if err != nil {
 		return err
 	}
