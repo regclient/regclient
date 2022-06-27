@@ -18,9 +18,12 @@ type Common interface {
 	Response() *http.Response
 	RawHeaders() http.Header
 
-	Digest() digest.Digest // TODO: deprecate
-	Length() int64         // TODO: deprecate
-	MediaType() string     // TODO: deprecate
+	// Deprecated: Digest should be replaced by GetDescriptor().Digest
+	Digest() digest.Digest
+	// Deprecated: Length should be replaced by GetDescriptor().Size
+	Length() int64
+	// Deprecated: MediaType should be replaced by GetDescriptor().MediaType
+	MediaType() string
 }
 
 type common struct {

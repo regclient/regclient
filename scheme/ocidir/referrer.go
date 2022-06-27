@@ -181,7 +181,7 @@ func (o *OCIDir) ReferrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 	}
 	rPush := r
 	rPush.Digest = ""
-	rPush.Tag = fmt.Sprintf("%s-%s.%s", desc.Algorithm().String(), stringMax(desc.Hex(), 64), stringMax(m.GetDigest().Hex(), 16))
+	rPush.Tag = fmt.Sprintf("%s-%s.%s", desc.Algorithm().String(), stringMax(desc.Hex(), 64), stringMax(m.GetDescriptor().Digest.Hex(), 16))
 	if refType != "" {
 		rPush.Tag = fmt.Sprintf("%s.%s", rPush.Tag, stringMax(refType, 5))
 	}

@@ -40,13 +40,20 @@ type Manifest interface {
 	RawHeaders() (http.Header, error)
 	SetOrig(interface{}) error
 
-	GetConfigDigest() (digest.Digest, error)                         // TODO: deprecate
-	GetDigest() digest.Digest                                        // TODO: deprecate
-	GetMediaType() string                                            // TODO: deprecate
-	GetPlatformDesc(p *platform.Platform) (*types.Descriptor, error) // TODO: deprecate
-	GetPlatformList() ([]*platform.Platform, error)                  // TODO: deprecate
-	GetRateLimit() types.RateLimit                                   // TODO: deprecate
-	HasRateLimit() bool                                              // TODO: deprecate
+	// Deprecated: GetConfigDigest should be replaced with GetConfig
+	GetConfigDigest() (digest.Digest, error)
+	// Deprecated: GetDigest should be replaced with GetDescriptor().Digest
+	GetDigest() digest.Digest
+	// Deprecated: GetMediaType should be replaced with GetDescriptor().MediaType
+	GetMediaType() string
+	// Deprecated: GetPlatformDesc method should be replaced with manifest.GetPlatformDesc function
+	GetPlatformDesc(p *platform.Platform) (*types.Descriptor, error)
+	// Deprecated: GetPlatformList method should be replaced with manifest.GetPlatformList function
+	GetPlatformList() ([]*platform.Platform, error)
+	// Deprecated: GetRateLimit method should be replaced with manifest.GetRateLimit function
+	GetRateLimit() types.RateLimit
+	// Deprecated: HasRateLimit method should be replaced with manifest.HasRateLimit function
+	HasRateLimit() bool
 }
 
 type Annotator interface {
