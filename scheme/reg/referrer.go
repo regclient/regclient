@@ -186,8 +186,8 @@ func (reg *Reg) referrerListExtAPI(ctx context.Context, r ref.Ref) (referrer.Ref
 	if err != nil {
 		return rl, err
 	}
-	if m.GetMediaType() != types.MediaTypeOCI1ManifestList {
-		return rl, fmt.Errorf("unexpected media type for referrers: %s, %w", m.GetMediaType(), types.ErrUnsupportedMediaType)
+	if m.GetDescriptor().MediaType != types.MediaTypeOCI1ManifestList {
+		return rl, fmt.Errorf("unexpected media type for referrers: %s, %w", m.GetDescriptor().MediaType, types.ErrUnsupportedMediaType)
 	}
 	rl.Manifest = m
 	rl.Descriptors, err = m.GetManifestList()
@@ -277,7 +277,7 @@ func (reg *Reg) ReferrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest)
 			return fmt.Errorf("digest could not be parsed for %s: %w", r.CommonName(), err)
 		}
 		rPush.Digest = ""
-		rPush.Tag = fmt.Sprintf("%s-%s.%s", desc.Algorithm().String(), stringMax(desc.Hex(), 64), stringMax(m.GetDigest().Hex(), 16))
+		rPush.Tag = fmt.Sprintf("%s-%s.%s", desc.Algorithm().String(), stringMax(desc.Hex(), 64), stringMax(m.GetDescriptor().Digest.Hex(), 16))
 		if refType != "" {
 			rPush.Tag = fmt.Sprintf("%s.%s", rPush.Tag, stringMax(refType, 5))
 		}
