@@ -13,6 +13,7 @@ import (
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/mod"
 	"github.com/regclient/regclient/pkg/template"
+	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/sirupsen/logrus"
@@ -522,7 +523,11 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	cd, err := m.GetConfig()
+	mi, ok := m.(manifest.Imager)
+	if !ok {
+		return fmt.Errorf("manifest does not support image methods%.0w", types.ErrUnsupportedMediaType)
+	}
+	cd, err := mi.GetConfig()
 	if err != nil {
 		return err
 	}

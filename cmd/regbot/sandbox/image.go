@@ -84,7 +84,11 @@ func (s *Sandbox) configGet(ls *lua.LState) int {
 		"script": s.name,
 		"image":  m.r.CommonName(),
 	}).Debug("Retrieve image config")
-	confDesc, err := m.m.GetConfig()
+	mi, ok := m.m.(manifest.Imager)
+	if !ok {
+		ls.RaiseError("Image methods are not available for manifest")
+	}
+	confDesc, err := mi.GetConfig()
 	if err != nil {
 		ls.RaiseError("Failed looking up \"%s\" config digest: %v", m.r.CommonName(), err)
 	}

@@ -27,10 +27,7 @@ import (
 // Manifest interface is implemented by all supported manifests but
 // many calls are only supported by certain underlying media types.
 type Manifest interface {
-	GetConfig() (types.Descriptor, error)
 	GetDescriptor() types.Descriptor
-	GetLayers() ([]types.Descriptor, error)
-	GetManifestList() ([]types.Descriptor, error)
 	GetOrig() interface{}
 	GetRef() ref.Ref
 	IsList() bool
@@ -39,6 +36,14 @@ type Manifest interface {
 	RawBody() ([]byte, error)
 	RawHeaders() (http.Header, error)
 	SetOrig(interface{}) error
+
+	// Deprecated: GetConfig should be accessed using Imager interface
+	GetConfig() (types.Descriptor, error)
+	// Deprecated: GetLayers should be accessed using Imager interface
+	GetLayers() ([]types.Descriptor, error)
+
+	// Deprecated: GetManifestList should be accessed using Indexer interface
+	GetManifestList() ([]types.Descriptor, error)
 
 	// Deprecated: GetConfigDigest should be replaced with GetConfig
 	GetConfigDigest() (digest.Digest, error)
@@ -61,9 +66,21 @@ type Annotator interface {
 	SetAnnotation(key, val string) error
 }
 
+type Indexer interface {
+	GetManifestList() ([]types.Descriptor, error)
+	SetManifestList(dl []types.Descriptor) error
+}
+
+type Imager interface {
+	GetConfig() (types.Descriptor, error)
+	GetLayers() ([]types.Descriptor, error)
+	SetConfig(d types.Descriptor) error
+	SetLayers(dl []types.Descriptor) error
+}
+
 type Referrer interface {
 	GetRefers() (*types.Descriptor, error)
-	SetRefers(*types.Descriptor) error
+	SetRefers(d *types.Descriptor) error
 }
 
 type manifestConfig struct {

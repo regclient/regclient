@@ -189,8 +189,12 @@ func (reg *Reg) referrerListExtAPI(ctx context.Context, r ref.Ref) (referrer.Ref
 	if m.GetDescriptor().MediaType != types.MediaTypeOCI1ManifestList {
 		return rl, fmt.Errorf("unexpected media type for referrers: %s, %w", m.GetDescriptor().MediaType, types.ErrUnsupportedMediaType)
 	}
+	mi, ok := m.(manifest.Indexer)
+	if !ok {
+		return rl, fmt.Errorf("manifest doesn't support index methods: %w", types.ErrUnsupportedMediaType)
+	}
 	rl.Manifest = m
-	rl.Descriptors, err = m.GetManifestList()
+	rl.Descriptors, err = mi.GetManifestList()
 	if err != nil {
 		return rl, err
 	}

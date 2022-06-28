@@ -10,6 +10,7 @@ import (
 
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -33,7 +34,12 @@ func TestBlob(t *testing.T) {
 		t.Errorf("expected manifest list")
 		return
 	}
-	dl, err := ml.GetManifestList()
+	mli, ok := ml.(manifest.Indexer)
+	if !ok {
+		t.Errorf("manifest doesn't support index methods")
+		return
+	}
+	dl, err := mli.GetManifestList()
 	if err != nil || len(dl) < 1 {
 		t.Errorf("descriptor list (%d): %v", len(dl), err)
 		return
@@ -49,7 +55,12 @@ func TestBlob(t *testing.T) {
 		t.Errorf("manifest get: %v", err)
 		return
 	}
-	cd, err := m.GetConfig()
+	mi, ok := m.(manifest.Imager)
+	if !ok {
+		t.Errorf("manifest doesn't support image methods")
+		return
+	}
+	cd, err := mi.GetConfig()
 	if err != nil {
 		t.Errorf("config digest: %v", err)
 		return

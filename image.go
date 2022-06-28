@@ -193,9 +193,9 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 
 	if !ref.EqualRepository(refSrc, refTgt) {
 		// copy components of the image if the repository is different
-		if m.IsList() {
+		if mi, ok := m.(manifest.Indexer); ok {
 			// manifest lists need to recursively copy nested images by digest
-			pd, err := m.GetManifestList()
+			pd, err := mi.GetManifestList()
 			if err != nil {
 				return err
 			}
@@ -246,10 +246,11 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					return err
 				}
 			}
-		} else {
+		}
+		if mi, ok := m.(manifest.Imager); ok {
 			// copy components of an image
 			// transfer the config
-			cd, err := m.GetConfig()
+			cd, err := mi.GetConfig()
 			if err != nil {
 				// docker schema v1 does not have a config object, ignore if it's missing
 				if !errors.Is(err, types.ErrUnsupportedMediaType) {
@@ -277,7 +278,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 			}
 
 			// copy filesystem layers
-			l, err := m.GetLayers()
+			l, err := mi.GetLayers()
 			if err != nil {
 				return err
 			}
@@ -473,8 +474,8 @@ func (rc *RegClient) ImageExport(ctx context.Context, ref ref.Ref, outStream io.
 	}
 
 	// append to docker manifest with tag, config filename, each layer filename, and layer descriptors
-	if !m.IsList() {
-		conf, err := m.GetConfig()
+	if mi, ok := m.(manifest.Imager); ok {
+		conf, err := mi.GetConfig()
 		if err != nil {
 			return err
 		}
@@ -488,7 +489,7 @@ func (rc *RegClient) ImageExport(ctx context.Context, ref ref.Ref, outStream io.
 			Layers:       []string{},
 			LayerSources: map[digest.Digest]types.Descriptor{},
 		}
-		dl, err := m.GetLayers()
+		dl, err := mi.GetLayers()
 		if err != nil {
 			return err
 		}
@@ -528,6 +529,10 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 		if err != nil {
 			return err
 		}
+		mi, ok := m.(manifest.Imager)
+		if !ok {
+			return fmt.Errorf("manifest doesn't support image methods%.0w", types.ErrUnsupportedMediaType)
+		}
 		// write manifest body by digest
 		mBody, err := m.RawBody()
 		if err != nil {
@@ -543,7 +548,7 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 		}
 
 		// add config
-		confD, err := m.GetConfig()
+		confD, err := mi.GetConfig()
 		// ignore unsupported media type errors
 		if err != nil && !errors.Is(err, types.ErrUnsupportedMediaType) {
 			return err
@@ -556,7 +561,7 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 		}
 
 		// loop over layers
-		layerDL, err := m.GetLayers()
+		layerDL, err := mi.GetLayers()
 		// ignore unsupported media type errors
 		if err != nil && !errors.Is(err, types.ErrUnsupportedMediaType) {
 			return err
@@ -577,6 +582,10 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 		if err != nil {
 			return err
 		}
+		mi, ok := m.(manifest.Indexer)
+		if !ok {
+			return fmt.Errorf("manifest doesn't support index methods%.0w", types.ErrUnsupportedMediaType)
+		}
 		// write manifest body by digest
 		mBody, err := m.RawBody()
 		if err != nil {
@@ -591,7 +600,7 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 			return err
 		}
 		// recurse over entries in the list/index
-		mdl, err := m.GetManifestList()
+		mdl, err := mi.GetManifestList()
 		if err != nil {
 			return err
 		}
@@ -856,8 +865,12 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 	}
 
 	if !push {
+		mi, ok := m.(manifest.Indexer)
+		if !ok {
+			return fmt.Errorf("manifest doesn't support image methods%.0w", types.ErrUnsupportedMediaType)
+		}
 		// for root index, add handler for matching reference (or only reference)
-		dl, err := m.GetManifestList()
+		dl, err := mi.GetManifestList()
 		if err != nil {
 			return err
 		}
@@ -893,7 +906,11 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 		})
 	} else if m.IsList() {
 		// for index/manifest lists, add handlers for each embedded manifest
-		dl, err := m.GetManifestList()
+		mi, ok := m.(manifest.Indexer)
+		if !ok {
+			return fmt.Errorf("manifest doesn't support index methods%.0w", types.ErrUnsupportedMediaType)
+		}
+		dl, err := mi.GetManifestList()
 		if err != nil {
 			return err
 		}
@@ -902,8 +919,12 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 		}
 	} else {
 		// else if a single image/manifest
+		mi, ok := m.(manifest.Imager)
+		if !ok {
+			return fmt.Errorf("manifest doesn't support image methods%.0w", types.ErrUnsupportedMediaType)
+		}
 		// add handler for the config descriptor if it's defined
-		cd, err := m.GetConfig()
+		cd, err := mi.GetConfig()
 		if err == nil {
 			filename := tarOCILayoutDescPath(cd)
 			if !trd.processed[filename] && trd.handlers[filename] == nil {
@@ -915,7 +936,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 			}
 		}
 		// add handlers for each layer
-		layers, err := m.GetLayers()
+		layers, err := mi.GetLayers()
 		if err != nil {
 			return err
 		}

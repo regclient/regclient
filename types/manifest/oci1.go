@@ -355,6 +355,42 @@ func (m *oci1Artifact) SetAnnotation(key, val string) error {
 	return m.updateDesc()
 }
 
+func (m *oci1Artifact) SetConfig(d types.Descriptor) error {
+	return wraperr.New(fmt.Errorf("set config not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+}
+
+func (m *oci1Manifest) SetConfig(d types.Descriptor) error {
+	if !m.manifSet {
+		return fmt.Errorf("manifest is not set")
+	}
+	m.Config = d
+	return m.updateDesc()
+}
+
+func (m *oci1Artifact) SetLayers(dl []types.Descriptor) error {
+	if !m.manifSet {
+		return fmt.Errorf("manifest is not set")
+	}
+	m.Blobs = dl
+	return m.updateDesc()
+}
+
+func (m *oci1Manifest) SetLayers(dl []types.Descriptor) error {
+	if !m.manifSet {
+		return fmt.Errorf("manifest is not set")
+	}
+	m.Layers = dl
+	return m.updateDesc()
+}
+
+func (m *oci1Index) SetManifestList(dl []types.Descriptor) error {
+	if !m.manifSet {
+		return fmt.Errorf("manifest is not set")
+	}
+	m.Manifests = dl
+	return m.updateDesc()
+}
+
 func (m *oci1Manifest) SetOrig(origIn interface{}) error {
 	orig, ok := origIn.(v1.Manifest)
 	if !ok {

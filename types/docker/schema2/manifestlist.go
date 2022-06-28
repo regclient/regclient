@@ -15,7 +15,7 @@ var ManifestListSchemaVersion = docker.Versioned{
 type ManifestList struct {
 	docker.Versioned
 
-	// Config references the image configuration as a blob.
+	// Manifests lists descriptors in the manifest list
 	Manifests []types.Descriptor `json:"manifests"`
 
 	// Annotations contains arbitrary metadata for the image index.

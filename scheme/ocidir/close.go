@@ -74,9 +74,9 @@ func (o *OCIDir) Close(ctx context.Context, r ref.Ref) error {
 }
 
 func (o *OCIDir) closeProcManifest(ctx context.Context, r ref.Ref, m manifest.Manifest, dl *map[string]bool) error {
-	if m.IsList() {
+	if mi, ok := m.(manifest.Indexer); ok {
 		// go through manifest list, updating dl, and recursively processing nested manifests
-		ml, err := m.GetManifestList()
+		ml, err := mi.GetManifestList()
 		if err != nil {
 			return err
 		}
@@ -99,14 +99,15 @@ func (o *OCIDir) closeProcManifest(ctx context.Context, r ref.Ref, m manifest.Ma
 				return err
 			}
 		}
-	} else {
+	}
+	if mi, ok := m.(manifest.Imager); ok {
 		// get config from manifest if it exists
-		cd, err := m.GetConfig()
+		cd, err := mi.GetConfig()
 		if err == nil {
 			(*dl)[cd.Digest.String()] = true
 		}
 		// finally add all layers to digest list
-		layers, err := m.GetLayers()
+		layers, err := mi.GetLayers()
 		if err != nil {
 			return err
 		}
