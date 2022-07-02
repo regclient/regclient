@@ -6,6 +6,7 @@
 - [Tag commands](#tag-commands)
 - [Image commands](#image-commands)
 - [Blob commands](#blob-commands)
+- [Index commands](#index-commands)
 - [Artifact commands](#artifact-commands)
 - [Format flag](#format-flag)
 
@@ -243,6 +244,25 @@ The `--format` option to `put` has the following variables available:
 
 - `.Digest`: digest of the pushed blob
 - `.Size`: size of the pushed blob
+
+## Index Commands
+
+The index command creates or manages OCI Indexes and Manifest Lists.
+
+```text
+Usage:
+  regctl index [command]
+
+Available Commands:
+  add         add an index entry
+  create      create an index
+  delete      delete an index entry
+```
+
+The `create` command is used to create a new Index and optionally include an initial set of manifests.
+The `add` and `delete` commands are used to add and remove manifests from the Index.
+When adding manifests to an Index, references in other repositories will first be copied to the local repository.
+The platform will automatically be added when an image has a config containing those fields.
 
 ## Artifact Commands
 

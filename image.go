@@ -71,6 +71,7 @@ type tarWriteData struct {
 }
 
 type imageOpt struct {
+	child           bool
 	forceRecursive  bool
 	includeExternal bool
 	digestTags      bool
@@ -81,6 +82,13 @@ type imageOpt struct {
 
 // ImageOpts define options for the Image* commands
 type ImageOpts func(*imageOpt)
+
+// ImageWithChild attempts to copy every manifest and blob even if parent manifests already exist.
+func ImageWithChild() ImageOpts {
+	return func(opts *imageOpt) {
+		opts.child = true
+	}
+}
 
 // ImageWithForceRecursive attempts to copy every manifest and blob even if parent manifests already exist.
 func ImageWithForceRecursive() ImageOpts {
@@ -130,7 +138,7 @@ func (rc *RegClient) ImageCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.R
 	for _, optFn := range opts {
 		optFn(&opt)
 	}
-	return rc.imageCopyOpt(ctx, refSrc, refTgt, types.Descriptor{}, false, &opt)
+	return rc.imageCopyOpt(ctx, refSrc, refTgt, types.Descriptor{}, opt.child, &opt)
 }
 
 func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor, child bool, opt *imageOpt) error {
