@@ -3,10 +3,13 @@ package ocidir
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"path"
+	"strings"
 	"sync"
 
 	"github.com/regclient/regclient/internal/rwfs"
@@ -19,7 +22,8 @@ import (
 
 const (
 	imageLayoutFile = "oci-layout"
-	aRefName        = "org.opencontainers.image.ref.name"
+	aOCIRefName     = "org.opencontainers.image.ref.name"
+	aCtrdImageName  = "io.containerd.image.name"
 )
 
 // OCIDir is used for accessing OCI Image Layouts defined as a directory
@@ -112,6 +116,10 @@ func (o *OCIDir) readIndex(r ref.Ref) (v1.Index, error) {
 }
 
 func (o *OCIDir) writeIndex(r ref.Ref, i v1.Index) error {
+	err := rwfs.MkdirAll(o.fs, r.Path, 0777)
+	if err != nil && !errors.Is(err, fs.ErrExist) {
+		return fmt.Errorf("failed creating %s: %w", r.Path, err)
+	}
 	// create/replace oci-layout file
 	layout := v1.ImageLayout{
 		Version: "1.0.0",
@@ -198,7 +206,13 @@ func indexGet(index v1.Index, r ref.Ref) (types.Descriptor, error) {
 		}
 	} else if r.Tag != "" {
 		for _, im := range index.Manifests {
-			if name, ok := im.Annotations[aRefName]; ok && name == r.Tag {
+			if name, ok := im.Annotations[aOCIRefName]; ok && name == r.Tag {
+				return im, nil
+			}
+		}
+		// fall back to support full image name in annotation
+		for _, im := range index.Manifests {
+			if name, ok := im.Annotations[aOCIRefName]; ok && strings.HasSuffix(name, ":"+r.Tag) {
 				return im, nil
 			}
 		}
@@ -214,7 +228,7 @@ func indexSet(index *v1.Index, r ref.Ref, d types.Descriptor) error {
 		if d.Annotations == nil {
 			d.Annotations = map[string]string{}
 		}
-		d.Annotations[aRefName] = r.Tag
+		d.Annotations[aOCIRefName] = r.Tag
 	}
 	if index.Manifests == nil {
 		index.Manifests = []types.Descriptor{}
@@ -224,7 +238,7 @@ func indexSet(index *v1.Index, r ref.Ref, d types.Descriptor) error {
 	for i := range index.Manifests {
 		var name string
 		if index.Manifests[i].Annotations != nil {
-			name = index.Manifests[i].Annotations[aRefName]
+			name = index.Manifests[i].Annotations[aOCIRefName]
 		}
 		if (name == "" && index.Manifests[i].Digest == d.Digest) || (r.Tag != "" && name == r.Tag) {
 			index.Manifests[i] = d
@@ -237,7 +251,7 @@ func indexSet(index *v1.Index, r ref.Ref, d types.Descriptor) error {
 		for i := len(index.Manifests) - 1; i > pos; i-- {
 			var name string
 			if index.Manifests[i].Annotations != nil {
-				name = index.Manifests[i].Annotations[aRefName]
+				name = index.Manifests[i].Annotations[aOCIRefName]
 			}
 			// prune entries without any tag and a matching digest
 			// or entries with a matching tag

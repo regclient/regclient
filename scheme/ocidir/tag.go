@@ -25,7 +25,7 @@ func (o *OCIDir) TagDelete(ctx context.Context, r ref.Ref) error {
 	}
 	changed := false
 	for i, desc := range index.Manifests {
-		if t, ok := desc.Annotations[aRefName]; ok && t == r.Tag {
+		if t, ok := desc.Annotations[aOCIRefName]; ok && t == r.Tag {
 			// remove matching entry from index
 			index.Manifests = append(index.Manifests[:i], index.Manifests[i+1:]...)
 			changed = true
@@ -52,8 +52,20 @@ func (o *OCIDir) TagList(ctx context.Context, r ref.Ref, opts ...scheme.TagOpts)
 	}
 	tl := []string{}
 	for _, desc := range index.Manifests {
-		if t, ok := desc.Annotations[aRefName]; ok && !strings.Contains(t, ":") {
-			tl = append(tl, t)
+		if t, ok := desc.Annotations[aOCIRefName]; ok {
+			if i := strings.LastIndex(t, ":"); i >= 0 {
+				t = t[i+1:]
+			}
+			found := false
+			for _, cur := range tl {
+				if cur == t {
+					found = true
+					break
+				}
+			}
+			if !found {
+				tl = append(tl, t)
+			}
 		}
 	}
 	sort.Strings(tl)
