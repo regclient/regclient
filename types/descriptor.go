@@ -67,6 +67,56 @@ func (d Descriptor) GetData() ([]byte, error) {
 	return dBytes, nil
 }
 
+// Equal indicates the two descriptors are identical, effectively a DeepEqual.
+func (d Descriptor) Equal(d2 Descriptor) bool {
+	if !d.Same(d2) {
+		return false
+	}
+	if d.Platform == nil || d2.Platform == nil {
+		if d.Platform != nil || d2.Platform != nil {
+			return false
+		}
+	} else if !platform.Match(*d.Platform, *d2.Platform) {
+		return false
+	}
+	if d.URLs == nil || d2.URLs == nil {
+		if d.URLs != nil || d2.URLs != nil {
+			return false
+		}
+	} else if len(d.URLs) != len(d2.URLs) {
+		return false
+	} else {
+		for i := range d.URLs {
+			if d.URLs[i] != d2.URLs[i] {
+				return false
+			}
+		}
+	}
+	if d.Annotations == nil || d2.Annotations == nil {
+		if d.Annotations != nil || d2.Annotations != nil {
+			return false
+		}
+	} else if len(d.Annotations) != len(d2.Annotations) {
+		return false
+	} else {
+		for i := range d.Annotations {
+			if d.Annotations[i] != d2.Annotations[i] {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// Same indicates two descriptors point to the same CAS object.
+// This verifies the digest, media type, and size all match
+func (d Descriptor) Same(d2 Descriptor) bool {
+	if d.Digest != d2.Digest || d.MediaType != d2.MediaType || d.Size != d2.Size {
+		return false
+	}
+	return true
+}
+
 func (d Descriptor) MarshalPrettyTW(tw *tabwriter.Writer, prefix string) error {
 	fmt.Fprintf(tw, "%sDigest:\t%s\n", prefix, string(d.Digest))
 	fmt.Fprintf(tw, "%sMediaType:\t%s\n", prefix, d.MediaType)
