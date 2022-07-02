@@ -189,7 +189,7 @@ func (o *OCIDir) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 	}
 	if r.Tag != "" {
 		desc.Annotations = map[string]string{
-			aRefName: r.Tag,
+			aOCIRefName: r.Tag,
 		}
 	}
 	// create manifest CAS file
