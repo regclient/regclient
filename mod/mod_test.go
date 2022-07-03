@@ -187,6 +187,21 @@ func TestMod(t *testing.T) {
 			ref: "ocidir://testrepo:v3",
 		},
 		{
+			name: "Layer File Tar Timestamp",
+			opts: []Opts{
+				WithFileTarTimeMax("/dir/layer.tar", tTime),
+			},
+			ref: "ocidir://testrepo:v3",
+		},
+		{
+			name: "Layer File Tar Timestamp Unchanged",
+			opts: []Opts{
+				WithFileTarTimeMax("/dir/layer.tar", time.Now()),
+			},
+			ref:      "ocidir://testrepo:v3",
+			wantSame: true,
+		},
+		{
 			name: "Layer Trim By Created RE",
 			opts: []Opts{
 				WithLayerRmCreatedBy(*regexp.MustCompile("^COPY layer2.txt /layer2")),

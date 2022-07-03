@@ -292,6 +292,21 @@ func init() {
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
+			vs := strings.SplitN(val, ",", 2)
+			if len(vs) != 2 {
+				return fmt.Errorf("filename and timestamp both required, comma separated")
+			}
+			t, err := time.Parse(time.RFC3339, vs[1])
+			if err != nil {
+				return fmt.Errorf("time must be formatted %s: %w", time.RFC3339, err)
+			}
+			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithFileTarTimeMax(vs[0], t))
+			return nil
+		},
+	}, "file-tar-time-max", "", `max timestamp for contents of a tar file within a layer`)
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "stringArray",
+		f: func(val string) error {
 			vs := strings.SplitN(val, "=", 2)
 			if len(vs) == 2 {
 				imageOpts.modOpts = append(imageOpts.modOpts, mod.WithLabel(vs[0], vs[1]))

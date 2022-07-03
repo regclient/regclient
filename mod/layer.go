@@ -3,7 +3,10 @@ package mod
 import (
 	"archive/tar"
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -99,7 +102,7 @@ func WithLayerStripFile(file string) Opts {
 	file = strings.Trim(file, "/")
 	fileRE := regexp.MustCompile("^/?" + regexp.QuoteMeta(file) + "(/.*)?$")
 	return func(dc *dagConfig) {
-		dc.stepsLayerFile = append(dc.stepsLayerFile, func(c context.Context, rc *regclient.RegClient, r ref.Ref, dl *dagLayer, th *tar.Header, tr *tar.Reader) (*tar.Header, *tar.Reader, changes, error) {
+		dc.stepsLayerFile = append(dc.stepsLayerFile, func(c context.Context, rc *regclient.RegClient, r ref.Ref, dl *dagLayer, th *tar.Header, tr io.Reader) (*tar.Header, io.Reader, changes, error) {
 			if fileRE.Match([]byte(th.Name)) {
 				return th, tr, deleted, nil
 			}
@@ -130,7 +133,7 @@ func WithLayerTimestampFromLabel(label string) Opts {
 			return nil
 		})
 		dc.stepsLayerFile = append(dc.stepsLayerFile,
-			func(c context.Context, rc *regclient.RegClient, r ref.Ref, dl *dagLayer, th *tar.Header, tr *tar.Reader) (*tar.Header, *tar.Reader, changes, error) {
+			func(c context.Context, rc *regclient.RegClient, r ref.Ref, dl *dagLayer, th *tar.Header, tr io.Reader) (*tar.Header, io.Reader, changes, error) {
 				if t.IsZero() {
 					return nil, nil, unchanged, fmt.Errorf("timestamp not available")
 				}
@@ -163,7 +166,7 @@ func WithLayerTimestampFromLabel(label string) Opts {
 func WithLayerTimestampMax(t time.Time) Opts {
 	return func(dc *dagConfig) {
 		dc.stepsLayerFile = append(dc.stepsLayerFile,
-			func(c context.Context, rc *regclient.RegClient, r ref.Ref, dl *dagLayer, th *tar.Header, tr *tar.Reader) (*tar.Header, *tar.Reader, changes, error) {
+			func(c context.Context, rc *regclient.RegClient, r ref.Ref, dl *dagLayer, th *tar.Header, tr io.Reader) (*tar.Header, io.Reader, changes, error) {
 				changed := false
 				if th == nil || tr == nil {
 					return nil, nil, unchanged, fmt.Errorf("missing header or reader")
@@ -187,4 +190,104 @@ func WithLayerTimestampMax(t time.Time) Opts {
 			},
 		)
 	}
+}
+
+// WithFileTarTimeMax processes a tar file within a layer and rewrites the contents with a max timestamp
+func WithFileTarTimeMax(name string, t time.Time) Opts {
+	name = strings.TrimPrefix(name, "/")
+	return func(dc *dagConfig) {
+		dc.stepsLayerFile = append(dc.stepsLayerFile, func(ctx context.Context, rc *regclient.RegClient, r ref.Ref, dl *dagLayer, th *tar.Header, tr io.Reader) (*tar.Header, io.Reader, changes, error) {
+			// check the header for a matching filename
+			if th.Name != name {
+				return th, tr, unchanged, nil
+			}
+			// read contents into a temporary file, adjusting included timestamps, track if any timestamps are changed
+			tmpFile, err := os.CreateTemp("", "regclient.*")
+			if err != nil {
+				return th, tr, unchanged, err
+			}
+			// TODO: detect and handle compression
+			changed := false
+			tmpName := tmpFile.Name()
+			fsTR := tar.NewReader(tr)
+			fsTW := tar.NewWriter(tmpFile)
+			defer fsTW.Close()
+			for {
+				fsTH, err := fsTR.Next()
+				if err != nil {
+					if errors.Is(err, io.EOF) {
+						break
+					}
+					return th, tr, unchanged, err
+				}
+				if t.Before(fsTH.AccessTime) {
+					fsTH.AccessTime = t
+					changed = true
+				}
+				if t.Before(fsTH.ChangeTime) {
+					fsTH.ChangeTime = t
+					changed = true
+				}
+				if t.Before(fsTH.ModTime) {
+					fsTH.ModTime = t
+					changed = true
+				}
+				err = fsTW.WriteHeader(fsTH)
+				if err != nil {
+					return th, tr, unchanged, err
+				}
+				if fsTH.Size > 0 {
+					_, err = io.CopyN(fsTW, fsTR, fsTH.Size)
+					if err != nil {
+						return th, tr, unchanged, err
+					}
+				}
+			}
+			err = fsTW.Close()
+			if err != nil {
+				return th, tr, unchanged, err
+			}
+			// return a reader that reads from the temporary file and deletes it when finished
+			tmpFH, err := os.Open(tmpName)
+			if err != nil {
+				return th, tr, unchanged, err
+			}
+			fi, err := tmpFH.Stat()
+			if err != nil {
+				return th, tr, unchanged, err
+			}
+			th.Size = fi.Size()
+			tmpR := tmpReader{
+				file:     tmpFH,
+				remain:   th.Size,
+				filename: tmpName,
+			}
+			if changed {
+				return th, &tmpR, replaced, nil
+			}
+			return th, &tmpR, unchanged, nil
+		})
+	}
+}
+
+type tmpReader struct {
+	file     *os.File
+	remain   int64
+	filename string
+}
+
+// Read for tmpReader passes through the read and deletes the tmp file when the read completes
+func (t *tmpReader) Read(p []byte) (int, error) {
+	if t.file == nil {
+		return 0, io.EOF
+	}
+	size, err := t.file.Read(p)
+	t.remain -= int64(size)
+	if err != nil || t.remain <= 0 {
+		// cleanup on last read or any errors, intentionally ignoring any other errors
+		_ = t.file.Close()
+		_ = os.Remove(t.filename)
+		t.file = nil
+	}
+	return size, err
 }

@@ -17,9 +17,9 @@ func WithBuildArgRm(arg string, value *regexp.Regexp) Opts {
 		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(ctx context.Context, rc *regclient.RegClient, r ref.Ref, doc *dagOCIConfig) error {
 			changed := false
 			oc := doc.oc.GetConfig()
-			argexp := regexp.MustCompile(fmt.Sprintf(`^ARG %s(=.*|)$`,
+			argexp := regexp.MustCompile(fmt.Sprintf(`(?s)^ARG %s(=.*|)$`,
 				regexp.QuoteMeta(arg)))
-			runexp := regexp.MustCompile(fmt.Sprintf(`^RUN \|([0-9]+) (.*)%s=%s(.*)$`,
+			runexp := regexp.MustCompile(fmt.Sprintf(`(?s)^RUN \|([0-9]+) (.*)%s=%s(.*)$`,
 				regexp.QuoteMeta(arg), value.String()))
 			for i := len(oc.History) - 1; i >= 0; i-- {
 				if argexp.MatchString(oc.History[i].CreatedBy) && oc.History[i].EmptyLayer {
@@ -39,7 +39,6 @@ func WithBuildArgRm(arg string, value *regexp.Regexp) Opts {
 					}
 					changed = true
 				}
-
 			}
 			if changed {
 				doc.oc.SetConfig(oc)
