@@ -76,7 +76,7 @@ var artifactPutCmd = &cobra.Command{
 	Aliases:   []string{"push"},
 	Short:     "upload artifacts",
 	Long:      `Upload artifacts to the registry.`,
-	Args:      cobra.ExactArgs(1),
+	Args:      cobra.RangeArgs(0, 1),
 	ValidArgs: []string{}, // do not auto complete repository/tag
 	RunE:      runArtifactPut,
 }
@@ -93,7 +93,7 @@ var artifactOpts struct {
 	formatPut    string
 	manifestMT   string
 	outputDir    string
-	refers       bool
+	refers       string
 	stripDirs    bool
 }
 
@@ -128,7 +128,7 @@ func init() {
 		return manifestKnownTypes, cobra.ShellCompDirectiveNoFileComp
 	})
 	// TODO: remove experimental label when stable
-	artifactPutCmd.Flags().BoolVarP(&artifactOpts.refers, "refers", "", false, "EXPERIMENTAL: Create a referrer to the reference")
+	artifactPutCmd.Flags().StringVarP(&artifactOpts.refers, "refers", "", "", "EXPERIMENTAL: Create a referrer to the reference")
 	artifactPutCmd.Flags().BoolVarP(&artifactOpts.stripDirs, "strip-dirs", "", false, "Strip directories from filenames in artifact")
 
 	artifactCmd.AddCommand(artifactGetCmd)
@@ -163,10 +163,14 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	mi, ok := mm.(manifest.Imager)
+	if !ok {
+		return fmt.Errorf("manifest does not support image methods%.0w", types.ErrUnsupportedMediaType)
+	}
 
 	// if config-file defined, create file as writer, perform a blob get
 	if artifactOpts.configFile != "" {
-		d, err := mm.GetConfig()
+		d, err := mi.GetConfig()
 		if err != nil {
 			return err
 		}
@@ -184,7 +188,7 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 	}
 
 	// get list of layers
-	layers, err := mm.GetLayers()
+	layers, err := mi.GetLayers()
 	if err != nil {
 		return err
 	}
@@ -348,6 +352,8 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	mOpts := []manifest.Opts{}
 	hasConfig := false
+	var r, rMan, rArt ref.Ref
+	var err error
 
 	switch artifactOpts.manifestMT {
 	case types.MediaTypeOCI1Artifact:
@@ -359,9 +365,27 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	}
 
 	// validate inputs
-	r, err := ref.New(args[0])
-	if err != nil {
-		return err
+	if len(args) == 0 && artifactOpts.refers == "" {
+		return fmt.Errorf("reference and both refers missing")
+	}
+	if len(args) > 0 {
+		rMan, err = ref.New(args[0])
+		if err != nil {
+			return err
+		}
+		r = rMan
+	}
+	if artifactOpts.refers != "" {
+		rArt, err = ref.New(artifactOpts.refers)
+		if err != nil {
+			return err
+		}
+		r = rArt
+	}
+	if rMan.IsZero() && rArt.IsZero() {
+		return fmt.Errorf("either a reference or refers must be provided")
+	} else if !rMan.IsZero() && !rArt.IsZero() && !ref.EqualRepository(rMan, rArt) {
+		return fmt.Errorf("reference and refers must be in the same repository")
 	}
 	if len(artifactOpts.artifactFile) == 1 && len(artifactOpts.artifactMT) == 0 {
 		// default media-type for a single file, same is used for stdin
@@ -392,8 +416,8 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	defer rc.Close(ctx, r)
 
 	var refDesc *types.Descriptor
-	if artifactOpts.refers {
-		rmh, err := rc.ManifestHead(ctx, r)
+	if !rArt.IsZero() {
+		rmh, err := rc.ManifestHead(ctx, rArt)
 		if err != nil {
 			return fmt.Errorf("unable to find referenced manifest: %w", err)
 		}
@@ -552,18 +576,22 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	}
 
 	if artifactOpts.byDigest {
-		r.Tag = ""
-		r.Digest = mm.GetDescriptor().Digest.String()
+		rMan.Tag = ""
+		rMan.Digest = mm.GetDescriptor().Digest.String()
 	}
 
 	// push manifest
-	if artifactOpts.refers {
-		err = rc.ReferrerPut(ctx, r, mm)
-	} else {
-		err = rc.ManifestPut(ctx, r, mm)
+	if !rMan.IsZero() {
+		err = rc.ManifestPut(ctx, rMan, mm)
+		if err != nil {
+			return err
+		}
 	}
-	if err != nil {
-		return err
+	if !rArt.IsZero() {
+		err = rc.ReferrerPut(ctx, rArt, mm)
+		if err != nil {
+			return err
+		}
 	}
 
 	result := struct {

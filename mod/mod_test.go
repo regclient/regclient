@@ -11,6 +11,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/internal/rwfs"
+	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 )
@@ -49,7 +50,7 @@ func TestMod(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to parse platform: %v", err)
 	}
-	m3DescAmd, err := m3.GetPlatformDesc(&pAMD)
+	m3DescAmd, err := manifest.GetPlatformDesc(m3, &pAMD)
 	if err != nil {
 		t.Errorf("failed to get amd64 descriptor: %v", err)
 	}
@@ -184,6 +185,21 @@ func TestMod(t *testing.T) {
 				WithLayerStripFile("/layer2"),
 			},
 			ref: "ocidir://testrepo:v3",
+		},
+		{
+			name: "Layer File Tar Timestamp",
+			opts: []Opts{
+				WithFileTarTimeMax("/dir/layer.tar", tTime),
+			},
+			ref: "ocidir://testrepo:v3",
+		},
+		{
+			name: "Layer File Tar Timestamp Unchanged",
+			opts: []Opts{
+				WithFileTarTimeMax("/dir/layer.tar", time.Now()),
+			},
+			ref:      "ocidir://testrepo:v3",
+			wantSame: true,
 		},
 		{
 			name: "Layer Trim By Created RE",

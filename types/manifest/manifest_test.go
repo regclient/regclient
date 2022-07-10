@@ -595,8 +595,6 @@ func TestNew(t *testing.T) {
 		// TODO: add more tests to improve coverage
 		// - test rate limit
 		// - test retrieving descriptor lists from manifest lists
-		// - test retrieving layers from images
-		// - test retrieving config descriptor from image
 		// - test if manifest is set
 		// - test raw body
 	}
@@ -910,4 +908,192 @@ func TestModify(t *testing.T) {
 			t.Errorf("did not fail converting OCI image to non-pointer")
 		}
 	})
+}
+
+// test set methods for config, layers, and manifest list
+func TestSet(t *testing.T) {
+	addDigest := digest.FromString("new digest")
+	addDesc := types.Descriptor{
+		Digest: addDigest,
+		Size:   42,
+		Annotations: map[string]string{
+			"test": "new descriptor",
+		},
+	}
+	// test list includes each original media type, a layer to add, run the convert
+	// verify new layer, altered digest, and/or any error conditions
+	tests := []struct {
+		name        string
+		opts        []Opts
+		expectAnnot bool
+		expectImage bool
+		expectIndex bool
+		expectErr   error
+	}{
+		{
+			name: "Docker Schema 1",
+			opts: []Opts{
+				WithDesc(types.Descriptor{
+					MediaType: types.MediaTypeDocker1ManifestSigned,
+					Digest:    digestDockerSchema1Signed,
+					Size:      int64(len(rawDockerSchema1Signed)),
+				}),
+				WithRaw(rawDockerSchema1Signed),
+			},
+			expectImage: true,
+			expectErr:   types.ErrUnsupportedMediaType,
+		},
+		{
+			name: "Docker Schema 2 Manifest",
+			opts: []Opts{
+				WithDesc(types.Descriptor{
+					MediaType: types.MediaTypeDocker2Manifest,
+					Digest:    digestDockerSchema2,
+					Size:      int64(len(rawDockerSchema2)),
+				}),
+				WithRaw(rawDockerSchema2),
+			},
+			expectAnnot: true,
+			expectImage: true,
+		},
+		{
+			name: "Docker Schema 2 List",
+			opts: []Opts{
+				WithDesc(types.Descriptor{
+					MediaType: types.MediaTypeDocker2ManifestList,
+					Digest:    digestDockerSchema2List,
+					Size:      int64(len(rawDockerSchema2List)),
+				}),
+				WithRaw(rawDockerSchema2List),
+			},
+			expectAnnot: true,
+			expectIndex: true,
+		},
+		{
+			name: "OCI Image",
+			opts: []Opts{
+				WithRaw(rawOCIImage),
+				WithDesc(types.Descriptor{
+					MediaType: types.MediaTypeOCI1Manifest,
+					Digest:    digestOCIImage,
+					Size:      int64(len(rawOCIImage)),
+				}),
+			},
+			expectAnnot: true,
+			expectImage: true,
+		},
+		{
+			name: "OCI Index",
+			opts: []Opts{
+				WithRaw(rawOCIIndex),
+				WithDesc(types.Descriptor{
+					MediaType: types.MediaTypeOCI1ManifestList,
+					Digest:    digestOCIIndex,
+					Size:      int64(len(rawOCIIndex)),
+				}),
+			},
+			expectAnnot: true,
+			expectIndex: true,
+		},
+	}
+
+	// Loop of tests performing a round trip with different types
+	// round trip creates the manifest, GetOrig, to OCI, modify, to Orig, SetOrig
+	// resulting manifest should have a changed digest from the added layer
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, err := New(tt.opts...)
+			if err != nil {
+				t.Errorf("error creating manifest: %v", err)
+				return
+			}
+			if mi, ok := m.(Imager); ok {
+				if !tt.expectImage {
+					t.Errorf("image methods not expected")
+				}
+				prevDig := m.GetDescriptor().Digest
+				dl, err := mi.GetLayers()
+				if err != nil {
+					t.Errorf("failed getting layers")
+				}
+				dl = append(dl, addDesc)
+				err = mi.SetLayers(dl)
+				if tt.expectErr != nil {
+					if err == nil {
+						t.Errorf("did not receive expected error")
+					} else if !errors.Is(err, tt.expectErr) && err.Error() != tt.expectErr.Error() {
+						t.Errorf("unexpected error, expected %v, received %v", tt.expectErr, err)
+					}
+					return
+				} else if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if m.GetDescriptor().Digest == prevDig {
+					t.Errorf("digest did not change after adding layer/manifest")
+				}
+
+				prevDig = m.GetDescriptor().Digest
+				err = mi.SetConfig(addDesc)
+				if err != nil {
+					t.Errorf("failed setting config")
+				}
+				if m.GetDescriptor().Digest == prevDig {
+					t.Errorf("digest did not change after adding layer/manifest")
+				}
+			} else if tt.expectImage {
+				t.Errorf("image methods not found")
+			}
+
+			if mi, ok := m.(Indexer); ok {
+				if !tt.expectIndex {
+					t.Errorf("index methods not expected")
+				}
+				prevDig := m.GetDescriptor().Digest
+				dl, err := mi.GetManifestList()
+				if err != nil {
+					t.Errorf("failed getting manifest list")
+				}
+				dl = append(dl, addDesc)
+				err = mi.SetManifestList(dl)
+				if tt.expectErr != nil {
+					if err == nil {
+						t.Errorf("did not receive expected error")
+					} else if !errors.Is(err, tt.expectErr) && err.Error() != tt.expectErr.Error() {
+						t.Errorf("unexpected error, expected %v, received %v", tt.expectErr, err)
+					}
+					return
+				} else if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if m.GetDescriptor().Digest == prevDig {
+					t.Errorf("digest did not change after adding layer/manifest")
+				}
+			} else if tt.expectIndex {
+				t.Errorf("image methods not found")
+			}
+
+			if ma, ok := m.(Annotator); ok {
+				if !tt.expectAnnot {
+					t.Errorf("annotation methods not expected")
+				}
+				prevDig := m.GetDescriptor().Digest
+				_, err := ma.GetAnnotations()
+				if err != nil {
+					t.Errorf("failed fetching annotations: %v", err)
+					return
+				}
+				err = ma.SetAnnotation("new annotation", "new value")
+				if err != nil {
+					t.Errorf("failed setting annotation: %v", err)
+					return
+				}
+				if m.GetDescriptor().Digest == prevDig {
+					t.Errorf("digest did not change after setting annotation")
+				}
+			} else if tt.expectAnnot {
+				t.Errorf("annotation methods not found")
+			}
+
+		})
+	}
 }

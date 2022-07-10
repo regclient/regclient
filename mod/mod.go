@@ -38,7 +38,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, r ref.Ref, opts ...Opts
 		stepsManifest:  []func(context.Context, *regclient.RegClient, ref.Ref, *dagManifest) error{},
 		stepsOCIConfig: []func(context.Context, *regclient.RegClient, ref.Ref, *dagOCIConfig) error{},
 		stepsLayer:     []func(context.Context, *regclient.RegClient, ref.Ref, *dagLayer) error{},
-		stepsLayerFile: []func(context.Context, *regclient.RegClient, ref.Ref, *dagLayer, *tar.Header, *tar.Reader) (*tar.Header, *tar.Reader, changes, error){},
+		stepsLayerFile: []func(context.Context, *regclient.RegClient, ref.Ref, *dagLayer, *tar.Header, io.Reader) (*tar.Header, io.Reader, changes, error){},
 		maxDataSize:    -1, // unchanged, if a data field exists, preserve it
 	}
 	for _, opt := range opts {
@@ -139,9 +139,11 @@ func Apply(ctx context.Context, rc *regclient.RegClient, r ref.Ref, opts ...Opts
 						return nil, err
 					}
 					changeFile := unchanged
+					var rdr io.Reader
+					rdr = tr
 					for _, slf := range dc.stepsLayerFile {
 						var changeCur changes
-						th, tr, changeCur, err = slf(ctx, rc, r, dl, th, tr)
+						th, rdr, changeCur, err = slf(ctx, rc, r, dl, th, rdr)
 						if err != nil {
 							return nil, err
 						}
@@ -161,7 +163,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, r ref.Ref, opts ...Opts
 							return nil, err
 						}
 						if th.Typeflag == tar.TypeReg && th.Size > 0 {
-							_, err := io.CopyN(tw, tr, th.Size)
+							_, err := io.CopyN(tw, rdr, th.Size)
 							if err != nil {
 								return nil, err
 							}

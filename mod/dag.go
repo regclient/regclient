@@ -32,7 +32,7 @@ type dagConfig struct {
 	stepsManifest  []func(context.Context, *regclient.RegClient, ref.Ref, *dagManifest) error
 	stepsOCIConfig []func(context.Context, *regclient.RegClient, ref.Ref, *dagOCIConfig) error
 	stepsLayer     []func(context.Context, *regclient.RegClient, ref.Ref, *dagLayer) error
-	stepsLayerFile []func(context.Context, *regclient.RegClient, ref.Ref, *dagLayer, *tar.Header, *tar.Reader) (*tar.Header, *tar.Reader, changes, error)
+	stepsLayerFile []func(context.Context, *regclient.RegClient, ref.Ref, *dagLayer, *tar.Header, io.Reader) (*tar.Header, io.Reader, changes, error)
 	maxDataSize    int64
 }
 
@@ -70,8 +70,8 @@ func dagGet(ctx context.Context, rc *regclient.RegClient, r ref.Ref, d types.Des
 	if err != nil {
 		return nil, err
 	}
-	if dm.m.IsList() {
-		dl, err := dm.m.GetManifestList()
+	if mi, ok := dm.m.(manifest.Indexer); ok {
+		dl, err := mi.GetManifestList()
 		if err != nil {
 			return nil, err
 		}
@@ -82,31 +82,32 @@ func dagGet(ctx context.Context, rc *regclient.RegClient, r ref.Ref, d types.Des
 			}
 			dm.manifests = append(dm.manifests, curMM)
 		}
-		return &dm, nil
 	}
-	// pull config
-	doc := dagOCIConfig{}
-	cd, err := dm.m.GetConfig()
-	if err != nil && !errors.Is(err, types.ErrUnsupportedMediaType) {
-		return nil, err
-	} else if err == nil {
-		oc, err := rc.BlobGetOCIConfig(ctx, r, cd)
+	if mi, ok := dm.m.(manifest.Imager); ok {
+		// pull config
+		doc := dagOCIConfig{}
+		cd, err := mi.GetConfig()
+		if err != nil && !errors.Is(err, types.ErrUnsupportedMediaType) {
+			return nil, err
+		} else if err == nil {
+			oc, err := rc.BlobGetOCIConfig(ctx, r, cd)
+			if err != nil {
+				return nil, err
+			}
+			doc.oc = oc
+			dm.config = &doc
+		}
+		// init layers
+		layers, err := mi.GetLayers()
 		if err != nil {
 			return nil, err
 		}
-		doc.oc = oc
-		dm.config = &doc
-	}
-	// init layers
-	layers, err := dm.m.GetLayers()
-	if err != nil {
-		return nil, err
-	}
-	for _, layer := range layers {
-		dl := dagLayer{
-			desc: layer,
+		for _, layer := range layers {
+			dl := dagLayer{
+				desc: layer,
+			}
+			dm.layers = append(dm.layers, &dl)
 		}
-		dm.layers = append(dm.layers, &dl)
 	}
 	return &dm, nil
 }

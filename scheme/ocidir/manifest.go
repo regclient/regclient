@@ -172,9 +172,11 @@ func (o *OCIDir) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 		r.Tag = "latest"
 	}
 
+	indexChanged := false
 	index, err := o.readIndex(r)
 	if err != nil {
 		index = indexCreate()
+		indexChanged = true
 	}
 	desc := m.GetDescriptor()
 	b, err := m.RawBody()
@@ -187,7 +189,7 @@ func (o *OCIDir) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 	}
 	if r.Tag != "" {
 		desc.Annotations = map[string]string{
-			aRefName: r.Tag,
+			aOCIRefName: r.Tag,
 		}
 	}
 	// create manifest CAS file
@@ -212,6 +214,10 @@ func (o *OCIDir) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 		if err != nil {
 			return fmt.Errorf("failed to update index: %w", err)
 		}
+		indexChanged = true
+	}
+	// write the index.json and oci-layout if it's been changed
+	if indexChanged {
 		err = o.writeIndex(r, index)
 		if err != nil {
 			return fmt.Errorf("failed to write index: %w", err)

@@ -12,7 +12,7 @@ func TestDocker(t *testing.T) {
 	os.Setenv("PATH", "testdata"+string(os.PathListSeparator)+curPath)
 	defer os.Setenv("PATH", curPath)
 	curDockerConf := os.Getenv(dockerEnv)
-	os.Setenv(dockerEnv, "testdata/docker-config.json")
+	os.Setenv(dockerEnv, "testdata")
 	if curDockerConf != "" {
 		defer os.Setenv(dockerEnv, curDockerConf)
 	} else {
@@ -28,22 +28,45 @@ func TestDocker(t *testing.T) {
 		hostMap[h.Name] = &h
 	}
 	tests := []struct {
-		name       string
-		hostname   string
-		expectUser string
-		expectPass string
+		name             string
+		hostname         string
+		expectUser       string
+		expectPass       string
+		expectCredHelper string
+		expectTLS        TLSConf
+		expectHostname   string
+		expectCredHost   string
 	}{
 		{
-			name:       "testhost",
-			hostname:   "testhost.example.com",
-			expectUser: "hello",
-			expectPass: "world",
+			name:             "testhost",
+			hostname:         "testhost.example.com",
+			expectCredHelper: "docker-credential-test",
+			expectHostname:   "testhost.example.com",
+			expectTLS:        TLSEnabled,
 		},
 		{
-			name:       "localhost:5001",
-			hostname:   "localhost:5001",
-			expectUser: "hello",
-			expectPass: "docker",
+			name:           "localhost:5001",
+			hostname:       "localhost:5001",
+			expectUser:     "hello",
+			expectPass:     "docker",
+			expectHostname: "localhost:5001",
+			expectTLS:      TLSEnabled,
+		},
+		{
+			name:             "docker.io",
+			hostname:         DockerRegistry,
+			expectCredHelper: "docker-credential-test",
+			expectHostname:   DockerRegistryDNS,
+			expectTLS:        TLSEnabled,
+			expectCredHost:   DockerRegistryAuth,
+		},
+		{
+			name:             "http.example.com",
+			hostname:         "http.example.com",
+			expectCredHelper: "docker-credential-test",
+			expectHostname:   "http.example.com",
+			expectTLS:        TLSDisabled,
+			expectCredHost:   "http://http.example.com/",
 		},
 	}
 	for _, tt := range tests {
@@ -53,12 +76,22 @@ func TestDocker(t *testing.T) {
 				t.Errorf("host not found: %s", tt.hostname)
 				return
 			}
-			cred := h.GetCred()
-			if tt.expectUser != cred.User {
-				t.Errorf("user mismatch, expect %s, received %s", tt.expectUser, cred.User)
+			if tt.expectUser != h.User {
+				t.Errorf("user mismatch, expect %s, received %s", tt.expectUser, h.User)
 			}
-			if tt.expectPass != cred.Password {
-				t.Errorf("user mismatch, expect %s, received %s", tt.expectPass, cred.Password)
+			if tt.expectPass != h.Pass {
+				t.Errorf("pass mismatch, expect %s, received %s", tt.expectPass, h.Pass)
+			}
+			if tt.expectTLS != h.TLS {
+				eTLS, _ := tt.expectTLS.MarshalText()
+				hTLS, _ := h.TLS.MarshalText()
+				t.Errorf("tls mismatch, expect %s, received %s", eTLS, hTLS)
+			}
+			if tt.expectCredHelper != h.CredHelper {
+				t.Errorf("cred helper mismatch, expect %s, received %s", tt.expectCredHelper, h.CredHelper)
+			}
+			if tt.expectCredHost != h.CredHost {
+				t.Errorf("cred host mismatch, expect %s, received %s", tt.expectCredHost, h.CredHost)
 			}
 		})
 	}

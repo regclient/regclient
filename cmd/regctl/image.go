@@ -13,6 +13,7 @@ import (
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/mod"
 	"github.com/regclient/regclient/pkg/template"
+	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/sirupsen/logrus"
@@ -291,6 +292,21 @@ func init() {
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
+			vs := strings.SplitN(val, ",", 2)
+			if len(vs) != 2 {
+				return fmt.Errorf("filename and timestamp both required, comma separated")
+			}
+			t, err := time.Parse(time.RFC3339, vs[1])
+			if err != nil {
+				return fmt.Errorf("time must be formatted %s: %w", time.RFC3339, err)
+			}
+			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithFileTarTimeMax(vs[0], t))
+			return nil
+		},
+	}, "file-tar-time-max", "", `max timestamp for contents of a tar file within a layer`)
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "stringArray",
+		f: func(val string) error {
 			vs := strings.SplitN(val, "=", 2)
 			if len(vs) == 2 {
 				imageOpts.modOpts = append(imageOpts.modOpts, mod.WithLabel(vs[0], vs[1]))
@@ -522,7 +538,11 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	cd, err := m.GetConfig()
+	mi, ok := m.(manifest.Imager)
+	if !ok {
+		return fmt.Errorf("manifest does not support image methods%.0w", types.ErrUnsupportedMediaType)
+	}
+	cd, err := mi.GetConfig()
 	if err != nil {
 		return err
 	}

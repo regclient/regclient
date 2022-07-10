@@ -108,6 +108,7 @@ type Host struct {
 	Token       string            `json:"token,omitempty" yaml:"token"`           // token, experimental for specific APIs
 	CredHelper  string            `json:"credHelper,omitempty" yaml:"credHelper"` // credential helper command for requesting logins
 	CredExpire  timejson.Duration `json:"credExpire,omitempty" yaml:"credExpire"` // time until credential expires
+	CredHost    string            `json:"credHost" yaml:"credHost"`               // used when a helper hostname doesn't match Hostname
 	credRefresh time.Time         `json:"-" yaml:"-"`                             // internal use, when to refresh credentials
 	PathPrefix  string            `json:"pathPrefix,omitempty" yaml:"pathPrefix"` // used for mirrors defined within a repository namespace
 	Mirrors     []string          `json:"mirrors,omitempty" yaml:"mirrors"`       // list of other Host Names to use as mirrors
@@ -133,18 +134,36 @@ func HostNew() *Host {
 }
 
 // HostNewName creates a default Host with a hostname
-func HostNewName(host string) *Host {
-	h := Host{
-		Name:     host,
-		TLS:      TLSEnabled,
-		Hostname: host,
-		APIOpts:  map[string]string{},
-	}
-	if host == DockerRegistry || host == DockerRegistryDNS || host == DockerRegistryAuth {
+func HostNewName(name string) *Host {
+	h := HostNew()
+	origName := name
+	// Docker Hub is a special case
+	if name == DockerRegistryAuth || name == DockerRegistryDNS || name == DockerRegistry {
 		h.Name = DockerRegistry
 		h.Hostname = DockerRegistryDNS
+		h.CredHost = DockerRegistryAuth
+		return h
 	}
-	return &h
+	// handle http/https prefix
+	i := strings.Index(name, "://")
+	if i > 0 {
+		scheme := name[:i]
+		name = name[i+3:]
+		if scheme == "http" {
+			h.TLS = TLSDisabled
+		}
+	}
+	// trim any repository path
+	i = strings.Index(name, "/")
+	if i > 0 {
+		name = name[:i]
+	}
+	h.Name = name
+	h.Hostname = name
+	if origName != name {
+		h.CredHost = origName
+	}
+	return h
 }
 
 func (host *Host) GetCred() Cred {
@@ -249,6 +268,17 @@ func (host *Host) Merge(newHost Host, log *logrus.Logger) error {
 			}).Warn("Changing credential expire for registry")
 		}
 		host.CredExpire = newHost.CredExpire
+	}
+
+	if newHost.CredHost != "" {
+		if host.CredHost != "" && host.CredHost != newHost.CredHost {
+			log.WithFields(logrus.Fields{
+				"host": name,
+				"orig": host.CredHost,
+				"new":  newHost.CredHost,
+			}).Warn("Changing credential host for registry")
+		}
+		host.CredHost = newHost.CredHost
 	}
 
 	if newHost.TLS != TLSUndefined {

@@ -2,6 +2,7 @@ package ocidir
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 
@@ -37,6 +38,7 @@ func TestReferrer(t *testing.T) {
 	repo := "ocidir://testrepo"
 	tagName := "v3"
 	aType := "sbom"
+	bType := "notbom"
 	extraAnnot := "org.opencontainers.artifact.sbom.format"
 	extraValue := "SPDX json"
 	digest1 := digest.FromString("example1")
@@ -50,6 +52,7 @@ func TestReferrer(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to get manifest: %v", err)
 	}
+	mDigest := m.GetDescriptor().Digest
 	// artifact being attached
 	artifactAnnot := map[string]string{
 		annotType:  aType,
@@ -94,6 +97,13 @@ func TestReferrer(t *testing.T) {
 			t.Errorf("Failed running ReferrerPut: %v", err)
 			return
 		}
+		rTag2 := r
+		rTag2.Tag = fmt.Sprintf("%s-%s.%s.%s", mDigest.Algorithm().String(), mDigest.Hex(), artifactM.GetDescriptor().Digest.Hex()[:16], bType)
+		err = o.ManifestPut(ctx, rTag2, artifactM)
+		if err != nil {
+			t.Errorf("Failed pushing second tag: %v", err)
+			return
+		}
 	})
 
 	// list referrers to v1
@@ -117,6 +127,12 @@ func TestReferrer(t *testing.T) {
 			rl.Descriptors[0].Digest != artifactM.GetDescriptor().Digest ||
 			!mapStringStringEq(rl.Descriptors[0].Annotations, artifactAnnot) {
 			t.Errorf("returned descriptor mismatch: %v", rl.Descriptors[0])
+		}
+		if len(rl.Descriptors) > 1 && rl.Descriptors[0].Digest == rl.Descriptors[1].Digest {
+			t.Errorf("descriptor list is not de-duplicated")
+		}
+		if len(rl.Tags) < 2 || rl.Tags[0] == rl.Tags[1] {
+			t.Errorf("tag list missing entries, received: %v", rl.Tags)
 		}
 	})
 }

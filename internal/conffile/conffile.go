@@ -37,17 +37,26 @@ func New(opts ...Opt) *File {
 // e.g. dir=".app", name="config.json", sets the fullname to "$HOME/.app/config.json"
 func WithDirName(dir, name string) Opt {
 	return func(f *File) {
-		fullname := filepath.Join(homedir(), dir, name)
-		f.fullname = fullname
+		f.fullname = filepath.Join(homedir(), dir, name)
 	}
 }
 
-// WithEnv sets the fullname to the environment value if defined
-func WithEnv(envVar string) Opt {
+// WithEnvFile sets the fullname to the environment value if defined
+func WithEnvFile(envVar string) Opt {
 	return func(f *File) {
 		val := os.Getenv(envVar)
 		if val != "" {
 			f.fullname = val
+		}
+	}
+}
+
+// WithEnvDir sets the fullname to the environment value + filename if the environment variable is defined
+func WithEnvDir(envVar, name string) Opt {
+	return func(f *File) {
+		val := os.Getenv(envVar)
+		if val != "" {
+			f.fullname = filepath.Join(val, name)
 		}
 	}
 }

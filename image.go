@@ -71,6 +71,7 @@ type tarWriteData struct {
 }
 
 type imageOpt struct {
+	child           bool
 	forceRecursive  bool
 	includeExternal bool
 	digestTags      bool
@@ -81,6 +82,13 @@ type imageOpt struct {
 
 // ImageOpts define options for the Image* commands
 type ImageOpts func(*imageOpt)
+
+// ImageWithChild attempts to copy every manifest and blob even if parent manifests already exist.
+func ImageWithChild() ImageOpts {
+	return func(opts *imageOpt) {
+		opts.child = true
+	}
+}
 
 // ImageWithForceRecursive attempts to copy every manifest and blob even if parent manifests already exist.
 func ImageWithForceRecursive() ImageOpts {
@@ -130,7 +138,7 @@ func (rc *RegClient) ImageCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.R
 	for _, optFn := range opts {
 		optFn(&opt)
 	}
-	return rc.imageCopyOpt(ctx, refSrc, refTgt, types.Descriptor{}, false, &opt)
+	return rc.imageCopyOpt(ctx, refSrc, refTgt, types.Descriptor{}, opt.child, &opt)
 }
 
 func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor, child bool, opt *imageOpt) error {
@@ -193,9 +201,9 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 
 	if !ref.EqualRepository(refSrc, refTgt) {
 		// copy components of the image if the repository is different
-		if m.IsList() {
+		if mi, ok := m.(manifest.Indexer); ok {
 			// manifest lists need to recursively copy nested images by digest
-			pd, err := m.GetManifestList()
+			pd, err := mi.GetManifestList()
 			if err != nil {
 				return err
 			}
@@ -246,10 +254,11 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					return err
 				}
 			}
-		} else {
+		}
+		if mi, ok := m.(manifest.Imager); ok {
 			// copy components of an image
 			// transfer the config
-			cd, err := m.GetConfig()
+			cd, err := mi.GetConfig()
 			if err != nil {
 				// docker schema v1 does not have a config object, ignore if it's missing
 				if !errors.Is(err, types.ErrUnsupportedMediaType) {
@@ -277,7 +286,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 			}
 
 			// copy filesystem layers
-			l, err := m.GetLayers()
+			l, err := mi.GetLayers()
 			if err != nil {
 				return err
 			}
@@ -322,55 +331,14 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 		}
 	}
 
-	// lookup digest tags to include artifacts with image
-	if opt.digestTags {
-		if len(opt.tagList) == 0 {
-			tl, err := rc.TagList(ctx, refSrc)
-			if err != nil {
-				rc.log.WithFields(logrus.Fields{
-					"source": refSrc.Reference,
-					"err":    err,
-				}).Warn("Failed to list tags for digest-tag copy")
-				return err
-			}
-			tags, err := tl.GetTags()
-			if err != nil {
-				rc.log.WithFields(logrus.Fields{
-					"source": refSrc.Reference,
-					"err":    err,
-				}).Warn("Failed to list tags for digest-tag copy")
-				return err
-			}
-			opt.tagList = tags
-		}
-		prefix := fmt.Sprintf("%s-%s", m.GetDescriptor().Digest.Algorithm(), m.GetDescriptor().Digest.Encoded())
-		for _, tag := range opt.tagList {
-			if strings.HasPrefix(tag, prefix) {
-				refTagSrc := refSrc
-				refTagSrc.Tag = tag
-				refTagSrc.Digest = ""
-				refTagTgt := refTgt
-				refTagTgt.Tag = tag
-				refTagTgt.Digest = ""
-				err = rc.imageCopyOpt(ctx, refTagSrc, refTagTgt, types.Descriptor{}, false, opt)
-				if err != nil {
-					rc.log.WithFields(logrus.Fields{
-						"tag": tag,
-						"src": refTagSrc.CommonName(),
-						"tgt": refTagTgt.CommonName(),
-					}).Warn("Failed to copy digest-tag")
-					return err
-				}
-			}
-		}
-	}
-
 	// experimental support for referrers
+	referTags := []string{}
 	if opt.referrers {
 		rl, err := rc.ReferrerList(ctx, refSrc)
 		if err != nil {
 			return err
 		}
+		referTags = append(referTags, rl.Tags...)
 		for _, rDesc := range rl.Descriptors {
 			referSrc := refSrc
 			referSrc.Tag = ""
@@ -399,6 +367,55 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 			err = rc.ReferrerPut(ctx, refTgt, referM)
 			if err != nil {
 				return err
+			}
+		}
+	}
+
+	// lookup digest tags to include artifacts with image
+	if opt.digestTags {
+		if len(opt.tagList) == 0 {
+			tl, err := rc.TagList(ctx, refSrc)
+			if err != nil {
+				rc.log.WithFields(logrus.Fields{
+					"source": refSrc.Reference,
+					"err":    err,
+				}).Warn("Failed to list tags for digest-tag copy")
+				return err
+			}
+			tags, err := tl.GetTags()
+			if err != nil {
+				rc.log.WithFields(logrus.Fields{
+					"source": refSrc.Reference,
+					"err":    err,
+				}).Warn("Failed to list tags for digest-tag copy")
+				return err
+			}
+			opt.tagList = tags
+		}
+		prefix := fmt.Sprintf("%s-%s", m.GetDescriptor().Digest.Algorithm(), m.GetDescriptor().Digest.Encoded())
+		for _, tag := range opt.tagList {
+			if strings.HasPrefix(tag, prefix) {
+				// skip referrers that were copied above
+				for _, referTag := range referTags {
+					if referTag == tag {
+						continue
+					}
+				}
+				refTagSrc := refSrc
+				refTagSrc.Tag = tag
+				refTagSrc.Digest = ""
+				refTagTgt := refTgt
+				refTagTgt.Tag = tag
+				refTagTgt.Digest = ""
+				err = rc.imageCopyOpt(ctx, refTagSrc, refTagTgt, types.Descriptor{}, false, opt)
+				if err != nil {
+					rc.log.WithFields(logrus.Fields{
+						"tag": tag,
+						"src": refTagSrc.CommonName(),
+						"tgt": refTagTgt.CommonName(),
+					}).Warn("Failed to copy digest-tag")
+					return err
+				}
 			}
 		}
 	}
@@ -465,8 +482,8 @@ func (rc *RegClient) ImageExport(ctx context.Context, ref ref.Ref, outStream io.
 	}
 
 	// append to docker manifest with tag, config filename, each layer filename, and layer descriptors
-	if !m.IsList() {
-		conf, err := m.GetConfig()
+	if mi, ok := m.(manifest.Imager); ok {
+		conf, err := mi.GetConfig()
 		if err != nil {
 			return err
 		}
@@ -480,7 +497,7 @@ func (rc *RegClient) ImageExport(ctx context.Context, ref ref.Ref, outStream io.
 			Layers:       []string{},
 			LayerSources: map[digest.Digest]types.Descriptor{},
 		}
-		dl, err := m.GetLayers()
+		dl, err := mi.GetLayers()
 		if err != nil {
 			return err
 		}
@@ -520,6 +537,10 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 		if err != nil {
 			return err
 		}
+		mi, ok := m.(manifest.Imager)
+		if !ok {
+			return fmt.Errorf("manifest doesn't support image methods%.0w", types.ErrUnsupportedMediaType)
+		}
 		// write manifest body by digest
 		mBody, err := m.RawBody()
 		if err != nil {
@@ -535,7 +556,7 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 		}
 
 		// add config
-		confD, err := m.GetConfig()
+		confD, err := mi.GetConfig()
 		// ignore unsupported media type errors
 		if err != nil && !errors.Is(err, types.ErrUnsupportedMediaType) {
 			return err
@@ -548,7 +569,7 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 		}
 
 		// loop over layers
-		layerDL, err := m.GetLayers()
+		layerDL, err := mi.GetLayers()
 		// ignore unsupported media type errors
 		if err != nil && !errors.Is(err, types.ErrUnsupportedMediaType) {
 			return err
@@ -569,6 +590,10 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 		if err != nil {
 			return err
 		}
+		mi, ok := m.(manifest.Indexer)
+		if !ok {
+			return fmt.Errorf("manifest doesn't support index methods%.0w", types.ErrUnsupportedMediaType)
+		}
 		// write manifest body by digest
 		mBody, err := m.RawBody()
 		if err != nil {
@@ -583,7 +608,7 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 			return err
 		}
 		// recurse over entries in the list/index
-		mdl, err := m.GetManifestList()
+		mdl, err := mi.GetManifestList()
 		if err != nil {
 			return err
 		}
@@ -848,8 +873,12 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 	}
 
 	if !push {
+		mi, ok := m.(manifest.Indexer)
+		if !ok {
+			return fmt.Errorf("manifest doesn't support image methods%.0w", types.ErrUnsupportedMediaType)
+		}
 		// for root index, add handler for matching reference (or only reference)
-		dl, err := m.GetManifestList()
+		dl, err := mi.GetManifestList()
 		if err != nil {
 			return err
 		}
@@ -885,7 +914,11 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 		})
 	} else if m.IsList() {
 		// for index/manifest lists, add handlers for each embedded manifest
-		dl, err := m.GetManifestList()
+		mi, ok := m.(manifest.Indexer)
+		if !ok {
+			return fmt.Errorf("manifest doesn't support index methods%.0w", types.ErrUnsupportedMediaType)
+		}
+		dl, err := mi.GetManifestList()
 		if err != nil {
 			return err
 		}
@@ -894,8 +927,12 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 		}
 	} else {
 		// else if a single image/manifest
+		mi, ok := m.(manifest.Imager)
+		if !ok {
+			return fmt.Errorf("manifest doesn't support image methods%.0w", types.ErrUnsupportedMediaType)
+		}
 		// add handler for the config descriptor if it's defined
-		cd, err := m.GetConfig()
+		cd, err := mi.GetConfig()
 		if err == nil {
 			filename := tarOCILayoutDescPath(cd)
 			if !trd.processed[filename] && trd.handlers[filename] == nil {
@@ -907,7 +944,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 			}
 		}
 		// add handlers for each layer
-		layers, err := m.GetLayers()
+		layers, err := mi.GetLayers()
 		if err != nil {
 			return err
 		}

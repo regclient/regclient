@@ -4,6 +4,7 @@ COPY layer1.txt /layer1
 ARG  arg=value
 COPY layer2.txt /layer2
 COPY layer3.txt /layer3
+COPY layer.tar /dir/layer.tar
 ARG  arg_label=value
 LABEL arg_label=${arg_label}
 LABEL version=3

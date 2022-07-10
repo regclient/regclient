@@ -27,10 +27,7 @@ import (
 // Manifest interface is implemented by all supported manifests but
 // many calls are only supported by certain underlying media types.
 type Manifest interface {
-	GetConfig() (types.Descriptor, error)
 	GetDescriptor() types.Descriptor
-	GetLayers() ([]types.Descriptor, error)
-	GetManifestList() ([]types.Descriptor, error)
 	GetOrig() interface{}
 	GetRef() ref.Ref
 	IsList() bool
@@ -40,13 +37,28 @@ type Manifest interface {
 	RawHeaders() (http.Header, error)
 	SetOrig(interface{}) error
 
-	GetConfigDigest() (digest.Digest, error)                         // TODO: deprecate
-	GetDigest() digest.Digest                                        // TODO: deprecate
-	GetMediaType() string                                            // TODO: deprecate
-	GetPlatformDesc(p *platform.Platform) (*types.Descriptor, error) // TODO: deprecate
-	GetPlatformList() ([]*platform.Platform, error)                  // TODO: deprecate
-	GetRateLimit() types.RateLimit                                   // TODO: deprecate
-	HasRateLimit() bool                                              // TODO: deprecate
+	// Deprecated: GetConfig should be accessed using Imager interface
+	GetConfig() (types.Descriptor, error)
+	// Deprecated: GetLayers should be accessed using Imager interface
+	GetLayers() ([]types.Descriptor, error)
+
+	// Deprecated: GetManifestList should be accessed using Indexer interface
+	GetManifestList() ([]types.Descriptor, error)
+
+	// Deprecated: GetConfigDigest should be replaced with GetConfig
+	GetConfigDigest() (digest.Digest, error)
+	// Deprecated: GetDigest should be replaced with GetDescriptor().Digest
+	GetDigest() digest.Digest
+	// Deprecated: GetMediaType should be replaced with GetDescriptor().MediaType
+	GetMediaType() string
+	// Deprecated: GetPlatformDesc method should be replaced with manifest.GetPlatformDesc function
+	GetPlatformDesc(p *platform.Platform) (*types.Descriptor, error)
+	// Deprecated: GetPlatformList method should be replaced with manifest.GetPlatformList function
+	GetPlatformList() ([]*platform.Platform, error)
+	// Deprecated: GetRateLimit method should be replaced with manifest.GetRateLimit function
+	GetRateLimit() types.RateLimit
+	// Deprecated: HasRateLimit method should be replaced with manifest.HasRateLimit function
+	HasRateLimit() bool
 }
 
 type Annotator interface {
@@ -54,9 +66,21 @@ type Annotator interface {
 	SetAnnotation(key, val string) error
 }
 
+type Indexer interface {
+	GetManifestList() ([]types.Descriptor, error)
+	SetManifestList(dl []types.Descriptor) error
+}
+
+type Imager interface {
+	GetConfig() (types.Descriptor, error)
+	GetLayers() ([]types.Descriptor, error)
+	SetConfig(d types.Descriptor) error
+	SetLayers(dl []types.Descriptor) error
+}
+
 type Referrer interface {
 	GetRefers() (*types.Descriptor, error)
-	SetRefers(*types.Descriptor) error
+	SetRefers(d *types.Descriptor) error
 }
 
 type manifestConfig struct {

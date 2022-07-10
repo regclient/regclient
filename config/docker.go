@@ -57,7 +57,7 @@ type dockerAuthConfig struct {
 }
 
 func DockerLoad() ([]Host, error) {
-	cf := conffile.New(conffile.WithDirName(dockerDir, dockerConfFile), conffile.WithEnv(dockerEnv))
+	cf := conffile.New(conffile.WithDirName(dockerDir, dockerConfFile), conffile.WithEnvDir(dockerEnv, dockerConfFile))
 	return dockerParse(cf)
 }
 
@@ -84,14 +84,12 @@ func dockerParse(cf *conffile.File) ([]Host, error) {
 	}
 	// also include default entries for credential helpers
 	for name, helper := range dc.CredentialHelpers {
-		if _, ok := dc.AuthConfigs[name]; ok {
+		h := HostNewName(name)
+		h.CredHelper = dockerHelperPre + helper
+		if _, ok := dc.AuthConfigs[h.Name]; ok {
 			continue // skip fields with auth config
 		}
-		hosts = append(hosts, Host{
-			Name:       name,
-			Hostname:   name,
-			CredHelper: dockerHelperPre + helper,
-		})
+		hosts = append(hosts, *h)
 	}
 	return hosts, nil
 }
@@ -115,36 +113,12 @@ func dockerAuthToHost(name string, conf dockerConfig, auth dockerAuthConfig) (Ho
 		return Host{}, fmt.Errorf("no credentials found for %s", name)
 	}
 
-	// Docker Hub is a special case
-	if name == DockerRegistryAuth {
-		name = DockerRegistry
-		auth.ServerAddress = DockerRegistryDNS
-	}
-	// handle names with a scheme included (https://registry.example.com)
-	tls := TLSEnabled
-	i := strings.Index(name, "://")
-	if i > 0 {
-		scheme := name[:i]
-		if name == auth.ServerAddress {
-			auth.ServerAddress = name[i+3:]
-		}
-		name = name[i+3:]
-		if scheme == "http" {
-			tls = TLSDisabled
-		}
-	}
-	if auth.ServerAddress == "" {
-		auth.ServerAddress = name
-	}
-	return Host{
-		Name:       name,
-		Hostname:   auth.ServerAddress,
-		TLS:        tls,
-		User:       auth.Username,
-		Pass:       auth.Password,
-		Token:      auth.IdentityToken,
-		CredHelper: helper,
-	}, nil
+	h := HostNewName(name)
+	h.User = auth.Username
+	h.Pass = auth.Password
+	h.Token = auth.IdentityToken
+	h.CredHelper = helper
+	return *h, nil
 }
 
 func decodeAuth(authStr string) (string, string, error) {
