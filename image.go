@@ -435,7 +435,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 // index.json: created at top level, single descriptor with org.opencontainers.image.ref.name annotation pointing to the tag
 // manifest.json: created at top level, based on every layer added, only works for a single arch image
 // blobs/$algo/$hash: each content addressable object (manifest, config, or layer), created recursively
-func (rc *RegClient) ImageExport(ctx context.Context, ref ref.Ref, outStream io.Writer) error {
+func (rc *RegClient) ImageExport(ctx context.Context, r ref.Ref, outStream io.Writer) error {
 	var ociIndex v1.Index
 
 	// create tar writer object
@@ -449,10 +449,10 @@ func (rc *RegClient) ImageExport(ctx context.Context, ref ref.Ref, outStream io.
 	}
 
 	// retrieve image manifest
-	m, err := rc.ManifestGet(ctx, ref)
+	m, err := rc.ManifestGet(ctx, r)
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
-			"ref": ref.CommonName(),
+			"ref": r.CommonName(),
 			"err": err,
 		}).Warn("Failed to get manifest")
 		return err
@@ -470,8 +470,8 @@ func (rc *RegClient) ImageExport(ctx context.Context, ref ref.Ref, outStream io.
 	if mDesc.Annotations == nil {
 		mDesc.Annotations = map[string]string{}
 	}
-	mDesc.Annotations[annotationImageName] = ref.CommonName()
-	mDesc.Annotations[annotationRefName] = ref.Tag
+	mDesc.Annotations[annotationImageName] = r.CommonName()
+	mDesc.Annotations[annotationRefName] = r.Tag
 
 	// generate/write an OCI index
 	ociIndex.Versioned = v1.IndexSchemaVersion
@@ -487,9 +487,12 @@ func (rc *RegClient) ImageExport(ctx context.Context, ref ref.Ref, outStream io.
 		if err != nil {
 			return err
 		}
-		refTag := ref
+		refTag := r.ToReg()
 		if refTag.Digest != "" {
 			refTag.Digest = ""
+		}
+		if refTag.Tag == "" {
+			refTag.Tag = "latest"
 		}
 		dockerManifest := dockerTarManifest{
 			RepoTags:     []string{refTag.CommonName()},
@@ -514,7 +517,7 @@ func (rc *RegClient) ImageExport(ctx context.Context, ref ref.Ref, outStream io.
 	}
 
 	// recursively include manifests and nested blobs
-	err = rc.imageExportDescriptor(ctx, ref, mDesc, twd)
+	err = rc.imageExportDescriptor(ctx, r, mDesc, twd)
 	if err != nil {
 		return err
 	}

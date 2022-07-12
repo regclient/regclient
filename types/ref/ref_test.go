@@ -558,3 +558,46 @@ func TestEqual(t *testing.T) {
 		})
 	}
 }
+
+func TestToReg(t *testing.T) {
+	tests := []struct {
+		name   string
+		inRef  string
+		expect string
+	}{
+		{
+			name:   "simple path",
+			inRef:  "ocidir://test",
+			expect: "localhost/test",
+		},
+		{
+			name:   "relative path",
+			inRef:  "ocidir://../test",
+			expect: "localhost/test",
+		},
+		{
+			name:   "upper case",
+			inRef:  "ocidir://Test",
+			expect: "localhost/test",
+		},
+		{
+			name:   "other characters",
+			inRef:  "ocidir://test_-_hello world",
+			expect: "localhost/test-hello-world",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, err := New(tt.inRef)
+			if err != nil {
+				t.Errorf("failed parsing input ref: %v", err)
+				return
+			}
+			outRef := r.ToReg()
+			if outRef.CommonName() != tt.expect {
+				t.Errorf("convert expected %s, received %s", tt.expect, outRef.CommonName())
+			}
+		})
+	}
+
+}
