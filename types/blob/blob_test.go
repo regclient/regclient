@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/opencontainers/go-digest"
@@ -234,6 +235,7 @@ func TestReader(t *testing.T) {
 		if b.GetDescriptor().Size != exLen {
 			t.Errorf("length mismatch, expected %d, received %d", exLen, b.GetDescriptor().Size)
 		}
+
 	})
 
 	t.Run("ociconfig", func(t *testing.T) {
@@ -377,6 +379,96 @@ func TestOCI(t *testing.T) {
 			t.Errorf("config bytes unchanged, received %s", string(raw))
 		}
 	})
+}
+
+func TestTarReader(t *testing.T) {
+	fh, err := os.Open("../../testdata/layer.tar")
+	if err != nil {
+		t.Errorf("failed to open test data: %v", err)
+		return
+	}
+	digger := digest.Canonical.Digester()
+	fhSize, err := io.Copy(digger.Hash(), fh)
+	if err != nil {
+		t.Errorf("failed to build digest on test data: %v", err)
+		return
+	}
+	fh.Close()
+	dig := digger.Digest()
+
+	tests := []struct {
+		name     string
+		opts     []Opts
+		errClose bool
+	}{
+		{
+			name: "no desc",
+			opts: []Opts{},
+		},
+		{
+			name: "good desc",
+			opts: []Opts{
+				WithDesc(types.Descriptor{
+					MediaType: types.MediaTypeOCI1Layer,
+					Size:      fhSize,
+					Digest:    dig,
+				}),
+			},
+		},
+		{
+			name: "bad desc",
+			opts: []Opts{
+				WithDesc(types.Descriptor{
+					MediaType: types.MediaTypeOCI1Layer,
+					Size:      fhSize,
+					Digest:    digest.FromString("bad digest"),
+				}),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fh, err := os.Open("../../testdata/layer.tar")
+			if err != nil {
+				t.Errorf("failed to open test data: %v", err)
+				return
+			}
+			opts := append(tt.opts, WithReader(fh))
+			btr := NewTarReader(opts...)
+			tr, err := btr.GetTarReader()
+			if err != nil {
+				t.Errorf("failed to get tar reader: %v", err)
+				return
+			}
+			for {
+				th, err := tr.Next()
+				if err != nil {
+					if err != io.EOF {
+						t.Errorf("failed to read tar: %v", err)
+						return
+					}
+					break
+				}
+				if th.Size != 0 {
+					b, err := io.ReadAll(tr)
+					if err != nil {
+						t.Errorf("failed to read content: %v", err)
+						break
+					}
+					if int64(len(b)) != th.Size {
+						t.Errorf("content size mismatch, expected %d, received %d", th.Size, len(b))
+					}
+				}
+			}
+			err = btr.Close()
+			if !tt.errClose && err != nil {
+				t.Errorf("failed to close tar reader: %v", err)
+			} else if tt.errClose && err == nil {
+				t.Errorf("close did not fail")
+			}
+		})
+	}
 }
 
 func cmpSliceString(a, b []string) bool {
