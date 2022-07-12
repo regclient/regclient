@@ -44,6 +44,12 @@ func TestParseAuthHeader(t *testing.T) {
 			wantE: nil,
 		},
 		{
+			name:  "Basic unquoted token",
+			in:    `Basic realm=/`,
+			wantC: []Challenge{{authType: "basic", params: map[string]string{"realm": "/"}}},
+			wantE: nil,
+		},
+		{
 			name:  "Missing close quote",
 			in:    `Basic realm="GitHub Package Registry`,
 			wantC: []Challenge{},

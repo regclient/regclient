@@ -31,7 +31,7 @@ var tokenBuffer = time.Second * 5
 
 const (
 	isSpace charLU = 1 << iota
-	isAlphaNum
+	isToken
 )
 
 func init() {
@@ -40,8 +40,8 @@ func init() {
 		if strings.ContainsRune(" \t\r\n", rune(c)) {
 			charLUs[c] |= isSpace
 		}
-		if (rune('a') <= rune(c) && rune(c) <= rune('z')) || (rune('A') <= rune(c) && rune(c) <= rune('Z') || (rune('0') <= rune(c) && rune(c) <= rune('9'))) {
-			charLUs[c] |= isAlphaNum
+		if (rune('a') <= rune(c) && rune(c) <= rune('z')) || (rune('A') <= rune(c) && rune(c) <= rune('Z') || (rune('0') <= rune(c) && rune(c) <= rune('9')) || strings.ContainsRune("-._~+/", rune(c))) {
+			charLUs[c] |= isToken
 		}
 	}
 }
@@ -346,8 +346,8 @@ func ParseAuthHeader(ah string) ([]Challenge, error) {
 				// beginning of string
 				if b == '"' { // TODO: Invalid?
 					state = "quoted"
-				} else if charLUs[b]&isAlphaNum != 0 {
-					// read any alphanum
+				} else if charLUs[b]&isToken != 0 {
+					// read any token
 					eb = append(eb, b)
 				} else if charLUs[b]&isSpace != 0 {
 					// ignore leading whitespace
@@ -356,8 +356,8 @@ func ParseAuthHeader(ah string) ([]Challenge, error) {
 					return nil, ErrParseFailure
 				}
 			} else {
-				if charLUs[b]&isAlphaNum != 0 {
-					// read any alphanum
+				if charLUs[b]&isToken != 0 {
+					// read any token
 					eb = append(eb, b)
 				} else if b == '=' && len(atb) > 0 {
 					// equals when authtype is defined makes this a key
@@ -377,8 +377,8 @@ func ParseAuthHeader(ah string) ([]Challenge, error) {
 			}
 
 		case "value":
-			if charLUs[b]&isAlphaNum != 0 {
-				// read any alphanum
+			if charLUs[b]&isToken != 0 {
+				// read any token
 				vb = append(vb, b)
 			} else if b == '"' && len(vb) == 0 {
 				// quoted value
