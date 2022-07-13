@@ -248,6 +248,7 @@ func WithManifestToOCI() Opts {
 				if err != nil {
 					return err
 				}
+				ociM.Config.MediaType = types.MediaTypeOCI1ImageConfig
 				for i, l := range ociM.Layers {
 					if l.MediaType == types.MediaTypeDocker2LayerGzip {
 						ociM.Layers[i].MediaType = types.MediaTypeOCI1LayerGzip
@@ -255,7 +256,11 @@ func WithManifestToOCI() Opts {
 				}
 				om = ociM
 			}
-			dm.m.SetOrig(om)
+			newM, err := manifest.New(manifest.WithOrig(om))
+			if err != nil {
+				return err
+			}
+			dm.m = newM
 			dm.newDesc = dm.m.GetDescriptor()
 			dm.mod = replaced
 			return nil
