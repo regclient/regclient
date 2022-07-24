@@ -1,6 +1,6 @@
 # regclient Documentation
 
-- [Project Specific Documentation](#project-dpecific-documentation)
+- [Project Specific Documentation](#project-specific-documentation)
 - [Schemes](#schemes)
 - [Template Functions](#template-functions)
 - [FAQ](#faq)

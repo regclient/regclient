@@ -162,6 +162,7 @@ Usage:
 
 Available Commands:
   delete      delete a manifest
+  diff        compare manifests
   digest      retrieve digest of manifest
   get         retrieve manifest or manifest list
   put         push manifest or manifest list
@@ -171,6 +172,9 @@ The `delete` command removes the image manifest from the server.
 This will impact all tags pointing to the same manifest and requires a digest to be included in the image reference to be deleted (e.g. `myimage@sha256:abcd...`).
 Using `--force-tag-dereference` will automatically lookup the digest for a specific tag, and will delete the underlying image which will delete any other tags pointing to the same image.
 Use `tag delete` to remove a single tag.
+
+The `diff` command compares two manifests and shows what has changed between these manifests.
+See also the `blob diff-config` and `blob diff-layer` commands.
 
 The `digest` command is useful to pin the image used within your deployment to an immutable sha256 checksum.
 
@@ -191,8 +195,36 @@ Usage:
   regctl blob [command]
 
 Available Commands:
+  diff-config diff two image configs
+  diff-layer  diff two tar layers
   get         download a blob/layer
   put         upload a blob/layer
+```
+
+The `diff-config` command compares two config blobs, showing the differences between the configs.
+
+The `diff-layer` command compares two layer blobs, showing exactly what changed in the filesystem between the two layers.
+
+Example usage:
+
+```shell
+$ regctl blob diff-layer --context 0 --ignore-timestamp \
+    alpine sha256:627fad6f28f79c3907ad18a4399be4d810c0e1bb503fe3712217145c555b9d2f \
+    alpine sha256:decfdc335d9bae9ca06166e1a4fc2cdf8c2344a42d85c8a1d3f964aab59ecff5
+@@ -6,1 +6,1 @@
+- -rwxr-xr-x 0/0   824904 bin/busybox                              sha256:4a1876b4899ce26853ec5f5eb75248e5a2d9e07369c4435c8d41e83393e04a9b
++ -rwxr-xr-x 0/0   829000 bin/busybox                              sha256:d15929a78a86065c41dd274f2f3f058986b6f5eee4a4c881c83d4fa4179e58ee
+@@ -85,1 +85,1 @@
+- -rw-r--r-- 0/0        8 etc/alpine-release                       sha256:9fa33d932bbf6e5784f15b467a9a10e4ce43993c2341ee742f23ce0196fd73e9
++ -rw-r--r-- 0/0        7 etc/alpine-release                       sha256:922fe0c3de073b01988e23348ea184456161678c5e329e6f34be89be24383f93
+@@ -95,1 +95,1 @@
+- -rw-r--r-- 0/0      103 etc/apk/repositories                     sha256:e44b25ef011171afece2ff51a206b732f84c7f3ddc8291c6dc50cb1572c0ae1c
++ -rw-r--r-- 0/0      103 etc/apk/repositories                     sha256:7b5dba82c50baee0b4aee54038ca2265df42d1f873d1601934bb45daf17311b4
+@@ -101,1 +101,1 @@
+- -rw-r--r-- 0/0      682 etc/group                                sha256:412af628e00706d3c90a5d465d59cc422ff68d79eeb8870c4f33ed6df04b2871
++ -rw-r--r-- 0/0      697 etc/group                                sha256:0632d55a68081065097472fe7bc7c66f0785f3b78f39fb23f622d24a7e09be9f
+@@ -106,1 +106,1 @@
+...
 ```
 
 The `get` command will pull a specific sha256 blob from the registry and returns it to stdout.

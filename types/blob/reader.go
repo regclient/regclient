@@ -18,6 +18,7 @@ type Reader interface {
 	Blob
 	io.ReadCloser
 	ToOCIConfig() (OCIConfig, error)
+	ToTarReader() (TarReader, error)
 }
 
 // reader is the internal struct implementing BlobReader
@@ -161,5 +162,21 @@ func (b *reader) ToOCIConfig() (OCIConfig, error) {
 		WithRawBody(blobBody),
 		WithRef(b.r),
 		WithResp(b.resp),
+	), nil
+}
+
+func (b *reader) ToTarReader() (TarReader, error) {
+	if !b.blobSet {
+		return nil, fmt.Errorf("blob is not defined")
+	}
+	if b.readBytes != 0 {
+		return nil, fmt.Errorf("unable to convert after read has been performed")
+	}
+	return NewTarReader(
+		WithDesc(b.desc),
+		WithHeader(b.rawHeader),
+		WithRef(b.r),
+		WithResp(b.resp),
+		WithReader(b.reader),
 	), nil
 }
