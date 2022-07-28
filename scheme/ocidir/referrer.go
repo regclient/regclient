@@ -2,8 +2,8 @@ package ocidir
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"regexp"
 
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/scheme"
@@ -12,7 +12,6 @@ import (
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/regclient/regclient/types/referrer"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -23,7 +22,8 @@ const (
 // This is EXPERIMENTAL
 func (o *OCIDir) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.ReferrerOpts) (referrer.ReferrerList, error) {
 	rl := referrer.ReferrerList{
-		Ref: r,
+		Ref:  r,
+		Tags: []string{},
 	}
 	// if ref is a tag, run a head request for the digest
 	if r.Digest == "" {
@@ -34,72 +34,39 @@ func (o *OCIDir) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Ref
 		r.Digest = m.GetDescriptor().Digest.String()
 	}
 
-	// use tag listing and convert into an index
+	// pull referrer list by tag
 	dig, err := digest.Parse(r.Digest)
 	if err != nil {
 		return rl, fmt.Errorf("failed to parse digest for referrers: %w", err)
 	}
-	// TODO: add support for filter on type
-	re, err := regexp.Compile(fmt.Sprintf(`^%s-%s\.([0-9a-f]{16})(?:\.([a-z0-9]*)|)$`, regexp.QuoteMeta(dig.Algorithm().String()), regexp.QuoteMeta(stringMax(dig.Hex(), 64))))
+	rr := r
+	rr.Digest = ""
+	rr.Tag = fmt.Sprintf("%s-%s", dig.Algorithm(), stringMax(dig.Hex(), 64))
+	m, err := o.ManifestGet(ctx, rr)
 	if err != nil {
-		return rl, fmt.Errorf("failed to compile regexp for referrers: %w", err)
-	}
-	tl, err := o.TagList(ctx, r)
-	if err != nil {
-		return rl, fmt.Errorf("failed to list tags for referrers: %w", err)
-	}
-	ociM := v1.Index{
-		Versioned: v1.IndexSchemaVersion,
-		MediaType: types.MediaTypeOCI1ManifestList,
-		Manifests: []types.Descriptor{},
-	}
-	foundDigests := map[string]bool{}
-	tags := []string{}
-
-	for _, t := range tl.Tags {
-		match := re.FindStringSubmatch(t)
-		if match != nil {
-			// for each matching entry, make a head request on the tag to build a descriptor for the generated index
-			rt := r
-			rt.Digest = ""
-			rt.Tag = t
-			mCur, err := o.ManifestGet(ctx, rt)
+		if errors.Is(err, types.ErrNotFound) {
+			// empty list, initialize a new manifest
+			rl.Manifest, err = manifest.New(manifest.WithOrig(v1.Index{
+				Versioned: v1.IndexSchemaVersion,
+				MediaType: types.MediaTypeOCI1ManifestList,
+			}))
 			if err != nil {
-				return rl, fmt.Errorf("failed to pull manifest: %s: %w", rt.CommonName(), err)
+				return rl, err
 			}
-			d := mCur.GetDescriptor()
-			// reject unsupported media types
-			if d.MediaType != types.MediaTypeOCI1Manifest && d.MediaType != types.MediaTypeOCI1Artifact {
-				continue
-			}
-			tags = append(tags, t)
-			// ignore multiple matching tags
-			if foundDigests[d.Digest.String()] {
-				continue
-			} else {
-				foundDigests[d.Digest.String()] = true
-			}
-			mCurAnnot, ok := mCur.(manifest.Annotator)
-			if !ok {
-				return rl, fmt.Errorf("manifest does not support annotations: %w", types.ErrUnsupportedMediaType)
-			}
-			// pull up annotations
-			d.Annotations, err = mCurAnnot.GetAnnotations()
-			if err != nil {
-				return rl, fmt.Errorf("failed pulling up annotations: %s: %w", rt.CommonName(), err)
-			}
-			ociM.Manifests = append(ociM.Manifests, d)
+			return rl, nil
 		}
+		return rl, err
 	}
-	mRet, err := manifest.New(manifest.WithOrig(ociM))
-	if err != nil {
-		return rl, fmt.Errorf("failed to build manifest of referrers: %w", err)
+	ociML, ok := m.GetOrig().(v1.Index)
+	if !ok {
+		return rl, fmt.Errorf("manifest is not an OCI index: %s", rr.CommonName())
 	}
-	rl.Manifest = mRet
-	rl.Descriptors = ociM.Manifests
-	rl.Annotations = ociM.Annotations
-	rl.Tags = tags
-
+	// TODO: filter resulting manifest entries
+	// return resulting index
+	rl.Manifest = m
+	rl.Descriptors = ociML.Manifests
+	rl.Annotations = ociML.Annotations
+	rl.Tags = append(rl.Tags, rr.Tag)
 	return rl, nil
 }
 
@@ -114,30 +81,17 @@ func (o *OCIDir) ReferrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 	if r.Digest == "" {
 		r.Digest = mRef.GetDescriptor().Digest.String()
 	}
-	// TODO: support artifact media type
-	mRawOrig, err := m.RawBody()
+
+	// pull existing referrer list
+	rl, err := o.ReferrerList(ctx, r)
 	if err != nil {
 		return err
 	}
-	mDigOrig := m.GetDescriptor().Digest
-	mOrig := m.GetOrig()
-	ociM, err := manifest.OCIManifestFromAny(mOrig)
-	if err != nil {
-		return fmt.Errorf("failed to convert to manifest: %w", err)
-	}
-	// set annotations and refers field in manifest
-	refType := ""
-	mAnnot, ok := m.(manifest.Annotator)
+	rlM, ok := rl.Manifest.GetOrig().(v1.Index)
 	if !ok {
-		return fmt.Errorf("manifest does not support annotations: %w", types.ErrUnsupportedMediaType)
+		return fmt.Errorf("referrer list manifest is not an OCI index for %s", r.CommonName())
 	}
-	annot, err := mAnnot.GetAnnotations()
-	if err != nil {
-		return err
-	}
-	if annot != nil && annot[annotType] != "" {
-		refType = annot[annotType]
-	}
+	// set referrer if missing
 	mRefer, ok := m.(manifest.Referrer)
 	if !ok {
 		return fmt.Errorf("manifest does not support refers: %w", types.ErrUnsupportedMediaType)
@@ -154,44 +108,54 @@ func (o *OCIDir) ReferrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 			return err
 		}
 	}
-	err = manifest.OCIManifestToAny(ociM, &mOrig)
+	// push manifest (by digest, with child flag)
+	rPut := r
+	rPut.Tag = ""
+	rPut.Digest = m.GetDescriptor().Digest.String()
+	err = o.ManifestPut(ctx, rPut, m, scheme.WithManifestChild())
 	if err != nil {
 		return err
-	}
-	err = m.SetOrig(mOrig)
-	if err != nil {
-		return err
-	}
-	mRawNew, err := m.RawBody()
-	if err != nil {
-		return err
-	}
-	mDigNew := m.GetDescriptor().Digest
-	if mDigOrig != mDigNew {
-		o.log.WithFields(logrus.Fields{
-			"orig": string(mRawOrig),
-			"new":  string(mRawNew),
-		}).Warn("digest changed")
 	}
 
-	// set tag to push
-	desc, err := digest.Parse(r.Digest)
-	if err != nil {
-		return fmt.Errorf("digest could not be parsed for %s: %w", r.CommonName(), err)
+	// if entry already exists, return
+	mDesc := m.GetDescriptor()
+	for _, d := range rlM.Manifests {
+		if d.Digest == mDesc.Digest {
+			return nil
+		}
 	}
-	rPush := r
-	rPush.Digest = ""
-	rPush.Tag = fmt.Sprintf("%s-%s.%s", desc.Algorithm().String(), stringMax(desc.Hex(), 64), stringMax(m.GetDescriptor().Digest.Hex(), 16))
-	if refType != "" {
-		rPush.Tag = fmt.Sprintf("%s.%s", rPush.Tag, stringMax(refType, 5))
+	// update descriptor, pulling up artifact type and annotations
+	switch mOrig := m.GetOrig().(type) {
+	case v1.ArtifactManifest:
+		mDesc.Annotations = mOrig.Annotations
+		mDesc.ArtifactType = mOrig.ArtifactType
+	case v1.Manifest:
+		mDesc.Annotations = mOrig.Annotations
+		mDesc.ArtifactType = mOrig.Config.MediaType
+	default:
+		// other types are not supported
+		return fmt.Errorf("invalid manifest for referrer \"%t\": %w", m.GetOrig(), types.ErrUnsupportedMediaType)
+	}
+	// append descriptor to index
+	rlM.Manifests = append(rlM.Manifests, mDesc)
+	err = rl.Manifest.SetOrig(rlM)
+	if err != nil {
+		return err
 	}
 
-	// call manifest put
-	return o.ManifestPut(ctx, rPush, m)
+	// push updated referrer list by tag
+	dig, err := digest.Parse(r.Digest)
+	if err != nil {
+		return fmt.Errorf("failed to parse digest for referrers: %w", err)
+	}
+	rr := r
+	rr.Digest = ""
+	rr.Tag = fmt.Sprintf("%s-%s", dig.Algorithm(), stringMax(dig.Hex(), 64))
+	return o.ManifestPut(ctx, rr, rl.Manifest)
 }
 
 func stringMax(s string, max int) string {
-	if len(s) < max {
+	if len(s) <= max {
 		return s
 	}
 	return s[:max]

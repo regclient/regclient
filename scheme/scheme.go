@@ -78,18 +78,10 @@ func WithManifestChild() ManifestOpts {
 
 // ReferrerConfig is used by schemes to import ReferrerOpts
 type ReferrerConfig struct {
-	ForceGet bool
 }
 
 // ReferrerOpts is used to set options on referrer APIs
 type ReferrerOpts func(*ReferrerConfig)
-
-// WithReferrerForceGet forces a Get request to populate annotations when processing remote tags for referrers
-func WithReferrerForceGet() ReferrerOpts {
-	return func(config *ReferrerConfig) {
-		config.ForceGet = true
-	}
-}
 
 // RepoConfig is used by schemes to import RepoOpts
 type RepoConfig struct {

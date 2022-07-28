@@ -375,6 +375,56 @@ func TestDescriptorEq(t *testing.T) {
 			expectEqual: false,
 			expectSame:  true,
 		},
+		{
+			name: "artifactType eq",
+			d1: Descriptor{
+				MediaType:    MediaTypeDocker2Manifest,
+				Size:         1234,
+				Digest:       digA,
+				ArtifactType: "application/vnd.example.test",
+			},
+			d2: Descriptor{
+				MediaType:    MediaTypeDocker2Manifest,
+				Size:         1234,
+				Digest:       digA,
+				ArtifactType: "application/vnd.example.test",
+			},
+			expectEqual: true,
+			expectSame:  true,
+		},
+		{
+			name: "artifactType diff",
+			d1: Descriptor{
+				MediaType:    MediaTypeDocker2Manifest,
+				Size:         1234,
+				Digest:       digA,
+				ArtifactType: "application/vnd.example.test",
+			},
+			d2: Descriptor{
+				MediaType:    MediaTypeDocker2Manifest,
+				Size:         1234,
+				Digest:       digA,
+				ArtifactType: "application/vnd.example.test2",
+			},
+			expectEqual: false,
+			expectSame:  true,
+		},
+		{
+			name: "artifactType missing",
+			d1: Descriptor{
+				MediaType:    MediaTypeDocker2Manifest,
+				Size:         1234,
+				Digest:       digA,
+				ArtifactType: "application/vnd.example.test",
+			},
+			d2: Descriptor{
+				MediaType: MediaTypeDocker2Manifest,
+				Size:      1234,
+				Digest:    digA,
+			},
+			expectEqual: false,
+			expectSame:  true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
