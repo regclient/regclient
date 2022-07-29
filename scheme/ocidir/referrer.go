@@ -21,6 +21,10 @@ const (
 // ReferrerList returns a list of referrers to a given reference
 // This is EXPERIMENTAL
 func (o *OCIDir) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.ReferrerOpts) (referrer.ReferrerList, error) {
+	config := scheme.ReferrerConfig{}
+	for _, opt := range opts {
+		opt(&config)
+	}
 	rl := referrer.ReferrerList{
 		Ref:  r,
 		Tags: []string{},
@@ -61,12 +65,31 @@ func (o *OCIDir) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Ref
 	if !ok {
 		return rl, fmt.Errorf("manifest is not an OCI index: %s", rr.CommonName())
 	}
-	// TODO: filter resulting manifest entries
-	// return resulting index
+	// update referrer list
 	rl.Manifest = m
 	rl.Descriptors = ociML.Manifests
 	rl.Annotations = ociML.Annotations
 	rl.Tags = append(rl.Tags, rr.Tag)
+
+	// filter resulting descriptor list
+	if config.FilterArtifactType != "" && len(rl.Descriptors) > 0 {
+		for i := len(rl.Descriptors) - 1; i >= 0; i-- {
+			if rl.Descriptors[i].ArtifactType != config.FilterArtifactType {
+				rl.Descriptors = append(rl.Descriptors[:i], rl.Descriptors[i+1:]...)
+			}
+		}
+	}
+	for k, v := range config.FilterAnnotation {
+		if len(rl.Descriptors) > 0 {
+			for i := len(rl.Descriptors) - 1; i >= 0; i-- {
+				if rl.Descriptors[i].Annotations == nil || rl.Descriptors[i].Annotations[k] != v {
+					rl.Descriptors = append(rl.Descriptors[:i], rl.Descriptors[i+1:]...)
+				}
+			}
+
+		}
+	}
+
 	return rl, nil
 }
 

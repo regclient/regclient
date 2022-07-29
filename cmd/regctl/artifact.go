@@ -16,6 +16,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/pkg/archive"
 	"github.com/regclient/regclient/pkg/template"
+	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	v1 "github.com/regclient/regclient/types/oci/v1"
@@ -56,7 +57,7 @@ var artifactGetCmd = &cobra.Command{
 	Aliases:   []string{"pull"},
 	Short:     "download artifacts",
 	Long:      `Download artifacts from the registry.`,
-	Args:      cobra.ExactArgs(1),
+	Args:      cobra.RangeArgs(0, 1),
 	ValidArgs: []string{}, // do not auto complete repository/tag
 	RunE:      runArtifactGet,
 }
@@ -87,6 +88,8 @@ var artifactOpts struct {
 	byDigest     bool
 	configFile   string
 	configMT     string
+	filterAT     string
+	filterAnnot  []string
 	formatList   string
 	formatPut    string
 	manifestMT   string
@@ -96,6 +99,9 @@ var artifactOpts struct {
 }
 
 func init() {
+	artifactGetCmd.Flags().StringVarP(&artifactOpts.filterAT, "filter-artifact-type", "", "", "EXPERIMENTAL: Filter referrers by artifactType")
+	artifactGetCmd.Flags().StringArrayVarP(&artifactOpts.filterAnnot, "filter-annotation", "", []string{}, "EXPERIMENTAL: Filter referrers by annotation (key=value)")
+	artifactGetCmd.Flags().StringVarP(&artifactOpts.refers, "refers", "", "", "EXPERIMENTAL: Get a referrer to the reference")
 	artifactGetCmd.Flags().StringArrayVarP(&artifactOpts.artifactFile, "file", "f", []string{}, "Filter by artifact filename")
 	artifactGetCmd.Flags().StringArrayVarP(&artifactOpts.artifactMT, "media-type", "", []string{}, "Filter by artifact media-type")
 	artifactGetCmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -105,6 +111,8 @@ func init() {
 	artifactGetCmd.Flags().StringVarP(&artifactOpts.outputDir, "output", "o", "", "Output directory for multiple artifacts")
 	artifactGetCmd.Flags().BoolVarP(&artifactOpts.stripDirs, "strip-dirs", "", false, "Strip directories from filenames in output dir")
 
+	artifactListCmd.Flags().StringVarP(&artifactOpts.filterAT, "filter-artifact-type", "", "", "Filter descriptors by artifactType")
+	artifactListCmd.Flags().StringArrayVarP(&artifactOpts.filterAnnot, "filter-annotation", "", []string{}, "Filter descriptors by annotation (key=value)")
 	artifactListCmd.Flags().StringVarP(&artifactOpts.formatList, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 
 	artifactPutCmd.Flags().StringArrayVarP(&artifactOpts.annotations, "annotation", "", []string{}, "Annotation to include on manifest")
@@ -136,6 +144,7 @@ func init() {
 
 func runArtifactGet(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
+	rc := newRegClient()
 
 	// validate inputs
 	// if output dir defined, ensure it exists
@@ -149,13 +158,54 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// pull the manifest
-	r, err := ref.New(args[0])
-	if err != nil {
-		return err
+	r := ref.Ref{}
+	if len(args) == 0 && artifactOpts.refers != "" {
+		rRefer, err := ref.New(artifactOpts.refers)
+		if err != nil {
+			return err
+		}
+		// lookup referrers to a manifest
+		referrerOpts := []scheme.ReferrerOpts{}
+		if artifactOpts.filterAT != "" {
+			referrerOpts = append(referrerOpts, scheme.WithReferrerAT(artifactOpts.filterAT))
+		}
+		if artifactOpts.filterAnnot != nil {
+			af := map[string]string{}
+			for _, kv := range artifactOpts.filterAnnot {
+				kvSplit := strings.SplitN(kv, "=", 2)
+				if len(kvSplit) == 2 {
+					af[kvSplit[0]] = kvSplit[1]
+				} else {
+					af[kv] = ""
+				}
+			}
+			referrerOpts = append(referrerOpts, scheme.WithReferrerAnnotations(af))
+		}
+
+		rl, err := rc.ReferrerList(ctx, rRefer, referrerOpts...)
+		if err != nil {
+			return err
+		}
+		if len(rl.Descriptors) == 0 {
+			return fmt.Errorf("no matching referrers to %s", artifactOpts.refers)
+		} else if len(rl.Descriptors) > 1 {
+			log.Warnf("found %d matching referrers to %s, using first match", len(rl.Descriptors), artifactOpts.refers)
+		}
+		r = rRefer
+		r.Tag = ""
+		r.Digest = rl.Descriptors[0].Digest.String()
+	} else if len(args) > 0 {
+		var err error
+		r, err = ref.New(args[0])
+		if err != nil {
+			return err
+		}
+	} else {
+		return fmt.Errorf("either a reference or refers must be provided")
 	}
-	rc := newRegClient()
 	defer rc.Close(ctx, r)
+
+	// pull the manifest
 	mm, err := rc.ManifestGet(ctx, r)
 	if err != nil {
 		return err
@@ -325,7 +375,24 @@ func runArtifactList(cmd *cobra.Command, args []string) error {
 	rc := newRegClient()
 	defer rc.Close(ctx, r)
 
-	rl, err := rc.ReferrerList(ctx, r)
+	referrerOpts := []scheme.ReferrerOpts{}
+	if artifactOpts.filterAT != "" {
+		referrerOpts = append(referrerOpts, scheme.WithReferrerAT(artifactOpts.filterAT))
+	}
+	if artifactOpts.filterAnnot != nil {
+		af := map[string]string{}
+		for _, kv := range artifactOpts.filterAnnot {
+			kvSplit := strings.SplitN(kv, "=", 2)
+			if len(kvSplit) == 2 {
+				af[kvSplit[0]] = kvSplit[1]
+			} else {
+				af[kv] = ""
+			}
+		}
+		referrerOpts = append(referrerOpts, scheme.WithReferrerAnnotations(af))
+	}
+
+	rl, err := rc.ReferrerList(ctx, r, referrerOpts...)
 	if err != nil {
 		return err
 	}

@@ -20,6 +20,10 @@ import (
 // ReferrerList returns a list of referrers to a given reference
 // This is EXPERIMENTAL
 func (reg *Reg) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.ReferrerOpts) (referrer.ReferrerList, error) {
+	config := scheme.ReferrerConfig{}
+	for _, opt := range opts {
+		opt(&config)
+	}
 	rl := referrer.ReferrerList{
 		Ref:  r,
 		Tags: []string{},
@@ -35,44 +39,33 @@ func (reg *Reg) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Refe
 
 	// TODO: attempt to call the referrer API when approved by OCI
 	// attempt to call the referrer extension API
-	rlAPI, err := reg.referrerListExtAPI(ctx, r)
-	if err == nil {
-		return rlAPI, nil
-	}
-
-	// fall back to pulling by tag
-	dig, err := digest.Parse(r.Digest)
+	rl, err := reg.referrerListExtAPI(ctx, r)
 	if err != nil {
-		return rl, fmt.Errorf("failed to parse digest for referrers: %w", err)
+		rl, err = reg.referrerListTag(ctx, r)
 	}
-	rr := r
-	rr.Digest = ""
-	rr.Tag = fmt.Sprintf("%s-%s", dig.Algorithm(), stringMax(dig.Hex(), 64))
-	m, err := reg.ManifestGet(ctx, rr)
 	if err != nil {
-		if errors.Is(err, types.ErrNotFound) {
-			// empty list, initialize a new manifest
-			rl.Manifest, err = manifest.New(manifest.WithOrig(v1.Index{
-				Versioned: v1.IndexSchemaVersion,
-				MediaType: types.MediaTypeOCI1ManifestList,
-			}))
-			if err != nil {
-				return rl, err
-			}
-			return rl, nil
-		}
 		return rl, err
 	}
-	ociML, ok := m.GetOrig().(v1.Index)
-	if !ok {
-		return rl, fmt.Errorf("manifest is not an OCI index: %s", rr.CommonName())
+
+	// filter resulting descriptor list
+	if config.FilterArtifactType != "" && len(rl.Descriptors) > 0 {
+		for i := len(rl.Descriptors) - 1; i >= 0; i-- {
+			if rl.Descriptors[i].ArtifactType != config.FilterArtifactType {
+				rl.Descriptors = append(rl.Descriptors[:i], rl.Descriptors[i+1:]...)
+			}
+		}
 	}
-	// TODO: filter resulting manifest entries
-	// return resulting index
-	rl.Manifest = m
-	rl.Descriptors = ociML.Manifests
-	rl.Annotations = ociML.Annotations
-	rl.Tags = append(rl.Tags, rr.Tag)
+	for k, v := range config.FilterAnnotation {
+		if len(rl.Descriptors) > 0 {
+			for i := len(rl.Descriptors) - 1; i >= 0; i-- {
+				if rl.Descriptors[i].Annotations == nil || rl.Descriptors[i].Annotations[k] != v {
+					rl.Descriptors = append(rl.Descriptors[:i], rl.Descriptors[i+1:]...)
+				}
+			}
+
+		}
+	}
+
 	return rl, nil
 }
 
@@ -124,6 +117,46 @@ func (reg *Reg) referrerListExtAPI(ctx context.Context, r ref.Ref) (referrer.Ref
 	rl.Manifest = m
 	rl.Descriptors = ociML.Manifests
 	rl.Annotations = ociML.Annotations
+	return rl, nil
+}
+
+func (reg *Reg) referrerListTag(ctx context.Context, r ref.Ref) (referrer.ReferrerList, error) {
+	rl := referrer.ReferrerList{
+		Ref:  r,
+		Tags: []string{},
+	}
+	// fall back to pulling by tag
+	dig, err := digest.Parse(r.Digest)
+	if err != nil {
+		return rl, fmt.Errorf("failed to parse digest for referrers: %w", err)
+	}
+	rr := r
+	rr.Digest = ""
+	rr.Tag = fmt.Sprintf("%s-%s", dig.Algorithm(), stringMax(dig.Hex(), 64))
+	m, err := reg.ManifestGet(ctx, rr)
+	if err != nil {
+		if errors.Is(err, types.ErrNotFound) {
+			// empty list, initialize a new manifest
+			rl.Manifest, err = manifest.New(manifest.WithOrig(v1.Index{
+				Versioned: v1.IndexSchemaVersion,
+				MediaType: types.MediaTypeOCI1ManifestList,
+			}))
+			if err != nil {
+				return rl, err
+			}
+			return rl, nil
+		}
+		return rl, err
+	}
+	ociML, ok := m.GetOrig().(v1.Index)
+	if !ok {
+		return rl, fmt.Errorf("manifest is not an OCI index: %s", rr.CommonName())
+	}
+	// return resulting index
+	rl.Manifest = m
+	rl.Descriptors = ociML.Manifests
+	rl.Annotations = ociML.Annotations
+	rl.Tags = append(rl.Tags, rr.Tag)
 	return rl, nil
 }
 

@@ -78,10 +78,32 @@ func WithManifestChild() ManifestOpts {
 
 // ReferrerConfig is used by schemes to import ReferrerOpts
 type ReferrerConfig struct {
+	FilterArtifactType string
+	FilterAnnotation   map[string]string
 }
 
 // ReferrerOpts is used to set options on referrer APIs
 type ReferrerOpts func(*ReferrerConfig)
+
+// WithReferrerAT filters by a specific artifactType value
+func WithReferrerAT(at string) ReferrerOpts {
+	return func(config *ReferrerConfig) {
+		config.FilterArtifactType = at
+	}
+}
+
+// WithReferrerAnnotations filters by a list of annotations, all of which must match
+func WithReferrerAnnotations(annotations map[string]string) ReferrerOpts {
+	return func(config *ReferrerConfig) {
+		if config.FilterAnnotation == nil {
+			config.FilterAnnotation = annotations
+		} else {
+			for k, v := range annotations {
+				config.FilterAnnotation[k] = v
+			}
+		}
+	}
+}
 
 // RepoConfig is used by schemes to import RepoOpts
 type RepoConfig struct {
