@@ -14,6 +14,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/reqresp"
+	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/docker/schema2"
 	"github.com/regclient/regclient/types/manifest"
@@ -621,6 +622,56 @@ func TestReferrer(t *testing.T) {
 		}
 		if len(rl.Tags) != 0 {
 			t.Errorf("tag list unexpected entries, received: %v", rl.Tags)
+		}
+	})
+	t.Run("List with artifact filter", func(t *testing.T) {
+		r, err := ref.New(tsURLAPI.Host + repoPath + ":" + tagV1)
+		if err != nil {
+			t.Errorf("Failed creating getRef: %v", err)
+			return
+		}
+		rl, err := reg.ReferrerList(ctx, r, scheme.WithReferrerAT(configMTA))
+		if err != nil {
+			t.Errorf("Failed running ReferrerList: %v", err)
+			return
+		}
+		if len(rl.Descriptors) != 1 {
+			t.Errorf("descriptor list mismatch: %v", rl.Descriptors)
+			return
+		}
+		rl, err = reg.ReferrerList(ctx, r, scheme.WithReferrerAT("application/vnd.example.unknown"))
+		if err != nil {
+			t.Errorf("Failed running ReferrerList: %v", err)
+			return
+		}
+		if len(rl.Descriptors) > 0 {
+			t.Errorf("unexpected descriptors: %v", rl.Descriptors)
+			return
+		}
+	})
+	t.Run("List with annotation filter", func(t *testing.T) {
+		r, err := ref.New(tsURLAPI.Host + repoPath + ":" + tagV1)
+		if err != nil {
+			t.Errorf("Failed creating getRef: %v", err)
+			return
+		}
+		rl, err := reg.ReferrerList(ctx, r, scheme.WithReferrerAnnotations(map[string]string{extraAnnot: extraValue}))
+		if err != nil {
+			t.Errorf("Failed running ReferrerList: %v", err)
+			return
+		}
+		if len(rl.Descriptors) != 1 {
+			t.Errorf("descriptor list mismatch: %v", rl.Descriptors)
+			return
+		}
+		rl, err = reg.ReferrerList(ctx, r, scheme.WithReferrerAnnotations(map[string]string{extraAnnot: "unknown value"}))
+		if err != nil {
+			t.Errorf("Failed running ReferrerList: %v", err)
+			return
+		}
+		if len(rl.Descriptors) > 0 {
+			t.Errorf("unexpected descriptors: %v", rl.Descriptors)
+			return
 		}
 	})
 }

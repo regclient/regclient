@@ -8,6 +8,7 @@ import (
 
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/internal/rwfs"
+	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	v1 "github.com/regclient/regclient/types/oci/v1"
@@ -151,6 +152,56 @@ func TestReferrer(t *testing.T) {
 		}
 		if len(rl.Tags) != 1 || rl.Tags[0] != tagRef {
 			t.Errorf("tag list missing entries, received: %v", rl.Tags)
+		}
+	})
+	t.Run("List with artifact filter", func(t *testing.T) {
+		r, err := ref.New(repo + ":" + tagName)
+		if err != nil {
+			t.Errorf("Failed creating getRef: %v", err)
+			return
+		}
+		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerAT(types.MediaTypeOCI1ImageConfig))
+		if err != nil {
+			t.Errorf("Failed running ReferrerList: %v", err)
+			return
+		}
+		if len(rl.Descriptors) <= 0 {
+			t.Errorf("descriptor list missing")
+			return
+		}
+		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerAT("application/vnd.example.unknown"))
+		if err != nil {
+			t.Errorf("Failed running ReferrerList: %v", err)
+			return
+		}
+		if len(rl.Descriptors) > 0 {
+			t.Errorf("unexpected descriptors")
+			return
+		}
+	})
+	t.Run("List with annotation filter", func(t *testing.T) {
+		r, err := ref.New(repo + ":" + tagName)
+		if err != nil {
+			t.Errorf("Failed creating getRef: %v", err)
+			return
+		}
+		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerAnnotations(map[string]string{extraAnnot: extraValue}))
+		if err != nil {
+			t.Errorf("Failed running ReferrerList: %v", err)
+			return
+		}
+		if len(rl.Descriptors) <= 0 {
+			t.Errorf("descriptor list missing")
+			return
+		}
+		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerAnnotations(map[string]string{extraAnnot: "unknown value"}))
+		if err != nil {
+			t.Errorf("Failed running ReferrerList: %v", err)
+			return
+		}
+		if len(rl.Descriptors) > 0 {
+			t.Errorf("unexpected descriptors")
+			return
 		}
 	})
 }
