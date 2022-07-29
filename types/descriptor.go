@@ -40,6 +40,9 @@ type Descriptor struct {
 	// Platform describes the platform which the image in the manifest runs on.
 	// This should only be used when referring to a manifest.
 	Platform *platform.Platform `json:"platform,omitempty"`
+
+	// ArtifactType is the media type of the artifact this descriptor refers to.
+	ArtifactType string `json:"artifactType,omitempty"`
 }
 
 var emptyDigest = digest.FromBytes([]byte{})
@@ -70,6 +73,9 @@ func (d Descriptor) GetData() ([]byte, error) {
 // Equal indicates the two descriptors are identical, effectively a DeepEqual.
 func (d Descriptor) Equal(d2 Descriptor) bool {
 	if !d.Same(d2) {
+		return false
+	}
+	if d.ArtifactType != d2.ArtifactType {
 		return false
 	}
 	if d.Platform == nil || d2.Platform == nil {
@@ -120,6 +126,9 @@ func (d Descriptor) Same(d2 Descriptor) bool {
 func (d Descriptor) MarshalPrettyTW(tw *tabwriter.Writer, prefix string) error {
 	fmt.Fprintf(tw, "%sDigest:\t%s\n", prefix, string(d.Digest))
 	fmt.Fprintf(tw, "%sMediaType:\t%s\n", prefix, d.MediaType)
+	if d.ArtifactType != "" {
+		fmt.Fprintf(tw, "%sArtifactType:\t%s\n", prefix, d.ArtifactType)
+	}
 	switch d.MediaType {
 	case MediaTypeDocker1Manifest, MediaTypeDocker1ManifestSigned,
 		MediaTypeDocker2Manifest, MediaTypeDocker2ManifestList,

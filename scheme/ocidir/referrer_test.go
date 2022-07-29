@@ -16,7 +16,6 @@ import (
 )
 
 func TestReferrer(t *testing.T) {
-	// setup http server with and without API support
 	ctx := context.Background()
 	fsOS := rwfs.OSNew("")
 	fsMem := rwfs.MemNew()
@@ -53,6 +52,7 @@ func TestReferrer(t *testing.T) {
 		t.Errorf("failed to get manifest: %v", err)
 	}
 	mDigest := m.GetDescriptor().Digest
+	tagRef := fmt.Sprintf("%s-%s", mDigest.Algorithm().String(), mDigest.Hex())
 	// artifact being attached
 	artifactAnnot := map[string]string{
 		annotType:  aType,
@@ -85,6 +85,24 @@ func TestReferrer(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed extracting raw body from artifact: %v", err)
 	}
+
+	// list empty
+	t.Run("List empty NoAPI", func(t *testing.T) {
+		r, err := ref.New(repo + ":" + tagName)
+		if err != nil {
+			t.Errorf("Failed creating getRef: %v", err)
+			return
+		}
+		rl, err := o.ReferrerList(ctx, r)
+		if err != nil {
+			t.Errorf("Failed running ReferrerList: %v", err)
+			return
+		}
+		if len(rl.Descriptors) > 0 {
+			t.Errorf("descriptors exist")
+			return
+		}
+	})
 
 	// attach to v1 image
 	t.Run("Put", func(t *testing.T) {
@@ -131,7 +149,7 @@ func TestReferrer(t *testing.T) {
 		if len(rl.Descriptors) > 1 && rl.Descriptors[0].Digest == rl.Descriptors[1].Digest {
 			t.Errorf("descriptor list is not de-duplicated")
 		}
-		if len(rl.Tags) < 2 || rl.Tags[0] == rl.Tags[1] {
+		if len(rl.Tags) != 1 || rl.Tags[0] != tagRef {
 			t.Errorf("tag list missing entries, received: %v", rl.Tags)
 		}
 	})

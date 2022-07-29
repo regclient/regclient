@@ -16,7 +16,6 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/pkg/archive"
 	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	v1 "github.com/regclient/regclient/types/oci/v1"
@@ -88,7 +87,6 @@ var artifactOpts struct {
 	byDigest     bool
 	configFile   string
 	configMT     string
-	forceGet     bool
 	formatList   string
 	formatPut    string
 	manifestMT   string
@@ -107,7 +105,6 @@ func init() {
 	artifactGetCmd.Flags().StringVarP(&artifactOpts.outputDir, "output", "o", "", "Output directory for multiple artifacts")
 	artifactGetCmd.Flags().BoolVarP(&artifactOpts.stripDirs, "strip-dirs", "", false, "Strip directories from filenames in output dir")
 
-	artifactListCmd.Flags().BoolVarP(&artifactOpts.forceGet, "force-get", "", false, "Force get of manifests to populate annotations")
 	artifactListCmd.Flags().StringVarP(&artifactOpts.formatList, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 
 	artifactPutCmd.Flags().StringArrayVarP(&artifactOpts.annotations, "annotation", "", []string{}, "Annotation to include on manifest")
@@ -328,12 +325,7 @@ func runArtifactList(cmd *cobra.Command, args []string) error {
 	rc := newRegClient()
 	defer rc.Close(ctx, r)
 
-	referrerOpts := []scheme.ReferrerOpts{}
-	if artifactOpts.forceGet {
-		referrerOpts = append(referrerOpts, scheme.WithReferrerForceGet())
-	}
-
-	rl, err := rc.ReferrerList(ctx, r, referrerOpts...)
+	rl, err := rc.ReferrerList(ctx, r)
 	if err != nil {
 		return err
 	}
