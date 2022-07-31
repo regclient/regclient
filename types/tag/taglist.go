@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -27,6 +29,7 @@ type tagCommon struct {
 	orig      interface{}
 	rawHeader http.Header
 	rawBody   []byte
+	url       *url.URL
 }
 
 // DockerList is returned from registry/2.0 API's
@@ -47,6 +50,7 @@ type tagConfig struct {
 	raw    []byte
 	header http.Header
 	tags   []string
+	url    *url.URL
 }
 
 // Opts defines options for creating a new tag
@@ -55,11 +59,12 @@ type Opts func(*tagConfig)
 // New creates a tag list from options
 // Tags may be provided directly, or they will be parsed from the raw input based on the media type
 func New(opts ...Opts) (*List, error) {
-	conf := tagConfig{
-		mt: "application/json",
-	}
+	conf := tagConfig{}
 	for _, opt := range opts {
 		opt(&conf)
+	}
+	if conf.mt == "" {
+		conf.mt = "application/json"
 	}
 	tl := List{}
 	tc := tagCommon{
@@ -67,21 +72,24 @@ func New(opts ...Opts) (*List, error) {
 		mt:        conf.mt,
 		rawHeader: conf.header,
 		rawBody:   conf.raw,
+		url:       conf.url,
 	}
 	if len(conf.tags) > 0 {
 		tl.Tags = conf.tags
 	}
-	mt := strings.Split(conf.mt, ";")[0] // "application/json; charset=utf-8" -> "application/json"
-	switch mt {
-	case "application/json", "text/plain":
-		err := json.Unmarshal(conf.raw, &tl)
-		if err != nil {
-			return nil, err
+	if len(conf.raw) > 0 {
+		mt := strings.Split(conf.mt, ";")[0] // "application/json; charset=utf-8" -> "application/json"
+		switch mt {
+		case "application/json", "text/plain":
+			err := json.Unmarshal(conf.raw, &tl)
+			if err != nil {
+				return nil, err
+			}
+		case types.MediaTypeOCI1ManifestList:
+			// noop
+		default:
+			return nil, fmt.Errorf("%w: media type: %s, reference: %s", types.ErrUnsupportedMediaType, conf.mt, conf.ref.CommonName())
 		}
-	case types.MediaTypeOCI1ManifestList:
-		// noop
-	default:
-		return nil, fmt.Errorf("%w: media type: %s, reference: %s", types.ErrUnsupportedMediaType, conf.mt, conf.ref.CommonName())
 	}
 	tl.tagCommon = tc
 
@@ -116,11 +124,66 @@ func WithRef(ref ref.Ref) Opts {
 	}
 }
 
+// WithResp includes the response from an http request
+func WithResp(resp *http.Response) Opts {
+	return func(tConf *tagConfig) {
+		if len(tConf.raw) == 0 {
+			body, err := io.ReadAll(resp.Body)
+			if err == nil {
+				tConf.raw = body
+			}
+		}
+		if tConf.header == nil {
+			tConf.header = resp.Header
+		}
+		if tConf.mt == "" && resp.Header != nil {
+			tConf.mt = resp.Header.Get("Content-Type")
+		}
+		if tConf.url == nil {
+			tConf.url = resp.Request.URL
+		}
+	}
+}
+
 // WithTags provides the parsed tags for the tag list
 func WithTags(tags []string) Opts {
 	return func(tConf *tagConfig) {
 		tConf.tags = tags
 	}
+}
+
+// Append extends a tag list with another
+func (l *List) Append(add *List) error {
+	// verify two lists are compatible
+	if l.mt != add.mt || !ref.EqualRepository(l.r, add.r) || l.Name != add.Name {
+		return fmt.Errorf("unable to append, lists are incompatible")
+	}
+	if add.orig != nil {
+		l.orig = add.orig
+	}
+	if add.rawBody != nil {
+		l.rawBody = add.rawBody
+	}
+	if add.rawHeader != nil {
+		l.rawHeader = add.rawHeader
+	}
+	if add.url != nil {
+		l.url = add.url
+	}
+	l.Tags = append(l.Tags, add.Tags...)
+	if add.Children != nil {
+		l.Children = append(l.Children, add.Children...)
+	}
+	if add.Manifests != nil {
+		if l.Manifests == nil {
+			l.Manifests = add.Manifests
+		} else {
+			for k, v := range add.Manifests {
+				l.Manifests[k] = v
+			}
+		}
+	}
+	return nil
 }
 
 // GetOrig returns the underlying tag data structure if defined
@@ -148,6 +211,11 @@ func (t tagCommon) RawBody() ([]byte, error) {
 // RawHeaders returns the received http headers
 func (t tagCommon) RawHeaders() (http.Header, error) {
 	return t.rawHeader, nil
+}
+
+// GetURL returns the URL of the request
+func (t tagCommon) GetURL() *url.URL {
+	return t.url
 }
 
 // GetTags returns the tags from a list
