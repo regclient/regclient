@@ -188,6 +188,9 @@ func EqualRegistry(a, b Ref) bool {
 		return a.Registry == b.Registry
 	case "ocidir":
 		return a.Path == b.Path
+	case "":
+		// both undefined
+		return true
 	default:
 		return false
 	}
@@ -203,6 +206,9 @@ func EqualRepository(a, b Ref) bool {
 		return a.Registry == b.Registry && a.Repository == b.Repository
 	case "ocidir":
 		return a.Path == b.Path
+	case "":
+		// both undefined
+		return true
 	default:
 		return false
 	}
