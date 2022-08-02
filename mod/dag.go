@@ -247,7 +247,7 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 					oc.RootFS.DiffIDs[i] = layer.ucDigest
 				}
 				newHistory := v1.History{
-					Created: &timeNow,
+					Created: &timeStart,
 					Comment: "regclient",
 				}
 				if iConfig < 0 {
