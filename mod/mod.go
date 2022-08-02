@@ -7,7 +7,6 @@ import (
 	"context"
 	"io"
 	"os"
-	"time"
 
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient"
@@ -15,10 +14,6 @@ import (
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
-)
-
-var (
-	timeNow = time.Now()
 )
 
 // Opts defines options for Apply
