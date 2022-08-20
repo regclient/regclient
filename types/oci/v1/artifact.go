@@ -2,19 +2,11 @@ package v1
 
 import (
 	"github.com/regclient/regclient/types"
-	"github.com/regclient/regclient/types/oci"
 )
-
-// ArtifactSchemaVersion is a pre-configured versioned field for manifests
-var ArtifactSchemaVersion = oci.Versioned{
-	SchemaVersion: 2,
-}
 
 // ArtifactManifest defines an OCI Artifact
 // This is EXPERIMENTAL
 type ArtifactManifest struct {
-	oci.Versioned
-
 	// MediaType is the media type of the object this schema refers to.
 	MediaType string `json:"mediaType"`
 
@@ -22,7 +14,7 @@ type ArtifactManifest struct {
 	ArtifactType string `json:"artifactType"`
 
 	// Blobs is a collection of blobs referenced by this manifest.
-	Blobs []types.Descriptor `json:"blobs"`
+	Blobs []types.Descriptor `json:"blobs,omitempty"`
 
 	// Refers indicates this manifest references another manifest
 	Refers *types.Descriptor `json:"refers,omitempty"`

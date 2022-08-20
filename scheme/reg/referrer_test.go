@@ -96,7 +96,6 @@ func TestReferrer(t *testing.T) {
 		extraAnnot: extraValue2,
 	}
 	artifact2 := v1.ArtifactManifest{
-		Versioned:    v1.ArtifactSchemaVersion,
 		MediaType:    types.MediaTypeOCI1Artifact,
 		ArtifactType: configMTB,
 		Blobs: []types.Descriptor{
