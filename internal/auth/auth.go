@@ -654,6 +654,7 @@ func (b *BearerHandler) tryGet() error {
 		req.SetBasicAuth(cred.User, cred.Password)
 	}
 
+	req.Header.Add("User-Agent", b.clientID)
 	req.URL.RawQuery = reqParams.Encode()
 
 	resp, err := b.client.Do(req)
@@ -693,6 +694,7 @@ func (b *BearerHandler) tryPost() error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
+	req.Header.Add("User-Agent", b.clientID)
 
 	resp, err := b.client.Do(req)
 	if err != nil {
