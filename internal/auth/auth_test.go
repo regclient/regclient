@@ -90,6 +90,7 @@ func TestParseAuthHeader(t *testing.T) {
 
 // TestAuth checks the auth interface using a mock http server
 func TestAuth(t *testing.T) {
+	clientID := "testClient"
 	token1Resp, _ := json.Marshal(BearerToken{
 		Token:     "token1",
 		ExpiresIn: 900,
@@ -108,6 +109,9 @@ func TestAuth(t *testing.T) {
 				Name:   "req token1",
 				Method: "POST",
 				Path:   "/token1",
+				Headers: http.Header{
+					"User-Agent": []string{clientID},
+				},
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: 200,
@@ -119,6 +123,9 @@ func TestAuth(t *testing.T) {
 				Name:   "req token2 POST",
 				Method: "POST",
 				Path:   "/token2",
+				Headers: http.Header{
+					"User-Agent": []string{clientID},
+				},
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusNotFound,
@@ -131,6 +138,7 @@ func TestAuth(t *testing.T) {
 				Path:   "/token2",
 				Headers: http.Header{
 					"Authorization": {"Basic dXNlcjpwYXNz"},
+					"User-Agent":    []string{clientID},
 				},
 				Query: map[string][]string{
 					"scope": {"repository:reponame:pull,push"},
@@ -198,6 +206,7 @@ func TestAuth(t *testing.T) {
 		{
 			name: "bearer1",
 			auth: NewAuth(
+				WithClientID(clientID),
 				WithCreds(func(s string) Cred {
 					return Cred{User: "user", Password: "pass"}
 				}),
@@ -222,6 +231,7 @@ func TestAuth(t *testing.T) {
 		{
 			name: "bearer2",
 			auth: NewAuth(
+				WithClientID(clientID),
 				WithCreds(func(s string) Cred {
 					return Cred{User: "user", Password: "pass"}
 				}),
