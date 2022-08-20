@@ -609,7 +609,6 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 
 	if artifactOpts.manifestMT == types.MediaTypeOCI1Artifact {
 		m := v1.ArtifactManifest{
-			Versioned:   v1.ArtifactSchemaVersion,
 			MediaType:   types.MediaTypeOCI1Artifact,
 			Blobs:       blobs,
 			Annotations: annotations,
