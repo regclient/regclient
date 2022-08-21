@@ -2,6 +2,7 @@ package reg
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,9 +18,34 @@ import (
 
 // ManifestDelete removes a manifest by reference (digest) from a registry.
 // This will implicitly delete all tags pointing to that manifest.
-func (reg *Reg) ManifestDelete(ctx context.Context, r ref.Ref) error {
+func (reg *Reg) ManifestDelete(ctx context.Context, r ref.Ref, opts ...scheme.ManifestOpts) error {
 	if r.Digest == "" {
 		return wraperr.New(fmt.Errorf("digest required to delete manifest, reference %s", r.CommonName()), types.ErrMissingDigest)
+	}
+
+	mc := scheme.ManifestConfig{}
+	for _, opt := range opts {
+		opt(&mc)
+	}
+
+	if mc.CheckRefers && mc.Manifest == nil {
+		m, err := reg.ManifestGet(ctx, r)
+		if err != nil {
+			return fmt.Errorf("failed to pull manifest for refers: %w", err)
+		}
+		mc.Manifest = m
+	}
+	if mc.Manifest != nil {
+		if mr, ok := mc.Manifest.(manifest.Refers); ok {
+			rDesc, err := mr.GetRefers()
+			if err == nil && rDesc != nil && rDesc.MediaType != "" && rDesc.Size > 0 {
+				// attempt to delete the referrer, but ignore if the referrer entry wasn't found
+				err = reg.referrerDelete(ctx, r, mc.Manifest)
+				if err != nil && !errors.Is(err, types.ErrNotFound) {
+					return err
+				}
+			}
+		}
 	}
 
 	// build/send request
@@ -199,6 +225,20 @@ func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest,
 	defer resp.Close()
 	if resp.HTTPResponse().StatusCode != 201 {
 		return fmt.Errorf("failed to put manifest %s: %w", r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
+	}
+
+	// update referrers if defined on this manifest
+	if mr, ok := m.(manifest.Refers); ok {
+		mDesc, err := mr.GetRefers()
+		if err != nil {
+			return err
+		}
+		if mDesc != nil && mDesc.MediaType != "" && mDesc.Size > 0 {
+			err = reg.referrerPut(ctx, r, m)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil

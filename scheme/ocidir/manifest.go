@@ -24,9 +24,35 @@ import (
 )
 
 // ManifestDelete removes a manifest, including all tags that point to that manifest
-func (o *OCIDir) ManifestDelete(ctx context.Context, r ref.Ref) error {
+func (o *OCIDir) ManifestDelete(ctx context.Context, r ref.Ref, opts ...scheme.ManifestOpts) error {
 	if r.Digest == "" {
 		return wraperr.New(fmt.Errorf("digest required to delete manifest, reference %s", r.CommonName()), types.ErrMissingDigest)
+	}
+
+	mc := scheme.ManifestConfig{}
+	for _, opt := range opts {
+		opt(&mc)
+	}
+
+	// always check for refers with ocidir
+	if mc.Manifest == nil {
+		m, err := o.ManifestGet(ctx, r)
+		if err != nil {
+			return fmt.Errorf("failed to pull manifest for refers: %w", err)
+		}
+		mc.Manifest = m
+	}
+	if mc.Manifest != nil {
+		if mr, ok := mc.Manifest.(manifest.Refers); ok {
+			rDesc, err := mr.GetRefers()
+			if err == nil && rDesc != nil && rDesc.MediaType != "" && rDesc.Size > 0 {
+				// attempt to delete the referrer, but ignore if the referrer entry wasn't found
+				err = o.referrerDelete(ctx, r, mc.Manifest)
+				if err != nil && !errors.Is(err, types.ErrNotFound) {
+					return err
+				}
+			}
+		}
 	}
 
 	// get index
@@ -228,5 +254,20 @@ func (o *OCIDir) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 		"ref":  r.CommonName(),
 		"file": file,
 	}).Debug("pushed manifest")
+
+	// update referrers if defined on this manifest
+	if mr, ok := m.(manifest.Refers); ok {
+		mDesc, err := mr.GetRefers()
+		if err != nil {
+			return err
+		}
+		if mDesc != nil && mDesc.MediaType != "" && mDesc.Size > 0 {
+			err = o.referrerPut(ctx, r, m)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	return nil
 }

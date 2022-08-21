@@ -10,15 +10,37 @@ import (
 )
 
 type manifestOpt struct {
-	d types.Descriptor
+	d          types.Descriptor
+	schemeOpts []scheme.ManifestOpts
 }
 
 // ManifestOpts define options for the Manifest* commands
 type ManifestOpts func(*manifestOpt)
 
-// ManifestWithDesc includes the descriptor for ManifestGet.
+// WithManifest passes a manifest to ManifestDelete.
+func WithManifest(m manifest.Manifest) ManifestOpts {
+	return func(opts *manifestOpt) {
+		opts.schemeOpts = append(opts.schemeOpts, scheme.WithManifest(m))
+	}
+}
+
+// WithManifestCheckRefers checks for refers field on ManifestDelete.
+func WithManifestCheckRefers() ManifestOpts {
+	return func(opts *manifestOpt) {
+		opts.schemeOpts = append(opts.schemeOpts, scheme.WithManifestCheckRefers())
+	}
+}
+
+// WithManifestChild for ManifestPut.
+func WithManifestChild() ManifestOpts {
+	return func(opts *manifestOpt) {
+		opts.schemeOpts = append(opts.schemeOpts, scheme.WithManifestChild())
+	}
+}
+
+// WithManifestDesc includes the descriptor for ManifestGet.
 // This is used to automatically extract a Data field if available.
-func ManifestWithDesc(d types.Descriptor) ManifestOpts {
+func WithManifestDesc(d types.Descriptor) ManifestOpts {
 	return func(opts *manifestOpt) {
 		opts.d = d
 	}
@@ -27,17 +49,21 @@ func ManifestWithDesc(d types.Descriptor) ManifestOpts {
 // ManifestDelete removes a manifest, including all tags pointing to that registry
 // The reference must include the digest to delete (see TagDelete for deleting a tag)
 // All tags pointing to the manifest will be deleted
-func (rc *RegClient) ManifestDelete(ctx context.Context, r ref.Ref) error {
+func (rc *RegClient) ManifestDelete(ctx context.Context, r ref.Ref, opts ...ManifestOpts) error {
+	opt := manifestOpt{schemeOpts: []scheme.ManifestOpts{}}
+	for _, fn := range opts {
+		fn(&opt)
+	}
 	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
 		return err
 	}
-	return schemeAPI.ManifestDelete(ctx, r)
+	return schemeAPI.ManifestDelete(ctx, r, opt.schemeOpts...)
 }
 
 // ManifestGet retrieves a manifest
 func (rc *RegClient) ManifestGet(ctx context.Context, r ref.Ref, opts ...ManifestOpts) (manifest.Manifest, error) {
-	opt := manifestOpt{}
+	opt := manifestOpt{schemeOpts: []scheme.ManifestOpts{}}
 	for _, fn := range opts {
 		fn(&opt)
 	}
@@ -70,10 +96,14 @@ func (rc *RegClient) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Mani
 
 // ManifestPut pushes a manifest
 // Any descriptors referenced by the manifest typically need to be pushed first
-func (rc *RegClient) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest, opts ...scheme.ManifestOpts) error {
+func (rc *RegClient) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest, opts ...ManifestOpts) error {
+	opt := manifestOpt{schemeOpts: []scheme.ManifestOpts{}}
+	for _, fn := range opts {
+		fn(&opt)
+	}
 	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
 		return err
 	}
-	return schemeAPI.ManifestPut(ctx, r, m, opts...)
+	return schemeAPI.ManifestPut(ctx, r, m, opt.schemeOpts...)
 }

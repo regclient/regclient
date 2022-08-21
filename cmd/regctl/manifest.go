@@ -84,11 +84,13 @@ var manifestOpts struct {
 	formatPut     string
 	list          bool
 	platform      string
+	refers        bool
 	requireList   bool
 }
 
 func init() {
 	manifestDeleteCmd.Flags().BoolVarP(&manifestOpts.forceTagDeref, "force-tag-dereference", "", false, "Dereference the a tag to a digest, this is unsafe")
+	manifestDeleteCmd.Flags().BoolVarP(&manifestOpts.refers, "refers", "", false, "Check for refers, recommended when deleting artifacts")
 
 	manifestDiffCmd.Flags().IntVarP(&manifestOpts.diffCtx, "context", "", 3, "Lines of context")
 	manifestDiffCmd.Flags().BoolVarP(&manifestOpts.diffFullCtx, "context-full", "", false, "Show all lines of context")
@@ -141,7 +143,7 @@ func getManifest(ctx context.Context, rc *regclient.RegClient, r ref.Ref) (manif
 		if err != nil {
 			return m, fmt.Errorf("failed to lookup platform specific digest: %w", err)
 		}
-		m, err = rc.ManifestGet(ctx, r, regclient.ManifestWithDesc(*desc))
+		m, err = rc.ManifestGet(ctx, r, regclient.WithManifestDesc(*desc))
 		if err != nil {
 			return m, fmt.Errorf("failed to pull platform specific digest: %w", err)
 		}
@@ -222,8 +224,12 @@ func runManifestDelete(cmd *cobra.Command, args []string) error {
 		"repo":   r.Repository,
 		"digest": r.Digest,
 	}).Debug("Manifest delete")
+	mOpts := []regclient.ManifestOpts{}
+	if manifestOpts.refers {
+		mOpts = append(mOpts, regclient.WithManifestCheckRefers())
+	}
 
-	err = rc.ManifestDelete(ctx, r)
+	err = rc.ManifestDelete(ctx, r, mOpts...)
 	if err != nil {
 		return err
 	}

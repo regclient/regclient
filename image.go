@@ -18,7 +18,6 @@ import (
 
 	digest "github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/pkg/archive"
-	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/docker/schema2"
 	"github.com/regclient/regclient/types/manifest"
@@ -142,9 +141,9 @@ func (rc *RegClient) ImageCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.R
 }
 
 func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor, child bool, opt *imageOpt) error {
-	mOpts := []scheme.ManifestOpts{}
+	mOpts := []ManifestOpts{}
 	if child {
-		mOpts = append(mOpts, scheme.WithManifestChild())
+		mOpts = append(mOpts, WithManifestChild())
 	}
 	// check if scheme/refTgt prefers parent manifests pushed first
 	// if so, this should automatically set forceRecursive
@@ -178,7 +177,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 	}
 
 	// get the manifest for the source
-	m, err := rc.ManifestGet(ctx, refSrc, ManifestWithDesc(d))
+	m, err := rc.ManifestGet(ctx, refSrc, WithManifestDesc(d))
 	if err != nil {
 		rc.log.WithFields(logrus.Fields{
 			"ref": refSrc.Reference,
@@ -331,7 +330,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 		}
 	}
 
-	// experimental support for referrers
+	// EXPERIMENTAL support for referrers
 	referTags := []string{}
 	if opt.referrers {
 		rl, err := rc.ReferrerList(ctx, refSrc)
@@ -353,19 +352,6 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					"src":    referSrc.CommonName(),
 					"tgt":    referTgt.CommonName(),
 				}).Warn("Failed to copy referrer")
-				return err
-			}
-			referM, err := rc.ManifestGet(ctx, referTgt)
-			if err != nil {
-				rc.log.WithFields(logrus.Fields{
-					"digest": rDesc.Digest.String(),
-					"src":    referSrc.CommonName(),
-					"tgt":    referTgt.CommonName(),
-				}).Warn("Failed to copy referrer")
-				return err
-			}
-			err = rc.ReferrerPut(ctx, refTgt, referM)
-			if err != nil {
 				return err
 			}
 		}
@@ -536,7 +522,7 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 	case types.MediaTypeDocker1Manifest, types.MediaTypeDocker1ManifestSigned, types.MediaTypeDocker2Manifest, types.MediaTypeOCI1Manifest:
 		// Handle single platform manifests
 		// retrieve manifest
-		m, err := rc.ManifestGet(ctx, ref, ManifestWithDesc(desc))
+		m, err := rc.ManifestGet(ctx, ref, WithManifestDesc(desc))
 		if err != nil {
 			return err
 		}
@@ -589,7 +575,7 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 	case types.MediaTypeDocker2ManifestList, types.MediaTypeOCI1ManifestList:
 		// handle OCI index and Docker manifest list
 		// retrieve manifest
-		m, err := rc.ManifestGet(ctx, ref, ManifestWithDesc(desc))
+		m, err := rc.ManifestGet(ctx, ref, WithManifestDesc(desc))
 		if err != nil {
 			return err
 		}
@@ -971,9 +957,9 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 			if err == nil {
 				return nil
 			}
-			opts := []scheme.ManifestOpts{}
+			opts := []ManifestOpts{}
 			if child {
-				opts = append(opts, scheme.WithManifestChild())
+				opts = append(opts, WithManifestChild())
 			}
 			return rc.ManifestPut(ctx, mRef, m, opts...)
 		})
