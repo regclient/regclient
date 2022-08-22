@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/url"
 
-	"github.com/opencontainers/go-digest"
+	"github.com/regclient/regclient/internal/httplink"
 	"github.com/regclient/regclient/internal/reghttp"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
@@ -37,9 +37,12 @@ func (reg *Reg) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Refe
 		r.Digest = m.GetDescriptor().Digest.String()
 	}
 
-	// TODO: attempt to call the referrer API when approved by OCI
+	// attempt to call the referrer API
+	rl, err := reg.referrerListAPI(ctx, r, config)
 	// attempt to call the referrer extension API
-	rl, err := reg.referrerListExtAPI(ctx, r)
+	if err != nil {
+		rl, err = reg.referrerListExtAPI(ctx, r, config)
+	}
 	if err != nil {
 		rl, err = reg.referrerListTag(ctx, r)
 	}
@@ -62,20 +65,128 @@ func (reg *Reg) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Refe
 					rl.Descriptors = append(rl.Descriptors[:i], rl.Descriptors[i+1:]...)
 				}
 			}
-
 		}
 	}
 
 	return rl, nil
 }
 
-func (reg *Reg) referrerListExtAPI(ctx context.Context, r ref.Ref) (referrer.ReferrerList, error) {
+func (reg *Reg) referrerListAPI(ctx context.Context, r ref.Ref, config scheme.ReferrerConfig) (referrer.ReferrerList, error) {
+	rl := referrer.ReferrerList{
+		Ref:  r,
+		Tags: []string{},
+	}
+	var link *url.URL
+	var resp reghttp.Resp
+	// loop for paging
+	for {
+		rlAdd, respNext, err := reg.referrerListAPIReq(ctx, r, config, link)
+		if err != nil {
+			return rl, err
+		}
+		if rl.Manifest == nil {
+			rl = rlAdd
+		} else {
+			rl.Descriptors = append(rl.Descriptors, rlAdd.Descriptors...)
+		}
+		resp = respNext
+		if resp.HTTPResponse() == nil {
+			return rl, fmt.Errorf("missing http response")
+		}
+		respHead := resp.HTTPResponse().Header
+		links, err := httplink.Parse((respHead.Values("Link")))
+		if err != nil {
+			return rl, err
+		}
+		next, err := links.Get("rel", "next")
+		if err != nil {
+			// no next link
+			break
+		}
+		link = resp.HTTPResponse().Request.URL
+		if link == nil {
+			return rl, fmt.Errorf("referrers list failed to get URL of previous request")
+		}
+		link, err = link.Parse(next.URI)
+		if err != nil {
+			return rl, fmt.Errorf("referrers list failed to parse Link: %w", err)
+		}
+	}
+	return rl, nil
+}
+
+func (reg *Reg) referrerListAPIReq(ctx context.Context, r ref.Ref, config scheme.ReferrerConfig, link *url.URL) (referrer.ReferrerList, reghttp.Resp, error) {
+	rl := referrer.ReferrerList{
+		Ref:  r,
+		Tags: []string{},
+	}
+	query := url.Values{}
+	if config.FilterArtifactType != "" {
+		query.Set("artifactType", config.FilterArtifactType)
+	}
+	req := &reghttp.Req{
+		Host: r.Registry,
+		APIs: map[string]reghttp.ReqAPI{
+			"": {
+				Method:     "GET",
+				Repository: r.Repository,
+				Path:       "referrers/" + r.Digest,
+				Query:      query,
+			},
+		},
+	}
+	// replace the API if a link is provided
+	if link != nil {
+		req.APIs[""] = reghttp.ReqAPI{
+			Method:     "GET",
+			DirectURL:  link,
+			Repository: r.Repository,
+		}
+	}
+	resp, err := reg.reghttp.Do(ctx, req)
+	if err != nil {
+		return rl, nil, fmt.Errorf("failed to get referrers %s: %w", r.CommonName(), err)
+	}
+	defer resp.Close()
+	if resp.HTTPResponse().StatusCode != 200 {
+		return rl, nil, fmt.Errorf("failed to get referrers %s: %w", r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
+	}
+
+	// read manifest
+	rawBody, err := io.ReadAll(resp)
+	if err != nil {
+		return rl, nil, fmt.Errorf("error reading referrers for %s: %w", r.CommonName(), err)
+	}
+
+	m, err := manifest.New(
+		manifest.WithRef(r),
+		manifest.WithHeader(resp.HTTPResponse().Header),
+		manifest.WithRaw(rawBody),
+	)
+	if err != nil {
+		return rl, nil, err
+	}
+	ociML, ok := m.GetOrig().(v1.Index)
+	if !ok {
+		return rl, nil, fmt.Errorf("unexpected manifest type for referrers: %s, %w", m.GetDescriptor().MediaType, types.ErrUnsupportedMediaType)
+	}
+	rl.Manifest = m
+	rl.Descriptors = ociML.Manifests
+	rl.Annotations = ociML.Annotations
+
+	return rl, resp, nil
+}
+
+func (reg *Reg) referrerListExtAPI(ctx context.Context, r ref.Ref, config scheme.ReferrerConfig) (referrer.ReferrerList, error) {
 	rl := referrer.ReferrerList{
 		Ref:  r,
 		Tags: []string{},
 	}
 	query := url.Values{}
 	query.Set("digest", r.Digest)
+	if config.FilterArtifactType != "" {
+		query.Set("artifactType", config.FilterArtifactType)
+	}
 	req := &reghttp.Req{
 		Host: r.Registry,
 		APIs: map[string]reghttp.ReqAPI{
@@ -125,15 +236,11 @@ func (reg *Reg) referrerListTag(ctx context.Context, r ref.Ref) (referrer.Referr
 		Ref:  r,
 		Tags: []string{},
 	}
-	// fall back to pulling by tag
-	dig, err := digest.Parse(r.Digest)
+	rlTag, err := referrer.FallbackTag(r)
 	if err != nil {
-		return rl, fmt.Errorf("failed to parse digest for referrers: %w", err)
+		return rl, err
 	}
-	rr := r
-	rr.Digest = ""
-	rr.Tag = fmt.Sprintf("%s-%s", dig.Algorithm(), stringMax(dig.Hex(), 64))
-	m, err := reg.ManifestGet(ctx, rr)
+	m, err := reg.ManifestGet(ctx, rlTag)
 	if err != nil {
 		if errors.Is(err, types.ErrNotFound) {
 			// empty list, initialize a new manifest
@@ -150,30 +257,20 @@ func (reg *Reg) referrerListTag(ctx context.Context, r ref.Ref) (referrer.Referr
 	}
 	ociML, ok := m.GetOrig().(v1.Index)
 	if !ok {
-		return rl, fmt.Errorf("manifest is not an OCI index: %s", rr.CommonName())
+		return rl, fmt.Errorf("manifest is not an OCI index: %s", rlTag.CommonName())
 	}
 	// return resulting index
 	rl.Manifest = m
 	rl.Descriptors = ociML.Manifests
 	rl.Annotations = ociML.Annotations
-	rl.Tags = append(rl.Tags, rr.Tag)
+	rl.Tags = append(rl.Tags, rlTag.Tag)
 	return rl, nil
 }
 
-// ReferrerPut pushes a new referrer associated with a given reference
-// This is EXPERIMENTAL
-func (reg *Reg) ReferrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest) error {
-	// get descriptor for ref
-	mRef, err := reg.ManifestHead(ctx, r)
-	if err != nil {
-		return err
-	}
-	if r.Digest == "" {
-		r.Digest = mRef.GetDescriptor().Digest.String()
-	}
-
-	// set referrer if missing
-	mRefer, ok := m.(manifest.Referrer)
+// referrerDelete deletes a referrer associated with a manifest
+func (reg *Reg) referrerDelete(ctx context.Context, r ref.Ref, m manifest.Manifest) error {
+	// get refers field
+	mRefer, ok := m.(manifest.Refers)
 	if !ok {
 		return fmt.Errorf("manifest does not support refers: %w", types.ErrUnsupportedMediaType)
 	}
@@ -182,76 +279,112 @@ func (reg *Reg) ReferrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest)
 		return err
 	}
 	// validate/set referrer descriptor
-	mRefDesc := mRef.GetDescriptor()
-	if refers == nil || refers.MediaType != mRefDesc.MediaType || refers.Digest != mRefDesc.Digest || refers.Size != mRefDesc.Size {
-		err = mRefer.SetRefers(&mRefDesc)
-		if err != nil {
-			return err
-		}
+	if refers == nil || refers.MediaType == "" || refers.Digest == "" || refers.Size <= 0 {
+		return fmt.Errorf("refers is not set%.0w", types.ErrNotFound)
 	}
 
-	// push manifest by digest
-	rPut := r
-	rPut.Tag = ""
-	rPut.Digest = m.GetDescriptor().Digest.String()
-	err = reg.ManifestPut(ctx, rPut, m, scheme.WithManifestChild())
-	if err != nil {
-		return err
-	}
+	rRef := r
+	rRef.Tag = ""
+	rRef.Digest = refers.Digest.String()
 
-	// if referrer API is available, return
-	if reg.referrerPing(ctx, r) {
+	// if referrer API is available, nothing to do, return
+	if reg.referrerPing(ctx, rRef) {
 		return nil
 	}
 
 	// fallback to using tag schema for refers
-	rl, err := reg.ReferrerList(ctx, r)
+	rl, err := reg.referrerListTag(ctx, rRef)
 	if err != nil {
 		return err
 	}
-	rlM, ok := rl.Manifest.GetOrig().(v1.Index)
-	if !ok {
-		return fmt.Errorf("referrer list manifest is not an OCI index for %s", r.CommonName())
+	err = rl.Delete(m)
+	if err != nil {
+		return err
 	}
-	// if entry already exists, return
-	mDesc := m.GetDescriptor()
-	for _, d := range rlM.Manifests {
-		if d.Digest == mDesc.Digest {
+	// push updated referrer list by tag
+	rlTag, err := referrer.FallbackTag(rRef)
+	if err != nil {
+		return err
+	}
+	if rl.IsEmpty() {
+		err = reg.TagDelete(ctx, rlTag)
+		if err == nil {
 			return nil
 		}
+		// if delete is not supported, fall back to pushing empty list
 	}
-	// update descriptor, pulling up artifact type and annotations
-	switch mOrig := m.GetOrig().(type) {
-	case v1.ArtifactManifest:
-		mDesc.Annotations = mOrig.Annotations
-		mDesc.ArtifactType = mOrig.ArtifactType
-	case v1.Manifest:
-		mDesc.Annotations = mOrig.Annotations
-		mDesc.ArtifactType = mOrig.Config.MediaType
-	default:
-		// other types are not supported
-		return fmt.Errorf("invalid manifest for referrer \"%t\": %w", m.GetOrig(), types.ErrUnsupportedMediaType)
+	return reg.ManifestPut(ctx, rlTag, rl.Manifest)
+}
+
+// referrerPut pushes a new referrer associated with a manifest
+func (reg *Reg) referrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest) error {
+	// get refers field
+	mRefer, ok := m.(manifest.Refers)
+	if !ok {
+		return fmt.Errorf("manifest does not support refers: %w", types.ErrUnsupportedMediaType)
 	}
-	// append descriptor to index
-	rlM.Manifests = append(rlM.Manifests, mDesc)
-	err = rl.Manifest.SetOrig(rlM)
+	refers, err := mRefer.GetRefers()
 	if err != nil {
 		return err
 	}
-
-	// push updated referrer list by tag
-	dig, err := digest.Parse(r.Digest)
-	if err != nil {
-		return fmt.Errorf("failed to parse digest for referrers: %w", err)
+	// validate/set referrer descriptor
+	if refers == nil || refers.MediaType == "" || refers.Digest == "" || refers.Size <= 0 {
+		return fmt.Errorf("refers is not set%.0w", types.ErrNotFound)
 	}
-	rr := r
-	rr.Digest = ""
-	rr.Tag = fmt.Sprintf("%s-%s", dig.Algorithm(), stringMax(dig.Hex(), 64))
-	return reg.ManifestPut(ctx, rr, rl.Manifest)
+
+	rRef := r
+	rRef.Tag = ""
+	rRef.Digest = refers.Digest.String()
+
+	// if referrer API is available, return
+	if reg.referrerPing(ctx, rRef) {
+		return nil
+	}
+
+	// fallback to using tag schema for refers
+	rl, err := reg.referrerListTag(ctx, rRef)
+	if err != nil {
+		return err
+	}
+	err = rl.Add(m)
+	if err != nil {
+		return err
+	}
+	// push updated referrer list by tag
+	rlTag, err := referrer.FallbackTag(rRef)
+	if err != nil {
+		return err
+	}
+	return reg.ManifestPut(ctx, rlTag, rl.Manifest)
 }
 
+// referrerPing verifies the registry supports the referrers API
 func (reg *Reg) referrerPing(ctx context.Context, r ref.Ref) bool {
-	// TODO: add ping for OCI path when approved
+	return reg.referrerPingAPI(ctx, r) || reg.referrerPingExt(ctx, r)
+}
+
+// referrerPingAPI checks the OCI API
+func (reg *Reg) referrerPingAPI(ctx context.Context, r ref.Ref) bool {
+	req := &reghttp.Req{
+		Host: r.Registry,
+		APIs: map[string]reghttp.ReqAPI{
+			"": {
+				Method:     "GET",
+				Repository: r.Repository,
+				Path:       "referrers/" + r.Digest,
+			},
+		},
+	}
+	resp, err := reg.reghttp.Do(ctx, req)
+	if err != nil {
+		return false
+	}
+	resp.Close()
+	return resp.HTTPResponse().StatusCode == 200
+}
+
+// referrerPingExt checks the extension API
+func (reg *Reg) referrerPingExt(ctx context.Context, r ref.Ref) bool {
 	query := url.Values{}
 	query.Set("digest", r.Digest)
 	req := &reghttp.Req{
@@ -269,13 +402,6 @@ func (reg *Reg) referrerPing(ctx context.Context, r ref.Ref) bool {
 	if err != nil {
 		return false
 	}
-	defer resp.Close()
+	resp.Close()
 	return resp.HTTPResponse().StatusCode == 200
-}
-
-func stringMax(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	return s[:max]
 }

@@ -5,17 +5,12 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/regclient/regclient/types/referrer"
-)
-
-const (
-	annotType = "org.opencontainers.artifact.type"
 )
 
 // ReferrerList returns a list of referrers to a given reference
@@ -39,14 +34,11 @@ func (o *OCIDir) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Ref
 	}
 
 	// pull referrer list by tag
-	dig, err := digest.Parse(r.Digest)
+	rlTag, err := referrer.FallbackTag(r)
 	if err != nil {
-		return rl, fmt.Errorf("failed to parse digest for referrers: %w", err)
+		return rl, err
 	}
-	rr := r
-	rr.Digest = ""
-	rr.Tag = fmt.Sprintf("%s-%s", dig.Algorithm(), stringMax(dig.Hex(), 64))
-	m, err := o.ManifestGet(ctx, rr)
+	m, err := o.ManifestGet(ctx, rlTag)
 	if err != nil {
 		if errors.Is(err, types.ErrNotFound) {
 			// empty list, initialize a new manifest
@@ -63,13 +55,13 @@ func (o *OCIDir) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Ref
 	}
 	ociML, ok := m.GetOrig().(v1.Index)
 	if !ok {
-		return rl, fmt.Errorf("manifest is not an OCI index: %s", rr.CommonName())
+		return rl, fmt.Errorf("manifest is not an OCI index: %s", rlTag.CommonName())
 	}
 	// update referrer list
 	rl.Manifest = m
 	rl.Descriptors = ociML.Manifests
 	rl.Annotations = ociML.Annotations
-	rl.Tags = append(rl.Tags, rr.Tag)
+	rl.Tags = append(rl.Tags, rlTag.Tag)
 
 	// filter resulting descriptor list
 	if config.FilterArtifactType != "" && len(rl.Descriptors) > 0 {
@@ -86,36 +78,16 @@ func (o *OCIDir) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Ref
 					rl.Descriptors = append(rl.Descriptors[:i], rl.Descriptors[i+1:]...)
 				}
 			}
-
 		}
 	}
 
 	return rl, nil
 }
 
-// ReferrerPut pushes a new referrer associated with a given reference
-// This is EXPERIMENTAL
-func (o *OCIDir) ReferrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest) error {
-	// get descriptor for ref
-	mRef, err := o.ManifestHead(ctx, r)
-	if err != nil {
-		return err
-	}
-	if r.Digest == "" {
-		r.Digest = mRef.GetDescriptor().Digest.String()
-	}
-
-	// pull existing referrer list
-	rl, err := o.ReferrerList(ctx, r)
-	if err != nil {
-		return err
-	}
-	rlM, ok := rl.Manifest.GetOrig().(v1.Index)
-	if !ok {
-		return fmt.Errorf("referrer list manifest is not an OCI index for %s", r.CommonName())
-	}
-	// set referrer if missing
-	mRefer, ok := m.(manifest.Referrer)
+// referrerDelete deletes a referrer associated with a manifest
+func (o *OCIDir) referrerDelete(ctx context.Context, r ref.Ref, m manifest.Manifest) error {
+	// get refers field
+	mRefer, ok := m.(manifest.Refers)
 	if !ok {
 		return fmt.Errorf("manifest does not support refers: %w", types.ErrUnsupportedMediaType)
 	}
@@ -124,62 +96,75 @@ func (o *OCIDir) ReferrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 		return err
 	}
 	// validate/set referrer descriptor
-	mRefDesc := mRef.GetDescriptor()
-	if refers == nil || refers.MediaType != mRefDesc.MediaType || refers.Digest != mRefDesc.Digest || refers.Size != mRefDesc.Size {
-		err = mRefer.SetRefers(&mRefDesc)
-		if err != nil {
-			return err
-		}
+	if refers == nil || refers.MediaType == "" || refers.Digest == "" || refers.Size <= 0 {
+		return fmt.Errorf("refers is not set%.0w", types.ErrNotFound)
 	}
-	// push manifest (by digest, with child flag)
-	rPut := r
-	rPut.Tag = ""
-	rPut.Digest = m.GetDescriptor().Digest.String()
-	err = o.ManifestPut(ctx, rPut, m, scheme.WithManifestChild())
+
+	// get descriptor for refers
+	rRef := r
+	rRef.Tag = ""
+	rRef.Digest = refers.Digest.String()
+
+	// pull existing referrer list
+	rl, err := o.ReferrerList(ctx, rRef)
 	if err != nil {
 		return err
 	}
-
-	// if entry already exists, return
-	mDesc := m.GetDescriptor()
-	for _, d := range rlM.Manifests {
-		if d.Digest == mDesc.Digest {
-			return nil
-		}
-	}
-	// update descriptor, pulling up artifact type and annotations
-	switch mOrig := m.GetOrig().(type) {
-	case v1.ArtifactManifest:
-		mDesc.Annotations = mOrig.Annotations
-		mDesc.ArtifactType = mOrig.ArtifactType
-	case v1.Manifest:
-		mDesc.Annotations = mOrig.Annotations
-		mDesc.ArtifactType = mOrig.Config.MediaType
-	default:
-		// other types are not supported
-		return fmt.Errorf("invalid manifest for referrer \"%t\": %w", m.GetOrig(), types.ErrUnsupportedMediaType)
-	}
-	// append descriptor to index
-	rlM.Manifests = append(rlM.Manifests, mDesc)
-	err = rl.Manifest.SetOrig(rlM)
+	err = rl.Delete(m)
 	if err != nil {
 		return err
 	}
 
 	// push updated referrer list by tag
-	dig, err := digest.Parse(r.Digest)
+	rlTag, err := referrer.FallbackTag(rRef)
 	if err != nil {
-		return fmt.Errorf("failed to parse digest for referrers: %w", err)
+		return err
 	}
-	rr := r
-	rr.Digest = ""
-	rr.Tag = fmt.Sprintf("%s-%s", dig.Algorithm(), stringMax(dig.Hex(), 64))
-	return o.ManifestPut(ctx, rr, rl.Manifest)
+	if rl.IsEmpty() {
+		err = o.TagDelete(ctx, rlTag)
+		if err == nil {
+			return nil
+		}
+		// if delete is not supported, fall back to pushing empty list
+	}
+	return o.ManifestPut(ctx, rlTag, rl.Manifest)
 }
 
-func stringMax(s string, max int) string {
-	if len(s) <= max {
-		return s
+// referrerPut pushes a new referrer associated with a given reference
+func (o *OCIDir) referrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest) error {
+	// get refers field
+	mRefer, ok := m.(manifest.Refers)
+	if !ok {
+		return fmt.Errorf("manifest does not support refers: %w", types.ErrUnsupportedMediaType)
 	}
-	return s[:max]
+	refers, err := mRefer.GetRefers()
+	if err != nil {
+		return err
+	}
+	// validate/set referrer descriptor
+	if refers == nil || refers.MediaType == "" || refers.Digest == "" || refers.Size <= 0 {
+		return fmt.Errorf("refers is not set%.0w", types.ErrNotFound)
+	}
+
+	// get descriptor for refers
+	rRef := r
+	rRef.Tag = ""
+	rRef.Digest = refers.Digest.String()
+
+	// pull existing referrer list
+	rl, err := o.ReferrerList(ctx, rRef)
+	if err != nil {
+		return err
+	}
+	err = rl.Add(m)
+	if err != nil {
+		return err
+	}
+
+	// push updated referrer list by tag
+	rlTag, err := referrer.FallbackTag(rRef)
+	if err != nil {
+		return err
+	}
+	return o.ManifestPut(ctx, rlTag, rl.Manifest)
 }

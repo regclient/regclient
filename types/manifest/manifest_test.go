@@ -380,7 +380,6 @@ func TestNew(t *testing.T) {
 			testAnnot: true,
 			testRefer: true,
 			hasAnnot:  true,
-			hasRefer:  true,
 		},
 		{
 			name: "Docker Schema 2 Manifest full desc",
@@ -401,7 +400,6 @@ func TestNew(t *testing.T) {
 			testRefer: true,
 			wantE:     nil,
 			hasAnnot:  true,
-			hasRefer:  true,
 		},
 		{
 			name: "Docker Schema 2 List from Http",
@@ -564,7 +562,6 @@ func TestNew(t *testing.T) {
 			testAnnot: true,
 			testRefer: true,
 			hasAnnot:  true,
-			hasRefer:  true,
 		},
 		{
 			name: "OCI Artifact Orig",
@@ -658,21 +655,22 @@ func TestNew(t *testing.T) {
 				}
 			}
 			if tt.testRefer {
-				mr, ok := m.(Referrer)
+				mr, ok := m.(Refers)
 				if tt.hasRefer {
 					if !ok {
 						t.Errorf("manifest does not support referrer")
-					}
-					err = mr.SetRefers(&rDesc)
-					if err != nil {
-						t.Errorf("failed setting referrer: %v", err)
-					}
-					getDesc, err := mr.GetRefers()
-					if err != nil {
-						t.Errorf("failed getting referrer: %v", err)
-					}
-					if getDesc == nil || getDesc.MediaType != rDesc.MediaType || getDesc.Digest != rDesc.Digest {
-						t.Errorf("referrer did not match, expected %v, received %v", rDesc, getDesc)
+					} else {
+						err = mr.SetRefers(&rDesc)
+						if err != nil {
+							t.Errorf("failed setting referrer: %v", err)
+						}
+						getDesc, err := mr.GetRefers()
+						if err != nil {
+							t.Errorf("failed getting referrer: %v", err)
+						}
+						if getDesc == nil || getDesc.MediaType != rDesc.MediaType || getDesc.Digest != rDesc.Digest {
+							t.Errorf("referrer did not match, expected %v, received %v", rDesc, getDesc)
+						}
 					}
 				} else if ok {
 					t.Errorf("manifest supports referrer")

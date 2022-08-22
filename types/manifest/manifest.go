@@ -78,7 +78,7 @@ type Imager interface {
 	SetLayers(dl []types.Descriptor) error
 }
 
-type Referrer interface {
+type Refers interface {
 	GetRefers() (*types.Descriptor, error)
 	SetRefers(d *types.Descriptor) error
 }
