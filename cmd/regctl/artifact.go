@@ -61,10 +61,9 @@ var artifactGetCmd = &cobra.Command{
 	RunE:      runArtifactGet,
 }
 var artifactListCmd = &cobra.Command{
-	Use:     "list <reference>",
-	Aliases: []string{"ls"},
-	// TODO: remove experimental label when stable
-	Short:     "EXPERIMENTAL: list artifacts that refer to the given reference",
+	Use:       "list <reference>",
+	Aliases:   []string{"ls"},
+	Short:     "list artifacts that refer to the given reference",
 	Long:      `List artifacts that refer to the given reference.`,
 	Args:      cobra.ExactArgs(1),
 	ValidArgs: []string{}, // do not auto complete repository/tag
@@ -98,9 +97,9 @@ var artifactOpts struct {
 }
 
 func init() {
-	artifactGetCmd.Flags().StringVarP(&artifactOpts.refers, "refers", "", "", "EXPERIMENTAL: Get a referrer to the reference")
-	artifactGetCmd.Flags().StringVarP(&artifactOpts.filterAT, "filter-artifact-type", "", "", "EXPERIMENTAL: Filter referrers by artifactType")
-	artifactGetCmd.Flags().StringArrayVarP(&artifactOpts.filterAnnot, "filter-annotation", "", []string{}, "EXPERIMENTAL: Filter referrers by annotation (key=value)")
+	artifactGetCmd.Flags().StringVarP(&artifactOpts.refers, "refers", "", "", "Get a referrer to the reference")
+	artifactGetCmd.Flags().StringVarP(&artifactOpts.filterAT, "filter-artifact-type", "", "", "Filter referrers by artifactType")
+	artifactGetCmd.Flags().StringArrayVarP(&artifactOpts.filterAnnot, "filter-annotation", "", []string{}, "Filter referrers by annotation (key=value)")
 	artifactGetCmd.Flags().StringVarP(&artifactOpts.artifactConfig, "config-file", "", "", "Config filename to output")
 	artifactGetCmd.Flags().StringArrayVarP(&artifactOpts.artifactFile, "file", "f", []string{}, "Filter by artifact filename")
 	artifactGetCmd.Flags().StringArrayVarP(&artifactOpts.artifactFileMT, "file-media-type", "m", []string{}, "Filter by artifact media-type")
@@ -131,8 +130,7 @@ func init() {
 	artifactPutCmd.Flags().StringArrayVarP(&artifactOpts.annotations, "annotation", "", []string{}, "Annotation to include on manifest")
 	artifactPutCmd.Flags().BoolVarP(&artifactOpts.byDigest, "by-digest", "", false, "Push manifest by digest instead of tag")
 	artifactPutCmd.Flags().StringVarP(&artifactOpts.formatPut, "format", "", "", "Format output with go template syntax")
-	// TODO: remove experimental label when stable
-	artifactPutCmd.Flags().StringVarP(&artifactOpts.refers, "refers", "", "", "EXPERIMENTAL: Create a referrer to the reference")
+	artifactPutCmd.Flags().StringVarP(&artifactOpts.refers, "refers", "", "", "Create a referrer to the reference")
 	artifactPutCmd.Flags().BoolVarP(&artifactOpts.stripDirs, "strip-dirs", "", false, "Strip directories from filenames in artifact")
 
 	artifactCmd.AddCommand(artifactGetCmd)
