@@ -64,6 +64,22 @@ The following functions have been added in addition to the defaults available in
 
 ## FAQ
 
+1. Q: How do I use HTTP instead of HTTPS? I'm getting `http: server gave HTTP response to HTTPS client`.
+
+   A: With `regctl` use:
+
+   ```shell
+   regctl registry set --tls disabled <registry>
+   ```
+
+   For `regsync` and `regbot` use:
+
+   ```yaml
+   creds:
+     - registry: registry.example.org:5000
+       tls: disabled
+   ```
+
 1. Q: After deleting tags and images on the registry, I'm still seeing disk space being used.
 
    A: Registries require garbage collection to run to cleanup untagged manifests and unused blobs.
