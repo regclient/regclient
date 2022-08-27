@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -23,6 +24,21 @@ import (
 var imageCmd = &cobra.Command{
 	Use:   "image <cmd>",
 	Short: "manage images",
+}
+var imageCheckBaseCmd = &cobra.Command{
+	Use:     "check-base <image_ref>",
+	Aliases: []string{},
+	Short:   "check if the base image has changed",
+	Long: `Check the base image (found using annotations or an option).
+If the base name is not provided, annotations will be checked in the image.
+If the digest is available, this checks if that matches the base name.
+If the digest is not available, layers of each manifest are compared.
+If the layers match, the config (history and roots) are optionally compared.	
+If the base image does not match, the command exits with a non-zero status.
+Use "-v info" to see more details.`,
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeArgTag,
+	RunE:              runImageCheckBase,
 }
 var imageCopyCmd = &cobra.Command{
 	Use:     "copy <src_image_ref> <dst_image_ref>",
@@ -115,6 +131,9 @@ The other values may be 0 if not provided by the registry.`,
 }
 
 var imageOpts struct {
+	checkBaseRef    string
+	checkBaseDigest string
+	checkSkipConfig bool
 	create          string
 	forceRecursive  bool
 	format          string
@@ -131,6 +150,11 @@ var imageOpts struct {
 
 func init() {
 	imageOpts.modOpts = []mod.Opts{}
+
+	imageCheckBaseCmd.Flags().StringVarP(&imageOpts.checkBaseRef, "base", "", "", "Base image reference (including tag)")
+	imageCheckBaseCmd.Flags().StringVarP(&imageOpts.checkBaseDigest, "digest", "", "", "Base image digest (checks if digest matches base)")
+	imageCheckBaseCmd.Flags().BoolVarP(&imageOpts.checkSkipConfig, "no-config", "", false, "Skip check of config history")
+	imageCheckBaseCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.forceRecursive, "force-recursive", "", false, "Force recursive copy of image, repairs missing nested blobs and manifests")
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.includeExternal, "include-external", "", false, "Include external layers")
@@ -418,6 +442,7 @@ func init() {
 	imageRateLimitCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	imageRateLimitCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
+	imageCmd.AddCommand(imageCheckBaseCmd)
 	imageCmd.AddCommand(imageCopyCmd)
 	imageCmd.AddCommand(imageDeleteCmd)
 	imageCmd.AddCommand(imageDigestCmd)
@@ -428,6 +453,44 @@ func init() {
 	imageCmd.AddCommand(imageModCmd)
 	imageCmd.AddCommand(imageRateLimitCmd)
 	rootCmd.AddCommand(imageCmd)
+}
+
+func runImageCheckBase(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	r, err := ref.New(args[0])
+	if err != nil {
+		return err
+	}
+	rc := newRegClient()
+	defer rc.Close(ctx, r)
+
+	opts := []regclient.ImageOpts{}
+	if imageOpts.checkBaseDigest != "" {
+		opts = append(opts, regclient.ImageWithCheckBaseDigest(imageOpts.checkBaseDigest))
+	}
+	if imageOpts.checkBaseRef != "" {
+		opts = append(opts, regclient.ImageWithCheckBaseRef(imageOpts.checkBaseRef))
+	}
+	if imageOpts.checkSkipConfig {
+		opts = append(opts, regclient.ImageWithCheckSkipConfig())
+	}
+	if imageOpts.platform != "" {
+		opts = append(opts, regclient.ImageWithPlatform(imageOpts.platform))
+	}
+
+	err = rc.ImageCheckBase(ctx, r, opts...)
+	if err == nil {
+		log.Info("base image matches")
+		return nil
+	} else if errors.Is(err, types.ErrMismatch) {
+		log.WithFields(logrus.Fields{
+			"err": err,
+		}).Info("base image mismatch")
+		// return empty error message
+		return fmt.Errorf("%.0w", err)
+	} else {
+		return err
+	}
 }
 
 func runImageCopy(cmd *cobra.Command, args []string) error {

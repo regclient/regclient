@@ -69,10 +69,14 @@ type tarWriteData struct {
 }
 
 type imageOpt struct {
+	checkBaseDigest string
+	checkBaseRef    string
+	checkSkipConfig bool
 	child           bool
 	forceRecursive  bool
 	includeExternal bool
 	digestTags      bool
+	platform        string
 	platforms       []string
 	referrers       bool
 	tagList         []string
@@ -80,6 +84,27 @@ type imageOpt struct {
 
 // ImageOpts define options for the Image* commands
 type ImageOpts func(*imageOpt)
+
+// ImageWithCheckBaseDigest provides a base digest to compare
+func ImageWithCheckBaseDigest(d string) ImageOpts {
+	return func(opts *imageOpt) {
+		opts.checkBaseDigest = d
+	}
+}
+
+// ImageWithCheckBaseRef provides a base reference to compare
+func ImageWithCheckBaseRef(r string) ImageOpts {
+	return func(opts *imageOpt) {
+		opts.checkBaseRef = r
+	}
+}
+
+// ImageWithCheckSkipConfig skips the configuration check
+func ImageWithCheckSkipConfig() ImageOpts {
+	return func(opts *imageOpt) {
+		opts.checkSkipConfig = true
+	}
+}
 
 // ImageWithChild attempts to copy every manifest and blob even if parent manifests already exist.
 func ImageWithChild() ImageOpts {
@@ -110,6 +135,14 @@ func ImageWithDigestTags() ImageOpts {
 	}
 }
 
+// ImageWithPlatform requests specific platforms from a manifest list.
+// This is used by ImageCheckBase.
+func ImageWithPlatform(p string) ImageOpts {
+	return func(opts *imageOpt) {
+		opts.platform = p
+	}
+}
+
 // ImageWithPlatforms only copies specific platforms from a manifest list.
 // This will result in a failure on many registries that validate manifests.
 // Use the empty string to indicate images without a platform definition should be copied.
@@ -125,6 +158,218 @@ func ImageWithReferrers() ImageOpts {
 	return func(opts *imageOpt) {
 		opts.referrers = true
 	}
+}
+
+// ImageCheckBase returns nil if the base image is unchanged.
+// A base image mismatch returns an error that wraps types.ErrMismatch.
+func (rc *RegClient) ImageCheckBase(ctx context.Context, r ref.Ref, opts ...ImageOpts) error {
+	var opt imageOpt
+	for _, optFn := range opts {
+		optFn(&opt)
+	}
+	var m manifest.Manifest
+	var err error
+
+	// if the base name is not provided, check image for base annotations
+	if opt.checkBaseRef == "" {
+		m, err = rc.ManifestGet(ctx, r)
+		if err != nil {
+			return err
+		}
+		ma, ok := m.(manifest.Annotator)
+		if !ok {
+			return fmt.Errorf("image does not support annotations, base image must be provided")
+		}
+		annot, err := ma.GetAnnotations()
+		if err != nil {
+			return err
+		}
+		if baseName, ok := annot[types.AnnotationBaseImageName]; ok {
+			opt.checkBaseRef = baseName
+		} else {
+			return fmt.Errorf("image does not have a base annotation, base image must be provided")
+		}
+		if baseDig, ok := annot[types.AnnotationBaseImageDigest]; ok {
+			opt.checkBaseDigest = baseDig
+		}
+	}
+	baseR, err := ref.New(opt.checkBaseRef)
+	if err != nil {
+		return err
+	}
+	defer rc.Close(ctx, baseR)
+
+	// if the digest is available, check if that matches the base name
+	if opt.checkBaseDigest != "" {
+		baseMH, err := rc.ManifestHead(ctx, baseR)
+		if err != nil {
+			return err
+		}
+		expectDig, err := digest.Parse(opt.checkBaseDigest)
+		if err != nil {
+			return err
+		}
+		if baseMH.GetDescriptor().Digest == expectDig {
+			rc.log.WithFields(logrus.Fields{
+				"name":   baseR.CommonName(),
+				"digest": baseMH.GetDescriptor().Digest.String(),
+			}).Debug("base image digest matches")
+			return nil
+		} else {
+			rc.log.WithFields(logrus.Fields{
+				"name":     baseR.CommonName(),
+				"digest":   baseMH.GetDescriptor().Digest.String(),
+				"expected": expectDig.String(),
+			}).Debug("base image digest changed")
+			return fmt.Errorf("base digest changed, %s, expected %s, received %s%.0w",
+				baseR.CommonName(), expectDig.String(), baseMH.GetDescriptor().Digest.String(), types.ErrMismatch)
+		}
+	}
+
+	// if the digest is not available, compare layers of each manifest
+	if m == nil {
+		m, err = rc.ManifestGet(ctx, r)
+		if err != nil {
+			return err
+		}
+	}
+	if m.IsList() && opt.platform != "" {
+		p, err := platform.Parse(opt.platform)
+		if err != nil {
+			return err
+		}
+		d, err := manifest.GetPlatformDesc(m, &p)
+		if err != nil {
+			return err
+		}
+		rp := r
+		rp.Digest = d.Digest.String()
+		m, err = rc.ManifestGet(ctx, rp)
+		if err != nil {
+			return err
+		}
+	}
+	if m.IsList() {
+		// loop through each platform
+		ml, ok := m.(manifest.Indexer)
+		if !ok {
+			return fmt.Errorf("manifest list is not an Indexer")
+		}
+		dl, err := ml.GetManifestList()
+		if err != nil {
+			return err
+		}
+		rp := r
+		for _, d := range dl {
+			rp.Digest = d.Digest.String()
+			optP := append(opts, ImageWithPlatform(d.Platform.String()))
+			err = rc.ImageCheckBase(ctx, rp, optP...)
+			if err != nil {
+				return fmt.Errorf("platform %s mismatch: %w", d.Platform.String(), err)
+			}
+		}
+		return nil
+	}
+	img, ok := m.(manifest.Imager)
+	if !ok {
+		return fmt.Errorf("manifest must be an image")
+	}
+	layers, err := img.GetLayers()
+	if err != nil {
+		return err
+	}
+	baseM, err := rc.ManifestGet(ctx, baseR)
+	if err != nil {
+		return err
+	}
+	if baseM.IsList() && opt.platform != "" {
+		p, err := platform.Parse(opt.platform)
+		if err != nil {
+			return err
+		}
+		d, err := manifest.GetPlatformDesc(baseM, &p)
+		if err != nil {
+			return err
+		}
+		rp := baseR
+		rp.Digest = d.Digest.String()
+		baseM, err = rc.ManifestGet(ctx, rp)
+		if err != nil {
+			return err
+		}
+	}
+	baseImg, ok := baseM.(manifest.Imager)
+	if !ok {
+		return fmt.Errorf("base image manifest must be an image")
+	}
+	baseLayers, err := baseImg.GetLayers()
+	if err != nil {
+		return err
+	}
+	if len(baseLayers) <= 0 {
+		return fmt.Errorf("base image has no layers")
+	}
+	for i := range baseLayers {
+		if i >= len(layers) {
+			return fmt.Errorf("image has fewer layers than base image")
+		}
+		if !layers[i].Same(baseLayers[i]) {
+			rc.log.WithFields(logrus.Fields{
+				"layer":    i,
+				"expected": layers[i].Digest.String(),
+				"digest":   baseLayers[i].Digest.String(),
+			}).Debug("image layer changed")
+			return fmt.Errorf("base layer changed, %s[%d], expected %s, received %s%.0w",
+				baseR.CommonName(), i, layers[i].Digest.String(), baseLayers[i].Digest.String(), types.ErrMismatch)
+		}
+	}
+
+	if opt.checkSkipConfig {
+		return nil
+	}
+
+	// if the layers match, compare the config history
+	confDesc, err := img.GetConfig()
+	if err != nil {
+		return err
+	}
+	conf, err := rc.BlobGetOCIConfig(ctx, r, confDesc)
+	if err != nil {
+		return err
+	}
+	confOCI := conf.GetConfig()
+	baseConfDesc, err := baseImg.GetConfig()
+	if err != nil {
+		return err
+	}
+	baseConf, err := rc.BlobGetOCIConfig(ctx, baseR, baseConfDesc)
+	if err != nil {
+		return err
+	}
+	baseConfOCI := baseConf.GetConfig()
+	for i := range baseConfOCI.History {
+		if i >= len(confOCI.History) {
+			return fmt.Errorf("image has fewer history entries than base image")
+		}
+		if baseConfOCI.History[i].Author != confOCI.History[i].Author ||
+			baseConfOCI.History[i].Comment != confOCI.History[i].Comment ||
+			!baseConfOCI.History[i].Created.Equal(*confOCI.History[i].Created) ||
+			baseConfOCI.History[i].CreatedBy != confOCI.History[i].CreatedBy ||
+			baseConfOCI.History[i].EmptyLayer != confOCI.History[i].EmptyLayer {
+			rc.log.WithFields(logrus.Fields{
+				"index":    i,
+				"expected": confOCI.History[i],
+				"history":  baseConfOCI.History[i],
+			}).Debug("image history changed")
+			return fmt.Errorf("base history changed, %s[%d], expected %v, received %v%.0w",
+				baseR.CommonName(), i, confOCI.History[i], baseConfOCI.History[i], types.ErrMismatch)
+		}
+	}
+
+	rc.log.WithFields(logrus.Fields{
+		"base": baseR.CommonName(),
+	}).Debug("base image layers and history matches")
+	return nil
 }
 
 // ImageCopy copies an image

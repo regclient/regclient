@@ -113,6 +113,11 @@ func TestPlatformParse(t *testing.T) {
 			parse: "windows/amd64/10.0.14393.4583",
 			goal:  Platform{OS: "windows", Architecture: "amd64", OSVersion: "10.0.14393.4583"},
 		},
+		{
+			name:  "local",
+			parse: "local",
+			goal:  Local(),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
