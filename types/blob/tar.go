@@ -4,7 +4,6 @@ import (
 	"archive/tar"
 	"fmt"
 	"io"
-	"io/ioutil"
 
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/pkg/archive"
@@ -93,7 +92,7 @@ func (tr *tarReader) RawBody() ([]byte, error) {
 	if tr.tr != nil {
 		return []byte{}, fmt.Errorf("RawBody cannot be returned after TarReader returned")
 	}
-	b, err := ioutil.ReadAll(tr.reader)
+	b, err := io.ReadAll(tr.reader)
 	if err != nil {
 		return b, err
 	}

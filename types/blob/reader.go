@@ -3,7 +3,6 @@ package blob
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"strconv"
 
 	// crypto libraries included for go-digest
@@ -90,7 +89,7 @@ func (b *reader) Close() error {
 
 // RawBody returns the original body from the request
 func (b *reader) RawBody() ([]byte, error) {
-	return ioutil.ReadAll(b)
+	return io.ReadAll(b)
 }
 
 // Read passes through the read operation while computing the digest and tracking the size
@@ -152,7 +151,7 @@ func (b *reader) ToOCIConfig() (OCIConfig, error) {
 	if b.readBytes != 0 {
 		return nil, fmt.Errorf("unable to convert after read has been performed")
 	}
-	blobBody, err := ioutil.ReadAll(b)
+	blobBody, err := io.ReadAll(b)
 	if err != nil {
 		return nil, fmt.Errorf("error reading image config for %s: %w", b.r.CommonName(), err)
 	}

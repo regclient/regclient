@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"strings"
 
@@ -379,7 +379,7 @@ func runManifestPut(cmd *cobra.Command, args []string) error {
 	rc := newRegClient()
 	defer rc.Close(ctx, r)
 
-	raw, err := ioutil.ReadAll(os.Stdin)
+	raw, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		return err
 	}

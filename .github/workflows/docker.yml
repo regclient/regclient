@@ -88,16 +88,17 @@ jobs:
         echo "::set-output name=created::$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
     - name: Check out code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
     - name: Set embed/version.json
       run: make embed/version.json
 
+    # qemu is not needed for Go cross compiling
     # - name: Set up QEMU
     #   uses: docker/setup-qemu-action@v1
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v1
+      uses: docker/setup-buildx-action@v2
 
     - name: Install cosign
       uses: sigstore/cosign-installer@main
@@ -111,14 +112,14 @@ jobs:
 
     - name: Login to GHCR
       if: github.repository_owner == 'regclient'
-      uses: docker/login-action@v1 
+      uses: docker/login-action@v2
       with:
         registry: ghcr.io
         username: ${{ secrets.GHCR_USERNAME }}
         password: ${{ secrets.GHCR_TOKEN }}
 
     - name: Build and push regctl scratch
-      uses: docker/build-push-action@v2
+      uses: docker/build-push-action@v3
       id: build-regctl-scratch
       with:
         context: .
@@ -138,7 +139,7 @@ jobs:
           org.opencontainers.image.revision=${{ github.sha }}
 
     - name: Build and push regctl alpine
-      uses: docker/build-push-action@v2
+      uses: docker/build-push-action@v3
       id: build-regctl-alpine
       with:
         context: .
@@ -158,7 +159,7 @@ jobs:
           org.opencontainers.image.revision=${{ github.sha }}
 
     - name: Build and push regsync scratch
-      uses: docker/build-push-action@v2
+      uses: docker/build-push-action@v3
       id: build-regsync-scratch
       with:
         context: .
@@ -178,7 +179,7 @@ jobs:
           org.opencontainers.image.revision=${{ github.sha }}
 
     - name: Build and push regsync alpine
-      uses: docker/build-push-action@v2
+      uses: docker/build-push-action@v3
       id: build-regsync-alpine
       with:
         context: .
@@ -198,7 +199,7 @@ jobs:
           org.opencontainers.image.revision=${{ github.sha }}
 
     - name: Build and push regbot scratch
-      uses: docker/build-push-action@v2
+      uses: docker/build-push-action@v3
       id: build-regbot-scratch
       with:
         context: .
@@ -218,7 +219,7 @@ jobs:
           org.opencontainers.image.revision=${{ github.sha }}
 
     - name: Build and push regbot alpine
-      uses: docker/build-push-action@v2
+      uses: docker/build-push-action@v3
       id: build-regbot-alpine
       with:
         context: .

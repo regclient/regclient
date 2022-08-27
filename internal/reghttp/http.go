@@ -6,9 +6,9 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -143,7 +143,7 @@ func WithCertDirs(dirs []string) Opts {
 func WithCertFiles(files []string) Opts {
 	return func(c *Client) {
 		for _, f := range files {
-			cert, err := ioutil.ReadFile(f)
+			cert, err := os.ReadFile(f)
 			if err != nil {
 				c.log.WithFields(logrus.Fields{
 					"err":  err,
@@ -455,7 +455,7 @@ func (resp *clientResp) Next() error {
 					"Status": http.StatusText(statusCode),
 				}).Debug("Request failed")
 				errHTTP := HTTPError(resp.resp.StatusCode)
-				errBody, _ := ioutil.ReadAll(resp.resp.Body)
+				errBody, _ := io.ReadAll(resp.resp.Body)
 				resp.resp.Body.Close()
 				return fmt.Errorf("request failed: %w: %s", errHTTP, errBody)
 			}
@@ -754,7 +754,14 @@ func makeRootPool(rootCAPool [][]byte, rootCADirs []string, hostname string, hos
 	}
 	if hostcert != "" {
 		if ok := pool.AppendCertsFromPEM([]byte(hostcert)); !ok {
-			return nil, fmt.Errorf("failed to load host specific ca (%s): %s", hostname, hostcert)
+			// try to parse the certificate and generate a useful error
+			block, _ := pem.Decode([]byte(hostcert))
+			if block == nil {
+				err = fmt.Errorf("pem.Decode is nil")
+			} else {
+				_, err = x509.ParseCertificate(block.Bytes)
+			}
+			return nil, fmt.Errorf("failed to load host specific ca (registry: %s): %w: %s", hostname, err, hostcert)
 		}
 	}
 	return pool, nil

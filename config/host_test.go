@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -10,8 +11,13 @@ import (
 )
 
 func TestConfig(t *testing.T) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Errorf("failed checking current directory: %v", err)
+		return
+	}
 	curPath := os.Getenv("PATH")
-	os.Setenv("PATH", "testdata"+string(os.PathListSeparator)+curPath)
+	os.Setenv("PATH", filepath.Join(cwd, "testdata")+string(os.PathListSeparator)+curPath)
 	defer os.Setenv("PATH", curPath)
 
 	// generate new/blank
@@ -58,7 +64,7 @@ func TestConfig(t *testing.T) {
 	}
 	`
 	var exHost, exHost2, exHostCredHelper Host
-	err := json.Unmarshal([]byte(exJSON), &exHost)
+	err = json.Unmarshal([]byte(exJSON), &exHost)
 	if err != nil {
 		t.Errorf("failed unmarshaling exJson: %v", err)
 	}

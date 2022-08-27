@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -251,7 +251,7 @@ func (reg *Reg) tagListOCI(ctx context.Context, r ref.Ref, config scheme.TagConf
 	if resp.HTTPResponse().StatusCode != 200 {
 		return nil, fmt.Errorf("failed to list tags for %s: %w", r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 	}
-	respBody, err := ioutil.ReadAll(resp)
+	respBody, err := io.ReadAll(resp)
 	if err != nil {
 		reg.log.WithFields(logrus.Fields{
 			"err": err,
@@ -299,7 +299,7 @@ func (reg *Reg) tagListLink(ctx context.Context, r ref.Ref, config scheme.TagCon
 	if resp.HTTPResponse().StatusCode != 200 {
 		return nil, fmt.Errorf("failed to list tags for %s: %w", r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 	}
-	respBody, err := ioutil.ReadAll(resp)
+	respBody, err := io.ReadAll(resp)
 	if err != nil {
 		reg.log.WithFields(logrus.Fields{
 			"err": err,
