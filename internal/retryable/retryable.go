@@ -7,6 +7,7 @@ package retryable
 import (
 	"bytes"
 	"context"
+	"os"
 	"sync"
 
 	// crypto libraries included for go-digest
@@ -16,7 +17,6 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"time"
@@ -78,7 +78,7 @@ func NewRetryable(opts ...Opts) Retryable {
 		limit:      defaultLimit,
 		delayInit:  defaultDelayInit,
 		delayMax:   defaultDelayMax,
-		log:        &logrus.Logger{Out: ioutil.Discard},
+		log:        &logrus.Logger{Out: io.Discard},
 		rootCAPool: [][]byte{},
 	}
 
@@ -140,7 +140,7 @@ func WithCerts(certs [][]byte) Opts {
 func WithCertFiles(files []string) Opts {
 	return func(r *retryable) {
 		for _, f := range files {
-			c, err := ioutil.ReadFile(f)
+			c, err := os.ReadFile(f)
 			if err != nil {
 				r.log.WithFields(logrus.Fields{
 					"err":  err,
@@ -311,7 +311,7 @@ func WithBodyBytes(body []byte) OptsReq {
 	return func(req *request) {
 		req.contentLen = int64(len(body))
 		req.getBody = func() (io.ReadCloser, error) {
-			return ioutil.NopCloser(bytes.NewReader(body)), nil
+			return io.NopCloser(bytes.NewReader(body)), nil
 		}
 	}
 }
@@ -485,7 +485,7 @@ func (req *request) retryLoop() error {
 			}).Debug("Gateway timeout")
 			runBackoff = true
 		default:
-			body, _ := ioutil.ReadAll(lastResp.Body)
+			body, _ := io.ReadAll(lastResp.Body)
 			req.log.WithFields(logrus.Fields{
 				"URL":    lastURL.String(),
 				"Status": lastResp.Status,

@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -51,8 +52,13 @@ func TestCredHelper(t *testing.T) {
 			expectErr:  true,
 		},
 	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Errorf("failed checking current directory: %v", err)
+		return
+	}
 	curPath := os.Getenv("PATH")
-	os.Setenv("PATH", "testdata"+string(os.PathListSeparator)+curPath)
+	os.Setenv("PATH", filepath.Join(cwd, "testdata")+string(os.PathListSeparator)+curPath)
 	defer os.Setenv("PATH", curPath)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

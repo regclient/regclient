@@ -4,7 +4,6 @@ package reqresp
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"regexp"
@@ -91,7 +90,7 @@ func stateMatch(state string, list []string) bool {
 }
 
 func (r *rrHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	reqBody, err := ioutil.ReadAll(req.Body)
+	reqBody, err := io.ReadAll(req.Body)
 	if err != nil {
 		r.t.Errorf("Error reading request body: %v", err)
 		rw.WriteHeader(http.StatusInternalServerError)

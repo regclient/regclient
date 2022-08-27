@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"path/filepath"
 	"strings"
 	"time"
@@ -830,7 +829,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 		filename := tarOCILayoutDescPath(d)
 		if !trd.processed[filename] && trd.handlers[filename] == nil {
 			trd.handlers[filename] = func(header *tar.Header, trd *tarReadData) error {
-				b, err := ioutil.ReadAll(trd.tr)
+				b, err := io.ReadAll(trd.tr)
 				if err != nil {
 					return err
 				}
@@ -1051,7 +1050,7 @@ func (trd *tarReadData) tarReadAll(rs io.ReadSeeker) error {
 
 // tarReadFileJSON reads the current tar entry and unmarshals json into provided interface
 func (trd *tarReadData) tarReadFileJSON(data interface{}) error {
-	b, err := ioutil.ReadAll(trd.tr)
+	b, err := io.ReadAll(trd.tr)
 	if err != nil {
 		return err
 	}

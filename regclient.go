@@ -5,8 +5,8 @@ import (
 	"embed"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
-	"io/ioutil"
 	"time"
 
 	"fmt"
@@ -66,7 +66,7 @@ func New(opts ...Opt) *RegClient {
 		hosts:     map[string]*config.Host{},
 		userAgent: DefaultUserAgent,
 		// logging is disabled by default
-		log:     &logrus.Logger{Out: ioutil.Discard},
+		log:     &logrus.Logger{Out: io.Discard},
 		regOpts: []reg.Opts{},
 		schemes: map[string]scheme.API{},
 		fs:      rwfs.OSNew(""),
