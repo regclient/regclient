@@ -122,6 +122,7 @@ Usage:
   regctl image [command]
 
 Available Commands:
+  check-base  check if the base image has changed
   copy        copy or retag image
   delete      delete image
   digest      show digest for pinning
@@ -131,6 +132,11 @@ Available Commands:
   manifest    show manifest or manifest list
   ratelimit   show the current rate limit
 ```
+
+The `check-base` command exits with a non-zero status when the base image has changed.
+If the base image digest can be found with annotations or options, this indicates if the tag points to the same digest.
+Otherwise this compares the image layers and build history steps to verify no changes exist between the two.
+The OCI annotations used to automatically detect the base image are `org.opencontainers.image.base.name` and `org.opencontainers.image.base.digest`.
 
 The `copy` command allows images to be copied between registries, between repositories on the same registry, or retag an image within the same repository, and only pulls the layers when needed (typically not needed with the same registry server).
 

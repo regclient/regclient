@@ -114,7 +114,7 @@ func Parse(platStr string) (Platform, error) {
 	}
 	// extrapolate missing fields and normalize
 	platLocal := Local()
-	if plat.OS == "" {
+	if plat.OS == "" || plat.OS == "local" {
 		// assume local OS
 		plat.OS = platLocal.OS
 	}

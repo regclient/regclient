@@ -29,6 +29,8 @@ var (
 	ErrMissingTag = errors.New("tag missing from image reference")
 	// ErrMissingTagOrDigest returned when image reference does not include a tag or digest
 	ErrMissingTagOrDigest = errors.New("tag or Digest missing from image reference")
+	// ErrMismatch returned when a comparison detects a difference
+	ErrMismatch = errors.New("content does not match")
 	// ErrMountReturnedLocation when a blob mount fails but a location header is received
 	ErrMountReturnedLocation = errors.New("blob mount returned a location to upload")
 	// ErrNoNewChallenge indicates a challenge update did not result in any change
