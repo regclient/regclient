@@ -410,7 +410,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	mOpts := []manifest.Opts{}
 	hasConfig := false
-	var r, rMan, rArt ref.Ref
+	var r, rArt, rRef ref.Ref
 	var err error
 
 	switch artifactOpts.artifactMT {
@@ -426,23 +426,23 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 && artifactOpts.refers == "" {
 		return fmt.Errorf("reference and both refers missing")
 	}
-	if len(args) > 0 {
-		rMan, err = ref.New(args[0])
+	if artifactOpts.refers != "" {
+		rRef, err = ref.New(artifactOpts.refers)
 		if err != nil {
 			return err
 		}
-		r = rMan
+		r = rRef
 	}
-	if artifactOpts.refers != "" {
-		rArt, err = ref.New(artifactOpts.refers)
+	if len(args) > 0 {
+		rArt, err = ref.New(args[0])
 		if err != nil {
 			return err
 		}
 		r = rArt
 	}
-	if rMan.IsZero() && rArt.IsZero() {
+	if rArt.IsZero() && rRef.IsZero() {
 		return fmt.Errorf("either a reference or refers must be provided")
-	} else if !rMan.IsZero() && !rArt.IsZero() && !ref.EqualRepository(rMan, rArt) {
+	} else if !rArt.IsZero() && !rRef.IsZero() && !ref.EqualRepository(rArt, rRef) {
 		return fmt.Errorf("reference and refers must be in the same repository")
 	}
 	if len(artifactOpts.artifactFile) == 1 && len(artifactOpts.artifactFileMT) == 0 {
@@ -474,8 +474,8 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	defer rc.Close(ctx, r)
 
 	var refDesc *types.Descriptor
-	if !rArt.IsZero() {
-		rmh, err := rc.ManifestHead(ctx, rArt)
+	if !rRef.IsZero() {
+		rmh, err := rc.ManifestHead(ctx, rRef)
 		if err != nil {
 			return fmt.Errorf("unable to find referenced manifest: %w", err)
 		}
@@ -633,7 +633,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if artifactOpts.byDigest || rMan.IsZero() {
+	if artifactOpts.byDigest || rArt.IsZero() {
 		r.Tag = ""
 		r.Digest = mm.GetDescriptor().Digest.String()
 	}
