@@ -178,7 +178,7 @@ func (rc *RegClient) ImageCheckBase(ctx context.Context, r ref.Ref, opts ...Imag
 		}
 		ma, ok := m.(manifest.Annotator)
 		if !ok {
-			return fmt.Errorf("image does not support annotations, base image must be provided")
+			return fmt.Errorf("image does not support annotations, base image must be provided%.0w", types.ErrMissingAnnotation)
 		}
 		annot, err := ma.GetAnnotations()
 		if err != nil {
@@ -187,7 +187,7 @@ func (rc *RegClient) ImageCheckBase(ctx context.Context, r ref.Ref, opts ...Imag
 		if baseName, ok := annot[types.AnnotationBaseImageName]; ok {
 			opt.checkBaseRef = baseName
 		} else {
-			return fmt.Errorf("image does not have a base annotation, base image must be provided")
+			return fmt.Errorf("image does not have a base annotation, base image must be provided%.0w", types.ErrMissingAnnotation)
 		}
 		if baseDig, ok := annot[types.AnnotationBaseImageDigest]; ok {
 			opt.checkBaseDigest = baseDig
