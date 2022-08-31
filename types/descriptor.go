@@ -46,6 +46,20 @@ type Descriptor struct {
 }
 
 var emptyDigest = digest.FromBytes([]byte{})
+var mtToOCI map[string]string
+
+func init() {
+	mtToOCI = map[string]string{
+		MediaTypeDocker2ManifestList: MediaTypeOCI1ManifestList,
+		MediaTypeDocker2Manifest:     MediaTypeOCI1Manifest,
+		MediaTypeDocker2ImageConfig:  MediaTypeOCI1ImageConfig,
+		MediaTypeDocker2LayerGzip:    MediaTypeOCI1LayerGzip,
+		MediaTypeOCI1ManifestList:    MediaTypeOCI1ManifestList,
+		MediaTypeOCI1Manifest:        MediaTypeOCI1Manifest,
+		MediaTypeOCI1ImageConfig:     MediaTypeOCI1ImageConfig,
+		MediaTypeOCI1LayerGzip:       MediaTypeOCI1LayerGzip,
+	}
+}
 
 // GetData decodes the Data field from the descriptor if available
 func (d Descriptor) GetData() ([]byte, error) {
@@ -73,6 +87,9 @@ func (d Descriptor) GetData() ([]byte, error) {
 // Equal indicates the two descriptors are identical, effectively a DeepEqual.
 func (d Descriptor) Equal(d2 Descriptor) bool {
 	if !d.Same(d2) {
+		return false
+	}
+	if d.MediaType != d2.MediaType {
 		return false
 	}
 	if d.ArtifactType != d2.ArtifactType {
@@ -117,8 +134,16 @@ func (d Descriptor) Equal(d2 Descriptor) bool {
 // Same indicates two descriptors point to the same CAS object.
 // This verifies the digest, media type, and size all match
 func (d Descriptor) Same(d2 Descriptor) bool {
-	if d.Digest != d2.Digest || d.MediaType != d2.MediaType || d.Size != d2.Size {
+	if d.Digest != d2.Digest || d.Size != d2.Size {
 		return false
+	}
+	// loosen the check on media type since this can be converted from a build
+	if d.MediaType != d2.MediaType {
+		if _, ok := mtToOCI[d.MediaType]; !ok {
+			return false
+		} else if mtToOCI[d.MediaType] != mtToOCI[d2.MediaType] {
+			return false
+		}
 	}
 	return true
 }

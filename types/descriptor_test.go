@@ -136,6 +136,21 @@ func TestDescriptorEq(t *testing.T) {
 			expectSame:  true,
 		},
 		{
+			name: "converting OCI media type",
+			d1: Descriptor{
+				MediaType: MediaTypeDocker2Manifest,
+				Size:      1234,
+				Digest:    digA,
+			},
+			d2: Descriptor{
+				MediaType: MediaTypeOCI1Manifest,
+				Size:      1234,
+				Digest:    digA,
+			},
+			expectEqual: false,
+			expectSame:  true,
+		},
+		{
 			name: "different media type",
 			d1: Descriptor{
 				MediaType: MediaTypeDocker2Manifest,
