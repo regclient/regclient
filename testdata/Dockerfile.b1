@@ -1,0 +1,3 @@
+FROM scratch
+COPY base-a.txt /base.txt
+LABEL base=a

@@ -11,6 +11,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/internal/rwfs"
+	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
@@ -38,6 +39,26 @@ func TestMod(t *testing.T) {
 	// create regclient
 	rc := regclient.New(regclient.WithFS(fsMem))
 
+	rb1, err := ref.New("ocidir://testrepo:b1")
+	if err != nil {
+		t.Errorf("failed to parse ref: %v", err)
+	}
+	rb2, err := ref.New("ocidir://testrepo:b2")
+	if err != nil {
+		t.Errorf("failed to parse ref: %v", err)
+	}
+	rb3, err := ref.New("ocidir://testrepo:b3")
+	if err != nil {
+		t.Errorf("failed to parse ref: %v", err)
+	}
+	// r1, err := ref.New("ocidir://testrepo:v1")
+	// if err != nil {
+	// 	t.Errorf("failed to parse ref: %v", err)
+	// }
+	// r2, err := ref.New("ocidir://testrepo:v2")
+	// if err != nil {
+	// 	t.Errorf("failed to parse ref: %v", err)
+	// }
 	r3, err := ref.New("ocidir://testrepo:v3")
 	if err != nil {
 		t.Errorf("failed to parse ref: %v", err)
@@ -289,6 +310,51 @@ func TestMod(t *testing.T) {
 			},
 			ref:      "ocidir://testrepo:v1",
 			wantSame: true,
+		},
+		{
+			name: "Rebase with annotations v2",
+			opts: []Opts{
+				WithRebase(),
+			},
+			ref: "ocidir://testrepo:v2",
+		},
+		{
+			name: "Rebase with annotations v3",
+			opts: []Opts{
+				WithRebase(),
+			},
+			ref: "ocidir://testrepo:v3",
+		},
+		{
+			name: "Rebase missing annotations",
+			opts: []Opts{
+				WithRebase(),
+			},
+			ref:     "ocidir://testrepo:v1",
+			wantErr: types.ErrMissingAnnotation,
+		},
+		{
+			name: "Rebase refs",
+			opts: []Opts{
+				WithRebaseRefs(rb1, rb2),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Rebase mismatch",
+			opts: []Opts{
+				WithRebaseRefs(rb2, rb3),
+			},
+			ref:     "ocidir://testrepo:v3",
+			wantErr: types.ErrMismatch,
+		},
+		{
+			name: "Rebase mismatch",
+			opts: []Opts{
+				WithRebaseRefs(rb3, rb2),
+			},
+			ref:     "ocidir://testrepo:v3",
+			wantErr: types.ErrMismatch,
 		},
 	}
 
