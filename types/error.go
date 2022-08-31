@@ -19,6 +19,8 @@ var (
 	ErrHTTPStatus = errors.New("unexpected http status code")
 	// ErrInvalidChallenge indicates an issue with the received challenge in the WWW-Authenticate header
 	ErrInvalidChallenge = errors.New("invalid challenge header")
+	// ErrMissingAnnotation returned when a needed annotation is not found
+	ErrMissingAnnotation = errors.New("annotation is missing")
 	// ErrMissingDigest returned when image reference does not include a digest
 	ErrMissingDigest = errors.New("digest missing from image reference")
 	// ErrMissingLocation returned when the location header is missing

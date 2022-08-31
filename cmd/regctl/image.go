@@ -397,6 +397,42 @@ func init() {
 			return nil
 		},
 	}, "layer-time-max", "", `max timestamp for a layer`)
+	flagRebase := imageModCmd.Flags().VarPF(&modFlagFunc{
+		t: "bool",
+		f: func(val string) error {
+			b, err := strconv.ParseBool(val)
+			if err != nil {
+				return fmt.Errorf("unable to parse value %s: %w", val, err)
+			}
+			if !b {
+				return nil
+			}
+			// pull the manifest, get the base image annotations
+			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithRebase())
+			return nil
+		},
+	}, "rebase", "", `rebase an image using OCI annotations`)
+	flagRebase.NoOptDefVal = "true"
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "string",
+		f: func(val string) error {
+			vs := strings.SplitN(val, ",", 2)
+			if len(vs) != 2 {
+				return fmt.Errorf("rebase-ref requires two base images (old,new), comma separated")
+			}
+			// parse both refs
+			rOld, err := ref.New(vs[0])
+			if err != nil {
+				return fmt.Errorf("failed parsing old base image ref: %w", err)
+			}
+			rNew, err := ref.New(vs[1])
+			if err != nil {
+				return fmt.Errorf("failed parsing new base image ref: %w", err)
+			}
+			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithRebaseRefs(rOld, rNew))
+			return nil
+		},
+	}, "rebase-ref", "", `rebase an image with base references (base:old,base:new)`)
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {

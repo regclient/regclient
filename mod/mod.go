@@ -17,7 +17,7 @@ import (
 )
 
 // Opts defines options for Apply
-type Opts func(*dagConfig)
+type Opts func(*dagConfig, *dagManifest) error
 
 // Apply applies a set of modifications to an image (manifest, configs, and layers)
 func Apply(ctx context.Context, rc *regclient.RegClient, r ref.Ref, opts ...Opts) (ref.Ref, error) {
@@ -29,6 +29,14 @@ func Apply(ctx context.Context, rc *regclient.RegClient, r ref.Ref, opts ...Opts
 	// do I need to store a DAG in memory with pointers back to parents and modified bool, so change to digest can be rippled up and modified objects are pushed?
 
 	rMod := r
+	// pull the image metadata into a DAG
+	dm, err := dagGet(ctx, rc, r, types.Descriptor{})
+	if err != nil {
+		return rMod, err
+	}
+	dm.top = true
+
+	// load the options
 	dc := dagConfig{
 		stepsManifest:  []func(context.Context, *regclient.RegClient, ref.Ref, *dagManifest) error{},
 		stepsOCIConfig: []func(context.Context, *regclient.RegClient, ref.Ref, *dagOCIConfig) error{},
@@ -37,15 +45,10 @@ func Apply(ctx context.Context, rc *regclient.RegClient, r ref.Ref, opts ...Opts
 		maxDataSize:    -1, // unchanged, if a data field exists, preserve it
 	}
 	for _, opt := range opts {
-		opt(&dc)
+		if err := opt(&dc, dm); err != nil {
+			return rMod, err
+		}
 	}
-
-	// pull the image metadata into a DAG
-	dm, err := dagGet(ctx, rc, r, types.Descriptor{})
-	if err != nil {
-		return rMod, err
-	}
-	dm.top = true
 
 	// perform manifest changes
 	if len(dc.stepsManifest) > 0 {
@@ -218,14 +221,15 @@ func Apply(ctx context.Context, rc *regclient.RegClient, r ref.Ref, opts ...Opts
 // WithData sets the descriptor data field max size.
 // This also strips the data field off descriptors above the max size.
 func WithData(maxDataSize int64) Opts {
-	return func(dc *dagConfig) {
+	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.maxDataSize = maxDataSize
+		return nil
 	}
 }
 
 // WithManifestToOCI converts the manifest to OCI media types
 func WithManifestToOCI() Opts {
-	return func(dc *dagConfig) {
+	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, r ref.Ref, dm *dagManifest) error {
 			switch dm.m.GetDescriptor().MediaType {
 			case types.MediaTypeOCI1Manifest, types.MediaTypeOCI1ManifestList:
@@ -260,5 +264,6 @@ func WithManifestToOCI() Opts {
 			dm.mod = replaced
 			return nil
 		})
+		return nil
 	}
 }

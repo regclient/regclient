@@ -1,4 +1,5 @@
-FROM scratch
+# syntax=docker/dockerfile:1.4
+FROM testrepo:b1
 
 COPY layer1.txt /layer1
 ARG  arg=value

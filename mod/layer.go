@@ -18,7 +18,7 @@ import (
 // WithLayerRmCreatedBy deletes a layer based on a regex of the created by field
 // in the config history for that layer
 func WithLayerRmCreatedBy(re regexp.Regexp) Opts {
-	return func(dc *dagConfig) {
+	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, r ref.Ref, dm *dagManifest) error {
 			if dm.m.IsList() || dm.config.oc == nil {
 				return nil
@@ -62,12 +62,13 @@ func WithLayerRmCreatedBy(re regexp.Regexp) Opts {
 			}
 			return nil
 		})
+		return nil
 	}
 }
 
 // WithLayerRmIndex deletes a layer by index. The index starts at 0.
 func WithLayerRmIndex(index int) Opts {
-	return func(dc *dagConfig) {
+	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, r ref.Ref, dm *dagManifest) error {
 			if !dm.top || dm.m.IsList() || dm.config.oc == nil {
 				return fmt.Errorf("remove layer by index requires v2 image manifest")
@@ -94,6 +95,7 @@ func WithLayerRmIndex(index int) Opts {
 			}
 			return nil
 		})
+		return nil
 	}
 }
 
@@ -101,20 +103,21 @@ func WithLayerRmIndex(index int) Opts {
 func WithLayerStripFile(file string) Opts {
 	file = strings.Trim(file, "/")
 	fileRE := regexp.MustCompile("^/?" + regexp.QuoteMeta(file) + "(/.*)?$")
-	return func(dc *dagConfig) {
+	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsLayerFile = append(dc.stepsLayerFile, func(c context.Context, rc *regclient.RegClient, r ref.Ref, dl *dagLayer, th *tar.Header, tr io.Reader) (*tar.Header, io.Reader, changes, error) {
 			if fileRE.Match([]byte(th.Name)) {
 				return th, tr, deleted, nil
 			}
 			return th, tr, unchanged, nil
 		})
+		return nil
 	}
 }
 
 // WithLayerTimestampFromLabel sets the max layer timestamp based on a label in the image
 func WithLayerTimestampFromLabel(label string) Opts {
 	t := time.Time{}
-	return func(dc *dagConfig) {
+	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(c context.Context, rc *regclient.RegClient, r ref.Ref, doc *dagOCIConfig) error {
 			oc := doc.oc.GetConfig()
 			tl, ok := oc.Config.Labels[label]
@@ -159,12 +162,13 @@ func WithLayerTimestampFromLabel(label string) Opts {
 				return th, tr, unchanged, nil
 			},
 		)
+		return nil
 	}
 }
 
 // WithLayerTimestampMax ensures no file timestamps are after specified time
 func WithLayerTimestampMax(t time.Time) Opts {
-	return func(dc *dagConfig) {
+	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsLayerFile = append(dc.stepsLayerFile,
 			func(c context.Context, rc *regclient.RegClient, r ref.Ref, dl *dagLayer, th *tar.Header, tr io.Reader) (*tar.Header, io.Reader, changes, error) {
 				changed := false
@@ -189,13 +193,14 @@ func WithLayerTimestampMax(t time.Time) Opts {
 				return th, tr, unchanged, nil
 			},
 		)
+		return nil
 	}
 }
 
 // WithFileTarTimeMax processes a tar file within a layer and rewrites the contents with a max timestamp
 func WithFileTarTimeMax(name string, t time.Time) Opts {
 	name = strings.TrimPrefix(name, "/")
-	return func(dc *dagConfig) {
+	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsLayerFile = append(dc.stepsLayerFile, func(ctx context.Context, rc *regclient.RegClient, r ref.Ref, dl *dagLayer, th *tar.Header, tr io.Reader) (*tar.Header, io.Reader, changes, error) {
 			// check the header for a matching filename
 			if th.Name != name {
@@ -267,6 +272,7 @@ func WithFileTarTimeMax(name string, t time.Time) Opts {
 			}
 			return th, &tmpR, unchanged, nil
 		})
+		return nil
 	}
 }
 
