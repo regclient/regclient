@@ -84,6 +84,12 @@ regctl registry set --priority  5 mirror-cluster:5000
 regctl registry set --mirror mirror-build:5000 --mirror mirror-cluster:5000 docker.io
 ```
 
+Resolving the error `http: server gave HTTP response to HTTPS client` is done by (replacing `localhost:5000` with your registry name):
+
+```text
+regctl registry set --tls=disabled localhost:5000
+```
+
 ## Repo Commands
 
 ```text
@@ -127,6 +133,7 @@ Available Commands:
   delete      delete image
   digest      show digest for pinning
   export      export image
+  get-file    get a file from an image
   import      import image
   inspect     inspect image
   manifest    show manifest or manifest list
@@ -147,7 +154,9 @@ Use `tag delete` to remove a single tag.
 
 The `digest` command is useful to pin the image used within your deployment to an immutable sha256 checksum.
 
-The `export`/`import` commands allow you to copy images between registry servers that may be disconnected, or to export an image directly from a registry without a docker engine and loading it into a potentially disconnected docker host. (Note that import is not yet implemented.)
+The `export`/`import` commands allow you to copy images between registry servers that may be disconnected, or to export an image directly from a registry without a docker engine and loading it into a potentially disconnected docker host.
+
+The `get-file` command returns the contents of a file from the image layers.
 
 The `inspect` command pulls the image config json blob. This is the same json shown with a `docker image inspect` command, and includes labels, the entrypoint/cmd, and layer history.
 This can be useful with image pruning scripts, or other tools that need the image labels without the need to pull all of the layers.
@@ -273,6 +282,8 @@ $ regctl blob get busybox sha256:6858809bf669cc5da7cb6af83d0fae838284d12e1be0182
     "StdinOnce": false,
     ...
 ```
+
+The `get-file` command returns the contents of a file from a layer.
 
 The `put` command uploads a blob to the registry.
 The digest of the blob is output.

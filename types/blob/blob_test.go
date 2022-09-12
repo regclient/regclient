@@ -471,6 +471,86 @@ func TestTarReader(t *testing.T) {
 	}
 }
 
+func TestReadFile(t *testing.T) {
+	tests := []struct {
+		name      string
+		filename  string
+		content   string
+		expectErr error
+	}{
+		{
+			name:     "layer1",
+			filename: "layer1.txt",
+			content:  "1\n",
+		},
+		{
+			name:      "layer2",
+			filename:  "layer2.txt",
+			expectErr: types.ErrFileDeleted,
+		},
+		{
+			name:     "layer3",
+			filename: "layer3.txt",
+			content:  "3\n",
+		},
+		{
+			name:      "opaque dir",
+			filename:  "exdir/test.txt",
+			expectErr: types.ErrFileDeleted,
+		},
+		{
+			name:      "missing",
+			filename:  "missing.txt",
+			expectErr: types.ErrFileNotFound,
+		},
+		{
+			name:      "invalid",
+			filename:  ".wh.filename.txt",
+			expectErr: fmt.Errorf(".wh. prefix is reserved for whiteout files"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fh, err := os.Open("../../testdata/layer-wh.tar")
+			if err != nil {
+				t.Errorf("failed to open test data: %v", err)
+				return
+			}
+			btr := NewTarReader(WithReader(fh))
+			defer btr.Close()
+			th, rdr, err := btr.ReadFile(tt.filename)
+			if tt.expectErr != nil {
+				if err == nil {
+					t.Errorf("ReadFile did not fail")
+				} else if !errors.Is(err, tt.expectErr) && err.Error() != tt.expectErr.Error() {
+					t.Errorf("unexpected error, expected %v, received %v", tt.expectErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("ReadFile failed: %v", err)
+				return
+			}
+			if th == nil {
+				t.Errorf("tar header is nil")
+				return
+			}
+			if rdr == nil {
+				t.Errorf("reader is nil")
+				return
+			}
+			content, err := io.ReadAll(rdr)
+			if err != nil {
+				t.Errorf("failed reading file: %v", err)
+			}
+			if tt.content != string(content) {
+				t.Errorf("file content mismatch: expected %s, received %s", tt.content, string(content))
+			}
+		})
+	}
+
+}
+
 func cmpSliceString(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
