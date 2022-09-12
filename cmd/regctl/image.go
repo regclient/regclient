@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/tar"
 	"errors"
 	"fmt"
 	"io"
@@ -16,6 +17,7 @@ import (
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -82,6 +84,15 @@ Example usage: regctl image export registry:5000/yourimg:v1 >yourimg-v1.tar`,
 	ValidArgsFunction: completeArgTag,
 	RunE:              runImageExport,
 }
+var imageGetFileCmd = &cobra.Command{
+	Use:               "get-file <image_ref> <filename> [out-file]",
+	Aliases:           []string{"cat"},
+	Short:             "get a file from an image",
+	Long:              `Go through each of the image layers searching for the requested file.`,
+	Args:              cobra.RangeArgs(2, 3),
+	ValidArgsFunction: completeArgList([]completeFunc{completeArgTag, completeArgNone, completeArgNone}),
+	RunE:              runImageGetFile,
+}
 var imageImportCmd = &cobra.Command{
 	Use:   "import <image_ref> <filename>",
 	Short: "import image",
@@ -137,6 +148,7 @@ var imageOpts struct {
 	create          string
 	forceRecursive  bool
 	format          string
+	formatFile      string
 	includeExternal bool
 	digestTags      bool
 	list            bool
@@ -171,6 +183,9 @@ func init() {
 	imageDigestCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
 	imageDigestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	imageDigestCmd.Flags().MarkHidden("list")
+
+	imageGetFileCmd.Flags().StringVarP(&imageOpts.formatFile, "format", "", "", "Format output with go template syntax")
+	imageGetFileCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 
 	imageInspectCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageInspectCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
@@ -483,6 +498,7 @@ func init() {
 	imageCmd.AddCommand(imageDeleteCmd)
 	imageCmd.AddCommand(imageDigestCmd)
 	imageCmd.AddCommand(imageExportCmd)
+	imageCmd.AddCommand(imageGetFileCmd)
 	imageCmd.AddCommand(imageImportCmd)
 	imageCmd.AddCommand(imageInspectCmd)
 	imageCmd.AddCommand(imageManifestCmd)
@@ -589,6 +605,113 @@ func runImageExport(cmd *cobra.Command, args []string) error {
 		"ref": r.CommonName(),
 	}).Debug("Image export")
 	return rc.ImageExport(ctx, r, w)
+}
+
+func runImageGetFile(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	r, err := ref.New(args[0])
+	if err != nil {
+		return err
+	}
+	filename := args[1]
+	filename = strings.TrimPrefix(filename, "/")
+	rc := newRegClient()
+	defer rc.Close(ctx, r)
+
+	log.WithFields(logrus.Fields{
+		"ref":      r.CommonName(),
+		"filename": filename,
+	}).Debug("Get file")
+
+	// TODO: a manifest get for a specific platform would be useful
+	// make it recursive for index of index scenarios
+	m, err := rc.ManifestGet(ctx, r)
+	if err != nil {
+		return err
+	}
+	if m.IsList() {
+		if imageOpts.platform == "" {
+			imageOpts.platform = "local"
+		}
+		plat, err := platform.Parse(imageOpts.platform)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"platform": imageOpts.platform,
+				"err":      err,
+			}).Warn("Could not parse platform")
+		}
+		desc, err := manifest.GetPlatformDesc(m, &plat)
+		if err != nil {
+			pl, _ := manifest.GetPlatformList(m)
+			var ps []string
+			for _, p := range pl {
+				ps = append(ps, p.String())
+			}
+			log.WithFields(logrus.Fields{
+				"platform":  plat,
+				"err":       err,
+				"platforms": strings.Join(ps, ", "),
+			}).Warn("Platform could not be found in manifest list")
+			return err
+		}
+		m, err = rc.ManifestGet(ctx, r, regclient.WithManifestDesc(*desc))
+		if err != nil {
+			return fmt.Errorf("failed to pull platform specific digest: %w", err)
+		}
+	}
+	// go through layers in reverse
+	mi, ok := m.(manifest.Imager)
+	if !ok {
+		return fmt.Errorf("reference is not a known image media type")
+	}
+	layers, err := mi.GetLayers()
+	if err != nil {
+		return err
+	}
+	for i := len(layers) - 1; i >= 0; i-- {
+		blob, err := rc.BlobGet(ctx, r, layers[i])
+		if err != nil {
+			return fmt.Errorf("failed pulling layer %d: %w", i, err)
+		}
+		btr, err := blob.ToTarReader()
+		if err != nil {
+			return fmt.Errorf("could not convert layer %d to tar reader: %w", i, err)
+		}
+		th, rdr, err := btr.ReadFile(filename)
+		if err != nil {
+			if errors.Is(err, types.ErrFileNotFound) {
+				continue
+			}
+			return fmt.Errorf("failed pulling from layer %d: %w", i, err)
+		}
+		// file found, output
+		if imageOpts.formatFile != "" {
+			data := struct {
+				Header *tar.Header
+				Reader io.Reader
+			}{
+				Header: th,
+				Reader: rdr,
+			}
+			return template.Writer(os.Stdout, imageOpts.formatFile, data)
+		}
+		var w io.Writer
+		if len(args) < 3 {
+			w = os.Stdout
+		} else {
+			w, err = os.Create(args[2])
+			if err != nil {
+				return err
+			}
+		}
+		_, err = io.Copy(w, rdr)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	// all layers exhausted, not found or deleted
+	return types.ErrNotFound
 }
 
 func runImageImport(cmd *cobra.Command, args []string) error {

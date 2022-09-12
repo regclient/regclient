@@ -55,6 +55,15 @@ registry. The blob or layer digest can be found in the image manifest.`,
 	ValidArgs: []string{}, // do not auto complete repository or digest
 	RunE:      runBlobGet,
 }
+var blobGetFileCmd = &cobra.Command{
+	Use:       "get-file <repository> <digest> <file> [out-file]",
+	Aliases:   []string{"cat"},
+	Short:     "get a file from a layer",
+	Long:      `This returns a requested file from a layer.`,
+	Args:      cobra.RangeArgs(3, 4),
+	ValidArgs: []string{}, // do not auto complete repository, digest, or filenames
+	RunE:      runBlobGetFile,
+}
 var blobPutCmd = &cobra.Command{
 	Use:     "put <repository>",
 	Aliases: []string{"push"},
@@ -71,6 +80,7 @@ var blobOpts struct {
 	diffFullCtx    bool
 	diffIgnoreTime bool
 	format         string
+	formatFile     string
 	formatPut      string
 	mt             string
 	digest         string
@@ -94,6 +104,8 @@ func init() {
 	})
 	blobGetCmd.Flags().MarkHidden("media-type")
 
+	blobGetFileCmd.Flags().StringVarP(&blobOpts.formatFile, "format", "", "", "Format output with go template syntax")
+
 	blobPutCmd.Flags().StringVarP(&blobOpts.mt, "content-type", "", "", "Set the requested content type (deprecated)")
 	blobPutCmd.Flags().StringVarP(&blobOpts.digest, "digest", "", "", "Set the expected digest")
 	blobPutCmd.Flags().StringVarP(&blobOpts.formatPut, "format", "", "{{println .Digest}}", "Format output with go template syntax")
@@ -108,6 +120,7 @@ func init() {
 	blobCmd.AddCommand(blobDiffConfigCmd)
 	blobCmd.AddCommand(blobDiffLayerCmd)
 	blobCmd.AddCommand(blobGetCmd)
+	blobCmd.AddCommand(blobGetFileCmd)
 	blobCmd.AddCommand(blobPutCmd)
 	rootCmd.AddCommand(blobCmd)
 }
@@ -250,6 +263,10 @@ func runBlobGet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	d, err := digest.Parse(args[1])
+	if err != nil {
+		return err
+	}
 	rc := newRegClient()
 	defer rc.Close(ctx, r)
 	if blobOpts.mt != "" {
@@ -263,10 +280,6 @@ func runBlobGet(cmd *cobra.Command, args []string) error {
 		"repository": r.Repository,
 		"digest":     args[1],
 	}).Debug("Pulling blob")
-	d, err := digest.Parse(args[1])
-	if err != nil {
-		return err
-	}
 	blob, err := rc.BlobGet(ctx, r, types.Descriptor{Digest: d})
 	if err != nil {
 		return err
@@ -286,6 +299,66 @@ func runBlobGet(cmd *cobra.Command, args []string) error {
 	}
 
 	return template.Writer(os.Stdout, blobOpts.format, blob)
+}
+
+func runBlobGetFile(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	r, err := ref.New(args[0])
+	if err != nil {
+		return err
+	}
+	d, err := digest.Parse(args[1])
+	if err != nil {
+		return err
+	}
+	filename := args[2]
+	filename = strings.TrimPrefix(filename, "/")
+	rc := newRegClient()
+	defer rc.Close(ctx, r)
+
+	log.WithFields(logrus.Fields{
+		"host":       r.Registry,
+		"repository": r.Repository,
+		"digest":     args[1],
+		"filename":   filename,
+	}).Debug("Get file")
+	blob, err := rc.BlobGet(ctx, r, types.Descriptor{Digest: d})
+	if err != nil {
+		return err
+	}
+	defer blob.Close()
+	tr, err := blob.ToTarReader()
+	if err != nil {
+		return err
+	}
+	th, rdr, err := tr.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+	if blobOpts.formatFile != "" {
+		data := struct {
+			Header *tar.Header
+			Reader io.Reader
+		}{
+			Header: th,
+			Reader: rdr,
+		}
+		return template.Writer(os.Stdout, blobOpts.formatFile, data)
+	}
+	var w io.Writer
+	if len(args) < 4 {
+		w = os.Stdout
+	} else {
+		w, err = os.Create(args[3])
+		if err != nil {
+			return err
+		}
+	}
+	_, err = io.Copy(w, rdr)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func runBlobPut(cmd *cobra.Command, args []string) error {
