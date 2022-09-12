@@ -120,11 +120,13 @@ func Parse(platStr string) (Platform, error) {
 	}
 	switch plat.OS {
 	case "macos":
-		plat.OS = "darwin"
+		fallthrough
+	case "darwin":
+		plat.OS = "linux"
 	}
-	if len(platSplit) < 2 && plat.OS == runtime.GOOS {
+	if len(platSplit) < 2 && (plat.OS == runtime.GOOS || runtime.GOOS == "darwin") {
 		switch plat.OS {
-		case "linux", "darwin":
+		case "linux":
 			// automatically expand local architecture with recognized OS
 			plat.Architecture = platLocal.Architecture
 		case "windows":
