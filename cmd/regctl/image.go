@@ -155,6 +155,7 @@ var imageOpts struct {
 	modOpts         []mod.Opts
 	platform        string
 	platforms       []string
+	rewrite         bool
 	referrers       bool
 	replace         bool
 	requireList     bool
@@ -170,11 +171,10 @@ func init() {
 
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.forceRecursive, "force-recursive", "", false, "Force recursive copy of image, repairs missing nested blobs and manifests")
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.includeExternal, "include-external", "", false, "Include external layers")
-	imageCopyCmd.Flags().StringArrayVarP(&imageOpts.platforms, "platforms", "", []string{}, "Copy only specific platforms, registry validation must be disabled")
+	imageCopyCmd.Flags().StringArrayVarP(&imageOpts.platforms, "platforms", "", []string{}, "Copy only specific platforms, registry validation must be disabled or flag 'rewrite' must be set")
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.digestTags, "digest-tags", "", false, "Include digest tags (\"sha256-<digest>.*\") when copying manifests")
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.referrers, "referrers", "", false, "Experimental: Include referrers")
-	// platforms should be treated as experimental since it will break many registries
-	imageCopyCmd.Flags().MarkHidden("platforms")
+	imageCopyCmd.Flags().BoolVarP(&imageOpts.rewrite, "rewrite", "", false, "Experimental: Rewrite Manifest for platforms")
 
 	imageDeleteCmd.Flags().BoolVarP(&manifestOpts.forceTagDeref, "force-tag-dereference", "", false, "Dereference the a tag to a digest, this is unsafe")
 
@@ -580,6 +580,9 @@ func runImageCopy(cmd *cobra.Command, args []string) error {
 	}
 	if len(imageOpts.platforms) > 0 {
 		opts = append(opts, regclient.ImageWithPlatforms(imageOpts.platforms))
+	}
+	if imageOpts.rewrite {
+		opts = append(opts, regclient.ImageWithRewrite())
 	}
 	return rc.ImageCopy(ctx, rSrc, rTgt, opts...)
 }

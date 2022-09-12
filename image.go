@@ -80,6 +80,7 @@ type imageOpt struct {
 	platforms       []string
 	referrers       bool
 	tagList         []string
+	rewrite         bool
 }
 
 // ImageOpts define options for the Image* commands
@@ -157,6 +158,14 @@ func ImageWithPlatforms(p []string) ImageOpts {
 func ImageWithReferrers() ImageOpts {
 	return func(opts *imageOpt) {
 		opts.referrers = true
+	}
+}
+
+// ImageWithRewrite enables on-the-fly rewriting of manifests with different specified platforms
+// EXPERIMENTAL: Rewrite Manifest for platforms
+func ImageWithRewrite() ImageOpts {
+	return func(opts *imageOpt) {
+		opts.rewrite = true
 	}
 }
 
@@ -384,6 +393,99 @@ func (rc *RegClient) ImageCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.R
 	return rc.imageCopyOpt(ctx, refSrc, refTgt, types.Descriptor{}, opt.child, &opt)
 }
 
+func (rc *RegClient) imageCheckPreconditions(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor, opt *imageOpt) (manifest.Manifest, error) {
+	// check if source and destination already match
+	mdh, errD := rc.ManifestHead(ctx, refTgt)
+	if opt.forceRecursive {
+		// copy forced, unable to run below skips
+	} else if errD == nil && refTgt.Digest != "" && digest.Digest(refTgt.Digest) == mdh.GetDescriptor().Digest {
+		rc.log.WithFields(logrus.Fields{
+			"target": refTgt.Reference,
+			"digest": mdh.GetDescriptor().Digest.String(),
+		}).Info("Copy not needed, target already up to date")
+		return nil, nil
+	} else if errD == nil && refTgt.Digest == "" {
+		msh, errS := rc.ManifestHead(ctx, refSrc)
+		if errS == nil && msh.GetDescriptor().Digest == mdh.GetDescriptor().Digest {
+			rc.log.WithFields(logrus.Fields{
+				"source": refSrc.Reference,
+				"target": refTgt.Reference,
+				"digest": mdh.GetDescriptor().Digest.String(),
+			}).Info("Copy not needed, target already up to date")
+			return nil, nil
+		}
+	}
+
+	// get the manifest for the source
+	m, err := rc.ManifestGet(ctx, refSrc, WithManifestDesc(d))
+	if err != nil {
+		rc.log.WithFields(logrus.Fields{
+			"ref": refSrc.Reference,
+			"err": err,
+		}).Warn("Failed to get source manifest")
+		return nil, err
+	}
+	return m, nil
+}
+
+func (rc *RegClient) imageCheckPreconditionsWithRewrite(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor, opt *imageOpt) (manifest.Manifest, error) {
+	// get the manifest from the source
+	msrc, err := rc.ManifestGet(ctx, refSrc, WithManifestDesc(d))
+	if err != nil {
+		rc.log.WithFields(logrus.Fields{
+			"ref": refSrc.Reference,
+			"err": err,
+		}).Warn("Failed to get source manifest")
+		return nil, err
+	}
+	// rewrite manifest to fit to the selected platforms
+	sourceMan, errS := rc.rewriteManifestsWithPlatforms(ctx, refSrc, msrc, opt.platforms, true)
+
+	if errS != nil {
+		rc.log.WithFields(logrus.Fields{
+			"ref": refSrc.Reference,
+			"err": errS,
+		}).Warn("Failed to rewrite source manifest")
+		return nil, errS
+	}
+	if sourceMan == nil {
+		rc.log.WithFields(logrus.Fields{
+			"ref": refSrc.Reference,
+		}).Warn("Source Image does not contain specified platforms")
+		return nil, fmt.Errorf("source image %s does not contain specified platforms %v", refSrc.Reference, opt.platforms)
+	}
+	// optional: get and rewrite the target manifest
+	mtgt, _ := rc.ManifestGet(ctx, refTgt)
+	tgtMan, errD := rc.rewriteManifestsWithPlatforms(ctx, refTgt, mtgt, opt.platforms, false)
+	if errD != nil {
+		rc.log.WithFields(logrus.Fields{
+			"ref": refTgt.Reference,
+			"err": errD,
+		}).Warn("Failed to rewrite tgt manifest")
+		return nil, errD
+	}
+
+	if opt.forceRecursive {
+		// copy forced, unable to run below skips
+	} else if errD == nil && refTgt.Digest != "" && digest.Digest(refTgt.Digest) == mtgt.GetDescriptor().Digest {
+		rc.log.WithFields(logrus.Fields{
+			"target": refTgt.Reference,
+			"digest": mtgt.GetDescriptor().Digest.String(),
+		}).Info("Copy not needed, target already up to date")
+		return nil, nil
+	} else if errD == nil && refTgt.Digest == "" {
+		if sourceMan != nil && tgtMan != nil && sourceMan.GetDescriptor().Digest == tgtMan.GetDescriptor().Digest {
+			rc.log.WithFields(logrus.Fields{
+				"source": refSrc.Reference,
+				"target": refTgt.Reference,
+				"digest": sourceMan.GetDescriptor().Digest.String(),
+			}).Info("Copy not needed, target already up to date")
+			return nil, nil
+		}
+	}
+	return sourceMan, nil
+}
+
 func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor, child bool, opt *imageOpt) error {
 	mOpts := []ManifestOpts{}
 	if child {
@@ -398,38 +500,20 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 	if tgtSI.ManifestPushFirst {
 		opt.forceRecursive = true
 	}
-	// check if source and destination already match
-	mdh, errD := rc.ManifestHead(ctx, refTgt)
-	if opt.forceRecursive {
-		// copy forced, unable to run below skips
-	} else if errD == nil && refTgt.Digest != "" && digest.Digest(refTgt.Digest) == mdh.GetDescriptor().Digest {
-		rc.log.WithFields(logrus.Fields{
-			"target": refTgt.Reference,
-			"digest": mdh.GetDescriptor().Digest.String(),
-		}).Info("Copy not needed, target already up to date")
-		return nil
-	} else if errD == nil && refTgt.Digest == "" {
-		msh, errS := rc.ManifestHead(ctx, refSrc)
-		if errS == nil && msh.GetDescriptor().Digest == mdh.GetDescriptor().Digest {
-			rc.log.WithFields(logrus.Fields{
-				"source": refSrc.Reference,
-				"target": refTgt.Reference,
-				"digest": mdh.GetDescriptor().Digest.String(),
-			}).Info("Copy not needed, target already up to date")
-			return nil
-		}
+	var m manifest.Manifest
+	if len(opt.platforms) > 0 && opt.rewrite {
+		m, err = rc.imageCheckPreconditionsWithRewrite(ctx, refSrc, refTgt, d, opt)
+	} else {
+		m, err = rc.imageCheckPreconditions(ctx, refSrc, refTgt, d, opt)
 	}
-
-	// get the manifest for the source
-	m, err := rc.ManifestGet(ctx, refSrc, WithManifestDesc(d))
+	// if an error occured: finish
 	if err != nil {
-		rc.log.WithFields(logrus.Fields{
-			"ref": refSrc.Reference,
-			"err": err,
-		}).Warn("Failed to get source manifest")
 		return err
 	}
-
+	// if source manifest is nil -> nothing to do: finish
+	if m == nil {
+		return nil
+	}
 	if tgtSI.ManifestPushFirst {
 		// push manifest to target
 		err = rc.ManifestPut(ctx, refTgt, m, mOpts...)
