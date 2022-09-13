@@ -74,7 +74,8 @@ func TestRegbot(t *testing.T) {
 			script: ConfigScript{
 				Name: "GetConfig",
 				Script: `
-				ic = image.config("ocidir://testrepo:v1")
+				m = manifest.get("ocidir://testrepo:v1", "linux/amd64")
+				ic = image.config(m)
 				if ic.Config.Labels["version"] ~= "1" then
 				  log("Config version: " .. ic.Config.Labels["version"])
 					error "version label missing/invalid"
