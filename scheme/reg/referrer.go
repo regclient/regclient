@@ -18,15 +18,14 @@ import (
 )
 
 // ReferrerList returns a list of referrers to a given reference
-// This is EXPERIMENTAL
 func (reg *Reg) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.ReferrerOpts) (referrer.ReferrerList, error) {
 	config := scheme.ReferrerConfig{}
 	for _, opt := range opts {
 		opt(&config)
 	}
 	rl := referrer.ReferrerList{
-		Ref:  r,
-		Tags: []string{},
+		Subject: r,
+		Tags:    []string{},
 	}
 	// if ref is a tag, run a head request for the digest
 	if r.Digest == "" {
@@ -73,8 +72,8 @@ func (reg *Reg) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Refe
 
 func (reg *Reg) referrerListAPI(ctx context.Context, r ref.Ref, config scheme.ReferrerConfig) (referrer.ReferrerList, error) {
 	rl := referrer.ReferrerList{
-		Ref:  r,
-		Tags: []string{},
+		Subject: r,
+		Tags:    []string{},
 	}
 	var link *url.URL
 	var resp reghttp.Resp
@@ -117,8 +116,8 @@ func (reg *Reg) referrerListAPI(ctx context.Context, r ref.Ref, config scheme.Re
 
 func (reg *Reg) referrerListAPIReq(ctx context.Context, r ref.Ref, config scheme.ReferrerConfig, link *url.URL) (referrer.ReferrerList, reghttp.Resp, error) {
 	rl := referrer.ReferrerList{
-		Ref:  r,
-		Tags: []string{},
+		Subject: r,
+		Tags:    []string{},
 	}
 	query := url.Values{}
 	if config.FilterArtifactType != "" {
@@ -179,8 +178,8 @@ func (reg *Reg) referrerListAPIReq(ctx context.Context, r ref.Ref, config scheme
 
 func (reg *Reg) referrerListExtAPI(ctx context.Context, r ref.Ref, config scheme.ReferrerConfig) (referrer.ReferrerList, error) {
 	rl := referrer.ReferrerList{
-		Ref:  r,
-		Tags: []string{},
+		Subject: r,
+		Tags:    []string{},
 	}
 	query := url.Values{}
 	query.Set("digest", r.Digest)
@@ -233,8 +232,8 @@ func (reg *Reg) referrerListExtAPI(ctx context.Context, r ref.Ref, config scheme
 
 func (reg *Reg) referrerListTag(ctx context.Context, r ref.Ref) (referrer.ReferrerList, error) {
 	rl := referrer.ReferrerList{
-		Ref:  r,
-		Tags: []string{},
+		Subject: r,
+		Tags:    []string{},
 	}
 	rlTag, err := referrer.FallbackTag(r)
 	if err != nil {
@@ -269,31 +268,31 @@ func (reg *Reg) referrerListTag(ctx context.Context, r ref.Ref) (referrer.Referr
 
 // referrerDelete deletes a referrer associated with a manifest
 func (reg *Reg) referrerDelete(ctx context.Context, r ref.Ref, m manifest.Manifest) error {
-	// get refers field
-	mRefer, ok := m.(manifest.Refers)
+	// get subject field
+	mSubject, ok := m.(manifest.Subjecter)
 	if !ok {
-		return fmt.Errorf("manifest does not support refers: %w", types.ErrUnsupportedMediaType)
+		return fmt.Errorf("manifest does not support the subject field: %w", types.ErrUnsupportedMediaType)
 	}
-	refers, err := mRefer.GetRefers()
+	subject, err := mSubject.GetSubject()
 	if err != nil {
 		return err
 	}
-	// validate/set referrer descriptor
-	if refers == nil || refers.MediaType == "" || refers.Digest == "" || refers.Size <= 0 {
+	// validate/set subject descriptor
+	if subject == nil || subject.MediaType == "" || subject.Digest == "" || subject.Size <= 0 {
 		return fmt.Errorf("refers is not set%.0w", types.ErrNotFound)
 	}
 
-	rRef := r
-	rRef.Tag = ""
-	rRef.Digest = refers.Digest.String()
+	rSubject := r
+	rSubject.Tag = ""
+	rSubject.Digest = subject.Digest.String()
 
 	// if referrer API is available, nothing to do, return
-	if reg.referrerPing(ctx, rRef) {
+	if reg.referrerPing(ctx, rSubject) {
 		return nil
 	}
 
 	// fallback to using tag schema for refers
-	rl, err := reg.referrerListTag(ctx, rRef)
+	rl, err := reg.referrerListTag(ctx, rSubject)
 	if err != nil {
 		return err
 	}
@@ -302,7 +301,7 @@ func (reg *Reg) referrerDelete(ctx context.Context, r ref.Ref, m manifest.Manife
 		return err
 	}
 	// push updated referrer list by tag
-	rlTag, err := referrer.FallbackTag(rRef)
+	rlTag, err := referrer.FallbackTag(rSubject)
 	if err != nil {
 		return err
 	}
@@ -318,31 +317,31 @@ func (reg *Reg) referrerDelete(ctx context.Context, r ref.Ref, m manifest.Manife
 
 // referrerPut pushes a new referrer associated with a manifest
 func (reg *Reg) referrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest) error {
-	// get refers field
-	mRefer, ok := m.(manifest.Refers)
+	// get subject field
+	mSubject, ok := m.(manifest.Subjecter)
 	if !ok {
-		return fmt.Errorf("manifest does not support refers: %w", types.ErrUnsupportedMediaType)
+		return fmt.Errorf("manifest does not support the subject field: %w", types.ErrUnsupportedMediaType)
 	}
-	refers, err := mRefer.GetRefers()
+	subject, err := mSubject.GetSubject()
 	if err != nil {
 		return err
 	}
-	// validate/set referrer descriptor
-	if refers == nil || refers.MediaType == "" || refers.Digest == "" || refers.Size <= 0 {
-		return fmt.Errorf("refers is not set%.0w", types.ErrNotFound)
+	// validate/set subject descriptor
+	if subject == nil || subject.MediaType == "" || subject.Digest == "" || subject.Size <= 0 {
+		return fmt.Errorf("subject is not set%.0w", types.ErrNotFound)
 	}
 
-	rRef := r
-	rRef.Tag = ""
-	rRef.Digest = refers.Digest.String()
+	rSubject := r
+	rSubject.Tag = ""
+	rSubject.Digest = subject.Digest.String()
 
 	// if referrer API is available, return
-	if reg.referrerPing(ctx, rRef) {
+	if reg.referrerPing(ctx, rSubject) {
 		return nil
 	}
 
 	// fallback to using tag schema for refers
-	rl, err := reg.referrerListTag(ctx, rRef)
+	rl, err := reg.referrerListTag(ctx, rSubject)
 	if err != nil {
 		return err
 	}
@@ -351,7 +350,7 @@ func (reg *Reg) referrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest)
 		return err
 	}
 	// push updated referrer list by tag
-	rlTag, err := referrer.FallbackTag(rRef)
+	rlTag, err := referrer.FallbackTag(rSubject)
 	if err != nil {
 		return err
 	}
@@ -384,6 +383,7 @@ func (reg *Reg) referrerPingAPI(ctx context.Context, r ref.Ref) bool {
 }
 
 // referrerPingExt checks the extension API
+// TODO: delete extension API in future releases
 func (reg *Reg) referrerPingExt(ctx context.Context, r ref.Ref) bool {
 	query := url.Values{}
 	query.Set("digest", r.Digest)

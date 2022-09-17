@@ -76,7 +76,7 @@ func TestReferrer(t *testing.T) {
 			},
 		},
 		Annotations: artifactAAnnot,
-		Refers:      &mDesc,
+		Subject:     &mDesc,
 	}
 	artifactAM, err := manifest.New(manifest.WithOrig(artifactA))
 	if err != nil {
@@ -100,7 +100,7 @@ func TestReferrer(t *testing.T) {
 			},
 		},
 		Annotations: artifactBAnnot,
-		Refers:      &mDesc,
+		Subject:     &mDesc,
 	}
 	artifactBM, err := manifest.New(manifest.WithOrig(artifactB))
 	if err != nil {
@@ -237,7 +237,7 @@ func TestReferrer(t *testing.T) {
 		}
 	})
 
-	// delete manifests with refers
+	// delete manifests with referrers
 	t.Run("Delete", func(t *testing.T) {
 		r := mRef
 		r.Tag = ""
@@ -248,7 +248,7 @@ func TestReferrer(t *testing.T) {
 			return
 		}
 		r.Digest = artifactBM.GetDescriptor().Digest.String()
-		err = o.ManifestDelete(ctx, r, scheme.WithManifestCheckRefers())
+		err = o.ManifestDelete(ctx, r, scheme.WithManifestCheckReferrers())
 		if err != nil {
 			t.Errorf("Failed running ManifestDelete on Artifact: %v", err)
 			return

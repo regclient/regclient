@@ -84,13 +84,13 @@ var manifestOpts struct {
 	formatPut     string
 	list          bool
 	platform      string
-	refers        bool
+	referrers     bool
 	requireList   bool
 }
 
 func init() {
 	manifestDeleteCmd.Flags().BoolVarP(&manifestOpts.forceTagDeref, "force-tag-dereference", "", false, "Dereference the a tag to a digest, this is unsafe")
-	manifestDeleteCmd.Flags().BoolVarP(&manifestOpts.refers, "refers", "", false, "Check for refers, recommended when deleting artifacts")
+	manifestDeleteCmd.Flags().BoolVarP(&manifestOpts.referrers, "referrers", "", false, "Check for referrers, recommended when deleting artifacts")
 
 	manifestDiffCmd.Flags().IntVarP(&manifestOpts.diffCtx, "context", "", 3, "Lines of context")
 	manifestDiffCmd.Flags().BoolVarP(&manifestOpts.diffFullCtx, "context-full", "", false, "Show all lines of context")
@@ -225,8 +225,8 @@ func runManifestDelete(cmd *cobra.Command, args []string) error {
 		"digest": r.Digest,
 	}).Debug("Manifest delete")
 	mOpts := []regclient.ManifestOpts{}
-	if manifestOpts.refers {
-		mOpts = append(mOpts, regclient.WithManifestCheckRefers())
+	if manifestOpts.referrers {
+		mOpts = append(mOpts, regclient.WithManifestCheckReferrers())
 	}
 
 	err = rc.ManifestDelete(ctx, r, mOpts...)

@@ -78,9 +78,9 @@ type Imager interface {
 	SetLayers(dl []types.Descriptor) error
 }
 
-type Refers interface {
-	GetRefers() (*types.Descriptor, error)
-	SetRefers(d *types.Descriptor) error
+type Subjecter interface {
+	GetSubject() (*types.Descriptor, error)
+	SetSubject(d *types.Descriptor) error
 }
 
 type manifestConfig struct {

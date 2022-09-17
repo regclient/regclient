@@ -24,10 +24,10 @@ func WithManifest(m manifest.Manifest) ManifestOpts {
 	}
 }
 
-// WithManifestCheckRefers checks for refers field on ManifestDelete.
-func WithManifestCheckRefers() ManifestOpts {
+// WithManifestCheckReferrers checks for referrers field on ManifestDelete.
+func WithManifestCheckReferrers() ManifestOpts {
 	return func(opts *manifestOpt) {
-		opts.schemeOpts = append(opts.schemeOpts, scheme.WithManifestCheckRefers())
+		opts.schemeOpts = append(opts.schemeOpts, scheme.WithManifestCheckReferrers())
 	}
 }
 
