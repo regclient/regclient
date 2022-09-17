@@ -28,7 +28,7 @@ func (reg *Reg) ManifestDelete(ctx context.Context, r ref.Ref, opts ...scheme.Ma
 		opt(&mc)
 	}
 
-	if mc.CheckRefers && mc.Manifest == nil {
+	if mc.CheckReferrers && mc.Manifest == nil {
 		m, err := reg.ManifestGet(ctx, r)
 		if err != nil {
 			return fmt.Errorf("failed to pull manifest for refers: %w", err)
@@ -36,9 +36,9 @@ func (reg *Reg) ManifestDelete(ctx context.Context, r ref.Ref, opts ...scheme.Ma
 		mc.Manifest = m
 	}
 	if mc.Manifest != nil {
-		if mr, ok := mc.Manifest.(manifest.Refers); ok {
-			rDesc, err := mr.GetRefers()
-			if err == nil && rDesc != nil && rDesc.MediaType != "" && rDesc.Size > 0 {
+		if mr, ok := mc.Manifest.(manifest.Subjecter); ok {
+			sDesc, err := mr.GetSubject()
+			if err == nil && sDesc != nil && sDesc.MediaType != "" && sDesc.Size > 0 {
 				// attempt to delete the referrer, but ignore if the referrer entry wasn't found
 				err = reg.referrerDelete(ctx, r, mc.Manifest)
 				if err != nil && !errors.Is(err, types.ErrNotFound) {
@@ -228,8 +228,8 @@ func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest,
 	}
 
 	// update referrers if defined on this manifest
-	if mr, ok := m.(manifest.Refers); ok {
-		mDesc, err := mr.GetRefers()
+	if mr, ok := m.(manifest.Subjecter); ok {
+		mDesc, err := mr.GetSubject()
 		if err != nil {
 			return err
 		}

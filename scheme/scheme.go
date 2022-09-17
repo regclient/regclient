@@ -59,19 +59,19 @@ type Info struct {
 
 // ManifestConfig is used by schemes to import ManifestOpts
 type ManifestConfig struct {
-	CheckRefers bool
-	Child       bool // used when pushing a child of a manifest list, skips indexing in ocidir
-	Manifest    manifest.Manifest
+	CheckReferrers bool
+	Child          bool // used when pushing a child of a manifest list, skips indexing in ocidir
+	Manifest       manifest.Manifest
 }
 
 // ManifestOpts is used to set options on manifest APIs
 type ManifestOpts func(*ManifestConfig)
 
-// WithManifestCheckRefers is used when deleting a manifest
-// It indicates the manifest should be fetched and refers should be deleted if defined
-func WithManifestCheckRefers() ManifestOpts {
+// WithManifestCheckReferrers is used when deleting a manifest
+// It indicates the manifest should be fetched and referrers should be deleted if defined
+func WithManifestCheckReferrers() ManifestOpts {
 	return func(config *ManifestConfig) {
-		config.CheckRefers = true
+		config.CheckReferrers = true
 	}
 }
 
@@ -85,7 +85,7 @@ func WithManifestChild() ManifestOpts {
 }
 
 // WithManifest is used to pass the manifest to a method to avoid an extra GET request
-// This is used on a delete to check for refers
+// This is used on a delete to check for referrers
 func WithManifest(m manifest.Manifest) ManifestOpts {
 	return func(mc *ManifestConfig) {
 		mc.Manifest = m

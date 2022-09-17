@@ -153,7 +153,6 @@ func ImageWithPlatforms(p []string) ImageOpts {
 }
 
 // ImageWithReferrers recursively includes images that refer to this.
-// EXPERIMENTAL: referrers implementation is considered experimental.
 func ImageWithReferrers() ImageOpts {
 	return func(opts *imageOpt) {
 		opts.referrers = true
@@ -574,27 +573,27 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 		}
 	}
 
-	// EXPERIMENTAL support for referrers
-	referTags := []string{}
+	// copy referrers
+	referrerTags := []string{}
 	if opt.referrers {
 		rl, err := rc.ReferrerList(ctx, refSrc)
 		if err != nil {
 			return err
 		}
-		referTags = append(referTags, rl.Tags...)
+		referrerTags = append(referrerTags, rl.Tags...)
 		for _, rDesc := range rl.Descriptors {
-			referSrc := refSrc
-			referSrc.Tag = ""
-			referSrc.Digest = rDesc.Digest.String()
-			referTgt := refTgt
-			referTgt.Tag = ""
-			referTgt.Digest = rDesc.Digest.String()
-			err = rc.imageCopyOpt(ctx, referSrc, referTgt, rDesc, true, opt)
+			referrerSrc := refSrc
+			referrerSrc.Tag = ""
+			referrerSrc.Digest = rDesc.Digest.String()
+			referrerTgt := refTgt
+			referrerTgt.Tag = ""
+			referrerTgt.Digest = rDesc.Digest.String()
+			err = rc.imageCopyOpt(ctx, referrerSrc, referrerTgt, rDesc, true, opt)
 			if err != nil {
 				rc.log.WithFields(logrus.Fields{
 					"digest": rDesc.Digest.String(),
-					"src":    referSrc.CommonName(),
-					"tgt":    referTgt.CommonName(),
+					"src":    referrerSrc.CommonName(),
+					"tgt":    referrerTgt.CommonName(),
 				}).Warn("Failed to copy referrer")
 				return err
 			}
@@ -626,8 +625,8 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 		for _, tag := range opt.tagList {
 			if strings.HasPrefix(tag, prefix) {
 				// skip referrers that were copied above
-				for _, referTag := range referTags {
-					if referTag == tag {
+				for _, referrerTag := range referrerTags {
+					if referrerTag == tag {
 						continue
 					}
 				}

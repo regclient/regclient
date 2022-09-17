@@ -14,9 +14,9 @@ import (
 	"github.com/regclient/regclient/types/ref"
 )
 
-// ReferrerList contains the response to a request for referrers
+// ReferrerList contains the response to a request for referrers to a subject
 type ReferrerList struct {
-	Ref         ref.Ref            `json:"ref"`                   // reference queried
+	Subject     ref.Ref            `json:"subject"`               // subject queried
 	Descriptors []types.Descriptor `json:"descriptors"`           // descriptors found in Index
 	Annotations map[string]string  `json:"annotations,omitempty"` // annotations extracted from Index
 	Manifest    manifest.Manifest  `json:"-"`                     // returned OCI Index
@@ -27,7 +27,7 @@ type ReferrerList struct {
 func (rl *ReferrerList) Add(m manifest.Manifest) error {
 	rlM, ok := rl.Manifest.GetOrig().(v1.Index)
 	if !ok {
-		return fmt.Errorf("referrer list manifest is not an OCI index for %s", rl.Ref.CommonName())
+		return fmt.Errorf("referrer list manifest is not an OCI index for %s", rl.Subject.CommonName())
 	}
 	// if entry already exists, return
 	mDesc := m.GetDescriptor()
@@ -61,7 +61,7 @@ func (rl *ReferrerList) Add(m manifest.Manifest) error {
 func (rl *ReferrerList) Delete(m manifest.Manifest) error {
 	rlM, ok := rl.Manifest.GetOrig().(v1.Index)
 	if !ok {
-		return fmt.Errorf("referrer list manifest is not an OCI index for %s", rl.Ref.CommonName())
+		return fmt.Errorf("referrer list manifest is not an OCI index for %s", rl.Subject.CommonName())
 	}
 	// delete matching entries from the list
 	mDesc := m.GetDescriptor()
@@ -77,7 +77,7 @@ func (rl *ReferrerList) Delete(m manifest.Manifest) error {
 		}
 	}
 	if !found {
-		return fmt.Errorf("refers not found in referrer list%.0w", types.ErrNotFound)
+		return fmt.Errorf("subject not found in referrer list%.0w", types.ErrNotFound)
 	}
 	err := rl.Manifest.SetOrig(rlM)
 	if err != nil {
@@ -99,10 +99,10 @@ func (rl ReferrerList) IsEmpty() bool {
 func (rl ReferrerList) MarshalPretty() ([]byte, error) {
 	buf := &bytes.Buffer{}
 	tw := tabwriter.NewWriter(buf, 0, 0, 1, ' ', 0)
-	if rl.Ref.Reference != "" {
-		fmt.Fprintf(tw, "Refers:\t%s\n", rl.Ref.Reference)
+	if rl.Subject.Reference != "" {
+		fmt.Fprintf(tw, "Subject:\t%s\n", rl.Subject.Reference)
 	}
-	rRef := rl.Ref
+	rRef := rl.Subject
 	rRef.Tag = ""
 	fmt.Fprintf(tw, "\t\n")
 	fmt.Fprintf(tw, "Referrers:\t\n")

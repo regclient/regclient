@@ -28,5 +28,9 @@ type Manifest struct {
 	Annotations map[string]string `json:"annotations,omitempty"`
 
 	// Refers indicates this manifest references another manifest
+	// TODO: deprecated, delete this from future releases
 	Refers *types.Descriptor `json:"refers,omitempty"`
+
+	// Subject is an optional link from the image manifest to another manifest forming an association between the image manifest and the other manifest.
+	Subject *types.Descriptor `json:"subject,omitempty"`
 }

@@ -8,10 +8,10 @@ rm -r testrepo
 
 # build base images
 for i in 1 2 3; do
-docker buildx build \
-  -t "testrepo:b${i}" -o "type=oci,dest=b${i}.tar" \
-  --platform "linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6" \
-  -f "Dockerfile.b${i}" .
+  docker buildx build \
+    -t "testrepo:b${i}" -o "type=oci,dest=b${i}.tar" \
+    --platform "linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6" \
+    -f "Dockerfile.b${i}" .
   regctl image import "ocidir://testrepo:b${i}" "b${i}.tar"
   regctl image mod \
     --annotation "org.example.version=b${i}" \
@@ -65,10 +65,10 @@ done
 # create two artifacts on v2
 echo eggs | regctl artifact put \
   --artifact-type application/example.sbom -m application/example.sbom.breakfast \
-  --refers ocidir://testrepo:v2 ocidir://testrepo:a1
+  --subject ocidir://testrepo:v2 ocidir://testrepo:a1
 echo signed | regctl artifact put \
   --artifact-type application/example.signature -m application/example.signature.text \
-  --refers ocidir://testrepo:v2 ocidir://testrepo:a2
+  --subject ocidir://testrepo:v2 ocidir://testrepo:a2
 
 # create a digest tag from v3 pointing to v1
 v1_dig="$(regctl image digest ocidir://testrepo:v1)"

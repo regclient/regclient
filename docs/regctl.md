@@ -324,6 +324,7 @@ Usage:
 
 Available Commands:
   get         download artifacts
+  list        list artifacts that have a subject to the given reference
   put         upload artifacts
 ```
 
@@ -331,11 +332,20 @@ The `get` command retrieves an artifact from the registry.
 By default, the artifact contents are written to stdout, redirect this to a file for binary content.
 For retrieving multiple files from a single artifact, specify an output directory.
 Filters can be added for the filename and media type, and the config json can also be output to a separate file.
+With the `--subject` option, an artifacts with a subject may be retrieved, and filters by artifact type or annotations can be used to select a specific artifact from a list of referrers.
+
+The `list` command shows artifacts that refer to an image.
+The result is a list of descriptors to artifacts with the `refers` field pointing to the specified image.
+The result may also be filtered using `--filter-annotation` and `--filter-artifact-type` to find artifacts of a specific type with specific annotations.
 
 The `put` command uploads an artifact to the registry.
+The artifact may be pushed with it's own tag or by digest using `--by-digest` which ignores the tag value.
+The artifact may be pushed with the `subject` field using the `--subject` option, associating the artifact with another manifest which can be shown with the `regctl artifact list` command.
+The `--media-type` must be either `application/vnd.oci.image.manifest.v1+json` or `application/vnd.oci.artifact.manifest.v1+json`, but many registries will not support the latter type.
+The `--artifact-type` option sets the `artifactType` on the artifact manifest, or the config `mediaType` on the image manifest.
+The config json may also included for image manifests.
 Each file should have a media type passed in the same order on the command line.
 A single file may be pushed using stdin.
-The config json may also be pushed, and have it's own media type.
 To set annotations on the manifest, use `--annotation name=value`, and repeat the flag for additional annotations.
 The format option includes `.Manifest` which supports methods from [manifest.Manifest](https://pkg.go.dev/github.com/regclient/regclient/types/manifest#Manifest).
 
@@ -374,6 +384,62 @@ Layers:
 $ regctl artifact get localhost:5000/artifact:demo
 Test artifact from regctl.
 This follows the OCI artifact format
+```
+
+The following demonstrates associating multiple artifacts with an existing image and fetching the content of a specific one:
+
+```shell
+$ regctl artifact list localhost:5000/artifacts:v1
+Subject:   localhost:5000/artifacts:v1
+           
+Referrers: 
+
+$ regctl artifact put \
+  --artifact-type application/vnd.example.sbom \
+  -m application/vnd.example.sbom.text \
+  --annotation org.example.sbom.format=text \
+  --subject localhost:5000/artifacts:v1 <<EOF
+Version: 1
+Type: OCI
+Contains: Image
+EOF
+
+$ regctl artifact put \
+  --artifact-type application/vnd.example.sbom \
+  -m application/vnd.example.sbom.json \
+  --annotation org.example.sbom.format=json \
+  --subject localhost:5000/artifacts:v1 <<EOF
+{ "version": 1,
+  "type": "OCI",
+  "contains": "Image"
+}   
+EOF
+
+$ regctl artifact list localhost:5000/artifacts:v1
+Subject:                     localhost:5000/artifacts:v1
+                             
+Referrers:                   
+                             
+  Name:                      localhost:5000/artifacts@sha256:80024f564d15a8e3593aac53d2ebaf62cad3db0b873ab66946b016cd65cc5728
+  Digest:                    sha256:80024f564d15a8e3593aac53d2ebaf62cad3db0b873ab66946b016cd65cc5728
+  MediaType:                 application/vnd.oci.image.manifest.v1+json
+  ArtifactType:              application/vnd.example.sbom
+  Annotations:               
+    org.example.sbom.format: text
+                             
+  Name:                      localhost:5000/artifacts@sha256:70440b27e1ebccf4627b10100421db022202a06a43d218ebadfdfd64c92f4c94
+  Digest:                    sha256:70440b27e1ebccf4627b10100421db022202a06a43d218ebadfdfd64c92f4c94
+  MediaType:                 application/vnd.oci.image.manifest.v1+json
+  ArtifactType:              application/vnd.example.sbom
+  Annotations:               
+    org.example.sbom.format: json
+
+$ regctl artifact get \
+  --filter-annotation org.example.sbom.format=text \
+  --subject localhost:5000/artifacts:v1
+Version: 1
+Type: OCI
+Contains: Image
 ```
 
 ## Format Flag
