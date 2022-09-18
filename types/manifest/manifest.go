@@ -547,6 +547,12 @@ func getPlatformDesc(p *platform.Platform, dl []types.Descriptor) (*types.Descri
 			return &d, nil
 		}
 	}
+	// if no platforms match, fall back to searching for a compatible platform (Mac runs Linux images)
+	for _, d := range dl {
+		if d.Platform != nil && platform.Compatible(*p, *d.Platform) {
+			return &d, nil
+		}
+	}
 	return nil, wraperr.New(fmt.Errorf("platform not found: %s", *p), types.ErrNotFound)
 }
 
