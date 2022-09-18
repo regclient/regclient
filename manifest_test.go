@@ -264,7 +264,7 @@ func TestManifest(t *testing.T) {
 			Digest:    mDigest,
 			Data:      []byte(base64.StdEncoding.EncodeToString(mBody)),
 		}
-		mGet, err := rc.ManifestGet(ctx, dataRef, ManifestWithDesc(d))
+		mGet, err := rc.ManifestGet(ctx, dataRef, WithManifestDesc(d))
 		if err != nil {
 			t.Errorf("failed running ManifestGet: %v", err)
 		}
@@ -287,7 +287,7 @@ func TestManifest(t *testing.T) {
 			Digest:    mDigest,
 			Data:      []byte(base64.StdEncoding.EncodeToString([]byte("invalid data"))),
 		}
-		_, err = rc.ManifestGet(ctx, getRef, ManifestWithDesc(d))
+		_, err = rc.ManifestGet(ctx, getRef, WithManifestDesc(d))
 		if err != nil {
 			t.Errorf("Failed running ManifestGet: %v", err)
 			return
@@ -304,7 +304,7 @@ func TestManifest(t *testing.T) {
 			Digest:    mDigest,
 			Data:      []byte(base64.StdEncoding.EncodeToString([]byte("invalid data"))),
 		}
-		_, err = rc.ManifestGet(ctx, missingRef, ManifestWithDesc(d))
+		_, err = rc.ManifestGet(ctx, missingRef, WithManifestDesc(d))
 		if err != nil {
 			t.Errorf("get with descriptor failed, didn't fall back to digest")
 			return
@@ -321,7 +321,7 @@ func TestManifest(t *testing.T) {
 			Digest:    missingDigest,
 			Data:      []byte(base64.StdEncoding.EncodeToString([]byte("invalid data"))),
 		}
-		_, err = rc.ManifestGet(ctx, missingRef, ManifestWithDesc(d))
+		_, err = rc.ManifestGet(ctx, missingRef, WithManifestDesc(d))
 		if err == nil {
 			t.Errorf("Success running ManifestGet on missing ref")
 			return

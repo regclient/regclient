@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -15,6 +17,11 @@ import (
 func TestNew(t *testing.T) {
 	emptyRaw := []byte("{}")
 	registryTags := []string{"cache", "edge", "edge-alpine", "alpine", "latest"}
+	reqURL, err := url.Parse("http://localhost:5000/v2/regclient/test/tag/list")
+	if err != nil {
+		t.Errorf("failed to parse URL: %v", err)
+		return
+	}
 	registryRef, _ := ref.New("localhost:5000/regclient/test")
 	registryRepoName := "regclient/test"
 	registryRaw := []byte(fmt.Sprintf(`{"name":"%s","tags":["%s"]}`, registryRepoName,
@@ -139,6 +146,39 @@ func TestNew(t *testing.T) {
 			tags:     registryTags,
 		},
 		{
+			name: "Registry with HTTP Response",
+			opts: []Opts{
+				WithRef(registryRef),
+				WithRaw(registryRaw),
+				WithResp(&http.Response{
+					Header: registryHeaders,
+					Request: &http.Request{
+						URL: reqURL,
+					},
+				}),
+			},
+			raw:      registryRaw,
+			repoName: registryRepoName,
+			tags:     registryTags,
+		},
+		{
+			name: "Registry with HTTP Response and Body",
+			opts: []Opts{
+				WithRef(registryRef),
+				WithResp(&http.Response{
+					Header:        registryHeaders,
+					Body:          io.NopCloser(bytes.NewReader(registryRaw)),
+					ContentLength: int64(len(registryRaw)),
+					Request: &http.Request{
+						URL: reqURL,
+					},
+				}),
+			},
+			raw:      registryRaw,
+			repoName: registryRepoName,
+			tags:     registryTags,
+		},
+		{
 			name: "GCR",
 			opts: []Opts{
 				WithRef(gcrRef),
@@ -201,6 +241,32 @@ func TestNew(t *testing.T) {
 				t.Errorf("unexpected gcr manifest: expected %v, received %v", tt.gcrManifests, tl.Manifests)
 			}
 		})
+	}
+}
+
+func TestAppend(t *testing.T) {
+	expectTags := []string{"1", "2", "3", "4", "5", "6"}
+	tl1, err := New(
+		WithTags(expectTags[:3]),
+	)
+	if err != nil {
+		t.Errorf("failed to build tag list 1: %v", err)
+		return
+	}
+	tl2, err := New(
+		WithTags(expectTags[3:]),
+	)
+	if err != nil {
+		t.Errorf("failed to build tag list 1: %v", err)
+		return
+	}
+	err = tl1.Append(tl2)
+	if err != nil {
+		t.Errorf("failed to append tags: %v", err)
+		return
+	}
+	if !cmpSliceString(tl1.Tags, expectTags) {
+		t.Errorf("tags mismatch, expected: %v, received %v", expectTags, tl1.Tags)
 	}
 }
 

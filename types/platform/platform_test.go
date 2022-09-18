@@ -5,72 +5,107 @@ import (
 	"testing"
 )
 
-func TestMatch(t *testing.T) {
+func TestCompare(t *testing.T) {
 	tests := []struct {
-		name   string
-		a, b   Platform
-		expect bool
+		name         string
+		a, b         Platform
+		expectMatch  bool
+		expectCompat bool
 	}{
 		{
-			name:   "linux match",
-			a:      Platform{OS: "linux", Architecture: "amd64"},
-			b:      Platform{OS: "linux", Architecture: "amd64"},
-			expect: true,
+			name:         "linux match",
+			a:            Platform{OS: "linux", Architecture: "amd64"},
+			b:            Platform{OS: "linux", Architecture: "amd64"},
+			expectMatch:  true,
+			expectCompat: true,
 		},
 		{
-			name:   "linux arch",
-			a:      Platform{OS: "linux", Architecture: "amd64"},
-			b:      Platform{OS: "linux", Architecture: "arm64"},
-			expect: false,
+			name:         "linux arch",
+			a:            Platform{OS: "linux", Architecture: "amd64"},
+			b:            Platform{OS: "linux", Architecture: "arm64"},
+			expectMatch:  false,
+			expectCompat: false,
 		},
 		{
-			name:   "linux normalized",
-			a:      Platform{OS: "linux", Architecture: "arm64"},
-			b:      Platform{OS: "linux", Architecture: "arm64", Variant: "v8"},
-			expect: true,
+			name:         "linux normalized",
+			a:            Platform{OS: "linux", Architecture: "arm64"},
+			b:            Platform{OS: "linux", Architecture: "arm64", Variant: "v8"},
+			expectMatch:  true,
+			expectCompat: true,
 		},
 		{
-			name:   "linux variant",
-			a:      Platform{OS: "linux", Architecture: "arm", Variant: "v6"},
-			b:      Platform{OS: "linux", Architecture: "arm", Variant: "v7"},
-			expect: false,
+			name:         "linux variant",
+			a:            Platform{OS: "linux", Architecture: "arm", Variant: "v6"},
+			b:            Platform{OS: "linux", Architecture: "arm", Variant: "v7"},
+			expectMatch:  false,
+			expectCompat: false,
 		},
 		{
-			name:   "windows match",
-			a:      Platform{OS: "windows", Architecture: "amd64", OSVersion: "10.0.17763.2114"},
-			b:      Platform{OS: "windows", Architecture: "amd64", OSVersion: "10.0.17763.2114"},
-			expect: true,
+			name:         "windows match",
+			a:            Platform{OS: "windows", Architecture: "amd64", OSVersion: "10.0.17763.2114"},
+			b:            Platform{OS: "windows", Architecture: "amd64", OSVersion: "10.0.17763.2114"},
+			expectMatch:  true,
+			expectCompat: true,
 		},
 		{
-			name:   "windows patch",
-			a:      Platform{OS: "windows", Architecture: "amd64", OSVersion: "10.0.17763.2014"},
-			b:      Platform{OS: "windows", Architecture: "amd64", OSVersion: "10.0.17763.2114"},
-			expect: true,
+			name:         "windows patch",
+			a:            Platform{OS: "windows", Architecture: "amd64", OSVersion: "10.0.17763.2014"},
+			b:            Platform{OS: "windows", Architecture: "amd64", OSVersion: "10.0.17763.2114"},
+			expectMatch:  true,
+			expectCompat: true,
 		},
 		{
-			name:   "windows minor",
-			a:      Platform{OS: "windows", Architecture: "amd64", OSVersion: "10.0.14393.4583"},
-			b:      Platform{OS: "windows", Architecture: "amd64", OSVersion: "10.0.17763.2114"},
-			expect: false,
+			name:         "windows minor",
+			a:            Platform{OS: "windows", Architecture: "amd64", OSVersion: "10.0.14393.4583"},
+			b:            Platform{OS: "windows", Architecture: "amd64", OSVersion: "10.0.17763.2114"},
+			expectMatch:  false,
+			expectCompat: false,
 		},
 		{
-			name:   "other",
-			a:      Platform{OS: "other", Architecture: "amd64", Variant: "42"},
-			b:      Platform{OS: "other", Architecture: "amd64", Variant: "42"},
-			expect: true,
+			name:         "darwin compatible",
+			a:            Platform{OS: "darwin", Architecture: "amd64"},
+			b:            Platform{OS: "linux", Architecture: "amd64"},
+			expectMatch:  false,
+			expectCompat: true,
 		},
 		{
-			name:   "other variant",
-			a:      Platform{OS: "other", Architecture: "amd64", Variant: "42"},
-			b:      Platform{OS: "other", Architecture: "amd64", Variant: "45"},
-			expect: false,
+			name:         "darwin target",
+			a:            Platform{OS: "linux", Architecture: "amd64"},
+			b:            Platform{OS: "darwin", Architecture: "amd64"},
+			expectMatch:  false,
+			expectCompat: false,
+		},
+		{
+			name:         "windows compatible",
+			a:            Platform{OS: "windows", Architecture: "amd64"},
+			b:            Platform{OS: "linux", Architecture: "amd64"},
+			expectMatch:  false,
+			expectCompat: true,
+		},
+		{
+			name:         "other",
+			a:            Platform{OS: "other", Architecture: "amd64", Variant: "42"},
+			b:            Platform{OS: "other", Architecture: "amd64", Variant: "42"},
+			expectMatch:  true,
+			expectCompat: true,
+		},
+		{
+			name:         "other variant",
+			a:            Platform{OS: "other", Architecture: "amd64", Variant: "42"},
+			b:            Platform{OS: "other", Architecture: "amd64", Variant: "45"},
+			expectMatch:  false,
+			expectCompat: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := Match(tt.a, tt.b)
-			if result != tt.expect {
+			if result != tt.expectMatch {
 				t.Errorf("unexpected match, result: %v, a: %v, b: %v", result, tt.a, tt.b)
+			}
+			result = Compatible(tt.a, tt.b)
+			if result != tt.expectCompat {
+				t.Errorf("unexpected compatible, result: %v, a: %v, b: %v", result, tt.a, tt.b)
 			}
 		})
 	}
@@ -112,6 +147,11 @@ func TestPlatformParse(t *testing.T) {
 			name:  "windows amd64/10.0.14393",
 			parse: "windows/amd64/10.0.14393.4583",
 			goal:  Platform{OS: "windows", Architecture: "amd64", OSVersion: "10.0.14393.4583"},
+		},
+		{
+			name:  "local",
+			parse: "local",
+			goal:  Local(),
 		},
 	}
 	for _, tt := range tests {

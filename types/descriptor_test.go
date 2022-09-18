@@ -136,6 +136,21 @@ func TestDescriptorEq(t *testing.T) {
 			expectSame:  true,
 		},
 		{
+			name: "converting OCI media type",
+			d1: Descriptor{
+				MediaType: MediaTypeDocker2Manifest,
+				Size:      1234,
+				Digest:    digA,
+			},
+			d2: Descriptor{
+				MediaType: MediaTypeOCI1Manifest,
+				Size:      1234,
+				Digest:    digA,
+			},
+			expectEqual: false,
+			expectSame:  true,
+		},
+		{
 			name: "different media type",
 			d1: Descriptor{
 				MediaType: MediaTypeDocker2Manifest,
@@ -366,6 +381,56 @@ func TestDescriptorEq(t *testing.T) {
 					OS:           "linux",
 					Architecture: "amd64",
 				},
+			},
+			d2: Descriptor{
+				MediaType: MediaTypeDocker2Manifest,
+				Size:      1234,
+				Digest:    digA,
+			},
+			expectEqual: false,
+			expectSame:  true,
+		},
+		{
+			name: "artifactType eq",
+			d1: Descriptor{
+				MediaType:    MediaTypeDocker2Manifest,
+				Size:         1234,
+				Digest:       digA,
+				ArtifactType: "application/vnd.example.test",
+			},
+			d2: Descriptor{
+				MediaType:    MediaTypeDocker2Manifest,
+				Size:         1234,
+				Digest:       digA,
+				ArtifactType: "application/vnd.example.test",
+			},
+			expectEqual: true,
+			expectSame:  true,
+		},
+		{
+			name: "artifactType diff",
+			d1: Descriptor{
+				MediaType:    MediaTypeDocker2Manifest,
+				Size:         1234,
+				Digest:       digA,
+				ArtifactType: "application/vnd.example.test",
+			},
+			d2: Descriptor{
+				MediaType:    MediaTypeDocker2Manifest,
+				Size:         1234,
+				Digest:       digA,
+				ArtifactType: "application/vnd.example.test2",
+			},
+			expectEqual: false,
+			expectSame:  true,
+		},
+		{
+			name: "artifactType missing",
+			d1: Descriptor{
+				MediaType:    MediaTypeDocker2Manifest,
+				Size:         1234,
+				Digest:       digA,
+				ArtifactType: "application/vnd.example.test",
 			},
 			d2: Descriptor{
 				MediaType: MediaTypeDocker2Manifest,

@@ -30,7 +30,7 @@ type API interface {
 	BlobPut(ctx context.Context, r ref.Ref, d types.Descriptor, rdr io.Reader) (types.Descriptor, error)
 
 	// ManifestDelete removes a manifest, including all tags that point to that manifest
-	ManifestDelete(ctx context.Context, r ref.Ref) error
+	ManifestDelete(ctx context.Context, r ref.Ref, opts ...ManifestOpts) error
 	// ManifestGet retrieves a manifest from a repository
 	ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest, error)
 	// ManifestHead gets metadata about the manifest (existence, digest, mediatype, size)
@@ -40,8 +40,6 @@ type API interface {
 
 	// ReferrerList returns a list of referrers to a given reference
 	ReferrerList(ctx context.Context, r ref.Ref, opts ...ReferrerOpts) (referrer.ReferrerList, error)
-	// ReferrerPut pushes a new referrer to a given reference
-	ReferrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest) error
 
 	// TagDelete removes a tag from the repository
 	TagDelete(ctx context.Context, r ref.Ref) error
@@ -61,11 +59,21 @@ type Info struct {
 
 // ManifestConfig is used by schemes to import ManifestOpts
 type ManifestConfig struct {
-	Child bool // used when pushing a child of a manifest list, skips indexing in ocidir
+	CheckReferrers bool
+	Child          bool // used when pushing a child of a manifest list, skips indexing in ocidir
+	Manifest       manifest.Manifest
 }
 
 // ManifestOpts is used to set options on manifest APIs
 type ManifestOpts func(*ManifestConfig)
+
+// WithManifestCheckReferrers is used when deleting a manifest
+// It indicates the manifest should be fetched and referrers should be deleted if defined
+func WithManifestCheckReferrers() ManifestOpts {
+	return func(config *ManifestConfig) {
+		config.CheckReferrers = true
+	}
+}
 
 // WithManifestChild indicates the API call is on a child manifest
 // This is used internally when copying multi-platform manifests
@@ -76,18 +84,40 @@ func WithManifestChild() ManifestOpts {
 	}
 }
 
+// WithManifest is used to pass the manifest to a method to avoid an extra GET request
+// This is used on a delete to check for referrers
+func WithManifest(m manifest.Manifest) ManifestOpts {
+	return func(mc *ManifestConfig) {
+		mc.Manifest = m
+	}
+}
+
 // ReferrerConfig is used by schemes to import ReferrerOpts
 type ReferrerConfig struct {
-	ForceGet bool
+	FilterArtifactType string
+	FilterAnnotation   map[string]string
 }
 
 // ReferrerOpts is used to set options on referrer APIs
 type ReferrerOpts func(*ReferrerConfig)
 
-// WithReferrerForceGet forces a Get request to populate annotations when processing remote tags for referrers
-func WithReferrerForceGet() ReferrerOpts {
+// WithReferrerAT filters by a specific artifactType value
+func WithReferrerAT(at string) ReferrerOpts {
 	return func(config *ReferrerConfig) {
-		config.ForceGet = true
+		config.FilterArtifactType = at
+	}
+}
+
+// WithReferrerAnnotations filters by a list of annotations, all of which must match
+func WithReferrerAnnotations(annotations map[string]string) ReferrerOpts {
+	return func(config *ReferrerConfig) {
+		if config.FilterAnnotation == nil {
+			config.FilterAnnotation = annotations
+		} else {
+			for k, v := range annotations {
+				config.FilterAnnotation[k] = v
+			}
+		}
 	}
 }
 

@@ -3,7 +3,7 @@ package reg
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -55,7 +55,7 @@ func (reg *Reg) RepoList(ctx context.Context, hostname string, opts ...scheme.Re
 		return nil, fmt.Errorf("failed to list repositories for %s: %w", hostname, reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 	}
 
-	respBody, err := ioutil.ReadAll(resp)
+	respBody, err := io.ReadAll(resp)
 	if err != nil {
 		reg.log.WithFields(logrus.Fields{
 			"err":  err,

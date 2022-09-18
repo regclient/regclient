@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"strings"
 
 	"github.com/regclient/regclient"
+	"github.com/regclient/regclient/internal/diff"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
@@ -34,6 +36,14 @@ layers (blobs) separately or not at all. See also the "tag delete" command.`,
 	Args:      cobra.ExactArgs(1),
 	ValidArgs: []string{}, // do not auto complete digests
 	RunE:      runManifestDelete,
+}
+
+var manifestDiffCmd = &cobra.Command{
+	Use:               "diff <image_ref> <image_ref>",
+	Short:             "compare manifests",
+	Args:              cobra.ExactArgs(2),
+	ValidArgsFunction: completeArgTag,
+	RunE:              runManifestDiff,
 }
 
 var manifestDigestCmd = &cobra.Command{
@@ -67,16 +77,23 @@ var manifestPutCmd = &cobra.Command{
 var manifestOpts struct {
 	byDigest      bool
 	contentType   string
+	diffCtx       int
+	diffFullCtx   bool
 	forceTagDeref bool
 	format        string
 	formatPut     string
 	list          bool
 	platform      string
+	referrers     bool
 	requireList   bool
 }
 
 func init() {
 	manifestDeleteCmd.Flags().BoolVarP(&manifestOpts.forceTagDeref, "force-tag-dereference", "", false, "Dereference the a tag to a digest, this is unsafe")
+	manifestDeleteCmd.Flags().BoolVarP(&manifestOpts.referrers, "referrers", "", false, "Check for referrers, recommended when deleting artifacts")
+
+	manifestDiffCmd.Flags().IntVarP(&manifestOpts.diffCtx, "context", "", 3, "Lines of context")
+	manifestDiffCmd.Flags().BoolVarP(&manifestOpts.diffFullCtx, "context-full", "", false, "Show all lines of context")
 
 	manifestDigestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Do not resolve platform from manifest list (enabled by default)")
 	manifestDigestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
@@ -98,6 +115,7 @@ func init() {
 	manifestPutCmd.Flags().StringVarP(&manifestOpts.formatPut, "format", "", "", "Format output with go template syntax")
 
 	manifestCmd.AddCommand(manifestDeleteCmd)
+	manifestCmd.AddCommand(manifestDiffCmd)
 	manifestCmd.AddCommand(manifestDigestCmd)
 	manifestCmd.AddCommand(manifestGetCmd)
 	manifestCmd.AddCommand(manifestPutCmd)
@@ -125,7 +143,7 @@ func getManifest(ctx context.Context, rc *regclient.RegClient, r ref.Ref) (manif
 		if err != nil {
 			return m, fmt.Errorf("failed to lookup platform specific digest: %w", err)
 		}
-		m, err = rc.ManifestGet(ctx, r, regclient.ManifestWithDesc(*desc))
+		m, err = rc.ManifestGet(ctx, r, regclient.WithManifestDesc(*desc))
 		if err != nil {
 			return m, fmt.Errorf("failed to pull platform specific digest: %w", err)
 		}
@@ -206,12 +224,67 @@ func runManifestDelete(cmd *cobra.Command, args []string) error {
 		"repo":   r.Repository,
 		"digest": r.Digest,
 	}).Debug("Manifest delete")
+	mOpts := []regclient.ManifestOpts{}
+	if manifestOpts.referrers {
+		mOpts = append(mOpts, regclient.WithManifestCheckReferrers())
+	}
 
-	err = rc.ManifestDelete(ctx, r)
+	err = rc.ManifestDelete(ctx, r, mOpts...)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func runManifestDiff(cmd *cobra.Command, args []string) error {
+	diffOpts := []diff.Opt{}
+	if manifestOpts.diffCtx > 0 {
+		diffOpts = append(diffOpts, diff.WithContext(manifestOpts.diffCtx, manifestOpts.diffCtx))
+	}
+	if manifestOpts.diffFullCtx {
+		diffOpts = append(diffOpts, diff.WithFullContext())
+	}
+	ctx := cmd.Context()
+	r1, err := ref.New(args[0])
+	if err != nil {
+		return err
+	}
+	r2, err := ref.New(args[1])
+	if err != nil {
+		return err
+	}
+
+	rc := newRegClient()
+
+	log.WithFields(logrus.Fields{
+		"ref1": r1.CommonName(),
+		"ref2": r2.CommonName(),
+	}).Debug("Manifest diff")
+
+	m1, err := rc.ManifestGet(ctx, r1)
+	if err != nil {
+		return err
+	}
+	m2, err := rc.ManifestGet(ctx, r2)
+	if err != nil {
+		return err
+	}
+
+	m1Json, err := json.MarshalIndent(m1, "", "  ")
+	if err != nil {
+		return err
+	}
+	m2Json, err := json.MarshalIndent(m2, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	mDiff := diff.Diff(strings.Split(string(m1Json), "\n"), strings.Split(string(m2Json), "\n"), diffOpts...)
+
+	_, err = fmt.Fprintln(os.Stdout, strings.Join(mDiff, "\n"))
+	return err
+	// TODO: support templating
+	// return template.Writer(os.Stdout, manifestOpts.format, mDiff)
 }
 
 func runManifestDigest(cmd *cobra.Command, args []string) error {
@@ -306,7 +379,7 @@ func runManifestPut(cmd *cobra.Command, args []string) error {
 	rc := newRegClient()
 	defer rc.Close(ctx, r)
 
-	raw, err := ioutil.ReadAll(os.Stdin)
+	raw, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		return err
 	}

@@ -13,7 +13,7 @@ import (
 
 // WithBuildArgRm removes a build arg from the config history
 func WithBuildArgRm(arg string, value *regexp.Regexp) Opts {
-	return func(dc *dagConfig) {
+	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(ctx context.Context, rc *regclient.RegClient, r ref.Ref, doc *dagOCIConfig) error {
 			changed := false
 			oc := doc.oc.GetConfig()
@@ -46,12 +46,13 @@ func WithBuildArgRm(arg string, value *regexp.Regexp) Opts {
 			}
 			return nil
 		})
+		return nil
 	}
 }
 
 // WithConfigTimestampFromLabel sets the max timestamp in the config to match a label value
 func WithConfigTimestampFromLabel(label string) Opts {
-	return func(dc *dagConfig) {
+	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(c context.Context, rc *regclient.RegClient, r ref.Ref, doc *dagOCIConfig) error {
 			var err error
 			changed := false
@@ -84,12 +85,13 @@ func WithConfigTimestampFromLabel(label string) Opts {
 			}
 			return nil
 		})
+		return nil
 	}
 }
 
 // WithConfigTimestampMax sets the max timestamp on any config objects
 func WithConfigTimestampMax(t time.Time) Opts {
-	return func(dc *dagConfig) {
+	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(c context.Context, rc *regclient.RegClient, r ref.Ref, doc *dagOCIConfig) error {
 			changed := false
 			oc := doc.oc.GetConfig()
@@ -112,12 +114,13 @@ func WithConfigTimestampMax(t time.Time) Opts {
 			}
 			return nil
 		})
+		return nil
 	}
 }
 
 // WithExposeAdd defines an exposed port in the image config
 func WithExposeAdd(port string) Opts {
-	return func(dc *dagConfig) {
+	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(ctx context.Context, rc *regclient.RegClient, r ref.Ref, doc *dagOCIConfig) error {
 			changed := false
 			oc := doc.oc.GetConfig()
@@ -135,12 +138,13 @@ func WithExposeAdd(port string) Opts {
 			}
 			return nil
 		})
+		return nil
 	}
 }
 
 // WithExposeRm deletes an exposed from the image config
 func WithExposeRm(port string) Opts {
-	return func(dc *dagConfig) {
+	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(ctx context.Context, rc *regclient.RegClient, r ref.Ref, doc *dagOCIConfig) error {
 			changed := false
 			oc := doc.oc.GetConfig()
@@ -158,12 +162,13 @@ func WithExposeRm(port string) Opts {
 			}
 			return nil
 		})
+		return nil
 	}
 }
 
 // WithLabel sets or deletes a label from the image config
 func WithLabel(name, value string) Opts {
-	return func(dc *dagConfig) {
+	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(c context.Context, rc *regclient.RegClient, r ref.Ref, doc *dagOCIConfig) error {
 			changed := false
 			oc := doc.oc.GetConfig()
@@ -185,12 +190,13 @@ func WithLabel(name, value string) Opts {
 			}
 			return nil
 		})
+		return nil
 	}
 }
 
 // WithVolumeAdd defines a volume in the image config
 func WithVolumeAdd(volume string) Opts {
-	return func(dc *dagConfig) {
+	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(ctx context.Context, rc *regclient.RegClient, r ref.Ref, doc *dagOCIConfig) error {
 			changed := false
 			oc := doc.oc.GetConfig()
@@ -208,12 +214,13 @@ func WithVolumeAdd(volume string) Opts {
 			}
 			return nil
 		})
+		return nil
 	}
 }
 
 // WithVolumeRm deletes a volume from the image config
 func WithVolumeRm(volume string) Opts {
-	return func(dc *dagConfig) {
+	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(ctx context.Context, rc *regclient.RegClient, r ref.Ref, doc *dagOCIConfig) error {
 			changed := false
 			oc := doc.oc.GetConfig()
@@ -231,5 +238,6 @@ func WithVolumeRm(volume string) Opts {
 			}
 			return nil
 		})
+		return nil
 	}
 }

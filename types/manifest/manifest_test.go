@@ -12,6 +12,7 @@ import (
 	"github.com/regclient/regclient/types/docker/schema1"
 	"github.com/regclient/regclient/types/docker/schema2"
 	v1 "github.com/regclient/regclient/types/oci/v1"
+	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -350,15 +351,17 @@ func TestNew(t *testing.T) {
 		t.Fatalf("failed to unmarshal docker schema1 signed json: %v", err)
 	}
 	var tests = []struct {
-		name      string
-		opts      []Opts
-		wantR     ref.Ref
-		wantDesc  types.Descriptor
-		wantE     error
-		testAnnot bool
-		hasAnnot  bool
-		testRefer bool
-		hasRefer  bool
+		name        string
+		opts        []Opts
+		wantR       ref.Ref
+		wantDesc    types.Descriptor
+		wantE       error
+		testAnnot   bool
+		hasAnnot    bool
+		testPlat    string
+		wantPlat    types.Descriptor
+		testSubject bool
+		hasSubject  bool
 	}{
 		{
 			name:  "empty",
@@ -376,11 +379,10 @@ func TestNew(t *testing.T) {
 				Size:      int64(len(rawDockerSchema2)),
 				Digest:    digestDockerSchema2,
 			},
-			wantE:     nil,
-			testAnnot: true,
-			testRefer: true,
-			hasAnnot:  true,
-			hasRefer:  true,
+			wantE:       nil,
+			testAnnot:   true,
+			testSubject: true,
+			hasAnnot:    true,
 		},
 		{
 			name: "Docker Schema 2 Manifest full desc",
@@ -397,11 +399,10 @@ func TestNew(t *testing.T) {
 				Size:      int64(len(rawDockerSchema2)),
 				Digest:    digestDockerSchema2,
 			},
-			testAnnot: true,
-			testRefer: true,
-			wantE:     nil,
-			hasAnnot:  true,
-			hasRefer:  true,
+			testAnnot:   true,
+			testSubject: true,
+			wantE:       nil,
+			hasAnnot:    true,
 		},
 		{
 			name: "Docker Schema 2 List from Http",
@@ -413,10 +414,33 @@ func TestNew(t *testing.T) {
 					"Docker-Content-Digest": []string{digestDockerSchema2List.String()},
 				}),
 			},
-			wantE:     nil,
-			testAnnot: true,
-			testRefer: true,
-			hasAnnot:  true,
+			wantE:       nil,
+			testAnnot:   true,
+			testSubject: true,
+			hasAnnot:    true,
+			testPlat:    "linux/amd64",
+			wantPlat: types.Descriptor{
+				MediaType: "application/vnd.docker.distribution.manifest.v2+json",
+				Digest:    "sha256:41b9947d8f19e154a5415c88ef71b851d37fa3ceb1de56ffe88d1b616ce503d9",
+				Size:      1152,
+			},
+		},
+		{
+			name: "Docker Schema 2 List get Darwin",
+			opts: []Opts{
+				WithRef(r),
+				WithRaw(rawDockerSchema2List),
+			},
+			wantE:       nil,
+			testAnnot:   true,
+			testSubject: true,
+			hasAnnot:    true,
+			testPlat:    "darwin/arm64",
+			wantPlat: types.Descriptor{
+				MediaType: "application/vnd.docker.distribution.manifest.v2+json",
+				Digest:    "sha256:b302f648065bb2ba542dc75167db065781f296ef72bb504585d652b27b5079ad",
+				Size:      1152,
+			},
 		},
 		{
 			name: "OCI Artifact from Http",
@@ -428,11 +452,11 @@ func TestNew(t *testing.T) {
 					"Docker-Content-Digest": []string{digestOCIArtifact.String()},
 				}),
 			},
-			wantE:     nil,
-			testAnnot: true,
-			testRefer: true,
-			hasAnnot:  true,
-			hasRefer:  true,
+			wantE:       nil,
+			testAnnot:   true,
+			testSubject: true,
+			hasAnnot:    true,
+			hasSubject:  true,
 		},
 		{
 			name: "Header Request",
@@ -457,9 +481,9 @@ func TestNew(t *testing.T) {
 				WithRef(r),
 				WithRaw(rawDockerSchema1Signed),
 			},
-			wantE:     nil,
-			testAnnot: true,
-			testRefer: true,
+			wantE:       nil,
+			testAnnot:   true,
+			testSubject: true,
 		},
 		{
 			name: "Docker Schema 1 Signed Manifest",
@@ -560,22 +584,21 @@ func TestNew(t *testing.T) {
 			opts: []Opts{
 				WithOrig(manifestDockerSchema2),
 			},
-			wantE:     nil,
-			testAnnot: true,
-			testRefer: true,
-			hasAnnot:  true,
-			hasRefer:  true,
+			wantE:       nil,
+			testAnnot:   true,
+			testSubject: true,
+			hasAnnot:    true,
 		},
 		{
 			name: "OCI Artifact Orig",
 			opts: []Opts{
 				WithOrig(manifestOCIArtifact),
 			},
-			wantE:     nil,
-			testAnnot: true,
-			testRefer: true,
-			hasAnnot:  true,
-			hasRefer:  true,
+			wantE:       nil,
+			testAnnot:   true,
+			testSubject: true,
+			hasAnnot:    true,
+			hasSubject:  true,
 		},
 		{
 			name: "Docker Schema1 Signed Orig",
@@ -598,7 +621,7 @@ func TestNew(t *testing.T) {
 		// - test if manifest is set
 		// - test raw body
 	}
-	rDesc := types.Descriptor{
+	subDesc := types.Descriptor{
 		MediaType: types.MediaTypeOCI1Manifest,
 		Size:      1234,
 		Digest:    digest.FromString("test referrer"),
@@ -657,25 +680,39 @@ func TestNew(t *testing.T) {
 					t.Errorf("manifest supports annotations")
 				}
 			}
-			if tt.testRefer {
-				mr, ok := m.(Referrer)
-				if tt.hasRefer {
+			if tt.testSubject {
+				mr, ok := m.(Subjecter)
+				if tt.hasSubject {
 					if !ok {
-						t.Errorf("manifest does not support referrer")
-					}
-					err = mr.SetRefers(&rDesc)
-					if err != nil {
-						t.Errorf("failed setting referrer: %v", err)
-					}
-					getDesc, err := mr.GetRefers()
-					if err != nil {
-						t.Errorf("failed getting referrer: %v", err)
-					}
-					if getDesc == nil || getDesc.MediaType != rDesc.MediaType || getDesc.Digest != rDesc.Digest {
-						t.Errorf("referrer did not match, expected %v, received %v", rDesc, getDesc)
+						t.Errorf("manifest does not support subject")
+					} else {
+						err = mr.SetSubject(&subDesc)
+						if err != nil {
+							t.Errorf("failed setting subject: %v", err)
+						}
+						getDesc, err := mr.GetSubject()
+						if err != nil {
+							t.Errorf("failed getting subject: %v", err)
+						}
+						if getDesc == nil || getDesc.MediaType != subDesc.MediaType || getDesc.Digest != subDesc.Digest {
+							t.Errorf("subject did not match, expected %v, received %v", subDesc, getDesc)
+						}
 					}
 				} else if ok {
-					t.Errorf("manifest supports referrer")
+					t.Errorf("manifest supports subject")
+				}
+			}
+			if tt.testPlat != "" {
+				p, err := platform.Parse(tt.testPlat)
+				if err != nil {
+					t.Errorf("failed to parse platform %s: %v", tt.testPlat, err)
+					return
+				}
+				d, err := GetPlatformDesc(m, &p)
+				if err != nil {
+					t.Errorf("failed to get descriptor: %v", err)
+				} else if !tt.wantPlat.Same(*d) {
+					t.Errorf("received platform mismatch, expected %v, received %v", tt.wantPlat, *d)
 				}
 			}
 		})

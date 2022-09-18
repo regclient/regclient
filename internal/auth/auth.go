@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -31,7 +31,7 @@ var tokenBuffer = time.Second * 5
 
 const (
 	isSpace charLU = 1 << iota
-	isAlphaNum
+	isToken
 )
 
 func init() {
@@ -40,8 +40,8 @@ func init() {
 		if strings.ContainsRune(" \t\r\n", rune(c)) {
 			charLUs[c] |= isSpace
 		}
-		if (rune('a') <= rune(c) && rune(c) <= rune('z')) || (rune('A') <= rune(c) && rune(c) <= rune('Z') || (rune('0') <= rune(c) && rune(c) <= rune('9'))) {
-			charLUs[c] |= isAlphaNum
+		if (rune('a') <= rune(c) && rune(c) <= rune('z')) || (rune('A') <= rune(c) && rune(c) <= rune('Z') || (rune('0') <= rune(c) && rune(c) <= rune('9')) || strings.ContainsRune("-._~+/", rune(c))) {
+			charLUs[c] |= isToken
 		}
 	}
 }
@@ -346,8 +346,8 @@ func ParseAuthHeader(ah string) ([]Challenge, error) {
 				// beginning of string
 				if b == '"' { // TODO: Invalid?
 					state = "quoted"
-				} else if charLUs[b]&isAlphaNum != 0 {
-					// read any alphanum
+				} else if charLUs[b]&isToken != 0 {
+					// read any token
 					eb = append(eb, b)
 				} else if charLUs[b]&isSpace != 0 {
 					// ignore leading whitespace
@@ -356,8 +356,8 @@ func ParseAuthHeader(ah string) ([]Challenge, error) {
 					return nil, ErrParseFailure
 				}
 			} else {
-				if charLUs[b]&isAlphaNum != 0 {
-					// read any alphanum
+				if charLUs[b]&isToken != 0 {
+					// read any token
 					eb = append(eb, b)
 				} else if b == '=' && len(atb) > 0 {
 					// equals when authtype is defined makes this a key
@@ -377,8 +377,8 @@ func ParseAuthHeader(ah string) ([]Challenge, error) {
 			}
 
 		case "value":
-			if charLUs[b]&isAlphaNum != 0 {
-				// read any alphanum
+			if charLUs[b]&isToken != 0 {
+				// read any token
 				vb = append(vb, b)
 			} else if b == '"' && len(vb) == 0 {
 				// quoted value
@@ -654,6 +654,7 @@ func (b *BearerHandler) tryGet() error {
 		req.SetBasicAuth(cred.User, cred.Password)
 	}
 
+	req.Header.Add("User-Agent", b.clientID)
 	req.URL.RawQuery = reqParams.Encode()
 
 	resp, err := b.client.Do(req)
@@ -693,6 +694,7 @@ func (b *BearerHandler) tryPost() error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
+	req.Header.Add("User-Agent", b.clientID)
 
 	resp, err := b.client.Do(req)
 	if err != nil {
@@ -823,7 +825,7 @@ func (j *JWTHubHandler) ProcessChallenge(c Challenge) error {
 		return err
 	}
 	defer resp.Body.Close()
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != 200 || resp.StatusCode >= 300 {
 		return ErrUnauthorized

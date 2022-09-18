@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -189,7 +189,7 @@ func TestBlobGet(t *testing.T) {
 			return
 		}
 		defer br.Close()
-		brBlob, err := ioutil.ReadAll(br)
+		brBlob, err := io.ReadAll(br)
 		if err != nil {
 			t.Errorf("Failed reading blob: %v", err)
 			return
@@ -216,7 +216,7 @@ func TestBlobGet(t *testing.T) {
 			return
 		}
 		defer br.Close()
-		brBlob, err := ioutil.ReadAll(br)
+		brBlob, err := io.ReadAll(br)
 		if err != nil {
 			t.Errorf("Failed reading blob: %v", err)
 			return
@@ -269,7 +269,7 @@ func TestBlobGet(t *testing.T) {
 			return
 		}
 		defer br.Close()
-		brBlob, err := ioutil.ReadAll(br)
+		brBlob, err := io.ReadAll(br)
 		if err != nil {
 			t.Errorf("Failed reading blob: %v", err)
 			return

@@ -11,7 +11,6 @@ import (
 
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
 	"github.com/regclient/regclient/types/manifest"
@@ -63,7 +62,7 @@ func dagGet(ctx context.Context, rc *regclient.RegClient, r ref.Ref, d types.Des
 	var err error
 	getOpts := []regclient.ManifestOpts{}
 	if d.Digest != "" {
-		getOpts = append(getOpts, regclient.ManifestWithDesc(d))
+		getOpts = append(getOpts, regclient.WithManifestDesc(d))
 	}
 	dm := dagManifest{}
 	dm.m, err = rc.ManifestGet(ctx, r, getOpts...)
@@ -247,7 +246,7 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 					oc.RootFS.DiffIDs[i] = layer.ucDigest
 				}
 				newHistory := v1.History{
-					Created: &timeNow,
+					Created: &timeStart,
 					Comment: "regclient",
 				}
 				if iConfig < 0 {
@@ -340,9 +339,9 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 	}
 	if dm.mod == replaced || dm.mod == added {
 		dm.newDesc = dm.m.GetDescriptor()
-		mpOpts := []scheme.ManifestOpts{}
+		mpOpts := []regclient.ManifestOpts{}
 		if !dm.top {
-			mpOpts = append(mpOpts, scheme.WithManifestChild())
+			mpOpts = append(mpOpts, regclient.WithManifestChild())
 		}
 		rPut := r
 		rPut.Tag = ""

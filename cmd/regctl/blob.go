@@ -1,14 +1,21 @@
 package main
 
 import (
+	"archive/tar"
+	"encoding/json"
+	"fmt"
 	"io"
+	"io/fs"
 	"os"
+	"strings"
+	"time"
 
 	// crypto libraries included for go-digest
 	_ "crypto/sha256"
 	_ "crypto/sha512"
 
 	"github.com/opencontainers/go-digest"
+	"github.com/regclient/regclient/internal/diff"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/ref"
@@ -21,6 +28,22 @@ var blobCmd = &cobra.Command{
 	Aliases: []string{"layer"},
 	Short:   "manage image blobs/layers",
 }
+var blobDiffConfigCmd = &cobra.Command{
+	Use:       "diff-config <repository> <digest> <repository> <digest>",
+	Short:     "diff two image configs",
+	Long:      `This returns the difference between two configs, comparing the contents of each config json.`,
+	Args:      cobra.ExactArgs(4),
+	ValidArgs: []string{}, // do not auto complete repository or digest
+	RunE:      runBlobDiffConfig,
+}
+var blobDiffLayerCmd = &cobra.Command{
+	Use:       "diff-layer <repository> <digest> <repository> <digest>",
+	Short:     "diff two tar layers",
+	Long:      `This returns the difference between two layers, comparing the contents of each tar.`,
+	Args:      cobra.ExactArgs(4),
+	ValidArgs: []string{}, // do not auto complete repository or digest
+	RunE:      runBlobDiffLayer,
+}
 var blobGetCmd = &cobra.Command{
 	Use:     "get <repository> <digest>",
 	Aliases: []string{"pull"},
@@ -31,6 +54,15 @@ registry. The blob or layer digest can be found in the image manifest.`,
 	Args:      cobra.ExactArgs(2),
 	ValidArgs: []string{}, // do not auto complete repository or digest
 	RunE:      runBlobGet,
+}
+var blobGetFileCmd = &cobra.Command{
+	Use:       "get-file <repository> <digest> <file> [out-file]",
+	Aliases:   []string{"cat"},
+	Short:     "get a file from a layer",
+	Long:      `This returns a requested file from a layer.`,
+	Args:      cobra.RangeArgs(3, 4),
+	ValidArgs: []string{}, // do not auto complete repository, digest, or filenames
+	RunE:      runBlobGetFile,
 }
 var blobPutCmd = &cobra.Command{
 	Use:     "put <repository>",
@@ -44,13 +76,24 @@ is the digest of the blob.`,
 }
 
 var blobOpts struct {
-	format    string
-	formatPut string
-	mt        string
-	digest    string
+	diffCtx        int
+	diffFullCtx    bool
+	diffIgnoreTime bool
+	format         string
+	formatFile     string
+	formatPut      string
+	mt             string
+	digest         string
 }
 
 func init() {
+	blobDiffConfigCmd.Flags().IntVarP(&blobOpts.diffCtx, "context", "", 3, "Lines of context")
+	blobDiffConfigCmd.Flags().BoolVarP(&blobOpts.diffFullCtx, "context-full", "", false, "Show all lines of context")
+
+	blobDiffLayerCmd.Flags().IntVarP(&blobOpts.diffCtx, "context", "", 3, "Lines of context")
+	blobDiffLayerCmd.Flags().BoolVarP(&blobOpts.diffFullCtx, "context-full", "", false, "Show all lines of context")
+	blobDiffLayerCmd.Flags().BoolVarP(&blobOpts.diffIgnoreTime, "ignore-timestamp", "", false, "Ignore timestamps on files")
+
 	blobGetCmd.Flags().StringVarP(&blobOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	blobGetCmd.Flags().StringVarP(&blobOpts.mt, "media-type", "", "", "Set the requested mediaType (deprecated)")
 	blobGetCmd.RegisterFlagCompletionFunc("format", completeArgNone)
@@ -60,6 +103,8 @@ func init() {
 		}, cobra.ShellCompDirectiveNoFileComp
 	})
 	blobGetCmd.Flags().MarkHidden("media-type")
+
+	blobGetFileCmd.Flags().StringVarP(&blobOpts.formatFile, "format", "", "", "Format output with go template syntax")
 
 	blobPutCmd.Flags().StringVarP(&blobOpts.mt, "content-type", "", "", "Set the requested content type (deprecated)")
 	blobPutCmd.Flags().StringVarP(&blobOpts.digest, "digest", "", "", "Set the expected digest")
@@ -72,14 +117,153 @@ func init() {
 	blobPutCmd.RegisterFlagCompletionFunc("digest", completeArgNone)
 	blobPutCmd.Flags().MarkHidden("content-type")
 
+	blobCmd.AddCommand(blobDiffConfigCmd)
+	blobCmd.AddCommand(blobDiffLayerCmd)
 	blobCmd.AddCommand(blobGetCmd)
+	blobCmd.AddCommand(blobGetFileCmd)
 	blobCmd.AddCommand(blobPutCmd)
 	rootCmd.AddCommand(blobCmd)
+}
+
+func runBlobDiffConfig(cmd *cobra.Command, args []string) error {
+	diffOpts := []diff.Opt{}
+	if blobOpts.diffCtx > 0 {
+		diffOpts = append(diffOpts, diff.WithContext(blobOpts.diffCtx, blobOpts.diffCtx))
+	}
+	if blobOpts.diffFullCtx {
+		diffOpts = append(diffOpts, diff.WithFullContext())
+	}
+	ctx := cmd.Context()
+	r1, err := ref.New(args[0])
+	if err != nil {
+		return err
+	}
+	r2, err := ref.New(args[2])
+	if err != nil {
+		return err
+	}
+	rc := newRegClient()
+
+	// open both configs, and output each as formatted json
+	d1, err := digest.Parse(args[1])
+	if err != nil {
+		return err
+	}
+	c1, err := rc.BlobGetOCIConfig(ctx, r1, types.Descriptor{Digest: d1})
+	if err != nil {
+		return err
+	}
+	c1Json, err := json.MarshalIndent(c1, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	d2, err := digest.Parse(args[3])
+	if err != nil {
+		return err
+	}
+	c2, err := rc.BlobGetOCIConfig(ctx, r2, types.Descriptor{Digest: d2})
+	if err != nil {
+		return err
+	}
+	c2Json, err := json.MarshalIndent(c2, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	cDiff := diff.Diff(strings.Split(string(c1Json), "\n"), strings.Split(string(c2Json), "\n"), diffOpts...)
+
+	_, err = fmt.Fprintln(os.Stdout, strings.Join(cDiff, "\n"))
+	return err
+	// TODO: support templating
+	// return template.Writer(os.Stdout, blobOpts.format, cDiff)
+}
+
+func runBlobDiffLayer(cmd *cobra.Command, args []string) error {
+	diffOpts := []diff.Opt{}
+	if blobOpts.diffCtx > 0 {
+		diffOpts = append(diffOpts, diff.WithContext(blobOpts.diffCtx, blobOpts.diffCtx))
+	}
+	if blobOpts.diffFullCtx {
+		diffOpts = append(diffOpts, diff.WithFullContext())
+	}
+	ctx := cmd.Context()
+	r1, err := ref.New(args[0])
+	if err != nil {
+		return err
+	}
+	r2, err := ref.New(args[2])
+	if err != nil {
+		return err
+	}
+	rc := newRegClient()
+
+	// open both blobs, and generate reports of each content
+	d1, err := digest.Parse(args[1])
+	if err != nil {
+		return err
+	}
+	b1, err := rc.BlobGet(ctx, r1, types.Descriptor{Digest: d1})
+	if err != nil {
+		return err
+	}
+	defer b1.Close()
+	btr1, err := b1.ToTarReader()
+	if err != nil {
+		return err
+	}
+	tr1, err := btr1.GetTarReader()
+	if err != nil {
+		return err
+	}
+	rep1, err := blobReportLayer(tr1)
+	if err != nil {
+		return err
+	}
+	err = btr1.Close()
+	if err != nil {
+		return err
+	}
+
+	d2, err := digest.Parse(args[3])
+	if err != nil {
+		return err
+	}
+	b2, err := rc.BlobGet(ctx, r2, types.Descriptor{Digest: d2})
+	if err != nil {
+		return err
+	}
+	defer b2.Close()
+	btr2, err := b2.ToTarReader()
+	if err != nil {
+		return err
+	}
+	tr2, err := btr2.GetTarReader()
+	if err != nil {
+		return err
+	}
+	rep2, err := blobReportLayer(tr2)
+	if err != nil {
+		return err
+	}
+	err = btr2.Close()
+	if err != nil {
+		return err
+	}
+
+	// run diff and output result
+	lDiff := diff.Diff(rep1, rep2, diffOpts...)
+	_, err = fmt.Fprintln(os.Stdout, strings.Join(lDiff, "\n"))
+	return err
 }
 
 func runBlobGet(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	r, err := ref.New(args[0])
+	if err != nil {
+		return err
+	}
+	d, err := digest.Parse(args[1])
 	if err != nil {
 		return err
 	}
@@ -96,10 +280,6 @@ func runBlobGet(cmd *cobra.Command, args []string) error {
 		"repository": r.Repository,
 		"digest":     args[1],
 	}).Debug("Pulling blob")
-	d, err := digest.Parse(args[1])
-	if err != nil {
-		return err
-	}
 	blob, err := rc.BlobGet(ctx, r, types.Descriptor{Digest: d})
 	if err != nil {
 		return err
@@ -119,6 +299,66 @@ func runBlobGet(cmd *cobra.Command, args []string) error {
 	}
 
 	return template.Writer(os.Stdout, blobOpts.format, blob)
+}
+
+func runBlobGetFile(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	r, err := ref.New(args[0])
+	if err != nil {
+		return err
+	}
+	d, err := digest.Parse(args[1])
+	if err != nil {
+		return err
+	}
+	filename := args[2]
+	filename = strings.TrimPrefix(filename, "/")
+	rc := newRegClient()
+	defer rc.Close(ctx, r)
+
+	log.WithFields(logrus.Fields{
+		"host":       r.Registry,
+		"repository": r.Repository,
+		"digest":     args[1],
+		"filename":   filename,
+	}).Debug("Get file")
+	blob, err := rc.BlobGet(ctx, r, types.Descriptor{Digest: d})
+	if err != nil {
+		return err
+	}
+	defer blob.Close()
+	tr, err := blob.ToTarReader()
+	if err != nil {
+		return err
+	}
+	th, rdr, err := tr.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+	if blobOpts.formatFile != "" {
+		data := struct {
+			Header *tar.Header
+			Reader io.Reader
+		}{
+			Header: th,
+			Reader: rdr,
+		}
+		return template.Writer(os.Stdout, blobOpts.formatFile, data)
+	}
+	var w io.Writer
+	if len(args) < 4 {
+		w = os.Stdout
+	} else {
+		w, err = os.Create(args[3])
+		if err != nil {
+			return err
+		}
+	}
+	_, err = io.Copy(w, rdr)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func runBlobPut(cmd *cobra.Command, args []string) error {
@@ -154,4 +394,38 @@ func runBlobPut(cmd *cobra.Command, args []string) error {
 	}
 
 	return template.Writer(os.Stdout, blobOpts.formatPut, result)
+}
+
+func blobReportLayer(tr *tar.Reader) ([]string, error) {
+	report := []string{}
+	if tr == nil {
+		return report, nil
+	}
+	for {
+		th, err := tr.Next()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return report, err
+		}
+		line := fmt.Sprintf("%s %d/%d %8d", fs.FileMode(th.Mode).String(), th.Uid, th.Gid, th.Size)
+		if !blobOpts.diffIgnoreTime {
+			line += " " + th.ModTime.Format(time.RFC3339)
+		}
+		line += fmt.Sprintf(" %-40s", th.Name)
+		if th.Size > 0 {
+			d := digest.Canonical.Digester()
+			size, err := io.Copy(d.Hash(), tr)
+			if err != nil {
+				return report, fmt.Errorf("failed to read %s: %w", th.Name, err)
+			}
+			if size != th.Size {
+				return report, fmt.Errorf("size mismatch for %s, expected %d, read %d", th.Name, th.Size, size)
+			}
+			line += " " + d.Digest().String()
+		}
+		report = append(report, line)
+	}
+	return report, nil
 }

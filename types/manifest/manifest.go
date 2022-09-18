@@ -78,9 +78,9 @@ type Imager interface {
 	SetLayers(dl []types.Descriptor) error
 }
 
-type Referrer interface {
-	GetRefers() (*types.Descriptor, error)
-	SetRefers(d *types.Descriptor) error
+type Subjecter interface {
+	GetSubject() (*types.Descriptor, error)
+	SetSubject(d *types.Descriptor) error
 }
 
 type manifestConfig struct {
@@ -544,6 +544,12 @@ func getPlatformDesc(p *platform.Platform, dl []types.Descriptor) (*types.Descri
 	}
 	for _, d := range dl {
 		if d.Platform != nil && platform.Match(*p, *d.Platform) {
+			return &d, nil
+		}
+	}
+	// if no platforms match, fall back to searching for a compatible platform (Mac runs Linux images)
+	for _, d := range dl {
+		if d.Platform != nil && platform.Compatible(*p, *d.Platform) {
 			return &d, nil
 		}
 	}

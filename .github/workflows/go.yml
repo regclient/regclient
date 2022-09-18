@@ -14,12 +14,16 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    steps:
+    strategy:
+      matrix:
+        gover: ["1.17", "1.18", "1.19"]
+        releasever: ["1.19"]
 
-    - name: Set up Go 1.17
+    steps:
+    - name: "Set up Go ${{ matrix.gover }}"
       uses: actions/setup-go@v3
       with:
-        go-version: 1.17.x
+        go-version: "${{ matrix.gover }}.x"
       id: go
 
     - name: Check out code
@@ -46,7 +50,7 @@ jobs:
       run: make artifacts
 
     - name: Gather release details
-      if: startsWith( github.ref, 'refs/tags/v' ) && github.repository_owner == 'regclient'
+      if: startsWith( github.ref, 'refs/tags/v' ) && github.repository_owner == 'regclient' && matrix.gover == matrix.releasever
       id: release_details
       run: |
         VERSION=${GITHUB_REF#refs/tags/}
@@ -64,7 +68,7 @@ jobs:
         echo ::set-output name=release_notes::${RELEASE_NOTES}
 
     - name: Create release
-      if: steps.release_details.outputs.valid == 'true'
+      if: steps.release_details.outputs.valid == 'true' && matrix.gover == matrix.releasever
       id: release_create
       uses: softprops/action-gh-release@v1
       env:
@@ -98,9 +102,9 @@ jobs:
           ./artifacts/regsync-windows-amd64.exe
 
     - name: Save artifacts
-      if: github.ref == 'refs/heads/main'
-      uses: actions/upload-artifact@v2
+      if: github.ref == 'refs/heads/main' && matrix.gover == matrix.releasever
+      uses: actions/upload-artifact@v3
       with:
         name: binaries
         path: ./artifacts/
-        retention-days: 7
+        retention-days: 30

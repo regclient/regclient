@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"path"
 	"strings"
 	"sync"
@@ -47,7 +46,7 @@ type Opts func(*ociConf)
 // New creates a new OCIDir with options
 func New(opts ...Opts) *OCIDir {
 	conf := ociConf{
-		log: &logrus.Logger{Out: ioutil.Discard},
+		log: &logrus.Logger{Out: io.Discard},
 		gc:  true,
 	}
 	for _, opt := range opts {

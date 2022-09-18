@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 
@@ -345,7 +344,7 @@ func (reg *Reg) blobPutUploadFull(ctx context.Context, r ref.Ref, d types.Descri
 			}
 		}
 		readOnce = true
-		return ioutil.NopCloser(rdr), nil
+		return io.NopCloser(rdr), nil
 	}
 
 	// build/send request
@@ -399,7 +398,7 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url
 		if err != nil {
 			return nil, err
 		}
-		return ioutil.NopCloser(bufRdr), nil
+		return io.NopCloser(bufRdr), nil
 	}
 	chunkURL := *putURL
 

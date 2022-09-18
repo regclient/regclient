@@ -5,6 +5,7 @@ package ref
 
 import (
 	"fmt"
+	"path"
 	"regexp"
 	"strings"
 )
@@ -154,11 +155,27 @@ func (r Ref) CommonName() string {
 }
 
 // IsZero returns true if ref is unset
-func (r *Ref) IsZero() bool {
+func (r Ref) IsZero() bool {
 	if r.Scheme == "" && r.Registry == "" && r.Repository == "" && r.Path == "" && r.Tag == "" && r.Digest == "" {
 		return true
 	}
 	return false
+}
+
+// ToReg converts a reference to a registry like syntax
+func (r Ref) ToReg() Ref {
+	switch r.Scheme {
+	case "ocidir":
+		r.Scheme = "reg"
+		r.Registry = "localhost"
+		// clean the path to strip leading ".."
+		r.Repository = path.Clean("/" + r.Path)[1:]
+		r.Repository = strings.ToLower(r.Repository)
+		// convert any unsupported characters to "-" in the path
+		re := regexp.MustCompile(`[^/a-z0-9]+`)
+		r.Repository = string(re.ReplaceAll([]byte(r.Repository), []byte("-")))
+	}
+	return r
 }
 
 // EqualRegistry compares the registry between two references
@@ -171,6 +188,9 @@ func EqualRegistry(a, b Ref) bool {
 		return a.Registry == b.Registry
 	case "ocidir":
 		return a.Path == b.Path
+	case "":
+		// both undefined
+		return true
 	default:
 		return false
 	}
@@ -186,6 +206,9 @@ func EqualRepository(a, b Ref) bool {
 		return a.Registry == b.Registry && a.Repository == b.Repository
 	case "ocidir":
 		return a.Path == b.Path
+	case "":
+		// both undefined
+		return true
 	default:
 		return false
 	}

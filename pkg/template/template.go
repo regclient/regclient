@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"strings"
@@ -23,7 +22,7 @@ var tmplFuncs = gotemplate.FuncMap{
 		return os.Getenv(key)
 	},
 	"file": func(filename string) string {
-		b, err := ioutil.ReadFile(filename)
+		b, err := os.ReadFile(filename)
 		if err != nil {
 			return ""
 		}

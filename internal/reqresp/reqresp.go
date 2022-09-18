@@ -4,7 +4,6 @@ package reqresp
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"regexp"
@@ -25,6 +24,8 @@ type ReqResp struct {
 type ReqEntry struct {
 	Name     string
 	DelOnUse bool
+	IfState  []string
+	SetState string
 	Method   string
 	Path     string
 	PathRE   *regexp.Regexp
@@ -48,8 +49,9 @@ func NewHandler(t *testing.T, rrs []ReqResp) http.Handler {
 }
 
 type rrHandler struct {
-	t   *testing.T
-	rrs []ReqResp
+	t     *testing.T
+	rrs   []ReqResp
+	state string
 }
 
 // return false if any item in a is not found in b
@@ -75,8 +77,20 @@ func strMapMatch(a, b map[string][]string) bool {
 	return true
 }
 
+func stateMatch(state string, list []string) bool {
+	if len(list) == 0 {
+		return true
+	}
+	for _, entry := range list {
+		if entry == state {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *rrHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	reqBody, err := ioutil.ReadAll(req.Body)
+	reqBody, err := io.ReadAll(req.Body)
 	if err != nil {
 		r.t.Errorf("Error reading request body: %v", err)
 		rw.WriteHeader(http.StatusInternalServerError)
@@ -85,7 +99,8 @@ func (r *rrHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 	for i, rr := range r.rrs {
 		reqMatch := rr.ReqEntry
-		if reqMatch.Method != req.Method ||
+		if !stateMatch(r.state, reqMatch.IfState) ||
+			reqMatch.Method != req.Method ||
 			(reqMatch.PathRE != nil && !reqMatch.PathRE.MatchString(req.URL.Path)) ||
 			(reqMatch.Path != "" && reqMatch.Path != req.URL.Path) ||
 			!strMapMatch(reqMatch.Query, req.URL.Query()) ||
@@ -110,9 +125,13 @@ func (r *rrHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		if reqMatch.DelOnUse {
 			r.rrs = append(r.rrs[:i], r.rrs[i+1:]...)
 		}
+		// update current state
+		if reqMatch.SetState != "" {
+			r.state = reqMatch.SetState
+		}
 		return
 	}
-	r.t.Errorf("Unhandled request: %v, body: %s", req, reqBody)
+	r.t.Errorf("Unhandled request: %v, body: %s, state: %s", req, reqBody, r.state)
 	rw.WriteHeader(http.StatusInternalServerError)
 	rw.Write([]byte("Unsupported request"))
 }

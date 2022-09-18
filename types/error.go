@@ -1,6 +1,10 @@
 package types
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+	"io/fs"
+)
 
 var (
 	// ErrAllRequestsFailed when there are no mirrors left to try
@@ -15,10 +19,16 @@ var (
 	ErrDigestMismatch = errors.New("digest mismatch")
 	// ErrEmptyChallenge indicates an issue with the received challenge in the WWW-Authenticate header
 	ErrEmptyChallenge = errors.New("empty challenge header")
+	// ErrFileDeleted indicates a requested file has been deleted
+	ErrFileDeleted = errors.New("file deleted")
+	// ErrFileNotFound indicates a requested file is not found
+	ErrFileNotFound = fmt.Errorf("file not found%.0w", fs.ErrNotExist)
 	// ErrHTTPStatus if the http status code was unexpected
 	ErrHTTPStatus = errors.New("unexpected http status code")
 	// ErrInvalidChallenge indicates an issue with the received challenge in the WWW-Authenticate header
 	ErrInvalidChallenge = errors.New("invalid challenge header")
+	// ErrMissingAnnotation returned when a needed annotation is not found
+	ErrMissingAnnotation = errors.New("annotation is missing")
 	// ErrMissingDigest returned when image reference does not include a digest
 	ErrMissingDigest = errors.New("digest missing from image reference")
 	// ErrMissingLocation returned when the location header is missing
@@ -29,6 +39,8 @@ var (
 	ErrMissingTag = errors.New("tag missing from image reference")
 	// ErrMissingTagOrDigest returned when image reference does not include a tag or digest
 	ErrMissingTagOrDigest = errors.New("tag or Digest missing from image reference")
+	// ErrMismatch returned when a comparison detects a difference
+	ErrMismatch = errors.New("content does not match")
 	// ErrMountReturnedLocation when a blob mount fails but a location header is received
 	ErrMountReturnedLocation = errors.New("blob mount returned a location to upload")
 	// ErrNoNewChallenge indicates a challenge update did not result in any change

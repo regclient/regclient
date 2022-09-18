@@ -25,6 +25,7 @@ import (
 
 func TestTag(t *testing.T) {
 	repoPath := "/proj"
+	repoPath2 := "/proj2"
 	pageLen := 2
 	listTagList := []string{"latest", "v1", "v1.1", "v1.1.1"}
 	listTagBody := []byte(fmt.Sprintf("{\"name\":\"%s\",\"tags\":[\"%s\"]}",
@@ -97,6 +98,41 @@ func TestTag(t *testing.T) {
 				Body: listTagBody,
 			},
 		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "repo2 tag get page 2",
+				Method: "GET",
+				Path:   "/v2" + repoPath2 + "/tags/list",
+				Query: map[string][]string{
+					"next": {fmt.Sprintf("%d", 1)},
+				},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", len(listTagBody2))},
+					"Content-Type":   {"application/json"},
+				},
+				Body: listTagBody2,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "repo2 tag get page 1",
+				Method: "GET",
+				Path:   "/v2" + repoPath2 + "/tags/list",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", len(listTagBody1))},
+					"Content-Type":   {"application/json"},
+					"Link":           {fmt.Sprintf(`<%s>; rel="next"`, "/v2"+repoPath2+"/tags/list?next=1")},
+				},
+				Body: listTagBody1,
+			},
+		},
+
 		{
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "tag missing",
@@ -247,8 +283,8 @@ func TestTag(t *testing.T) {
 			t.Errorf("returned list mismatch, expected %v, received %v", listTagList, tags)
 		}
 	})
-	// list tags with pagenation
-	t.Run("Pagenation", func(t *testing.T) {
+	// list tags with pagination
+	t.Run("Pagination", func(t *testing.T) {
 		listRef, err := ref.New(tsURL.Host + repoPath)
 		if err != nil {
 			t.Errorf("failed creating getRef: %v", err)
@@ -284,6 +320,27 @@ func TestTag(t *testing.T) {
 		}
 		if !stringSliceCmp(tags, listTagList[pageLen:]) {
 			t.Errorf("returned list mismatch, expected %v, received %v", listTagList[:pageLen], tags)
+		}
+	})
+	// list tags with automatic pagination
+	t.Run("Pagination automatic", func(t *testing.T) {
+		listRef, err := ref.New(tsURL.Host + repoPath2)
+		if err != nil {
+			t.Errorf("failed creating getRef: %v", err)
+		}
+		// page 1
+		tl, err := reg.TagList(ctx, listRef)
+		if err != nil {
+			t.Errorf("failed to list tags: %v", err)
+			return
+		}
+		tags, err := tl.GetTags()
+		if err != nil {
+			t.Errorf("failed to extract tag list: %v", err)
+			return
+		}
+		if !stringSliceCmp(tags, listTagList) {
+			t.Errorf("returned list mismatch, expected %v, received %v", listTagList, tags)
 		}
 	})
 	// list tags on missing repos

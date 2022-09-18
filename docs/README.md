@@ -1,6 +1,6 @@
 # regclient Documentation
 
-- [Project Specific Documentation](#project-dpecific-documentation)
+- [Project Specific Documentation](#project-specific-documentation)
 - [Schemes](#schemes)
 - [Template Functions](#template-functions)
 - [FAQ](#faq)
@@ -63,6 +63,22 @@ The following functions have been added in addition to the defaults available in
   Converts a string to uppercase.
 
 ## FAQ
+
+1. Q: How do I use HTTP instead of HTTPS? I'm getting `http: server gave HTTP response to HTTPS client`.
+
+   A: With `regctl` use:
+
+   ```shell
+   regctl registry set --tls disabled <registry>
+   ```
+
+   For `regsync` and `regbot` use:
+
+   ```yaml
+   creds:
+     - registry: registry.example.org:5000
+       tls: disabled
+   ```
 
 1. Q: After deleting tags and images on the registry, I'm still seeing disk space being used.
 

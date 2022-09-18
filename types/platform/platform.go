@@ -62,6 +62,35 @@ func (p Platform) String() string {
 	}
 }
 
+// Compatible indicates if a host can run a specified target platform image.
+// This accounts for Docker Desktop for Mac and Windows using a Linux VM.
+func Compatible(host, target Platform) bool {
+	(&host).normalize()
+	(&target).normalize()
+	if host.OS == "linux" {
+		return host.OS == target.OS && host.Architecture == target.Architecture && host.Variant == target.Variant
+	} else if host.OS == "windows" {
+		if target.OS == "windows" {
+			return host.Architecture == target.Architecture && host.Variant == target.Variant &&
+				prefix(host.OSVersion) == prefix(target.OSVersion)
+		} else if target.OS == "linux" {
+			return host.Architecture == target.Architecture && host.Variant == target.Variant
+		}
+		return false
+	} else if host.OS == "darwin" {
+		if target.OS == "darwin" || target.OS == "linux" {
+			return host.Architecture == target.Architecture && host.Variant == target.Variant
+		}
+		return false
+	} else {
+		return host.Architecture == target.Architecture &&
+			host.OSVersion == target.OSVersion &&
+			strSliceEq(host.OSFeatures, target.OSFeatures) &&
+			host.Variant == target.Variant &&
+			strSliceEq(host.Features, target.Features)
+	}
+}
+
 // Match indicates if two platforms are the same
 func Match(a, b Platform) bool {
 	(&a).normalize()
@@ -114,7 +143,7 @@ func Parse(platStr string) (Platform, error) {
 	}
 	// extrapolate missing fields and normalize
 	platLocal := Local()
-	if plat.OS == "" {
+	if plat.OS == "" || plat.OS == "local" {
 		// assume local OS
 		plat.OS = platLocal.OS
 	}
