@@ -1,34 +1,54 @@
-# Release v0.4.4
+# Release v0.4.5
 
 Breaking Changes:
 
-- Redundant manifest methods have been deprecated ([PR 257][pr-257])
-- Manifest methods specific to Images and Indexes/ManifestLists have a different interface ([PR 258][pr-258])
+- `regclient.ManifestWithDesc` has been renamed to `regclient.WithManifestDesc` ([PR 283][pr-283])
+- `manifest.Referrer` interface has been renamed to `manifest.Subjecter` ([PR 283][pr-283], [PR 302][pr-302])
+- `ReferrerPut` method has been removed, use `ManifestPut` instead ([PR 283][pr-283])
+- `regclient.ManifestPut` options are now in `regclient` rather than scheme ([PR 283][pr-283])
 
 New Features:
 
-- `regctl blob put` supports a format string ([PR 255][pr-255])
-- `regsync` immediately syncs any tags missing on the target without waiting for first sync schedule ([PR 256][pr-256])
-- Adding `regctl index` command to create and mutate an Index or Manifest List ([PR 260][pr-260])
+- Adding diff commands to regctl for manifests, configs, and layers ([PR 269][pr-269])
+- Supporting OCI subject/referrers ([PR 271][pr-271], [PR 302][pr-302])
+- Adding support for client side filters on artifact list ([PR 273][pr-273])
+- Support Link header in tag pagination seen on quay.io ([PR 276][pr-276])
+- Update referrers to support deletes ([PR 283][pr-283])
+- Add `regctl image check-base` ([PR 288][pr-288])
+- Adding experimental support for rebasing images ([PR 291][pr-291])
+- regclient adds a blob TarReader.ReadFile method ([PR 296][pr-296])
+- Adding `regctl blob get-file` to fetch a file from a layer ([PR 296][pr-296])
+- Adding `regctl image get-file` to fetch a file from the image layers ([PR 296][pr-296])
+- Fallback to using linux platforms on mac and windows when querying manifest lists ([PR 303][pr-303])
 
 Bug Fixes:
 
-- Credential helper support for Docker Hub ([PR 246][pr-246])
-- Fix handling of `DOCKER_CONFIG` variable ([PR 249][pr-249])
-- Fix handling of custom TLS settings on a registry with authentication ([PR 253][pr-253])
+- Fix reference for ocidir exports for importing into docker ([PR 264][pr-264])
+- Fix support for authentication parsing of token characters without quotes ([PR 266][pr-266])
+- Fix `regctl artifact put` with both a refers and a tag ([PR 290][pr-290])
+- Fixing regbot tests to run on other platforms ([PR 300][pr-300])
 
 Other Changes:
 
-- Normalize parsing of registry names in various components ([PR 247][pr-247])
-- Exclude tags from referrers when copying digest tags ([PR 250][pr-250])
+- Upgrade to Go 1.19 ([PR 278][pr-278], [PR 286][pr-286])
+- Add tips to common errors in regctl ([PR 285][pr-285])
+- Descriptor comparison now allows for Docker to OCI conversion ([PR 289][pr-289])
 
-[pr-246]: https://github.com/regclient/regclient/pull/246
-[pr-247]: https://github.com/regclient/regclient/pull/247
-[pr-249]: https://github.com/regclient/regclient/pull/249
-[pr-250]: https://github.com/regclient/regclient/pull/250
-[pr-253]: https://github.com/regclient/regclient/pull/253
-[pr-255]: https://github.com/regclient/regclient/pull/255
-[pr-256]: https://github.com/regclient/regclient/pull/256
-[pr-257]: https://github.com/regclient/regclient/pull/257
-[pr-258]: https://github.com/regclient/regclient/pull/258
-[pr-260]: https://github.com/regclient/regclient/pull/260
+[pr-264]: https://github.com/regclient/regclient/pull/264
+[pr-266]: https://github.com/regclient/regclient/pull/266
+[pr-269]: https://github.com/regclient/regclient/pull/269
+[pr-271]: https://github.com/regclient/regclient/pull/271
+[pr-273]: https://github.com/regclient/regclient/pull/273
+[pr-276]: https://github.com/regclient/regclient/pull/276
+[pr-278]: https://github.com/regclient/regclient/pull/278
+[pr-283]: https://github.com/regclient/regclient/pull/283
+[pr-285]: https://github.com/regclient/regclient/pull/285
+[pr-286]: https://github.com/regclient/regclient/pull/286
+[pr-288]: https://github.com/regclient/regclient/pull/288
+[pr-289]: https://github.com/regclient/regclient/pull/289
+[pr-290]: https://github.com/regclient/regclient/pull/290
+[pr-291]: https://github.com/regclient/regclient/pull/291
+[pr-296]: https://github.com/regclient/regclient/pull/296
+[pr-300]: https://github.com/regclient/regclient/pull/300
+[pr-302]: https://github.com/regclient/regclient/pull/302
+[pr-303]: https://github.com/regclient/regclient/pull/303
