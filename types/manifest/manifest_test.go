@@ -12,6 +12,7 @@ import (
 	"github.com/regclient/regclient/types/docker/schema1"
 	"github.com/regclient/regclient/types/docker/schema2"
 	v1 "github.com/regclient/regclient/types/oci/v1"
+	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -357,6 +358,8 @@ func TestNew(t *testing.T) {
 		wantE       error
 		testAnnot   bool
 		hasAnnot    bool
+		testPlat    string
+		wantPlat    types.Descriptor
 		testSubject bool
 		hasSubject  bool
 	}{
@@ -415,6 +418,29 @@ func TestNew(t *testing.T) {
 			testAnnot:   true,
 			testSubject: true,
 			hasAnnot:    true,
+			testPlat:    "linux/amd64",
+			wantPlat: types.Descriptor{
+				MediaType: "application/vnd.docker.distribution.manifest.v2+json",
+				Digest:    "sha256:41b9947d8f19e154a5415c88ef71b851d37fa3ceb1de56ffe88d1b616ce503d9",
+				Size:      1152,
+			},
+		},
+		{
+			name: "Docker Schema 2 List get Darwin",
+			opts: []Opts{
+				WithRef(r),
+				WithRaw(rawDockerSchema2List),
+			},
+			wantE:       nil,
+			testAnnot:   true,
+			testSubject: true,
+			hasAnnot:    true,
+			testPlat:    "darwin/arm64",
+			wantPlat: types.Descriptor{
+				MediaType: "application/vnd.docker.distribution.manifest.v2+json",
+				Digest:    "sha256:b302f648065bb2ba542dc75167db065781f296ef72bb504585d652b27b5079ad",
+				Size:      1152,
+			},
 		},
 		{
 			name: "OCI Artifact from Http",
@@ -674,6 +700,19 @@ func TestNew(t *testing.T) {
 					}
 				} else if ok {
 					t.Errorf("manifest supports subject")
+				}
+			}
+			if tt.testPlat != "" {
+				p, err := platform.Parse(tt.testPlat)
+				if err != nil {
+					t.Errorf("failed to parse platform %s: %v", tt.testPlat, err)
+					return
+				}
+				d, err := GetPlatformDesc(m, &p)
+				if err != nil {
+					t.Errorf("failed to get descriptor: %v", err)
+				} else if !tt.wantPlat.Same(*d) {
+					t.Errorf("received platform mismatch, expected %v, received %v", tt.wantPlat, *d)
 				}
 			}
 		})
