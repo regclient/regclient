@@ -2,11 +2,8 @@ package main
 
 import (
 	"context"
-	"embed"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/signal"
 	"regexp"
@@ -22,6 +19,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
+	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
@@ -47,18 +45,11 @@ var rootOpts struct {
 	format    string // for Go template formatting of various commands
 }
 
-//go:embed embed/*
-var embedFS embed.FS
-
 var (
-	// VCSRef and VCSTag are populated from an embed at build time
-	// These are used to version the UserAgent header
-	VCSRef = ""
-	VCSTag = ""
-	conf   *Config
-	log    *logrus.Logger
-	rc     *regclient.RegClient
-	sem    *semaphore.Weighted
+	conf *Config
+	log  *logrus.Logger
+	rc   *regclient.RegClient
+	sem  *semaphore.Weighted
 )
 
 var rootCmd = &cobra.Command{
@@ -113,11 +104,10 @@ func init() {
 		Hooks:     make(logrus.LevelHooks),
 		Level:     logrus.InfoLevel,
 	}
-	setupVCSVars()
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.confFile, "config", "c", "", "Config file")
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.InfoLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
 	rootCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
-	versionCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{jsonPretty .}}", "Format output with go template syntax")
+	versionCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 
 	rootCmd.MarkPersistentFlagFilename("config")
 	serverCmd.MarkPersistentFlagRequired("config")
@@ -148,14 +138,8 @@ func rootPreRun(cmd *cobra.Command, args []string) error {
 }
 
 func runVersion(cmd *cobra.Command, args []string) error {
-	ver := struct {
-		VCSRef string
-		VCSTag string
-	}{
-		VCSRef: VCSRef,
-		VCSTag: VCSTag,
-	}
-	return template.Writer(os.Stdout, rootOpts.format, ver)
+	info := version.GetInfo()
+	return template.Writer(os.Stdout, rootOpts.format, info)
 }
 
 // runOnce processes the file in one pass, ignoring cron
@@ -340,12 +324,13 @@ func loadConf() error {
 	}
 	if conf.Defaults.UserAgent != "" {
 		rcOpts = append(rcOpts, regclient.WithUserAgent(conf.Defaults.UserAgent))
-	} else if VCSTag != "" {
-		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+VCSTag+")"))
-	} else if VCSRef != "" {
-		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+VCSRef+")"))
 	} else {
-		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" (unknown)"))
+		info := version.GetInfo()
+		if info.VCSTag != "" {
+			rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+info.VCSTag+")"))
+		} else {
+			rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+info.VCSRef+")"))
+		}
 	}
 	if !conf.Defaults.SkipDockerConf {
 		rcOpts = append(rcOpts, regclient.WithDockerCreds(), regclient.WithDockerCerts())
@@ -911,30 +896,4 @@ func getPlatformDigest(ctx context.Context, r ref.Ref, platStr string, origMan m
 		return "", ErrNotFound
 	}
 	return descPlat.Digest, nil
-}
-
-func setupVCSVars() {
-	verS := struct {
-		VCSRef string
-		VCSTag string
-	}{}
-
-	verB, err := embedFS.ReadFile("embed/version.json")
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return
-	}
-
-	if len(verB) > 0 {
-		err = json.Unmarshal(verB, &verS)
-		if err != nil {
-			return
-		}
-	}
-
-	if verS.VCSRef != "" {
-		VCSRef = verS.VCSRef
-	}
-	if verS.VCSTag != "" {
-		VCSTag = verS.VCSTag
-	}
 }

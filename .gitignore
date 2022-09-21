@@ -3,5 +3,3 @@ hack
 artifacts/
 bin/
 vendor/
-embed/version.json
-cmd/**/embed/version.json

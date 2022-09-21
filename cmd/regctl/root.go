@@ -1,14 +1,11 @@
 package main
 
 import (
-	"embed"
-	"encoding/json"
-	"errors"
-	"io/fs"
 	"os"
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
+	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -21,15 +18,8 @@ More details at https://github.com/regclient/regclient`
 	UserAgent = "regclient/regctl"
 )
 
-//go:embed embed/*
-var embedFS embed.FS
-
 var (
-	// VCSRef and VCSTag are populated from an embed at build time
-	// These are used to version the UserAgent header
-	VCSRef = ""
-	VCSTag = ""
-	log    *logrus.Logger
+	log *logrus.Logger
 )
 
 var rootCmd = &cobra.Command{
@@ -62,7 +52,6 @@ func init() {
 		Hooks:     make(logrus.LevelHooks),
 		Level:     logrus.WarnLevel,
 	}
-	setupVCSVars()
 
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.WarnLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
 	rootCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
@@ -73,7 +62,7 @@ func init() {
 	})
 	rootCmd.RegisterFlagCompletionFunc("logopt", completeArgNone)
 
-	versionCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{jsonPretty .}}", "Format output with go template syntax")
+	versionCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	versionCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
 	rootCmd.PersistentPreRunE = rootPreRun
@@ -95,14 +84,8 @@ func rootPreRun(cmd *cobra.Command, args []string) error {
 }
 
 func runVersion(cmd *cobra.Command, args []string) error {
-	ver := struct {
-		VCSRef string
-		VCSTag string
-	}{
-		VCSRef: VCSRef,
-		VCSTag: VCSTag,
-	}
-	return template.Writer(os.Stdout, rootOpts.format, ver)
+	info := version.GetInfo()
+	return template.Writer(os.Stdout, rootOpts.format, info)
 }
 
 func newRegClient() *regclient.RegClient {
@@ -118,12 +101,13 @@ func newRegClient() *regclient.RegClient {
 	}
 	if rootOpts.userAgent != "" {
 		rcOpts = append(rcOpts, regclient.WithUserAgent(rootOpts.userAgent))
-	} else if VCSTag != "" {
-		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+VCSTag+")"))
-	} else if VCSRef != "" {
-		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+VCSRef+")"))
 	} else {
-		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" (unknown)"))
+		info := version.GetInfo()
+		if info.VCSTag != "" {
+			rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+info.VCSTag+")"))
+		} else {
+			rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+info.VCSRef+")"))
+		}
 	}
 	if conf.IncDockerCred == nil || *conf.IncDockerCred {
 		rcOpts = append(rcOpts, regclient.WithDockerCreds())
@@ -142,32 +126,6 @@ func newRegClient() *regclient.RegClient {
 	}
 
 	return regclient.New(rcOpts...)
-}
-
-func setupVCSVars() {
-	verS := struct {
-		VCSRef string
-		VCSTag string
-	}{}
-
-	verB, err := embedFS.ReadFile("embed/version.json")
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return
-	}
-
-	if len(verB) > 0 {
-		err = json.Unmarshal(verB, &verS)
-		if err != nil {
-			return
-		}
-	}
-
-	if verS.VCSRef != "" {
-		VCSRef = verS.VCSRef
-	}
-	if verS.VCSTag != "" {
-		VCSTag = verS.VCSTag
-	}
 }
 
 func flagChanged(cmd *cobra.Command, name string) bool {

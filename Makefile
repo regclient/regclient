@@ -43,21 +43,14 @@ lint-md: .FORCE
 vendor:
 	go mod vendor
 
-embed/version.json: .FORCE
-	# docker builds will not have the .dockerignore inside the container
-	if [ -f ".dockerignore" -o ! -f "embed/version.json" ]; then \
-		echo "{\"VCSRef\": \"$(VCS_REF)\", \"VCSTag\": \"$(VCS_TAG)\"}" >embed/version.json; \
-	fi
-
 binaries: vendor $(BINARIES)
 
-bin/%: embed/version.json .FORCE
-	if [ -f embed/version.json -a -d "cmd/$*/embed" ]; then cp embed/version.json "cmd/$*/embed/"; fi
+bin/%: .FORCE
 	CGO_ENABLED=0 go build ${GO_BUILD_FLAGS} -o bin/$* ./cmd/$*
 
 docker: $(IMAGES)
 
-docker-%: embed/version.json .FORCE
+docker-%: .FORCE
 	docker build -t regclient/$* -f build/Dockerfile.$*$(DOCKERFILE_EXT) $(DOCKER_ARGS) .
 	docker build -t regclient/$*:alpine -f build/Dockerfile.$*$(DOCKERFILE_EXT) --target release-alpine $(DOCKER_ARGS) .
 
@@ -72,7 +65,7 @@ artifacts: $(ARTIFACTS)
 artifact-pre:
 	mkdir -p artifacts
 
-artifacts/%: artifact-pre embed/version.json .FORCE
+artifacts/%: artifact-pre .FORCE
 	@target="$*"; \
 	command="$${target%%-*}"; \
 	platform_ext="$${target#*-}"; \
@@ -82,7 +75,6 @@ artifacts/%: artifact-pre embed/version.json .FORCE
 	echo export GOOS=$${GOOS}; \
 	echo export GOARCH=$${GOARCH}; \
 	echo go build ${GO_BUILD_FLAGS} -o "$@" ./cmd/$${command}/; \
-	if [ -f embed/version.json -a -d "cmd/$${command}/embed" ]; then cp embed/version.json "cmd/$${command}/embed/"; fi; \
 	CGO_ENABLED=0 go build ${GO_BUILD_FLAGS} -o "$@" ./cmd/$${command}/
 
 plugin-user:
