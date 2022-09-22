@@ -17,7 +17,9 @@ jobs:
     strategy:
       matrix:
         gover: ["1.17", "1.18", "1.19"]
-        releasever: ["1.19"]
+
+    env:
+      RELEASE_GO_VER: "1.19"
 
     steps:
     - name: "Set up Go ${{ matrix.gover }}"
@@ -50,7 +52,7 @@ jobs:
       run: make artifacts
 
     - name: Gather release details
-      if: startsWith( github.ref, 'refs/tags/v' ) && github.repository_owner == 'regclient' && matrix.gover == matrix.releasever
+      if: startsWith( github.ref, 'refs/tags/v' ) && github.repository_owner == 'regclient' && matrix.gover == env.RELEASE_GO_VER
       id: release_details
       run: |
         VERSION=${GITHUB_REF#refs/tags/}
@@ -68,7 +70,7 @@ jobs:
         echo ::set-output name=release_notes::${RELEASE_NOTES}
 
     - name: Create release
-      if: steps.release_details.outputs.valid == 'true' && matrix.gover == matrix.releasever
+      if: steps.release_details.outputs.valid == 'true' && matrix.gover == env.RELEASE_GO_VER
       id: release_create
       uses: softprops/action-gh-release@v1
       env:
@@ -102,7 +104,7 @@ jobs:
           ./artifacts/regsync-windows-amd64.exe
 
     - name: Save artifacts
-      if: github.ref == 'refs/heads/main' && matrix.gover == matrix.releasever
+      if: github.ref == 'refs/heads/main' && matrix.gover == env.RELEASE_GO_VER
       uses: actions/upload-artifact@v3
       with:
         name: binaries
