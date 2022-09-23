@@ -20,16 +20,22 @@ jobs:
       # https://blog.chainguard.dev/zero-friction-keyless-signing-with-github-actions/
       # TODO: make token conditional: "${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' && 'write' || 'none' }}"
       id-token: 'write'
+
+    strategy:
+      matrix:
+        image: ["regctl", "regsync", "regbot"]
+        type: ["scratch", "alpine"]
+
     steps:
     - name: Prepare
       id: prep
       run: |
-        REGCTL_HUB_IMAGE=regclient/regctl
-        REGSYNC_HUB_IMAGE=regclient/regsync
-        REGBOT_HUB_IMAGE=regclient/regbot
-        REGCTL_GHCR_IMAGE=ghcr.io/regclient/regctl
-        REGSYNC_GHCR_IMAGE=ghcr.io/regclient/regsync
-        REGBOT_GHCR_IMAGE=ghcr.io/regclient/regbot
+        EXT=""
+        if [ "${{ matrix.type }}" != "scratch" ]; then
+          EXT="-${{ matrix.type }}"
+        fi
+        HUB_IMAGE=regclient/${{ matrix.image }}
+        GHCR_IMAGE=ghcr.io/regclient/${{ matrix.image }}
         VERSION=noop
         if [ "${{ github.event_name }}" = "schedule" ]; then
           VERSION=edge
@@ -44,47 +50,25 @@ jobs:
           VERSION="pr-${{ github.event.number }}"
         fi
         VERSION="$(echo "${VERSION}" | sed -r 's#/+#-#g')"
-        REGCTL_TAGS_SCRATCH="${REGCTL_HUB_IMAGE}:${VERSION},${REGCTL_GHCR_IMAGE}:${VERSION}"
-        REGCTL_TAGS_ALPINE="${REGCTL_HUB_IMAGE}:${VERSION}-alpine,${REGCTL_GHCR_IMAGE}:${VERSION}-alpine"
-        REGSYNC_TAGS_SCRATCH="${REGSYNC_HUB_IMAGE}:${VERSION},${REGSYNC_GHCR_IMAGE}:${VERSION}"
-        REGSYNC_TAGS_ALPINE="${REGSYNC_HUB_IMAGE}:${VERSION}-alpine,${REGSYNC_GHCR_IMAGE}:${VERSION}-alpine"
-        REGBOT_TAGS_SCRATCH="${REGBOT_HUB_IMAGE}:${VERSION},${REGBOT_GHCR_IMAGE}:${VERSION}"
-        REGBOT_TAGS_ALPINE="${REGBOT_HUB_IMAGE}:${VERSION}-alpine,${REGBOT_GHCR_IMAGE}:${VERSION}-alpine"
+        TAGS="${HUB_IMAGE}:${VERSION}${EXT},${GHCR_IMAGE}:${VERSION}${EXT}"
         if [[ $VERSION =~ ^v[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
           MINOR="${VERSION%.*}"
           MAJOR="${MINOR%.*}"
-          REGCTL_TAGS_SCRATCH="${REGCTL_TAGS_SCRATCH},${REGCTL_HUB_IMAGE}:${MINOR},${REGCTL_HUB_IMAGE}:${MAJOR},${REGCTL_HUB_IMAGE}:latest"
-          REGCTL_TAGS_SCRATCH="${REGCTL_TAGS_SCRATCH},${REGCTL_GHCR_IMAGE}:${MINOR},${REGCTL_GHCR_IMAGE}:${MAJOR},${REGCTL_GHCR_IMAGE}:latest"
-          REGCTL_TAGS_ALPINE="${REGCTL_TAGS_ALPINE},${REGCTL_HUB_IMAGE}:${MINOR}-alpine,${REGCTL_HUB_IMAGE}:${MAJOR}-alpine,${REGCTL_HUB_IMAGE}:alpine"
-          REGCTL_TAGS_ALPINE="${REGCTL_TAGS_ALPINE},${REGCTL_GHCR_IMAGE}:${MINOR}-alpine,${REGCTL_GHCR_IMAGE}:${MAJOR}-alpine,${REGCTL_GHCR_IMAGE}:alpine"
-          REGSYNC_TAGS_SCRATCH="${REGSYNC_TAGS_SCRATCH},${REGSYNC_HUB_IMAGE}:${MINOR},${REGSYNC_HUB_IMAGE}:${MAJOR},${REGSYNC_HUB_IMAGE}:latest"
-          REGSYNC_TAGS_SCRATCH="${REGSYNC_TAGS_SCRATCH},${REGSYNC_GHCR_IMAGE}:${MINOR},${REGSYNC_GHCR_IMAGE}:${MAJOR},${REGSYNC_GHCR_IMAGE}:latest"
-          REGSYNC_TAGS_ALPINE="${REGSYNC_TAGS_ALPINE},${REGSYNC_HUB_IMAGE}:${MINOR}-alpine,${REGSYNC_HUB_IMAGE}:${MAJOR}-alpine,${REGSYNC_HUB_IMAGE}:alpine"
-          REGSYNC_TAGS_ALPINE="${REGSYNC_TAGS_ALPINE},${REGSYNC_GHCR_IMAGE}:${MINOR}-alpine,${REGSYNC_GHCR_IMAGE}:${MAJOR}-alpine,${REGSYNC_GHCR_IMAGE}:alpine"
-          REGBOT_TAGS_SCRATCH="${REGBOT_TAGS_SCRATCH},${REGBOT_HUB_IMAGE}:${MINOR},${REGBOT_HUB_IMAGE}:${MAJOR},${REGBOT_HUB_IMAGE}:latest"
-          REGBOT_TAGS_SCRATCH="${REGBOT_TAGS_SCRATCH},${REGBOT_GHCR_IMAGE}:${MINOR},${REGBOT_GHCR_IMAGE}:${MAJOR},${REGBOT_GHCR_IMAGE}:latest"
-          REGBOT_TAGS_ALPINE="${REGBOT_TAGS_ALPINE},${REGBOT_HUB_IMAGE}:${MINOR}-alpine,${REGBOT_HUB_IMAGE}:${MAJOR}-alpine,${REGBOT_HUB_IMAGE}:alpine"
-          REGBOT_TAGS_ALPINE="${REGBOT_TAGS_ALPINE},${REGBOT_GHCR_IMAGE}:${MINOR}-alpine,${REGBOT_GHCR_IMAGE}:${MAJOR}-alpine,${REGBOT_GHCR_IMAGE}:alpine"
+          TAGS="${TAGS},${HUB_IMAGE}:${MINOR}${EXT},${HUB_IMAGE}:${MAJOR}${EXT}"
+          TAGS="${TAGS},${GHCR_IMAGE}:${MINOR}${EXT},${GHCR_IMAGE}:${MAJOR}${EXT}"
+          if [ "${{ matrix.type }}" == "scratch" ]; then
+            TAGS="${TAGS},${HUB_IMAGE}:latest"
+            TAGS="${TAGS},${GHCR_IMAGE}:latest"
+          else
+            TAGS="${TAGS},${HUB_IMAGE}:${{ matrix.type }}"
+            TAGS="${TAGS},${GHCR_IMAGE}:${{ matrix.type }}"
+          fi
         fi
         echo "::set-output name=version::${VERSION}"
-        echo "::set-output name=regctl_cache_scratch::${REGCTL_GHCR_IMAGE}:buildcache-scratch"
-        echo "::set-output name=regctl_cache_alpine::${REGCTL_GHCR_IMAGE}:buildcache-alpine"
-        echo "::set-output name=regsync_cache_scratch::${REGSYNC_GHCR_IMAGE}:buildcache-scratch"
-        echo "::set-output name=regsync_cache_alpine::${REGSYNC_GHCR_IMAGE}:buildcache-alpine"
-        echo "::set-output name=regbot_cache_scratch::${REGBOT_GHCR_IMAGE}:buildcache-scratch"
-        echo "::set-output name=regbot_cache_alpine::${REGBOT_GHCR_IMAGE}:buildcache-alpine"
-        echo "::set-output name=regctl_image_hub::${REGCTL_HUB_IMAGE}"
-        echo "::set-output name=regctl_image_ghcr::${REGCTL_GHCR_IMAGE}"
-        echo "::set-output name=regsync_image_hub::${REGSYNC_HUB_IMAGE}"
-        echo "::set-output name=regsync_image_ghcr::${REGSYNC_GHCR_IMAGE}"
-        echo "::set-output name=regbot_image_hub::${REGBOT_HUB_IMAGE}"
-        echo "::set-output name=regbot_image_ghcr::${REGBOT_GHCR_IMAGE}"
-        echo "::set-output name=regctl_tags_scratch::${REGCTL_TAGS_SCRATCH}"
-        echo "::set-output name=regctl_tags_alpine::${REGCTL_TAGS_ALPINE}"
-        echo "::set-output name=regsync_tags_scratch::${REGSYNC_TAGS_SCRATCH}"
-        echo "::set-output name=regsync_tags_alpine::${REGSYNC_TAGS_ALPINE}"
-        echo "::set-output name=regbot_tags_scratch::${REGBOT_TAGS_SCRATCH}"
-        echo "::set-output name=regbot_tags_alpine::${REGBOT_TAGS_ALPINE}"
+        echo "::set-output name=cache::${GHCR_IMAGE}:buildcache${EXT}"
+        echo "::set-output name=image_hub::${HUB_IMAGE}"
+        echo "::set-output name=image_ghcr::${GHCR_IMAGE}"
+        echo "::set-output name=tags::${TAGS}"
         echo "::set-output name=created::$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
     - name: Check out code
@@ -115,118 +99,18 @@ jobs:
         username: ${{ secrets.GHCR_USERNAME }}
         password: ${{ secrets.GHCR_TOKEN }}
 
-    - name: Build and push regctl scratch
+    - name: Build and push
       uses: docker/build-push-action@v3
-      id: build-regctl-scratch
+      id: build
       with:
         context: .
-        file: ./build/Dockerfile.regctl.buildkit
+        file: ./build/Dockerfile.${{ matrix.image }}.buildkit
         platforms: linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x
         push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
-        target: release-scratch
-        tags: ${{ steps.prep.outputs.regctl_tags_scratch }}
-        cache-from: type=registry,ref=${{ steps.prep.outputs.regctl_cache_scratch }}
-        cache-to: ${{ github.repository_owner == 'regclient' && format('type=registry,ref={0},mode=max', steps.prep.outputs.regctl_cache_scratch) || 'type=inline'}}
-        build-args: |
-          VCS_REF=${{ github.sha }}
-        labels: |
-          org.opencontainers.image.created=${{ steps.prep.outputs.created }}
-          org.opencontainers.image.source=${{ github.repositoryUrl }}
-          org.opencontainers.image.version=${{ steps.prep.outputs.version }}
-          org.opencontainers.image.revision=${{ github.sha }}
-
-    - name: Build and push regctl alpine
-      uses: docker/build-push-action@v3
-      id: build-regctl-alpine
-      with:
-        context: .
-        file: ./build/Dockerfile.regctl.buildkit
-        platforms: linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x
-        push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
-        target: release-alpine
-        tags: ${{ steps.prep.outputs.regctl_tags_alpine }}
-        cache-from: type=registry,ref=${{ steps.prep.outputs.regctl_cache_alpine }}
-        cache-to: ${{ github.repository_owner == 'regclient' && format('type=registry,ref={0},mode=max', steps.prep.outputs.regctl_cache_alpine) || 'type=inline'}}
-        build-args: |
-          VCS_REF=${{ github.sha }}
-        labels: |
-          org.opencontainers.image.created=${{ steps.prep.outputs.created }}
-          org.opencontainers.image.source=${{ github.repositoryUrl }}
-          org.opencontainers.image.version=${{ steps.prep.outputs.version }}
-          org.opencontainers.image.revision=${{ github.sha }}
-
-    - name: Build and push regsync scratch
-      uses: docker/build-push-action@v3
-      id: build-regsync-scratch
-      with:
-        context: .
-        file: ./build/Dockerfile.regsync.buildkit
-        platforms: linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x
-        push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
-        target: release-scratch
-        tags: ${{ steps.prep.outputs.regsync_tags_scratch }}
-        cache-from: type=registry,ref=${{ steps.prep.outputs.regsync_cache_scratch }}
-        cache-to: ${{ github.repository_owner == 'regclient' && format('type=registry,ref={0},mode=max', steps.prep.outputs.regsync_cache_scratch) || 'type=inline'}}
-        build-args: |
-          VCS_REF=${{ github.sha }}
-        labels: |
-          org.opencontainers.image.created=${{ steps.prep.outputs.created }}
-          org.opencontainers.image.source=${{ github.repositoryUrl }}
-          org.opencontainers.image.version=${{ steps.prep.outputs.version }}
-          org.opencontainers.image.revision=${{ github.sha }}
-
-    - name: Build and push regsync alpine
-      uses: docker/build-push-action@v3
-      id: build-regsync-alpine
-      with:
-        context: .
-        file: ./build/Dockerfile.regsync.buildkit
-        platforms: linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x
-        push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
-        target: release-alpine
-        tags: ${{ steps.prep.outputs.regsync_tags_alpine }}
-        cache-from: type=registry,ref=${{ steps.prep.outputs.regsync_cache_alpine }}
-        cache-to: ${{ github.repository_owner == 'regclient' && format('type=registry,ref={0},mode=max', steps.prep.outputs.regsync_cache_alpine) || 'type=inline'}}
-        build-args: |
-          VCS_REF=${{ github.sha }}
-        labels: |
-          org.opencontainers.image.created=${{ steps.prep.outputs.created }}
-          org.opencontainers.image.source=${{ github.repositoryUrl }}
-          org.opencontainers.image.version=${{ steps.prep.outputs.version }}
-          org.opencontainers.image.revision=${{ github.sha }}
-
-    - name: Build and push regbot scratch
-      uses: docker/build-push-action@v3
-      id: build-regbot-scratch
-      with:
-        context: .
-        file: ./build/Dockerfile.regbot.buildkit
-        platforms: linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x
-        push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
-        target: release-scratch
-        tags: ${{ steps.prep.outputs.regbot_tags_scratch }}
-        cache-from: type=registry,ref=${{ steps.prep.outputs.regbot_cache_scratch }}
-        cache-to: ${{ github.repository_owner == 'regclient' && format('type=registry,ref={0},mode=max', steps.prep.outputs.regbot_cache_scratch) || 'type=inline'}}
-        build-args: |
-          VCS_REF=${{ github.sha }}
-        labels: |
-          org.opencontainers.image.created=${{ steps.prep.outputs.created }}
-          org.opencontainers.image.source=${{ github.repositoryUrl }}
-          org.opencontainers.image.version=${{ steps.prep.outputs.version }}
-          org.opencontainers.image.revision=${{ github.sha }}
-
-    - name: Build and push regbot alpine
-      uses: docker/build-push-action@v3
-      id: build-regbot-alpine
-      with:
-        context: .
-        file: ./build/Dockerfile.regbot.buildkit
-        platforms: linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x
-        push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
-        target: release-alpine
-        tags: ${{ steps.prep.outputs.regbot_tags_alpine }}
-        cache-from: type=registry,ref=${{ steps.prep.outputs.regbot_cache_alpine }}
-        cache-to: ${{ github.repository_owner == 'regclient' && format('type=registry,ref={0},mode=max', steps.prep.outputs.regbot_cache_alpine) || 'type=inline'}}
+        target: release-${{ matrix.type }}
+        tags: ${{ steps.prep.outputs.tags }}
+        cache-from: type=registry,ref=${{ steps.prep.outputs.cache }}
+        cache-to: ${{ github.repository_owner == 'regclient' && format('type=registry,ref={0},mode=max', steps.prep.outputs.cache) || 'type=inline'}}
         build-args: |
           VCS_REF=${{ github.sha }}
         labels: |
@@ -241,15 +125,5 @@ jobs:
         # experimental support needed for GitHub OIDC signing
         COSIGN_EXPERIMENTAL: "true"
       run: |
-        cosign sign ${{ steps.prep.outputs.regctl_image_hub }}@${{ steps.build-regctl-scratch.outputs.digest }}
-        cosign sign ${{ steps.prep.outputs.regctl_image_hub }}@${{ steps.build-regctl-alpine.outputs.digest }}
-        cosign sign ${{ steps.prep.outputs.regctl_image_ghcr }}@${{ steps.build-regctl-scratch.outputs.digest }}
-        cosign sign ${{ steps.prep.outputs.regctl_image_ghcr }}@${{ steps.build-regctl-alpine.outputs.digest }}
-        cosign sign ${{ steps.prep.outputs.regsync_image_hub }}@${{ steps.build-regsync-scratch.outputs.digest }}
-        cosign sign ${{ steps.prep.outputs.regsync_image_hub }}@${{ steps.build-regsync-alpine.outputs.digest }}
-        cosign sign ${{ steps.prep.outputs.regsync_image_ghcr }}@${{ steps.build-regsync-scratch.outputs.digest }}
-        cosign sign ${{ steps.prep.outputs.regsync_image_ghcr }}@${{ steps.build-regsync-alpine.outputs.digest }}
-        cosign sign ${{ steps.prep.outputs.regbot_image_hub }}@${{ steps.build-regbot-scratch.outputs.digest }}
-        cosign sign ${{ steps.prep.outputs.regbot_image_hub }}@${{ steps.build-regbot-alpine.outputs.digest }}
-        cosign sign ${{ steps.prep.outputs.regbot_image_ghcr }}@${{ steps.build-regbot-scratch.outputs.digest }}
-        cosign sign ${{ steps.prep.outputs.regbot_image_ghcr }}@${{ steps.build-regbot-alpine.outputs.digest }}
+        cosign sign ${{ steps.prep.outputs.image_hub }}@${{ steps.build.outputs.digest }}
+        cosign sign ${{ steps.prep.outputs.image_ghcr }}@${{ steps.build.outputs.digest }}
