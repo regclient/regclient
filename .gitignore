@@ -2,4 +2,5 @@ hack
 /regctl
 artifacts/
 bin/
+output/
 vendor/
