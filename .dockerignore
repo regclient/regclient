@@ -9,7 +9,6 @@
 !regclient/
 !scheme/
 !types/
-!vendor/
 !go.*
 !*.go
 !Makefile
