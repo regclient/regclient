@@ -119,11 +119,49 @@ jobs:
           org.opencontainers.image.version=${{ steps.prep.outputs.version }}
           org.opencontainers.image.revision=${{ github.sha }}
 
+    # Dogfooding, use regctl to modify regclient images to improve reproducibility
+    - name: Install regctl
+      uses: regclient/actions/regctl-installer@main
+      if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
+      with:
+        release: main
+
+    - name: Mutate
+      if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
+      id: mutate
+      run: |
+        vcs_date="$(date -d "@$(git log -1 --format=%at)" +%Y-%m-%dT%H:%M:%SZ --utc)"
+        base_name=""
+        mkdir -p "output/${{matrix.image}}"
+        if [ "${{matrix.type}}" = "alpine" ]; then
+          base_name="alpine:3"
+          base_digest="$(regctl image digest "${base_name}")"
+        fi
+        # mutate the image locally
+        local_tag="ocidir://output:${{matrix.image}}:${{matrix.type}}"
+        regctl image copy "${{ steps.prep.outputs.image_ghcr }}@${{ steps.build.outputs.digest }}" "${local_tag}"
+        regctl image mod "${local_tag}" --replace \
+          --time-max "${vcs_date}" \
+          --annotation "oci.opencontainers.image.created=${vcs_date}" \
+          --annotation "oci.opencontainers.image.source=${{ github.repositoryUrl }}" \
+          --annotation "oci.opencontainers.image.revision=${{ github.sha }}"
+        if [ -n "$base_name" ] && [ -n "$base_digest" ]; then
+          regctl image mod "${local_tag}" --replace \
+            --annotation "oci.opencontainers.image.base.name=${base_name}" \
+            --annotation "oci.opencontainers.image.base.digest=${base_digest}"
+        fi
+        # loop over the tags
+        for tag in $(echo ${{ steps.prep.outputs.tags }} | tr , ' '); do
+          echo "Updating ${tag}"
+          regctl image copy "${local_tag}" "${tag}"
+        done
+        echo "::set-output name=digest::$(regctl image digest ${local_tag})"
+
     - name: Sign the container image
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       env:
         # experimental support needed for GitHub OIDC signing
         COSIGN_EXPERIMENTAL: "true"
       run: |
-        cosign sign ${{ steps.prep.outputs.image_hub }}@${{ steps.build.outputs.digest }}
-        cosign sign ${{ steps.prep.outputs.image_ghcr }}@${{ steps.build.outputs.digest }}
+        cosign sign ${{ steps.prep.outputs.image_hub }}@${{ steps.mutate.outputs.digest }}
+        cosign sign ${{ steps.prep.outputs.image_ghcr }}@${{ steps.mutate.outputs.digest }}
