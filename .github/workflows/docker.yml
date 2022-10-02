@@ -138,7 +138,7 @@ jobs:
           base_digest="$(regctl image digest "${base_name}")"
         fi
         # mutate the image locally
-        local_tag="ocidir://output:${{matrix.image}}:${{matrix.type}}"
+        local_tag="ocidir://output/${{matrix.image}}:${{matrix.type}}"
         regctl image copy "${{ steps.prep.outputs.image_ghcr }}@${{ steps.build.outputs.digest }}" "${local_tag}"
         regctl image mod "${local_tag}" --replace \
           --time-max "${vcs_date}" \
