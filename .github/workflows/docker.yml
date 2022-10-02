@@ -30,6 +30,7 @@ jobs:
     - name: Prepare
       id: prep
       run: |
+        mkdir -p "output/${{matrix.image}}"
         EXT=""
         if [ "${{ matrix.type }}" != "scratch" ]; then
           EXT="-${{ matrix.type }}"
