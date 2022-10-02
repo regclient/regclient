@@ -42,6 +42,17 @@ export PATH="$PATH:${git_root}/bin"
 vcs_date="$(date -d "@$(git log -1 --format=%at)" +%Y-%m-%dT%H:%M:%SZ --utc)"
 vcs_repo="https://github.com/regclient/regclient.git"
 vcs_sha="$(git rev-list -1 HEAD)"
+vcs_describe="$(git describe --all)"
+vcs_version="noop"
+if [ "${vcs_describe}" != "${vcs_describe#tags/}" ]; then
+  vcs_version="${vcs_describe#tags/}"
+elif [ "${vcs_describe}" != "${vcs_describe#heads/}" ]; then
+  vcs_version="${vcs_describe#heads/}"
+  if [ "main" = "$$vcs_version" ]; then
+    vcs_version=edge
+  fi
+fi
+vcs_version="$(echo "${vcs_version}" | sed -r 's#/+#-#g')"
 buildx_opts=""
 if [ -n "$base_name" ] && [ -z "$base_digest" ]; then
   base_digest="$(regctl image digest "${base_name}")"
@@ -53,7 +64,12 @@ fi
 [ -d "output" ] || mkdir -p output
 docker buildx build --platform="$platforms" -f "build/Dockerfile.${image}.buildkit" \
   -o "type=oci,dest=output/${image}-${release}.tar" --metadata-file "output/${image}-${release}.json" \
-  --target "release-${release}" ${buildx_opts} .
+  --target "release-${release}" ${buildx_opts} \
+  --label org.opencontainers.image.created=${vcs_date} \
+  --label org.opencontainers.image.source=${vcs_repo} \
+  --label org.opencontainers.image.version=${vcs_version} \
+  --label org.opencontainers.image.revision=${vcs_sha} \
+  --no-cache .
 echo "Importing tar"
 regctl image import "ocidir://output/${image}:${release}" "output/${image}-${release}.tar"
 echo "Modding image"
