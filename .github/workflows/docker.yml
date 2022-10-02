@@ -65,7 +65,6 @@ jobs:
           fi
         fi
         echo "::set-output name=version::${VERSION}"
-        echo "::set-output name=cache::${GHCR_IMAGE}:buildcache${EXT}"
         echo "::set-output name=image_hub::${HUB_IMAGE}"
         echo "::set-output name=image_ghcr::${GHCR_IMAGE}"
         echo "::set-output name=tags::${TAGS}"
@@ -106,13 +105,8 @@ jobs:
         context: .
         file: ./build/Dockerfile.${{ matrix.image }}.buildkit
         platforms: linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x
-        push: ${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' }}
         target: release-${{ matrix.type }}
-        tags: ${{ steps.prep.outputs.tags }}
-        cache-from: type=registry,ref=${{ steps.prep.outputs.cache }}
-        cache-to: ${{ github.repository_owner == 'regclient' && format('type=registry,ref={0},mode=max', steps.prep.outputs.cache) || 'type=inline'}}
-        build-args: |
-          VCS_REF=${{ github.sha }}
+        output: "type=oci,dest=output/${{matrix.image}}-${{matrix.type}}.tar"
         labels: |
           org.opencontainers.image.created=${{ steps.prep.outputs.created }}
           org.opencontainers.image.source=${{ github.repositoryUrl }}
@@ -139,7 +133,8 @@ jobs:
         fi
         # mutate the image locally
         local_tag="ocidir://output/${{matrix.image}}:${{matrix.type}}"
-        regctl image copy "${{ steps.prep.outputs.image_ghcr }}@${{ steps.build.outputs.digest }}" "${local_tag}"
+        echo "Loading ${local_tag} from output/${{matrix.image}}-${{matrix.type}}.tar"
+        regctl image import "${local_tag}" "output/${{matrix.image}}-${{matrix.type}}.tar"
         regctl image mod "${local_tag}" --replace \
           --time-max "${vcs_date}" \
           --annotation "oci.opencontainers.image.created=${vcs_date}" \
