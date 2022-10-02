@@ -106,7 +106,7 @@ jobs:
         file: ./build/Dockerfile.${{ matrix.image }}.buildkit
         platforms: linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x
         target: release-${{ matrix.type }}
-        output: "type=oci,dest=output/${{matrix.image}}-${{matrix.type}}.tar"
+        outputs: type=oci,dest=output/${{matrix.image}}-${{matrix.type}}.tar
         labels: |
           org.opencontainers.image.created=${{ steps.prep.outputs.created }}
           org.opencontainers.image.source=${{ github.repositoryUrl }}
