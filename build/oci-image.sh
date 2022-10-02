@@ -48,7 +48,7 @@ if [ "${vcs_describe}" != "${vcs_describe#tags/}" ]; then
   vcs_version="${vcs_describe#tags/}"
 elif [ "${vcs_describe}" != "${vcs_describe#heads/}" ]; then
   vcs_version="${vcs_describe#heads/}"
-  if [ "main" = "$$vcs_version" ]; then
+  if [ "main" = "$vcs_version" ]; then
     vcs_version=edge
   fi
 fi
