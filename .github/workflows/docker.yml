@@ -68,11 +68,14 @@ jobs:
             TAGS="${TAGS},${GHCR_IMAGE}:${{ matrix.type }}"
           fi
         fi
+        VCS_DATE="$(date -d "@$(git log -1 --format=%at)" +%Y-%m-%dT%H:%M:%SZ --utc)"
+        REPO_URL="${{github.server_url}}/${{github.repository}}.git"
         echo "::set-output name=version::${VERSION}"
         echo "::set-output name=image_hub::${HUB_IMAGE}"
         echo "::set-output name=image_ghcr::${GHCR_IMAGE}"
         echo "::set-output name=tags::${TAGS}"
-        echo "::set-output name=created::$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+        echo "::set-output name=created::${VCS_DATE}"
+        echo "::set-output name=repo_url::${REPO_URL}"
 
     # qemu is not needed for Go cross compiling
     # - name: Set up QEMU
@@ -110,7 +113,7 @@ jobs:
         outputs: type=oci,dest=output/${{matrix.image}}-${{matrix.type}}.tar
         labels: |
           org.opencontainers.image.created=${{ steps.prep.outputs.created }}
-          org.opencontainers.image.source=${{ github.repositoryUrl }}
+          org.opencontainers.image.source=${{ steps.prep.outputs.repo_url }}
           org.opencontainers.image.version=${{ steps.prep.outputs.version }}
           org.opencontainers.image.revision=${{ github.sha }}
 
@@ -125,7 +128,7 @@ jobs:
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       id: mutate
       run: |
-        vcs_date="$(date -d "@$(git log -1 --format=%at)" +%Y-%m-%dT%H:%M:%SZ --utc)"
+        vcs_date="${{ steps.prep.outputs.created }}"
         base_name=""
         mkdir -p "output/${{matrix.image}}"
         if [ "${{matrix.type}}" = "alpine" ]; then
@@ -139,7 +142,7 @@ jobs:
         regctl image mod "${local_tag}" --replace \
           --time-max "${vcs_date}" \
           --annotation "oci.opencontainers.image.created=${vcs_date}" \
-          --annotation "oci.opencontainers.image.source=${{ github.repositoryUrl }}" \
+          --annotation "oci.opencontainers.image.source=${{ steps.prep.outputs.repo_url }}" \
           --annotation "oci.opencontainers.image.revision=${{ github.sha }}"
         if [ -n "$base_name" ] && [ -n "$base_digest" ]; then
           regctl image mod "${local_tag}" --replace \
