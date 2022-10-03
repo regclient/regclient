@@ -16,7 +16,7 @@ RUN addgroup -g 1000 appuser \
 WORKDIR /src
 
 FROM --platform=$BUILDPLATFORM golang as dev
-COPY --link . /src/
+COPY . /src/
 ENV PATH=${PATH}:/src/bin
 CMD make bin/regsync && bin/regsync
 
@@ -31,7 +31,7 @@ USER appuser
 CMD [ "bin/regsync" ]
 
 FROM scratch as artifact
-COPY --link --from=build /src/bin/regsync /regsync
+COPY --from=build /src/bin/regsync /regsync
 
 FROM --platform=$BUILDPLATFORM golang as docker-cred-ecr-login
 ARG TARGETOS
@@ -54,12 +54,12 @@ RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
    || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-gcr" /usr/local/bin/docker-credential-gcr )
 
 FROM ${REGISTRY}/library/alpine:${ALPINE_VER} as release-alpine
-COPY --link --from=build /etc/passwd /etc/group /etc/
-COPY --link --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --link --from=build --chown=1000:1000 /home/appuser/ /home/appuser/
-COPY --link --from=docker-cred-ecr-login /usr/local/bin/docker-credential-* /usr/local/bin/
-COPY --link --from=docker-cred-gcr /usr/local/bin/docker-credential-* /usr/local/bin/
-COPY --link --from=build /src/bin/regsync /usr/local/bin/regsync
+COPY --from=build /etc/passwd /etc/group /etc/
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build --chown=1000:1000 /home/appuser/ /home/appuser/
+COPY --from=docker-cred-ecr-login /usr/local/bin/docker-credential-* /usr/local/bin/
+COPY --from=docker-cred-gcr /usr/local/bin/docker-credential-* /usr/local/bin/
+COPY --from=build /src/bin/regsync /usr/local/bin/regsync
 USER appuser
 CMD [ "regsync", "--help" ]
 
@@ -79,11 +79,11 @@ LABEL maintainer="" \
       org.opencontainers.image.description=""
 
 FROM scratch as release-scratch
-ADD  --link build/root.tgz /
-COPY --link --from=build /etc/passwd /etc/group /etc/
-COPY --link --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --link --from=build --chown=1000:1000 /home/appuser/ /home/appuser/
-COPY --link --from=build /src/bin/regsync /regsync
+ADD  build/root.tgz /
+COPY --from=build /etc/passwd /etc/group /etc/
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build --chown=1000:1000 /home/appuser/ /home/appuser/
+COPY --from=build /src/bin/regsync /regsync
 USER appuser
 ENTRYPOINT [ "/regsync" ]
 
