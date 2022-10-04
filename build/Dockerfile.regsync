@@ -29,7 +29,7 @@ FROM golang as docker-cred-ecr-login
 ARG TARGETOS
 ARG TARGETARCH
 ARG ECR_HELPER_VER
-RUN go install github.com/awslabs/amazon-ecr-credential-helper/ecr-login/cli/docker-credential-ecr-login@${ECR_HELPER_VER} \
+RUN CGO_ENABLED=0 go install -trimpath -ldflags=-buildid= github.com/awslabs/amazon-ecr-credential-helper/ecr-login/cli/docker-credential-ecr-login@${ECR_HELPER_VER} \
  && ( cp "${GOPATH}/bin/docker-credential-ecr-login" /usr/local/bin/docker-credential-ecr-login \
    || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-ecr-login" /usr/local/bin/docker-credential-ecr-login )
 
@@ -37,7 +37,7 @@ FROM golang as docker-cred-gcr
 ARG TARGETOS
 ARG TARGETARCH
 ARG GCR_HELPER_VER
-RUN go install github.com/GoogleCloudPlatform/docker-credential-gcr@${GCR_HELPER_VER} \
+RUN CGO_ENABLED=0 go install -trimpath -ldflags=-buildid= github.com/GoogleCloudPlatform/docker-credential-gcr@${GCR_HELPER_VER} \
  && ( cp "${GOPATH}/bin/docker-credential-gcr" /usr/local/bin/docker-credential-gcr \
    || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-gcr" /usr/local/bin/docker-credential-gcr )
 
