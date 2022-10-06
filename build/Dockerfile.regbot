@@ -3,6 +3,8 @@ ARG ALPINE_VER=3
 ARG GO_VER=1.19-alpine
 ARG ECR_HELPER_VER=cd2dbcbbab495cdc87e734cea42852cd2e8a4692
 ARG GCR_HELPER_VER=9db1a8218571feeb5541ba12a7a9342e86c239a9
+ARG LUNAJSON_COMMIT=e6063d37de97dfdfe2749e24de949472bfad0945
+ARG SEMVER_COMMIT=af495adc857d51fd1507a112be18523828a1da0d
 
 FROM ${REGISTRY}/library/golang:${GO_VER} as golang
 RUN apk add --no-cache \
@@ -20,7 +22,7 @@ ENV PATH=${PATH}:/src/bin
 CMD make bin/regbot && bin/regbot
 
 FROM dev as build
-RUN make bin/regbot
+RUN make vendor bin/regbot
 USER appuser
 CMD [ "/src/bin/regbot" ]
 
@@ -41,15 +43,20 @@ RUN CGO_ENABLED=0 go install -trimpath -ldflags=-buildid= github.com/GoogleCloud
    || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-gcr" /usr/local/bin/docker-credential-gcr )
 
 FROM ${REGISTRY}/library/alpine:${ALPINE_VER} as lua-mods
-RUN apk add git \
- && mkdir -p /lua /src \
- && git clone https://github.com/grafi-tt/lunajson.git /src/json \
- && git clone https://github.com/kikito/semver.lua.git /src/semver \
- && cp -r /src/json/src/* /lua/ \
- && cp /src/semver/semver.lua /lua/ \
- && cd /lua \
- && ln -s lunajson.lua json.lua
+# COPY may pull in old timestamps, use a touch command below to reset them
 COPY cmd/regbot/lua/ /lua/
+ARG LUNAJSON_COMMIT
+ARG SEMVER_COMMIT
+RUN apk add curl \
+ && mkdir -p /lua/lunajson \
+ && curl -fL https://raw.githubusercontent.com/grafi-tt/lunajson/${LUNAJSON_COMMIT}/src/lunajson.lua > /lua/lunajson.lua \
+ && curl -fL https://raw.githubusercontent.com/grafi-tt/lunajson/${LUNAJSON_COMMIT}/src/lunajson/decoder.lua > /lua/lunajson/decoder.lua \
+ && curl -fL https://raw.githubusercontent.com/grafi-tt/lunajson/${LUNAJSON_COMMIT}/src/lunajson/encoder.lua > /lua/lunajson/encoder.lua \
+ && curl -fL https://raw.githubusercontent.com/grafi-tt/lunajson/${LUNAJSON_COMMIT}/src/lunajson/sax.lua > /lua/lunajson/sax.lua \
+ && curl -fL https://raw.githubusercontent.com/kikito/semver.lua/${SEMVER_COMMIT}/semver.lua > /lua/semver.lua \
+ && cd /lua \
+ && ln -s lunajson.lua json.lua \
+ && find . -exec touch '{}' \;
 
 FROM ${REGISTRY}/library/alpine:${ALPINE_VER} as release-alpine
 COPY --from=build /etc/passwd /etc/group /etc/

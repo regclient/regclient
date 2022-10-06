@@ -28,7 +28,7 @@ ARG TARGETARCH
 RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
     --mount=type=cache,id=goroot,target=/root/.cache/go-build \
     GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    make bin/regsync
+    make vendor bin/regsync
 USER appuser
 CMD [ "bin/regsync" ]
 

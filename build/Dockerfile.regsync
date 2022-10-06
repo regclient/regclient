@@ -21,7 +21,7 @@ CMD make bin/regsync && bin/regsync
 
 FROM dev as build
 ARG LD_FLAGS
-RUN make bin/regsync
+RUN make vendor bin/regsync
 USER appuser
 CMD [ "bin/regsync" ]
 

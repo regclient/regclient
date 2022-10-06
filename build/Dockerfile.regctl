@@ -20,7 +20,7 @@ ENV PATH=${PATH}:/src/bin
 CMD make bin/regctl && bin/regctl
 
 FROM dev as build
-RUN make bin/regctl
+RUN make vendor bin/regctl
 USER appuser
 CMD [ "bin/regctl" ]
 
