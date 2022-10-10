@@ -541,6 +541,32 @@ func TestBlobPut(t *testing.T) {
 		// 		},
 		// 	},
 		// },
+		// upload patch 2b for d2
+		{
+			ReqEntry: reqresp.ReqEntry{
+				DelOnUse: false,
+				Name:     "PATCH 2b for d2",
+				Method:   "PATCH",
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2.String(),
+				Query: map[string][]string{
+					"chunk": {"2b"},
+				},
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", blobLen-blobChunk-20)},
+					"Content-Range":  {fmt.Sprintf("%d-%d", blobChunk+20, blobLen-1)},
+					"Content-Type":   {"application/octet-stream"},
+				},
+				Body: blob2[blobChunk+20:],
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusAccepted,
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", 0)},
+					"Range":          {fmt.Sprintf("bytes=0-%d", blobLen-1)},
+					"Location":       {uuid2.String() + "?chunk=3"},
+				},
+			},
+		},
 		// upload patch 2 for d2
 		{
 			ReqEntry: reqresp.ReqEntry{
@@ -559,11 +585,11 @@ func TestBlobPut(t *testing.T) {
 				Body: blob2[blobChunk:],
 			},
 			RespEntry: reqresp.RespEntry{
-				Status: http.StatusAccepted,
+				Status: http.StatusRequestedRangeNotSatisfiable,
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
-					"Range":          {fmt.Sprintf("bytes=0-%d", blobLen)},
-					"Location":       {uuid2.String() + "?chunk=3"},
+					"Range":          {fmt.Sprintf("bytes=0-%d", blobChunk+20-1)},
+					"Location":       {uuid2.String() + "?chunk=2b"},
 				},
 			},
 		},
