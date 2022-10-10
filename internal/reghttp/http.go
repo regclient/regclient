@@ -442,6 +442,9 @@ func (resp *clientResp) Next() error {
 				case http.StatusNotFound:
 					// if not found, drop mirror for this req, but other requests don't need backoff
 					dropHost = true
+				case http.StatusRequestedRangeNotSatisfiable:
+					// if range request error (blob push), drop mirror for this req, but other requests don't need backoff
+					dropHost = true
 				case http.StatusTooManyRequests, http.StatusRequestTimeout, http.StatusGatewayTimeout:
 					// server is likely overloaded, backoff but still retry
 					backoff = true
