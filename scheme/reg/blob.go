@@ -406,9 +406,11 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url
 		return io.NopCloser(bufRdr), nil
 	}
 	chunkURL := *putURL
+	retryLimit := 10 // TODO: pull limit from reghttp
+	retryCur := 0
 	var err error
 
-	for !finalChunk {
+	for !finalChunk || chunkStart < bufStart+int64(len(bufBytes)) {
 		bufChange = false
 		for chunkStart >= bufStart+int64(len(bufBytes)) && !finalChunk {
 			bufStart += int64(len(bufBytes))
@@ -467,11 +469,11 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url
 				NoMirrors: true,
 			}
 			resp, err := reg.reghttp.Do(ctx, req)
-			if err != nil && !errors.Is(err, types.ErrHTTPStatus) {
+			if err != nil && !errors.Is(err, types.ErrHTTPStatus) && !errors.Is(err, types.ErrNotFound) {
 				return types.Descriptor{}, fmt.Errorf("failed to send blob (chunk), ref %s: http do: %w", r.CommonName(), err)
 			}
 			resp.Close()
-
+			httpResp := resp.HTTPResponse()
 			// distribution-spec is 202, AWS ECR returns a 201 and rejects the put
 			if resp.HTTPResponse().StatusCode == 201 {
 				reg.log.WithFields(logrus.Fields{
@@ -482,6 +484,7 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url
 			} else if resp.HTTPResponse().StatusCode >= 400 && resp.HTTPResponse().StatusCode < 500 &&
 				resp.HTTPResponse().Header.Get("Location") != "" &&
 				resp.HTTPResponse().Header.Get("Range") != "" {
+				retryCur++
 				reg.log.WithFields(logrus.Fields{
 					"ref":        r.CommonName(),
 					"chunkStart": chunkStart,
@@ -489,20 +492,30 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url
 					"range":      resp.HTTPResponse().Header.Get("Range"),
 				}).Debug("Recoverable chunk upload error")
 			} else if resp.HTTPResponse().StatusCode != 202 {
-				return types.Descriptor{}, fmt.Errorf("failed to send blob (chunk), ref %s: http status: %w", r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
+				retryCur++
+				statusResp, statusErr := reg.blobUploadStatus(ctx, r, &chunkURL)
+				if retryCur > retryLimit || statusErr != nil {
+					return types.Descriptor{}, fmt.Errorf("failed to send blob (chunk), ref %s: http status: %w", r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
+				}
+				httpResp = statusResp
+			} else {
+				// successful request
+				if retryCur > 0 {
+					retryCur--
+				}
 			}
-			rangeEnd, err := blobUploadCurBytes(resp.HTTPResponse())
+			rangeEnd, err := blobUploadCurBytes(httpResp)
 			if err == nil {
 				chunkStart = rangeEnd + 1
 			} else {
 				chunkStart += int64(chunkSize)
 			}
-			location := resp.HTTPResponse().Header.Get("Location")
+			location := httpResp.Header.Get("Location")
 			if location != "" {
 				reg.log.WithFields(logrus.Fields{
 					"location": location,
 				}).Debug("Next chunk upload location received")
-				prevURL := resp.HTTPResponse().Request.URL
+				prevURL := httpResp.Request.URL
 				parseURL, err := prevURL.Parse(location)
 				if err != nil {
 					return types.Descriptor{}, fmt.Errorf("failed to send blob (parse next chunk location), ref %s: %w", r.CommonName(), err)
@@ -579,29 +592,29 @@ func (reg *Reg) blobUploadCancel(ctx context.Context, r ref.Ref, uuid string) er
 	return nil
 }
 
-// // blobUploadStatus provides a response with headers indicating the progress of an upload
-// func (reg *Reg) blobUploadStatus(ctx context.Context, r ref.Ref, putURL *url.URL) (*http.Response, error) {
-// 	req := &reghttp.Req{
-// 		Host: r.Registry,
-// 		APIs: map[string]reghttp.ReqAPI{
-// 			"": {
-// 				Method:     "GET",
-// 				Repository: r.Repository,
-// 				DirectURL:  putURL,
-// 			},
-// 		},
-// 		NoMirrors: true,
-// 	}
-// 	resp, err := reg.reghttp.Do(ctx, req)
-// 	if err != nil {
-// 		return nil, fmt.Errorf("failed to get upload status: %v", err)
-// 	}
-// 	defer resp.Close()
-// 	if resp.HTTPResponse().StatusCode != 204 {
-// 		return resp.HTTPResponse(), fmt.Errorf("failed to get upload status: %v", reghttp.HttpError(resp.HTTPResponse().StatusCode))
-// 	}
-// 	return resp.HTTPResponse(), nil
-// }
+// blobUploadStatus provides a response with headers indicating the progress of an upload
+func (reg *Reg) blobUploadStatus(ctx context.Context, r ref.Ref, putURL *url.URL) (*http.Response, error) {
+	req := &reghttp.Req{
+		Host: r.Registry,
+		APIs: map[string]reghttp.ReqAPI{
+			"": {
+				Method:     "GET",
+				Repository: r.Repository,
+				DirectURL:  putURL,
+			},
+		},
+		NoMirrors: true,
+	}
+	resp, err := reg.reghttp.Do(ctx, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get upload status: %v", err)
+	}
+	defer resp.Close()
+	if resp.HTTPResponse().StatusCode != 204 {
+		return resp.HTTPResponse(), fmt.Errorf("failed to get upload status: %w", reghttp.HTTPError(resp.HTTPResponse().StatusCode))
+	}
+	return resp.HTTPResponse(), nil
+}
 
 func blobUploadCurBytes(resp *http.Response) (int64, error) {
 	if resp == nil {

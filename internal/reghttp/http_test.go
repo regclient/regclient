@@ -1234,8 +1234,8 @@ func TestRegHttp(t *testing.T) {
 			t.Errorf("unexpected success on get for missing manifest")
 			resp.Close()
 			return
-		} else if !errors.Is(err, types.ErrUnauthorized) {
-			t.Errorf("unexpected error, expected %v, received %v", types.ErrUnauthorized, err)
+		} else if !errors.Is(err, types.ErrHTTPUnauthorized) {
+			t.Errorf("unexpected error, expected %v, received %v", types.ErrHTTPUnauthorized, err)
 		}
 	})
 	t.Run("Bad GW", func(t *testing.T) {

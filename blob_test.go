@@ -290,7 +290,7 @@ func TestBlobGet(t *testing.T) {
 			t.Errorf("Unexpected success running BlobGet")
 			return
 		}
-		if !errors.Is(err, types.ErrUnauthorized) {
+		if !errors.Is(err, types.ErrHTTPUnauthorized) {
 			t.Errorf("Error does not match \"ErrUnauthorized\": %v", err)
 		}
 	})

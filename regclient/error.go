@@ -23,9 +23,9 @@ var (
 	ErrNotFound                 = types.ErrNotFound
 	ErrNotImplemented           = types.ErrNotImplemented
 	ErrParsingFailed            = types.ErrParsingFailed
-	ErrRateLimit                = types.ErrRateLimit
+	ErrRateLimit                = types.ErrHTTPRateLimit
 	ErrUnavailable              = types.ErrUnavailable
-	ErrUnauthorized             = types.ErrUnauthorized
+	ErrUnauthorized             = types.ErrHTTPUnauthorized
 	ErrUnsupportedAPI           = types.ErrUnsupportedAPI
 	ErrUnsupportedConfigVersion = types.ErrUnsupportedConfigVersion
 	ErrUnsupportedMediaType     = types.ErrUnsupportedMediaType

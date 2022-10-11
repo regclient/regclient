@@ -29,10 +29,10 @@ var (
 	ErrNotFound                 = topTypes.ErrNotFound
 	ErrNotImplemented           = topTypes.ErrNotImplemented
 	ErrParsingFailed            = topTypes.ErrParsingFailed
-	ErrRateLimit                = topTypes.ErrRateLimit
+	ErrRateLimit                = topTypes.ErrHTTPRateLimit
 	ErrRetryNeeded              = topTypes.ErrRetryNeeded
 	ErrUnavailable              = topTypes.ErrUnavailable
-	ErrUnauthorized             = topTypes.ErrUnauthorized
+	ErrUnauthorized             = topTypes.ErrHTTPUnauthorized
 	ErrUnsupported              = topTypes.ErrUnsupported
 	ErrUnsupportedAPI           = topTypes.ErrUnsupportedAPI
 	ErrUnsupportedConfigVersion = topTypes.ErrUnsupportedConfigVersion

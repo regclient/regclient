@@ -354,7 +354,7 @@ func TestBlobGet(t *testing.T) {
 			t.Errorf("Unexpected success running BlobGet")
 			return
 		}
-		if !errors.Is(err, types.ErrUnauthorized) {
+		if !errors.Is(err, types.ErrHTTPUnauthorized) {
 			t.Errorf("Error does not match \"ErrUnauthorized\": %v", err)
 		}
 	})
@@ -717,6 +717,47 @@ func TestBlobPut(t *testing.T) {
 				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3.String(),
 				Query: map[string][]string{
 					"chunk": {"2"},
+				},
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", blobLen3-blobChunk)},
+					"Content-Range":  {fmt.Sprintf("%d-%d", blobChunk, blobLen3-1)},
+					"Content-Type":   {"application/octet-stream"},
+				},
+				Body: blob3[blobChunk:],
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusTooManyRequests,
+			},
+		},
+		// get status for d3 after failed attempt of chunk 2
+		{
+			ReqEntry: reqresp.ReqEntry{
+				DelOnUse: false,
+				Name:     "GET 2 for d3",
+				Method:   "GET",
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3.String(),
+				Query: map[string][]string{
+					"chunk": {"2"},
+				},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusNoContent,
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", 0)},
+					"Range":          {fmt.Sprintf("bytes=0-%d", blobChunk-1)},
+					"Location":       {uuid3.String() + "?chunk=2b"},
+				},
+			},
+		},
+		// upload patch 2b for d3
+		{
+			ReqEntry: reqresp.ReqEntry{
+				DelOnUse: false,
+				Name:     "PATCH 2b for d3",
+				Method:   "PATCH",
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3.String(),
+				Query: map[string][]string{
+					"chunk": {"2b"},
 				},
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", blobLen3-blobChunk)},
