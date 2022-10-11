@@ -708,13 +708,13 @@ func (ch *clientHost) AuthCreds() func(h string) auth.Cred {
 func HTTPError(statusCode int) error {
 	switch statusCode {
 	case 401:
-		return fmt.Errorf("%w [http %d]", types.ErrUnauthorized, statusCode)
+		return fmt.Errorf("%w [http %d]", types.ErrHTTPUnauthorized, statusCode)
 	case 403:
-		return fmt.Errorf("%w [http %d]", types.ErrUnauthorized, statusCode)
+		return fmt.Errorf("%w [http %d]", types.ErrHTTPUnauthorized, statusCode)
 	case 404:
 		return fmt.Errorf("%w [http %d]", types.ErrNotFound, statusCode)
 	case 429:
-		return fmt.Errorf("%w [http %d]", types.ErrRateLimit, statusCode)
+		return fmt.Errorf("%w [http %d]", types.ErrHTTPRateLimit, statusCode)
 	default:
 		return fmt.Errorf("%w: %s [http %d]", types.ErrHTTPStatus, http.StatusText(statusCode), statusCode)
 	}
