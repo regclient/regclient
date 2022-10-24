@@ -469,7 +469,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 		// all other mis-matches are invalid
 		return fmt.Errorf("one artifact media-type must be set for each artifact file")
 	}
-	if artifactOpts.artifactType == "" {
+	if artifactOpts.artifactType == "" && hasConfig {
 		artifactOpts.artifactType = defaultMTConfig
 	}
 
