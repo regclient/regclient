@@ -28,6 +28,7 @@ import (
 	"github.com/regclient/regclient/internal/auth"
 	"github.com/regclient/regclient/types"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/semaphore"
 )
 
 var defaultDelayInit, _ = time.ParseDuration("1s")
@@ -53,6 +54,7 @@ type Client struct {
 }
 
 type clientHost struct {
+	initialized  bool
 	backoffCur   int
 	backoffUntil time.Time
 	config       *config.Host
@@ -60,6 +62,8 @@ type clientHost struct {
 	auth         map[string]auth.Auth
 	newAuth      func() auth.Auth
 	mu           sync.Mutex
+	parallel     *semaphore.Weighted
+	throttle     *time.Ticker
 }
 
 // Req is a request to send to a registry
@@ -102,6 +106,7 @@ type clientResp struct {
 	digester         digest.Digester
 	reader           io.Reader
 	readCur, readMax int64
+	parallel         *semaphore.Weighted
 }
 
 // Opts is used to configure client options
@@ -283,6 +288,9 @@ func (resp *clientResp) Next() error {
 		}
 
 		// try each host in a closure to handle all the backoff/dropHost from one place
+		if h.parallel != nil {
+			h.parallel.Acquire(resp.ctx, 1)
+		}
 		err = func() error {
 			var err error
 			if !okAPI {
@@ -398,12 +406,12 @@ func (resp *clientResp) Next() error {
 				}
 			}
 
-			// update http client for insecure requests and root certs
-			httpClient := *c.httpClient
-			if h.httpClient != nil {
-				// if we have previously setup a http client for this host, reuse it
-				httpClient = *h.httpClient
+			if h.throttle != nil {
+				<-h.throttle.C
 			}
+
+			// update http client for insecure requests and root certs
+			httpClient := *h.httpClient
 
 			// send request
 			resp.client.log.WithFields(logrus.Fields{
@@ -482,10 +490,14 @@ func (resp *clientResp) Next() error {
 		}()
 		// return on success
 		if err == nil {
+			resp.parallel = h.parallel
 			resp.backoffClear()
 			return nil
 		}
 		// backoff, dropHost, and/or go to next host in the list
+		if h.parallel != nil {
+			h.parallel.Release(1)
+		}
 		if backoff {
 			if api.IgnoreErr {
 				// don't set a backoff, immediately drop the host when errors ignored
@@ -562,6 +574,10 @@ func (resp *clientResp) Read(b []byte) (int, error) {
 }
 
 func (resp *clientResp) Close() error {
+	if resp.parallel != nil {
+		resp.parallel.Release(1)
+		resp.parallel = nil
+	}
 	if resp.resp == nil {
 		return types.ErrNotFound
 	}
@@ -621,9 +637,11 @@ func (c *Client) getHost(host string) *clientHost {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	h, ok := c.host[host]
+	if ok && h.initialized {
+		return h
+	}
 	if !ok {
 		h = &clientHost{}
-		c.host[host] = h
 	}
 	if h.config == nil {
 		h.config = config.HostNewName(host)
@@ -631,53 +649,62 @@ func (c *Client) getHost(host string) *clientHost {
 	if h.auth == nil {
 		h.auth = map[string]auth.Auth{}
 	}
+	if h.throttle == nil && h.config.ReqPerSec > 0 {
+		h.throttle = time.NewTicker(time.Duration(float64(time.Second) / h.config.ReqPerSec))
+	}
+	if h.parallel == nil && h.config.ReqConcurrent > 0 {
+		h.parallel = semaphore.NewWeighted(h.config.ReqConcurrent)
+	}
 
-	// update http client for insecure requests and root certs
-	httpClient := *c.httpClient
-	if h.httpClient != nil {
-		// if we have previously setup a http client for this host, reuse it
-		httpClient = *h.httpClient
-	} else if h.config.TLS == config.TLSInsecure || len(c.rootCAPool) > 0 || len(c.rootCADirs) > 0 || h.config.RegCert != "" {
-		if httpClient.Transport == nil {
-			httpClient.Transport = http.DefaultTransport.(*http.Transport).Clone()
-		}
-		t, ok := httpClient.Transport.(*http.Transport)
-		if ok {
-			var tlsc *tls.Config
-			if t.TLSClientConfig != nil {
-				tlsc = t.TLSClientConfig.Clone()
-			} else {
-				tlsc = &tls.Config{}
+	if h.httpClient == nil {
+		h.httpClient = c.httpClient
+		// update http client for insecure requests and root certs
+		if h.config.TLS == config.TLSInsecure || len(c.rootCAPool) > 0 || len(c.rootCADirs) > 0 || h.config.RegCert != "" {
+			// create a new client and modify the transport
+			httpClient := *c.httpClient
+			if httpClient.Transport == nil {
+				httpClient.Transport = http.DefaultTransport.(*http.Transport).Clone()
 			}
-			if h.config.TLS == config.TLSInsecure {
-				tlsc.InsecureSkipVerify = true
-			} else {
-				rootPool, err := makeRootPool(c.rootCAPool, c.rootCADirs, h.config.Hostname, h.config.RegCert)
-				if err != nil {
-					c.log.WithFields(logrus.Fields{
-						"err": err,
-					}).Warn("failed to setup CA pool")
+			t, ok := httpClient.Transport.(*http.Transport)
+			if ok {
+				var tlsc *tls.Config
+				if t.TLSClientConfig != nil {
+					tlsc = t.TLSClientConfig.Clone()
 				} else {
-					tlsc.RootCAs = rootPool
+					tlsc = &tls.Config{}
 				}
+				if h.config.TLS == config.TLSInsecure {
+					tlsc.InsecureSkipVerify = true
+				} else {
+					rootPool, err := makeRootPool(c.rootCAPool, c.rootCADirs, h.config.Hostname, h.config.RegCert)
+					if err != nil {
+						c.log.WithFields(logrus.Fields{
+							"err": err,
+						}).Warn("failed to setup CA pool")
+					} else {
+						tlsc.RootCAs = rootPool
+					}
+				}
+				t.TLSClientConfig = tlsc
+				httpClient.Transport = t
 			}
-			t.TLSClientConfig = tlsc
-			httpClient.Transport = t
+			h.httpClient = &httpClient
 		}
-		// cache the resulting client
-		h.httpClient = &httpClient
 	}
 
 	if h.newAuth == nil {
 		h.newAuth = func() auth.Auth {
 			return auth.NewAuth(
 				auth.WithLog(c.log),
-				auth.WithHTTPClient(&httpClient),
+				auth.WithHTTPClient(h.httpClient),
 				auth.WithCreds(h.AuthCreds()),
 				auth.WithClientID(c.userAgent),
 			)
 		}
 	}
+
+	h.initialized = true
+	c.host[host] = h
 	return h
 }
 

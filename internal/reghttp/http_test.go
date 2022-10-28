@@ -22,6 +22,7 @@ import (
 )
 
 // TODO: test for race conditions
+// TODO: test rate limits and concurrency
 
 func TestRegHttp(t *testing.T) {
 	ctx := context.Background()
