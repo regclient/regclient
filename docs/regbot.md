@@ -137,6 +137,13 @@ scripts:
     Blob size which skips the single put request in favor of the chunked upload.
     Note that a failed blob put will fall back to a chunked upload in most cases.
     Disable with -1 to always try a single put regardless of blob size.
+  - `reqPerSec`:
+    Requests per second to throttle API calls to the registry.
+    This may be a decimal like 0.5 to limit to one request every 2 seconds.
+    Disable by leaving undefined or setting to 0.
+  - `reqConcurrent`:
+    Number of concurrent requests that can be made to the registry.
+    Disable by leaving undefined or setting to 0.
 
 - `defaults`:
   Global settings and default values applied to each sync entry:

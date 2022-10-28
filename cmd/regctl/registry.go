@@ -63,6 +63,8 @@ var registryOpts struct {
 	priority             uint
 	repoAuth             bool
 	blobChunk, blobMax   int64
+	reqPerSec            float64
+	reqConcurrent        int64
 	apiOpts              []string
 	scheme               string   // TODO: remove
 	dns                  []string // TODO: remove
@@ -84,6 +86,8 @@ func init() {
 	registrySetCmd.Flags().BoolVarP(&registryOpts.repoAuth, "repo-auth", "", false, "Separate auth requests per repository instead of per registry")
 	registrySetCmd.Flags().Int64VarP(&registryOpts.blobChunk, "blob-chunk", "", 0, "Blob chunk size")
 	registrySetCmd.Flags().Int64VarP(&registryOpts.blobMax, "blob-max", "", 0, "Blob size before switching to chunked push, -1 to disable")
+	registrySetCmd.Flags().Float64VarP(&registryOpts.reqPerSec, "req-per-sec", "", 0, "Requests per second")
+	registrySetCmd.Flags().Int64VarP(&registryOpts.reqConcurrent, "req-concurrent", "", 0, "Concurrent requests")
 	registrySetCmd.Flags().StringArrayVarP(&registryOpts.apiOpts, "api-opts", "", nil, "List of options (key=value))")
 	registrySetCmd.RegisterFlagCompletionFunc("cacert", completeArgNone)
 	registrySetCmd.RegisterFlagCompletionFunc("tls", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -320,6 +324,12 @@ func runRegistrySet(cmd *cobra.Command, args []string) error {
 	}
 	if flagChanged(cmd, "blob-max") {
 		h.BlobMax = registryOpts.blobMax
+	}
+	if flagChanged(cmd, "req-per-sec") {
+		h.ReqPerSec = registryOpts.reqPerSec
+	}
+	if flagChanged(cmd, "req-concurrent") {
+		h.ReqConcurrent = registryOpts.reqConcurrent
 	}
 	if flagChanged(cmd, "api-opts") {
 		if h.APIOpts == nil {
