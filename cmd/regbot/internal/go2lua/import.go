@@ -20,7 +20,7 @@ func Import(ls *lua.LState, lv lua.LValue, v, orig interface{}) (err error) {
 	// orig may not be a pointer or empty interface, dereference v until the two values match
 	rV := reflect.ValueOf(v)
 	rOrig := reflect.ValueOf(orig)
-	for rV.IsValid() && rV.Type() != rOrig.Type() &&
+	for rV.IsValid() && rOrig.IsValid() && rV.Type() != rOrig.Type() &&
 		(rV.Type().Kind() == reflect.Interface || rV.Type().Kind() == reflect.Ptr) {
 		rV = rV.Elem()
 	}
@@ -74,7 +74,7 @@ func importReflect(ls *lua.LState, lv lua.LValue, v, orig reflect.Value) error {
 		}
 		return nil
 	case reflect.Slice:
-		// Slice follows the same pattern as array, except the slice is firsted created with the desired size.
+		// Slice follows the same pattern as array, except the slice is first created with the desired size.
 		if lvi, ok := lv.(*lua.LTable); ok {
 			newV := reflect.MakeSlice(v.Type(), lvi.Len(), lvi.Len())
 			for i := 0; i < newV.Len(); i++ {

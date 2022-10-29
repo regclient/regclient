@@ -191,9 +191,14 @@ The following additional functions are available:
 - `<ref>:tag`:
   Get or set the tag on a reference.
   This is useful when iterating over tags within a repository.
-- `repo.ls <host:port>`:
+- `repo.ls <host:port> [opts]`:
   List the repositories on a registry server.
   This depends on the registry supporting the API call.
+  Opts is a table that can have the following values set:
+  - `limit`: number of results to return
+  - `last`: last received repo, next batch of results will start after this
+
+  e.g. `list = repo.ls("example.com", {limit = 500})`
 - `tag.ls <repo>`:
   Returns an array of tags found within a repository.
 - `tag.delete <ref>`:
