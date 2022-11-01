@@ -38,6 +38,7 @@ type RespEntry struct {
 	Status  int
 	Headers http.Header
 	Body    []byte
+	Fail    bool // triggers a handler panic that simulates a server/connection failure
 }
 
 func NewHandler(t *testing.T, rrs []ReqResp) http.Handler {
@@ -128,6 +129,11 @@ func (r *rrHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		// update current state
 		if reqMatch.SetState != "" {
 			r.state = reqMatch.SetState
+		}
+
+		// handle failures
+		if rr.RespEntry.Fail {
+			panic(http.ErrAbortHandler)
 		}
 		return
 	}
