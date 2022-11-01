@@ -372,6 +372,33 @@ func TestRegHttp(t *testing.T) {
 		},
 		{
 			ReqEntry: reqresp.ReqEntry{
+				Name:     "put manifest fail",
+				Method:   "PUT",
+				Path:     "/v2/project/manifests/tag-put-fail",
+				Body:     putBody,
+				IfState:  []string{"", "ok"},
+				SetState: "put-fail",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusCreated,
+				Fail:   true,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:     "put manifest retry",
+				Method:   "PUT",
+				Path:     "/v2/project/manifests/tag-put-fail",
+				Body:     putBody,
+				IfState:  []string{"put-fail"},
+				SetState: "ok",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusCreated,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
 				Name:   "delete manifest",
 				Method: "DELETE",
 				Path:   "/v2/project/manifests/tag-delete",
@@ -685,6 +712,57 @@ func TestRegHttp(t *testing.T) {
 		}
 		if resp.HTTPResponse().StatusCode != 200 {
 			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
+		}
+		body, err := io.ReadAll(resp)
+		if err != nil {
+			t.Errorf("body read failure: %v", err)
+		} else if !bytes.Equal(body, getBody) {
+			t.Errorf("body read mismatch, expected %s, received %s", getBody, body)
+		}
+		err = resp.Close()
+		if err != nil {
+			t.Errorf("error closing request: %v", err)
+		}
+	})
+	t.Run("Seek", func(t *testing.T) {
+		apiGet := map[string]ReqAPI{
+			"": {
+				Method:     "GET",
+				Repository: "project",
+				Path:       "manifests/tag-get",
+				Headers:    headers,
+				Digest:     getDigest,
+			},
+		}
+		getReq := &Req{
+			Host: tsHost,
+			APIs: apiGet,
+		}
+		resp, err := hc.Do(ctx, getReq)
+		if err != nil {
+			t.Errorf("failed to run get: %v", err)
+			return
+		}
+		if resp.HTTPResponse().StatusCode != 200 {
+			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
+		}
+		b := make([]byte, 2)
+		l, err := resp.Read(b)
+		if err != nil {
+			t.Errorf("body read failure: %v", err)
+		}
+		if l != 2 {
+			t.Errorf("unexpected length, expected 2, received %d", l)
+		}
+		if !bytes.Equal(b, getBody[:2]) {
+			t.Errorf("body read mismatch, expected %s, received %s", getBody[:2], b)
+		}
+		cur, err := resp.Seek(0, io.SeekStart)
+		if err != nil {
+			t.Errorf("seek failure: %v", err)
+		}
+		if cur != 0 {
+			t.Errorf("seek to unexpected offset, expected 0, received %d", cur)
 		}
 		body, err := io.ReadAll(resp)
 		if err != nil {
@@ -1080,6 +1158,38 @@ func TestRegHttp(t *testing.T) {
 		}
 		if resp.HTTPResponse().StatusCode != http.StatusAccepted {
 			t.Errorf("invalid status code, expected %d, received %d", http.StatusAccepted, resp.HTTPResponse().StatusCode)
+		}
+		body, err := io.ReadAll(resp)
+		if err != nil {
+			t.Errorf("body read failure: %v", err)
+		} else if len(body) > 0 {
+			t.Errorf("body read mismatch, expected empty body, received %s", body)
+		}
+		err = resp.Close()
+		if err != nil {
+			t.Errorf("error closing request: %v", err)
+		}
+	})
+	t.Run("Put body retry", func(t *testing.T) {
+		apiPut := map[string]ReqAPI{
+			"": {
+				Method:     "PUT",
+				Repository: "project",
+				Path:       "manifests/tag-put-fail",
+				BodyBytes:  putBody,
+			},
+		}
+		putReq := &Req{
+			Host: tsHost,
+			APIs: apiPut,
+		}
+		resp, err := hc.Do(ctx, putReq)
+		if err != nil {
+			t.Errorf("failed to run put: %v", err)
+			return
+		}
+		if resp.HTTPResponse().StatusCode != http.StatusCreated {
+			t.Errorf("invalid status code, expected %d, received %d", http.StatusCreated, resp.HTTPResponse().StatusCode)
 		}
 		body, err := io.ReadAll(resp)
 		if err != nil {

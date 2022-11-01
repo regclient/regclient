@@ -91,7 +91,7 @@ type ReqAPI struct {
 
 // Resp is used to handle the result of a request
 type Resp interface {
-	io.ReadCloser
+	io.ReadSeekCloser
 	HTTPResponse() *http.Response
 }
 
@@ -422,6 +422,10 @@ func (resp *clientResp) Next() error {
 			resp.resp, err = httpClient.Do(httpReq)
 
 			if err != nil {
+				c.log.WithFields(logrus.Fields{
+					"URL": u.String(),
+					"err": err,
+				}).Debug("Request failed")
 				backoff = true
 				return err
 			}
@@ -473,6 +477,7 @@ func (resp *clientResp) Next() error {
 
 			// update digester
 			resp.reader = io.TeeReader(resp.resp.Body, resp.digester.Hash())
+			resp.done = false
 			// set variables from headers if found
 			if resp.readCur == 0 && resp.readMax == 0 && resp.resp.Header.Get("Content-Length") != "" {
 				cl, parseErr := strconv.ParseInt(resp.resp.Header.Get("Content-Length"), 10, 64)
@@ -583,6 +588,38 @@ func (resp *clientResp) Close() error {
 	}
 	resp.done = true
 	return resp.resp.Body.Close()
+}
+
+func (resp *clientResp) Seek(offset int64, whence int) (int64, error) {
+	newOffset := resp.readCur
+	switch whence {
+	case io.SeekStart:
+		newOffset = offset
+	case io.SeekCurrent:
+		newOffset += offset
+	case io.SeekEnd:
+		if resp.readMax <= 0 {
+			return resp.readCur, fmt.Errorf("seek from end is not supported")
+		} else if resp.readMax+offset < 0 {
+			return resp.readCur, fmt.Errorf("seek past beginning of the file is not supported")
+		}
+		newOffset = resp.readMax + offset
+	default:
+		return resp.readCur, fmt.Errorf("unknown value of whence: %d", whence)
+	}
+	if newOffset == 0 {
+		// reset digester
+		resp.digester = digest.Canonical.Digester()
+		resp.readCur = 0
+		// rerun the request to restart
+		err := resp.Next()
+		if err != nil {
+			return resp.readCur, err
+		}
+	} else if newOffset != resp.readCur {
+		return resp.readCur, fmt.Errorf("seek to arbitrary position is not supported")
+	}
+	return resp.readCur, nil
 }
 
 func (resp *clientResp) backoffClear() {
