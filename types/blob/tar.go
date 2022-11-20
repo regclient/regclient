@@ -110,6 +110,11 @@ func (tr *tarReader) ReadFile(filename string) (*tar.Header, io.Reader, error) {
 	if strings.HasPrefix(filename, ".wh.") {
 		return nil, nil, fmt.Errorf(".wh. prefix is reserved for whiteout files")
 	}
+	// normalize filenames,
+	filename = filepath.Clean(filename)
+	if filename[0] == '/' {
+		filename = filename[1:]
+	}
 	// get reader
 	rdr, err := tr.GetTarReader()
 	if err != nil {
@@ -126,8 +131,12 @@ func (tr *tarReader) ReadFile(filename string) (*tar.Header, io.Reader, error) {
 			}
 			return nil, nil, err
 		}
+		thFile := filepath.Clean(th.Name)
+		if thFile[0] == '/' {
+			thFile = thFile[1:]
+		}
 		// found the target file
-		if th.Name == filename {
+		if thFile == filename {
 			return th, rdr, nil
 		}
 		// check/track whiteout file
