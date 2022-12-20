@@ -14,15 +14,14 @@ import (
 )
 
 // ReferrerList returns a list of referrers to a given reference
-// This is EXPERIMENTAL
 func (o *OCIDir) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.ReferrerOpts) (referrer.ReferrerList, error) {
 	config := scheme.ReferrerConfig{}
 	for _, opt := range opts {
 		opt(&config)
 	}
 	rl := referrer.ReferrerList{
-		Ref:  r,
-		Tags: []string{},
+		Subject: r,
+		Tags:    []string{},
 	}
 	// if ref is a tag, run a head request for the digest
 	if r.Digest == "" {
@@ -87,26 +86,26 @@ func (o *OCIDir) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Ref
 // referrerDelete deletes a referrer associated with a manifest
 func (o *OCIDir) referrerDelete(ctx context.Context, r ref.Ref, m manifest.Manifest) error {
 	// get refers field
-	mRefer, ok := m.(manifest.Refers)
+	mSubject, ok := m.(manifest.Subjecter)
 	if !ok {
-		return fmt.Errorf("manifest does not support refers: %w", types.ErrUnsupportedMediaType)
+		return fmt.Errorf("manifest does not support subject: %w", types.ErrUnsupportedMediaType)
 	}
-	refers, err := mRefer.GetRefers()
+	subject, err := mSubject.GetSubject()
 	if err != nil {
 		return err
 	}
-	// validate/set referrer descriptor
-	if refers == nil || refers.MediaType == "" || refers.Digest == "" || refers.Size <= 0 {
-		return fmt.Errorf("refers is not set%.0w", types.ErrNotFound)
+	// validate/set subject descriptor
+	if subject == nil || subject.MediaType == "" || subject.Digest == "" || subject.Size <= 0 {
+		return fmt.Errorf("subject is not set%.0w", types.ErrNotFound)
 	}
 
-	// get descriptor for refers
-	rRef := r
-	rRef.Tag = ""
-	rRef.Digest = refers.Digest.String()
+	// get descriptor for subject
+	rSubject := r
+	rSubject.Tag = ""
+	rSubject.Digest = subject.Digest.String()
 
 	// pull existing referrer list
-	rl, err := o.ReferrerList(ctx, rRef)
+	rl, err := o.ReferrerList(ctx, rSubject)
 	if err != nil {
 		return err
 	}
@@ -116,7 +115,7 @@ func (o *OCIDir) referrerDelete(ctx context.Context, r ref.Ref, m manifest.Manif
 	}
 
 	// push updated referrer list by tag
-	rlTag, err := referrer.FallbackTag(rRef)
+	rlTag, err := referrer.FallbackTag(rSubject)
 	if err != nil {
 		return err
 	}
@@ -132,27 +131,27 @@ func (o *OCIDir) referrerDelete(ctx context.Context, r ref.Ref, m manifest.Manif
 
 // referrerPut pushes a new referrer associated with a given reference
 func (o *OCIDir) referrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest) error {
-	// get refers field
-	mRefer, ok := m.(manifest.Refers)
+	// get subject field
+	mSubject, ok := m.(manifest.Subjecter)
 	if !ok {
-		return fmt.Errorf("manifest does not support refers: %w", types.ErrUnsupportedMediaType)
+		return fmt.Errorf("manifest does not support subject: %w", types.ErrUnsupportedMediaType)
 	}
-	refers, err := mRefer.GetRefers()
+	subject, err := mSubject.GetSubject()
 	if err != nil {
 		return err
 	}
-	// validate/set referrer descriptor
-	if refers == nil || refers.MediaType == "" || refers.Digest == "" || refers.Size <= 0 {
-		return fmt.Errorf("refers is not set%.0w", types.ErrNotFound)
+	// validate/set subject descriptor
+	if subject == nil || subject.MediaType == "" || subject.Digest == "" || subject.Size <= 0 {
+		return fmt.Errorf("subject is not set%.0w", types.ErrNotFound)
 	}
 
-	// get descriptor for refers
-	rRef := r
-	rRef.Tag = ""
-	rRef.Digest = refers.Digest.String()
+	// get descriptor for subject
+	rSubject := r
+	rSubject.Tag = ""
+	rSubject.Digest = subject.Digest.String()
 
 	// pull existing referrer list
-	rl, err := o.ReferrerList(ctx, rRef)
+	rl, err := o.ReferrerList(ctx, rSubject)
 	if err != nil {
 		return err
 	}
@@ -162,7 +161,7 @@ func (o *OCIDir) referrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 	}
 
 	// push updated referrer list by tag
-	rlTag, err := referrer.FallbackTag(rRef)
+	rlTag, err := referrer.FallbackTag(rSubject)
 	if err != nil {
 		return err
 	}

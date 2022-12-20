@@ -3,7 +3,6 @@
 !build/root.tgz
 !cmd/
 !config/
-!embed/
 !internal/
 !mod/
 !pkg/

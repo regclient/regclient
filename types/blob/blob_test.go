@@ -484,6 +484,11 @@ func TestReadFile(t *testing.T) {
 			content:  "1\n",
 		},
 		{
+			name:     "layer1 absolute",
+			filename: "/layer1.txt",
+			content:  "1\n",
+		},
+		{
 			name:      "layer2",
 			filename:  "layer2.txt",
 			expectErr: types.ErrFileDeleted,

@@ -137,6 +137,13 @@ scripts:
     Blob size which skips the single put request in favor of the chunked upload.
     Note that a failed blob put will fall back to a chunked upload in most cases.
     Disable with -1 to always try a single put regardless of blob size.
+  - `reqPerSec`:
+    Requests per second to throttle API calls to the registry.
+    This may be a decimal like 0.5 to limit to one request every 2 seconds.
+    Disable by leaving undefined or setting to 0.
+  - `reqConcurrent`:
+    Number of concurrent requests that can be made to the registry.
+    Disable by leaving undefined or setting to 0.
 
 - `defaults`:
   Global settings and default values applied to each sync entry:
@@ -184,9 +191,14 @@ The following additional functions are available:
 - `<ref>:tag`:
   Get or set the tag on a reference.
   This is useful when iterating over tags within a repository.
-- `repo.ls <host:port>`:
+- `repo.ls <host:port> [opts]`:
   List the repositories on a registry server.
   This depends on the registry supporting the API call.
+  Opts is a table that can have the following values set:
+  - `limit`: number of results to return
+  - `last`: last received repo, next batch of results will start after this
+
+  e.g. `list = repo.ls("example.com", {limit = 500})`
 - `tag.ls <repo>`:
   Returns an array of tags found within a repository.
 - `tag.delete <ref>`:

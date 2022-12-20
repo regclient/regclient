@@ -290,7 +290,7 @@ func TestBlobGet(t *testing.T) {
 			t.Errorf("Unexpected success running BlobGet")
 			return
 		}
-		if !errors.Is(err, types.ErrUnauthorized) {
+		if !errors.Is(err, types.ErrHTTPUnauthorized) {
 			t.Errorf("Error does not match \"ErrUnauthorized\": %v", err)
 		}
 	})
@@ -731,6 +731,451 @@ func TestBlobPut(t *testing.T) {
 		}
 
 	})
+}
 
-	// TODO: Test BlobCopy, with and without external URLs
+func TestBlobCopy(t *testing.T) {
+	blobRepoA := "/proj/repo-a"
+	blobRepoB := "/proj/repo-b"
+	ctx := context.Background()
+	blobChunk := 512
+	// include a random blob
+	seed := time.Now().UTC().Unix()
+	t.Logf("Using seed %d", seed)
+	blobLen := 1024 // must be greater than 512 for retry test
+	d1, blob1 := reqresp.NewRandomBlob(blobLen, seed)
+	d2, blob2 := reqresp.NewRandomBlob(blobLen, seed+1)
+	d3, blob3 := reqresp.NewRandomBlob(blobLen, seed+2)
+	uuid1 := uuid.New()
+	uuid2 := uuid.New()
+	uuid3 := uuid.New()
+
+	// define req/resp entries
+	rrs := []reqresp.ReqResp{
+		// head
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "HEAD for repo a - d1",
+				Method: "HEAD",
+				Path:   "/v2" + blobRepoA + "/blobs/" + d1.String(),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", blobLen)},
+					"Content-Type":          {"application/octet-stream"},
+					"Docker-Content-Digest": {d1.String()},
+				},
+			},
+		},
+		// head
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:    "HEAD for repo b - d1",
+				Method:  "HEAD",
+				Path:    "/v2" + blobRepoB + "/blobs/" + d1.String(),
+				IfState: []string{""},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusNotFound,
+			},
+		},
+		// get
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "GET for repo a - d1",
+				Method: "GET",
+				Path:   "/v2" + blobRepoA + "/blobs/" + d1.String(),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Body:   blob1,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", blobLen)},
+					"Content-Type":          {"application/octet-stream"},
+					"Docker-Content-Digest": {d1.String()},
+				},
+			},
+		},
+		// get upload location
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "POST for repo b - d1",
+				Method: "POST",
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/",
+				Query: map[string][]string{
+					"mount": {d1.String()},
+				},
+				IfState: []string{""},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusAccepted,
+				Headers: http.Header{
+					"Content-Length": {"0"},
+					"Location":       {uuid1.String()},
+				},
+			},
+		},
+		// upload blob
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "PUT for repo b - d1",
+				Method: "PUT",
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid1.String(),
+				Query: map[string][]string{
+					"digest": {d1.String()},
+				},
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", len(blob1))},
+					"Content-Type":   {"application/octet-stream"},
+				},
+				Body:     blob1,
+				IfState:  []string{""},
+				SetState: "d1",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusCreated,
+				Headers: http.Header{
+					"Content-Length":        {"0"},
+					"Location":              {"/v2" + blobRepoB + "/blobs/" + d1.String()},
+					"Docker-Content-Digest": {d1.String()},
+				},
+			},
+		},
+		// head
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:    "HEAD for repo b - d1",
+				Method:  "HEAD",
+				Path:    "/v2" + blobRepoB + "/blobs/" + d1.String(),
+				IfState: []string{"d1"},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", blobLen)},
+					"Content-Type":          {"application/octet-stream"},
+					"Docker-Content-Digest": {d1.String()},
+				},
+			},
+		},
+		// get
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:    "GET for repo b - d1",
+				Method:  "GET",
+				Path:    "/v2" + blobRepoB + "/blobs/" + d1.String(),
+				IfState: []string{"d1"},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Body:   blob1,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", blobLen)},
+					"Content-Type":          {"application/octet-stream"},
+					"Docker-Content-Digest": {d1.String()},
+				},
+			},
+		},
+
+		// head
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "HEAD for repo a - d2",
+				Method: "HEAD",
+				Path:   "/v2" + blobRepoA + "/blobs/" + d2.String(),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", blobLen)},
+					"Content-Type":          {"application/octet-stream"},
+					"Docker-Content-Digest": {d2.String()},
+				},
+			},
+		},
+		// head
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "HEAD for repo b - d2",
+				Method: "HEAD",
+				Path:   "/v2" + blobRepoB + "/blobs/" + d2.String(),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusNotFound,
+			},
+		},
+		// get
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:     "GET for repo a - d2 fail",
+				Method:   "GET",
+				Path:     "/v2" + blobRepoA + "/blobs/" + d2.String(),
+				IfState:  []string{"d1"},
+				SetState: "d2fail",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Body:   blob2[:blobChunk],
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", blobLen)},
+					"Content-Type":          {"application/octet-stream"},
+					"Docker-Content-Digest": {d2.String()},
+				},
+				Fail: true,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:    "GET for repo a - d2",
+				Method:  "GET",
+				Path:    "/v2" + blobRepoA + "/blobs/" + d2.String(),
+				IfState: []string{"d2fail"},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Body:   blob2,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", blobLen)},
+					"Content-Type":          {"application/octet-stream"},
+					"Docker-Content-Digest": {d2.String()},
+				},
+			},
+		},
+		// get upload location
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "POST for repo b - d2",
+				Method: "POST",
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/",
+				Query: map[string][]string{
+					"mount": {d2.String()},
+				},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusAccepted,
+				Headers: http.Header{
+					"Content-Length": {"0"},
+					"Location":       {uuid2.String()},
+				},
+			},
+		},
+		// upload blob
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "PUT for repo b - d2",
+				Method: "PUT",
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid2.String(),
+				Query: map[string][]string{
+					"digest": {d2.String()},
+				},
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", len(blob2))},
+					"Content-Type":   {"application/octet-stream"},
+				},
+				Body:     blob2,
+				SetState: "d2",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusCreated,
+				Headers: http.Header{
+					"Content-Length":        {"0"},
+					"Location":              {"/v2" + blobRepoB + "/blobs/" + d2.String()},
+					"Docker-Content-Digest": {d2.String()},
+				},
+			},
+		},
+
+		// head
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "HEAD for repo a - d3",
+				Method: "HEAD",
+				Path:   "/v2" + blobRepoA + "/blobs/" + d3.String(),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", blobLen)},
+					"Content-Type":          {"application/octet-stream"},
+					"Docker-Content-Digest": {d3.String()},
+				},
+			},
+		},
+		// head
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "HEAD for repo b - d3",
+				Method: "HEAD",
+				Path:   "/v2" + blobRepoB + "/blobs/" + d3.String(),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusNotFound,
+			},
+		},
+		// get
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "GET for repo a - d3",
+				Method: "GET",
+				Path:   "/v2" + blobRepoA + "/blobs/" + d3.String(),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Body:   blob3,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", blobLen)},
+					"Content-Type":          {"application/octet-stream"},
+					"Docker-Content-Digest": {d3.String()},
+				},
+			},
+		},
+		// get upload location
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "POST for repo b - d3",
+				Method: "POST",
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/",
+				Query: map[string][]string{
+					"mount": {d3.String()},
+				},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusAccepted,
+				Headers: http.Header{
+					"Content-Length": {"0"},
+					"Location":       {uuid3.String()},
+				},
+			},
+		},
+		// upload blob
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "PUT for repo b - d3",
+				Method: "PUT",
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid3.String(),
+				Query: map[string][]string{
+					"digest": {d3.String()},
+				},
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", len(blob3))},
+					"Content-Type":   {"application/octet-stream"},
+				},
+				Body:    blob3,
+				IfState: []string{"d3fail"},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusCreated,
+				Headers: http.Header{
+					"Content-Length":        {"0"},
+					"Location":              {"/v2" + blobRepoB + "/blobs/" + d3.String()},
+					"Docker-Content-Digest": {d3.String()},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "PUT for repo b - d3 fail",
+				Method: "PUT",
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid3.String(),
+				Query: map[string][]string{
+					"digest": {d3.String()},
+				},
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", len(blob3))},
+					"Content-Type":   {"application/octet-stream"},
+				},
+				Body:     blob3,
+				SetState: "d3fail",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusCreated,
+				Headers: http.Header{
+					"Content-Length":        {"0"},
+					"Location":              {"/v2" + blobRepoB + "/blobs/" + d3.String()},
+					"Docker-Content-Digest": {d3.String()},
+				},
+				Fail: true,
+			},
+		},
+	}
+	rrs = append(rrs, reqresp.BaseEntries...)
+	// create a server
+	ts := httptest.NewServer(reqresp.NewHandler(t, rrs))
+	defer ts.Close()
+	// setup the regclient
+	tsURL, _ := url.Parse(ts.URL)
+	tsHost := tsURL.Host
+	rcHosts := []config.Host{
+		{
+			Name:      tsHost,
+			Hostname:  tsHost,
+			TLS:       config.TLSDisabled,
+			BlobChunk: int64(blobChunk),
+			BlobMax:   int64(-1),
+		},
+	}
+	log := &logrus.Logger{
+		Out:       os.Stderr,
+		Formatter: new(logrus.TextFormatter),
+		Hooks:     make(logrus.LevelHooks),
+		Level:     logrus.WarnLevel,
+	}
+	// use short delays for fast tests
+	delayInit, _ := time.ParseDuration("0.05s")
+	delayMax, _ := time.ParseDuration("0.10s")
+	rc := New(
+		WithConfigHosts(rcHosts),
+		WithLog(log),
+		WithRetryDelay(delayInit, delayMax),
+	)
+
+	refA, err := ref.New(tsURL.Host + blobRepoA)
+	if err != nil {
+		t.Errorf("Failed creating ref: %v", err)
+	}
+	refB, err := ref.New(tsURL.Host + blobRepoB)
+	if err != nil {
+		t.Errorf("Failed creating ref: %v", err)
+	}
+
+	// same repo
+	t.Run("Copy Same Repo", func(t *testing.T) {
+		err = rc.BlobCopy(ctx, refA, refA, types.Descriptor{Digest: d1})
+		if err != nil {
+			t.Errorf("Failed to copy d1 from repo a to a: %v", err)
+		}
+	})
+
+	// copy blob
+	t.Run("Copy Diff Repo", func(t *testing.T) {
+		err = rc.BlobCopy(ctx, refA, refB, types.Descriptor{Digest: d1})
+		if err != nil {
+			t.Errorf("Failed to copy d1 from repo a to b: %v", err)
+		}
+	})
+
+	// blob exists
+	t.Run("Copy Existing Blob", func(t *testing.T) {
+		err = rc.BlobCopy(ctx, refA, refB, types.Descriptor{Digest: d1})
+		if err != nil {
+			t.Errorf("Failed to copy d1 from repo a to b: %v", err)
+		}
+	})
+
+	// copy fails on get, retry succeeds
+	t.Run("Copy Flaky Get", func(t *testing.T) {
+		err = rc.BlobCopy(ctx, refA, refB, types.Descriptor{Digest: d2})
+		if err != nil {
+			t.Errorf("Failed to copy d2 from repo a to b: %v", err)
+		}
+	})
+
+	// copy fails on put, retry succeeds
+	t.Run("Copy Flaky Put", func(t *testing.T) {
+		err = rc.BlobCopy(ctx, refA, refB, types.Descriptor{Digest: d3})
+		if err != nil {
+			t.Errorf("Failed to copy d3 from repo a to b: %v", err)
+		}
+	})
+
 }

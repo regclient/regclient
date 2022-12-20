@@ -43,9 +43,9 @@ func (o *OCIDir) ManifestDelete(ctx context.Context, r ref.Ref, opts ...scheme.M
 		mc.Manifest = m
 	}
 	if mc.Manifest != nil {
-		if mr, ok := mc.Manifest.(manifest.Refers); ok {
-			rDesc, err := mr.GetRefers()
-			if err == nil && rDesc != nil && rDesc.MediaType != "" && rDesc.Size > 0 {
+		if ms, ok := mc.Manifest.(manifest.Subjecter); ok {
+			sDesc, err := ms.GetSubject()
+			if err == nil && sDesc != nil && sDesc.MediaType != "" && sDesc.Size > 0 {
 				// attempt to delete the referrer, but ignore if the referrer entry wasn't found
 				err = o.referrerDelete(ctx, r, mc.Manifest)
 				if err != nil && !errors.Is(err, types.ErrNotFound) {
@@ -256,8 +256,8 @@ func (o *OCIDir) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 	}).Debug("pushed manifest")
 
 	// update referrers if defined on this manifest
-	if mr, ok := m.(manifest.Refers); ok {
-		mDesc, err := mr.GetRefers()
+	if ms, ok := m.(manifest.Subjecter); ok {
+		mDesc, err := ms.GetSubject()
 		if err != nil {
 			return err
 		}

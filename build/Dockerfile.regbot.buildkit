@@ -3,6 +3,10 @@
 ARG REGISTRY=docker.io
 ARG ALPINE_VER=3
 ARG GO_VER=1.19-alpine
+ARG ECR_HELPER_VER=cd2dbcbbab495cdc87e734cea42852cd2e8a4692
+ARG GCR_HELPER_VER=9db1a8218571feeb5541ba12a7a9342e86c239a9
+ARG LUNAJSON_COMMIT=e6063d37de97dfdfe2749e24de949472bfad0945
+ARG SEMVER_COMMIT=af495adc857d51fd1507a112be18523828a1da0d
 
 FROM --platform=$BUILDPLATFORM ${REGISTRY}/library/golang:${GO_VER} as golang
 RUN apk add --no-cache \
@@ -16,7 +20,7 @@ RUN addgroup -g 1000 appuser \
 WORKDIR /src
 
 FROM --platform=$BUILDPLATFORM golang as dev
-COPY --link . /src/
+COPY . /src/
 ENV PATH=${PATH}:/src/bin
 CMD make bin/regbot && bin/regbot
 
@@ -26,52 +30,59 @@ ARG TARGETARCH
 RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
     --mount=type=cache,id=goroot,target=/root/.cache/go-build \
     GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    make bin/regbot
+    make vendor bin/regbot
 USER appuser
 CMD [ "bin/regbot" ]
 
 FROM scratch as artifact
-COPY --link --from=build /src/bin/regbot /regbot
+COPY --from=build /src/bin/regbot /regbot
 
 FROM --platform=$BUILDPLATFORM golang as docker-cred-ecr-login
 ARG TARGETOS
 ARG TARGETARCH
+ARG ECR_HELPER_VER
 RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
     --mount=type=cache,id=goroot,target=/root/.cache/go-build \
-    GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go install github.com/awslabs/amazon-ecr-credential-helper/ecr-login/cli/docker-credential-ecr-login@latest \
+    GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 \
+    go install -trimpath -ldflags=-buildid= github.com/awslabs/amazon-ecr-credential-helper/ecr-login/cli/docker-credential-ecr-login@${ECR_HELPER_VER} \
  && ( cp "${GOPATH}/bin/docker-credential-ecr-login" /usr/local/bin/docker-credential-ecr-login \
    || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-ecr-login" /usr/local/bin/docker-credential-ecr-login )
 
 FROM --platform=$BUILDPLATFORM golang as docker-cred-gcr
 ARG TARGETOS
 ARG TARGETARCH
+ARG GCR_HELPER_VER
 RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
     --mount=type=cache,id=goroot,target=/root/.cache/go-build \
-    GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go install github.com/GoogleCloudPlatform/docker-credential-gcr@latest \
+    GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 \
+    go install -trimpath -ldflags=-buildid= github.com/GoogleCloudPlatform/docker-credential-gcr@${GCR_HELPER_VER} \
  && ( cp "${GOPATH}/bin/docker-credential-gcr" /usr/local/bin/docker-credential-gcr \
    || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-gcr" /usr/local/bin/docker-credential-gcr )
 
 FROM --platform=$BUILDPLATFORM ${REGISTRY}/library/alpine:${ALPINE_VER} as lua-mods
-RUN apk add git \
- && mkdir -p /lua /src \
- && git clone https://github.com/grafi-tt/lunajson.git /src/json \
- && git clone https://github.com/kikito/semver.lua.git /src/semver \
- && cp -r /src/json/src/* /lua/ \
- && cp /src/semver/semver.lua /lua/ \
+# COPY may pull in old timestamps, use a touch command below to reset them
+COPY cmd/regbot/lua/ /lua/
+ARG LUNAJSON_COMMIT
+ARG SEMVER_COMMIT
+RUN apk add curl \
+ && mkdir -p /lua/lunajson \
+ && curl -fL https://raw.githubusercontent.com/grafi-tt/lunajson/${LUNAJSON_COMMIT}/src/lunajson.lua > /lua/lunajson.lua \
+ && curl -fL https://raw.githubusercontent.com/grafi-tt/lunajson/${LUNAJSON_COMMIT}/src/lunajson/decoder.lua > /lua/lunajson/decoder.lua \
+ && curl -fL https://raw.githubusercontent.com/grafi-tt/lunajson/${LUNAJSON_COMMIT}/src/lunajson/encoder.lua > /lua/lunajson/encoder.lua \
+ && curl -fL https://raw.githubusercontent.com/grafi-tt/lunajson/${LUNAJSON_COMMIT}/src/lunajson/sax.lua > /lua/lunajson/sax.lua \
+ && curl -fL https://raw.githubusercontent.com/kikito/semver.lua/${SEMVER_COMMIT}/semver.lua > /lua/semver.lua \
  && cd /lua \
- && ln -s lunajson.lua json.lua
-COPY --link cmd/regbot/lua/ /lua/
+ && ln -s lunajson.lua json.lua \
+ && find . -exec touch '{}' \;
 
 FROM ${REGISTRY}/library/alpine:${ALPINE_VER} as release-alpine
-COPY --link --from=build /etc/passwd /etc/group /etc/
-COPY --link --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --link --from=build --chown=1000:1000 /home/appuser /home/appuser
-COPY --link --from=docker-cred-ecr-login /usr/local/bin/docker-credential-* /usr/local/bin/
-COPY --link --from=docker-cred-gcr /usr/local/bin/docker-credential-* /usr/local/bin/
-COPY --link --from=build /src/bin/regbot /usr/local/bin/regbot
-COPY --link --from=lua-mods /lua /lua-mods
+COPY --from=build /etc/passwd /etc/group /etc/
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build --chown=1000:1000 /home/appuser /home/appuser
+COPY --from=docker-cred-ecr-login /usr/local/bin/docker-credential-* /usr/local/bin/
+COPY --from=docker-cred-gcr /usr/local/bin/docker-credential-* /usr/local/bin/
+COPY --from=build /src/bin/regbot /usr/local/bin/regbot
+COPY --from=lua-mods /lua /lua-mods
 ENV LUA_PATH="?;?.lua;/lua-user/?;/lua-user/?.lua;/lua-mods/?;/lua-mods/?.lua"
 USER appuser
 CMD [ "regbot", "--help" ]
@@ -92,12 +103,12 @@ LABEL maintainer="" \
       org.opencontainers.image.description=""
 
 FROM scratch as release-scratch
-ADD  --link build/root.tgz /
-COPY --link --from=build /etc/passwd /etc/group /etc/
-COPY --link --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --link --from=build --chown=1000:1000 /home/appuser/ /home/appuser/
-COPY --link --from=build /src/bin/regbot /regbot
-COPY --link --from=lua-mods /lua/ /lua-mods/
+ADD  build/root.tgz /
+COPY --from=build /etc/passwd /etc/group /etc/
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build --chown=1000:1000 /home/appuser/ /home/appuser/
+COPY --from=build /src/bin/regbot /regbot
+COPY --from=lua-mods /lua/ /lua-mods/
 ENV LUA_PATH="?;?.lua;/lua-user/?;/lua-user/?.lua;/lua-mods/?;/lua-mods/?.lua"
 USER appuser
 ENTRYPOINT [ "/regbot" ]

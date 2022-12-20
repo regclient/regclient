@@ -122,10 +122,9 @@ var imageManifestCmd = &cobra.Command{
 	RunE:              runManifestGet,
 }
 var imageModCmd = &cobra.Command{
-	Hidden:            true, // TODO: remove when stable, and remove EXPERIMENTAL from description below
 	Use:               "mod <image_ref>",
 	Short:             "modify an image",
-	Long:              `EXPERIMENTAL: Applies requested modifications to an image`,
+	Long:              `EXPERIMENTAL: Applies requested modifications to an image`, // TODO: remove EXPERIMENTAL when stable
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: completeArgTag,
 	RunE:              runImageMod,

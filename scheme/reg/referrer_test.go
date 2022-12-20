@@ -77,7 +77,7 @@ func TestReferrer(t *testing.T) {
 			},
 		},
 		Annotations: artifactAnnot,
-		Refers: &types.Descriptor{
+		Subject: &types.Descriptor{
 			MediaType: types.MediaTypeDocker2Manifest,
 			Size:      int64(mLen),
 			Digest:    mDigest,
@@ -106,7 +106,7 @@ func TestReferrer(t *testing.T) {
 			},
 		},
 		Annotations: artifact2Annot,
-		Refers: &types.Descriptor{
+		Subject: &types.Descriptor{
 			MediaType: types.MediaTypeDocker2Manifest,
 			Size:      int64(mLen),
 			Digest:    mDigest,
@@ -1050,7 +1050,7 @@ func TestReferrer(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed creating getRef: %v", err)
 		}
-		err = reg.ManifestDelete(ctx, r, scheme.WithManifestCheckRefers())
+		err = reg.ManifestDelete(ctx, r, scheme.WithManifestCheckReferrers())
 		if err != nil {
 			t.Errorf("Failed running ManifestDelete: %v", err)
 			return
@@ -1061,7 +1061,7 @@ func TestReferrer(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed creating getRef: %v", err)
 		}
-		err = reg.ManifestDelete(ctx, r, scheme.WithManifestCheckRefers())
+		err = reg.ManifestDelete(ctx, r, scheme.WithManifestCheckReferrers())
 		if err != nil {
 			t.Errorf("Failed running ManifestDelete: %v", err)
 			return
@@ -1072,7 +1072,7 @@ func TestReferrer(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed creating getRef: %v", err)
 		}
-		err = reg.ManifestDelete(ctx, r, scheme.WithManifestCheckRefers())
+		err = reg.ManifestDelete(ctx, r, scheme.WithManifestCheckReferrers())
 		if err != nil {
 			t.Errorf("Failed running ManifestDelete: %v", err)
 			return

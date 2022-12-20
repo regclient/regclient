@@ -95,29 +95,31 @@ func (t *TLSConf) UnmarshalText(b []byte) error {
 
 // Host struct contains host specific settings
 type Host struct {
-	Name        string            `json:"-" yaml:"registry,omitempty"`            // name of the host, read from yaml, not written in json
-	Scheme      string            `json:"scheme,omitempty" yaml:"scheme"`         // TODO: deprecate, delete
-	TLS         TLSConf           `json:"tls,omitempty" yaml:"tls"`               // enabled, disabled, insecure
-	RegCert     string            `json:"regcert,omitempty" yaml:"regcert"`       // public pem cert of registry
-	ClientCert  string            `json:"clientcert,omitempty" yaml:"clientcert"` // public pem cert for client (mTLS)
-	ClientKey   string            `json:"clientkey,omitempty" yaml:"clientkey"`   // private pem cert for client (mTLS)
-	DNS         []string          `json:"dns,omitempty" yaml:"dns"`               // TODO: remove slice, single string, or remove entirely?
-	Hostname    string            `json:"hostname,omitempty" yaml:"hostname"`     // replaces DNS array with single string
-	User        string            `json:"user,omitempty" yaml:"user"`             // username, not used with credHelper
-	Pass        string            `json:"pass,omitempty" yaml:"pass"`             // password, not used with credHelper
-	Token       string            `json:"token,omitempty" yaml:"token"`           // token, experimental for specific APIs
-	CredHelper  string            `json:"credHelper,omitempty" yaml:"credHelper"` // credential helper command for requesting logins
-	CredExpire  timejson.Duration `json:"credExpire,omitempty" yaml:"credExpire"` // time until credential expires
-	CredHost    string            `json:"credHost" yaml:"credHost"`               // used when a helper hostname doesn't match Hostname
-	credRefresh time.Time         `json:"-" yaml:"-"`                             // internal use, when to refresh credentials
-	PathPrefix  string            `json:"pathPrefix,omitempty" yaml:"pathPrefix"` // used for mirrors defined within a repository namespace
-	Mirrors     []string          `json:"mirrors,omitempty" yaml:"mirrors"`       // list of other Host Names to use as mirrors
-	Priority    uint              `json:"priority,omitempty" yaml:"priority"`     // priority when sorting mirrors, higher priority attempted first
-	RepoAuth    bool              `json:"repoAuth,omitempty" yaml:"repoAuth"`     // tracks a separate auth per repo
-	API         string            `json:"api,omitempty" yaml:"api"`               // experimental: registry API to use
-	APIOpts     map[string]string `json:"apiOpts,omitempty" yaml:"apiOpts"`       // options for APIs
-	BlobChunk   int64             `json:"blobChunk,omitempty" yaml:"blobChunk"`   // size of each blob chunk
-	BlobMax     int64             `json:"blobMax,omitempty" yaml:"blobMax"`       // threshold to switch to chunked upload, -1 to disable, 0 for regclient.blobMaxPut
+	Name          string            `json:"-" yaml:"registry,omitempty"`                  // name of the host, read from yaml, not written in json
+	Scheme        string            `json:"scheme,omitempty" yaml:"scheme"`               // TODO: deprecate, delete
+	TLS           TLSConf           `json:"tls,omitempty" yaml:"tls"`                     // enabled, disabled, insecure
+	RegCert       string            `json:"regcert,omitempty" yaml:"regcert"`             // public pem cert of registry
+	ClientCert    string            `json:"clientcert,omitempty" yaml:"clientcert"`       // public pem cert for client (mTLS)
+	ClientKey     string            `json:"clientkey,omitempty" yaml:"clientkey"`         // private pem cert for client (mTLS)
+	DNS           []string          `json:"dns,omitempty" yaml:"dns"`                     // TODO: remove slice, single string, or remove entirely?
+	Hostname      string            `json:"hostname,omitempty" yaml:"hostname"`           // replaces DNS array with single string
+	User          string            `json:"user,omitempty" yaml:"user"`                   // username, not used with credHelper
+	Pass          string            `json:"pass,omitempty" yaml:"pass"`                   // password, not used with credHelper
+	Token         string            `json:"token,omitempty" yaml:"token"`                 // token, experimental for specific APIs
+	CredHelper    string            `json:"credHelper,omitempty" yaml:"credHelper"`       // credential helper command for requesting logins
+	CredExpire    timejson.Duration `json:"credExpire,omitempty" yaml:"credExpire"`       // time until credential expires
+	CredHost      string            `json:"credHost" yaml:"credHost"`                     // used when a helper hostname doesn't match Hostname
+	credRefresh   time.Time         `json:"-" yaml:"-"`                                   // internal use, when to refresh credentials
+	PathPrefix    string            `json:"pathPrefix,omitempty" yaml:"pathPrefix"`       // used for mirrors defined within a repository namespace
+	Mirrors       []string          `json:"mirrors,omitempty" yaml:"mirrors"`             // list of other Host Names to use as mirrors
+	Priority      uint              `json:"priority,omitempty" yaml:"priority"`           // priority when sorting mirrors, higher priority attempted first
+	RepoAuth      bool              `json:"repoAuth,omitempty" yaml:"repoAuth"`           // tracks a separate auth per repo
+	API           string            `json:"api,omitempty" yaml:"api"`                     // experimental: registry API to use
+	APIOpts       map[string]string `json:"apiOpts,omitempty" yaml:"apiOpts"`             // options for APIs
+	BlobChunk     int64             `json:"blobChunk,omitempty" yaml:"blobChunk"`         // size of each blob chunk
+	BlobMax       int64             `json:"blobMax,omitempty" yaml:"blobMax"`             // threshold to switch to chunked upload, -1 to disable, 0 for regclient.blobMaxPut
+	ReqPerSec     float64           `json:"reqPerSec,omitempty" yaml:"reqPerSec"`         // requests per second
+	ReqConcurrent int64             `json:"reqConcurrent,omitempty" yaml:"reqConcurrent"` // concurrent requests
 }
 
 type Cred struct {
@@ -425,6 +427,28 @@ func (host *Host) Merge(newHost Host, log *logrus.Logger) error {
 			}).Warn("Changing blobMax settings for registry")
 		}
 		host.BlobMax = newHost.BlobMax
+	}
+
+	if newHost.ReqPerSec > 0 {
+		if host.ReqPerSec != 0 && host.ReqPerSec != newHost.ReqPerSec {
+			log.WithFields(logrus.Fields{
+				"orig": host.ReqPerSec,
+				"new":  newHost.ReqPerSec,
+				"host": name,
+			}).Warn("Changing reqPerSec settings for registry")
+		}
+		host.ReqPerSec = newHost.ReqPerSec
+	}
+
+	if newHost.ReqConcurrent > 0 {
+		if host.ReqConcurrent != 0 && host.ReqConcurrent != newHost.ReqConcurrent {
+			log.WithFields(logrus.Fields{
+				"orig": host.ReqConcurrent,
+				"new":  newHost.ReqConcurrent,
+				"host": name,
+			}).Warn("Changing reqPerSec settings for registry")
+		}
+		host.ReqConcurrent = newHost.ReqConcurrent
 	}
 
 	return nil

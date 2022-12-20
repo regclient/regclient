@@ -145,17 +145,25 @@ func (m *oci1Manifest) MarshalJSON() ([]byte, error) {
 
 	return json.Marshal((m.Manifest))
 }
-func (m *oci1Manifest) GetRefers() (*types.Descriptor, error) {
+func (m *oci1Manifest) GetSubject() (*types.Descriptor, error) {
 	if !m.manifSet {
 		return nil, wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
 	}
-	return m.Manifest.Refers, nil
+	// TODO: remove fall back support for refers in a future release
+	if m.Manifest.Subject == nil && m.Manifest.Refers != nil {
+		return m.Manifest.Refers, nil
+	}
+	return m.Manifest.Subject, nil
 }
-func (m *oci1Artifact) GetRefers() (*types.Descriptor, error) {
+func (m *oci1Artifact) GetSubject() (*types.Descriptor, error) {
 	if !m.manifSet {
 		return nil, wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
 	}
-	return m.ArtifactManifest.Refers, nil
+	// TODO: remove fall back support for refers in a future release
+	if m.ArtifactManifest.Subject == nil && m.ArtifactManifest.Refers != nil {
+		return m.ArtifactManifest.Refers, nil
+	}
+	return m.ArtifactManifest.Subject, nil
 }
 
 func (m *oci1Index) MarshalJSON() ([]byte, error) {
@@ -224,10 +232,10 @@ func (m *oci1Manifest) MarshalPretty() ([]byte, error) {
 			return []byte{}, err
 		}
 	}
-	if m.Refers != nil {
+	if m.Subject != nil {
 		fmt.Fprintf(tw, "\t\n")
-		fmt.Fprintf(tw, "Refers:\t\n")
-		err := m.Refers.MarshalPrettyTW(tw, "  ")
+		fmt.Fprintf(tw, "Subject:\t\n")
+		err := m.Subject.MarshalPrettyTW(tw, "  ")
 		if err != nil {
 			return []byte{}, err
 		}
@@ -312,10 +320,10 @@ func (m *oci1Artifact) MarshalPretty() ([]byte, error) {
 			return []byte{}, err
 		}
 	}
-	if m.Refers != nil {
+	if m.Subject != nil {
 		fmt.Fprintf(tw, "\t\n")
-		fmt.Fprintf(tw, "Refers:\t\n")
-		err := m.Refers.MarshalPrettyTW(tw, "  ")
+		fmt.Fprintf(tw, "Subject:\t\n")
+		err := m.Subject.MarshalPrettyTW(tw, "  ")
 		if err != nil {
 			return []byte{}, err
 		}
@@ -421,18 +429,18 @@ func (m *oci1Index) SetOrig(origIn interface{}) error {
 	return m.updateDesc()
 }
 
-func (m *oci1Artifact) SetRefers(d *types.Descriptor) error {
+func (m *oci1Artifact) SetSubject(d *types.Descriptor) error {
 	if !m.manifSet {
 		return wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
 	}
-	m.ArtifactManifest.Refers = d
+	m.ArtifactManifest.Subject = d
 	return m.updateDesc()
 }
-func (m *oci1Manifest) SetRefers(d *types.Descriptor) error {
+func (m *oci1Manifest) SetSubject(d *types.Descriptor) error {
 	if !m.manifSet {
 		return wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
 	}
-	m.Manifest.Refers = d
+	m.Manifest.Subject = d
 	return m.updateDesc()
 }
 

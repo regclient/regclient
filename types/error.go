@@ -51,14 +51,10 @@ var (
 	ErrNotImplemented = errors.New("not implemented")
 	// ErrParsingFailed when a string cannot be parsed
 	ErrParsingFailed = errors.New("parsing failed")
-	// ErrRateLimit when requests exceed server rate limit
-	ErrRateLimit = errors.New("rate limit exceeded")
 	// ErrRetryNeeded indicates a request needs to be retried
 	ErrRetryNeeded = errors.New("retry needed")
 	// ErrUnavailable when a requested value is not available
 	ErrUnavailable = errors.New("unavailable")
-	// ErrUnauthorized when authentication fails
-	ErrUnauthorized = errors.New("unauthorized")
 	// ErrUnsupported indicates the request was unsupported
 	ErrUnsupported = errors.New("unsupported")
 	// ErrUnsupportedAPI happens when an API is not supported on a registry
@@ -67,4 +63,12 @@ var (
 	ErrUnsupportedConfigVersion = errors.New("unsupported config version")
 	// ErrUnsupportedMediaType returned when media type is unknown or unsupported
 	ErrUnsupportedMediaType = errors.New("unsupported media type")
+)
+
+// custom HTTP errors extend the ErrHTTPStatus error
+var (
+	// ErrHTTPRateLimit when requests exceed server rate limit
+	ErrHTTPRateLimit = fmt.Errorf("rate limit exceeded%.0w", ErrHTTPStatus)
+	// ErrHTTPUnauthorized when authentication fails
+	ErrHTTPUnauthorized = fmt.Errorf("unauthorized%.0w", ErrHTTPStatus)
 )
