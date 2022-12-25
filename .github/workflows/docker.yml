@@ -70,16 +70,12 @@ jobs:
         fi
         VCS_DATE="$(date -d "@$(git log -1 --format=%at)" +%Y-%m-%dT%H:%M:%SZ --utc)"
         REPO_URL="${{github.server_url}}/${{github.repository}}.git"
-        echo "::set-output name=version::${VERSION}"
-        echo "::set-output name=image_hub::${HUB_IMAGE}"
-        echo "::set-output name=image_ghcr::${GHCR_IMAGE}"
-        echo "::set-output name=tags::${TAGS}"
-        echo "::set-output name=created::${VCS_DATE}"
-        echo "::set-output name=repo_url::${REPO_URL}"
-
-    # qemu is not needed for Go cross compiling
-    # - name: Set up QEMU
-    #   uses: docker/setup-qemu-action@v1
+        echo "version=${VERSION}" >>$GITHUB_OUTPUT
+        echo "image_hub=${HUB_IMAGE}" >>$GITHUB_OUTPUT
+        echo "image_ghcr=${GHCR_IMAGE}" >>$GITHUB_OUTPUT
+        echo "tags=${TAGS}" >>$GITHUB_OUTPUT
+        echo "created=${VCS_DATE}" >>$GITHUB_OUTPUT
+        echo "repo_url=${REPO_URL}" >>$GITHUB_OUTPUT
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
@@ -89,7 +85,7 @@ jobs:
     
     - name: Login to DockerHub
       if: github.repository_owner == 'regclient'
-      uses: docker/login-action@v1 
+      uses: docker/login-action@v2 
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -154,7 +150,7 @@ jobs:
           echo "Updating ${tag}"
           regctl image copy "${local_tag}" "${tag}"
         done
-        echo "::set-output name=digest::$(regctl image digest ${local_tag})"
+        echo "digest=$(regctl image digest ${local_tag})" >>$GITHUB_OUTPUT
 
     - name: Sign the container image
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
