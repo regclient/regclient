@@ -17,6 +17,14 @@ DOCKERFILE_EXT?=$(shell if docker build --help 2>/dev/null | grep -q -- '--progr
 DOCKER_ARGS?=--build-arg "VCS_REF=$(VCS_REF)"
 GOPATH?=$(shell go env GOPATH)
 PWD:=$(shell pwd)
+VER_BUMP?=$(shell command -v version-bump 2>/dev/null)
+VER_BUMP_CONTAINER?=sudobmitch/version-bump:edge
+ifeq "$(strip $(VER_BUMP))" ''
+	VER_BUMP=docker run --rm \
+		-v "$(shell pwd)/:$(shell pwd)/" -w "$(shell pwd)" \
+		-u "$(shell id -u):$(shell id -g)" \
+		$(VER_BUMP_CONTAINER)
+endif
 
 .PHONY: all fmt vet test lint lint-go lint-md vendor binaries docker artifacts artifact-pre plugin-user plugin-host .FORCE
 
@@ -91,6 +99,12 @@ plugin-user:
 
 plugin-host:
 	sudo cp docker-plugin/docker-regclient /usr/libexec/docker/cli-plugins/docker-regctl
+
+util-version-check:
+	$(VER_BUMP) check
+
+util-version-update:
+	$(VER_BUMP) update
 
 $(GOPATH)/bin/staticcheck: 
 	go install "honnef.co/go/tools/cmd/staticcheck@latest"

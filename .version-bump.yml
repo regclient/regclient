@@ -1,0 +1,80 @@
+files:
+  "build/Dockerfile*":
+    scans:
+      - docker-arg-alpine
+      - docker-arg-go
+      - git-commit-ecr
+      - git-commit-gcr
+      - git-commit-lunajson
+      - git-commit-semver
+  ".github/workflows/*.yml":
+    scans:
+      - gha-uses
+
+scans:
+  docker-arg-alpine:
+    type: "regexp"
+    source: "registry-digest-arg"
+    args:
+      regexp: '^ARG ALPINE_VER=(?P<Tag>[a-z0-9\-\.]+)@(?P<Version>sha256:[0-9a-f]+)\s*$'
+      image: "alpine"
+  docker-arg-go:
+    type: "regexp"
+    source: "registry-digest-arg"
+    args:
+      regexp: '^ARG GO_VER=(?P<Tag>[a-z0-9\-\.]+)@(?P<Version>sha256:[0-9a-f]+)\s*$'
+      image: "golang"
+  git-commit-ecr:
+    type: "regexp"
+    source: "git-commit"
+    args:
+      regexp: '^ARG ECR_HELPER_VER=(?P<Version>[0-9a-f]+)\s*$'
+      repo: "https://github.com/awslabs/amazon-ecr-credential-helper.git"
+      ref: main
+  git-commit-gcr:
+    type: "regexp"
+    source: "git-commit"
+    args:
+      regexp: '^ARG GCR_HELPER_VER=(?P<Version>[0-9a-f]+)\s*$'
+      repo: "https://github.com/GoogleCloudPlatform/docker-credential-gcr.git"
+      ref: master
+  git-commit-lunajson:
+    type: "regexp"
+    source: "git-commit"
+    args:
+      regexp: '^ARG LUNAJSON_COMMIT=(?P<Version>[0-9a-f]+)\s*$'
+      repo: "https://github.com/grafi-tt/lunajson.git"
+      ref: master
+  git-commit-semver:
+    type: "regexp"
+    source: "git-commit"
+    args:
+      regexp: '^ARG SEMVER_COMMIT=(?P<Version>[0-9a-f]+)\s*$'
+      repo: "https://github.com/kikito/semver.lua.git"
+      ref: master
+  gha-uses:
+    type: "regexp"
+    source: "gha-uses"
+    args:
+      regexp: '^\s+-?\s+uses: (?P<Repo>[^@]+)@(?P<Version>v\d+)\s*$'
+
+sources:
+  registry-digest-arg:
+    type: "registry"
+    key: "{{ .ScanArgs.image }}:{{.ScanMatch.Tag}}"
+    args:
+      image: "{{ .ScanArgs.image }}:{{.ScanMatch.Tag}}"
+  gha-uses:
+    type: "git"
+    key: "{{ .ScanMatch.Repo }}"
+    args:
+      type: "tag"
+      url: "https://github.com/{{ .ScanMatch.Repo }}.git"
+      tagExp: 'v\d+$'
+  git-commit:
+    type: "git"
+    key: "{{ .ScanArgs.repo }}:{{ .ScanArgs.ref }}"
+    args:
+      type: "commit"
+      url: "{{ .ScanArgs.repo }}"
+      ref: '{{ .ScanArgs.ref }}'
