@@ -73,7 +73,7 @@ func (m *common) IsSet() bool {
 // RawBody returns the raw body from the manifest if available.
 func (m *common) RawBody() ([]byte, error) {
 	if len(m.rawBody) == 0 {
-		return m.rawBody, types.ErrUnavailable
+		return m.rawBody, types.ErrManifestNotSet
 	}
 	return m.rawBody, nil
 }

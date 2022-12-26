@@ -15,7 +15,6 @@ import (
 	_ "crypto/sha512"
 
 	digest "github.com/opencontainers/go-digest"
-	"github.com/regclient/regclient/internal/wraperr"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/docker/schema1"
 	"github.com/regclient/regclient/types/docker/schema2"
@@ -540,7 +539,7 @@ func verifyMT(expected, received string) error {
 
 func getPlatformDesc(p *platform.Platform, dl []types.Descriptor) (*types.Descriptor, error) {
 	if p == nil {
-		return nil, wraperr.New(fmt.Errorf("invalid input, platform is nil"), types.ErrNotFound)
+		return nil, fmt.Errorf("invalid input, platform is nil%.0w", types.ErrNotFound)
 	}
 	for _, d := range dl {
 		if d.Platform != nil && platform.Match(*p, *d.Platform) {
@@ -553,7 +552,7 @@ func getPlatformDesc(p *platform.Platform, dl []types.Descriptor) (*types.Descri
 			return &d, nil
 		}
 	}
-	return nil, wraperr.New(fmt.Errorf("platform not found: %s", *p), types.ErrNotFound)
+	return nil, fmt.Errorf("platform not found: %s%.0w", *p, types.ErrNotFound)
 }
 
 func getPlatformList(dl []types.Descriptor) ([]*platform.Platform, error) {
