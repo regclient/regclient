@@ -1,0 +1,14 @@
+{"name":"gha-uses","key":"actions/checkout","version":"v3"}
+{"name":"gha-uses","key":"actions/setup-go","version":"v3"}
+{"name":"gha-uses","key":"actions/stale","version":"v7"}
+{"name":"gha-uses","key":"actions/upload-artifact","version":"v3"}
+{"name":"gha-uses","key":"docker/build-push-action","version":"v3"}
+{"name":"gha-uses","key":"docker/login-action","version":"v2"}
+{"name":"gha-uses","key":"docker/setup-buildx-action","version":"v2"}
+{"name":"gha-uses","key":"softprops/action-gh-release","version":"v1"}
+{"name":"git-commit","key":"https://github.com/GoogleCloudPlatform/docker-credential-gcr.git:master","version":"9db1a8218571feeb5541ba12a7a9342e86c239a9"}
+{"name":"git-commit","key":"https://github.com/awslabs/amazon-ecr-credential-helper.git:main","version":"55f4180e62142a290ade7e4c7d4ac18aadd01f28"}
+{"name":"git-commit","key":"https://github.com/grafi-tt/lunajson.git:master","version":"e6063d37de97dfdfe2749e24de949472bfad0945"}
+{"name":"git-commit","key":"https://github.com/kikito/semver.lua.git:master","version":"af495adc857d51fd1507a112be18523828a1da0d"}
+{"name":"registry-digest-arg","key":"alpine:3","version":"sha256:8914eb54f968791faf6a8638949e480fef81e697984fba772b3976835194c6d4"}
+{"name":"registry-digest-arg","key":"golang:1.19-alpine","version":"sha256:a9b24b67dc83b3383d22a14941c2b2b2ca6a103d805cac6820fd1355943beaf1"}
