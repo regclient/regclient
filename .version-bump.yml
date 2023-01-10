@@ -70,11 +70,13 @@ sources:
     args:
       type: "tag"
       url: "https://github.com/{{ .ScanMatch.Repo }}.git"
-      tagExp: 'v\d+$'
+    filter:
+      expr: '^v\d+$'
   git-commit:
     type: "git"
     key: "{{ .ScanArgs.repo }}:{{ .ScanArgs.ref }}"
     args:
       type: "commit"
       url: "{{ .ScanArgs.repo }}"
-      ref: '{{ .ScanArgs.ref }}'
+    filter:
+      expr: '^{{ .ScanArgs.ref }}$'
