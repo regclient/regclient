@@ -19,6 +19,20 @@ import (
 // Opts defines options for Apply
 type Opts func(*dagConfig, *dagManifest) error
 
+var (
+	// whitelist of tar media types
+	mtWLTar = []string{
+		types.MediaTypeDocker2LayerGzip,
+		types.MediaTypeOCI1Layer,
+		types.MediaTypeOCI1LayerGzip,
+		types.MediaTypeOCI1LayerZstd,
+	}
+	mtWLConfig = []string{
+		types.MediaTypeDocker2ImageConfig,
+		types.MediaTypeOCI1ImageConfig,
+	}
+)
+
 // Apply applies a set of modifications to an image (manifest, configs, and layers)
 func Apply(ctx context.Context, rc *regclient.RegClient, r ref.Ref, opts ...Opts) (ref.Ref, error) {
 	// check for the various types of mods (manifest, config, layer)
@@ -96,7 +110,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, r ref.Ref, opts ...Opts
 					return nil, err
 				}
 			}
-			if len(dc.stepsLayerFile) > 0 && dl.mod != deleted {
+			if len(dc.stepsLayerFile) > 0 && dl.mod != deleted && inListStr(dl.desc.MediaType, mtWLTar) {
 				changed := false
 				empty := true
 				// setup tar reader to process layer
@@ -266,4 +280,13 @@ func WithManifestToOCI() Opts {
 		})
 		return nil
 	}
+}
+
+func inListStr(str string, list []string) bool {
+	for _, s := range list {
+		if str == s {
+			return true
+		}
+	}
+	return false
 }
