@@ -147,6 +147,14 @@ func TestMod(t *testing.T) {
 			ref: "ocidir://testrepo:v1",
 		},
 		{
+			name: "Config Time Artifact",
+			opts: []Opts{
+				WithConfigTimestampMax(tTime),
+			},
+			ref:      "ocidir://testrepo:a1",
+			wantSame: true,
+		},
+		{
 			name: "Config Time Unchanged",
 			opts: []Opts{
 				WithConfigTimestampMax(time.Now()),
@@ -155,18 +163,26 @@ func TestMod(t *testing.T) {
 			wantSame: true,
 		},
 		{
-			name: "Expose port",
+			name: "Expose Port",
 			opts: []Opts{
 				WithExposeAdd("8080"),
 			},
 			ref: "ocidir://testrepo:v1",
 		},
 		{
-			name: "Expose port delete unchanged",
+			name: "Expose Port Delete Unchanged",
 			opts: []Opts{
 				WithExposeRm("8080"),
 			},
 			ref:      "ocidir://testrepo:v1",
+			wantSame: true,
+		},
+		{
+			name: "Expose Port Artifact",
+			opts: []Opts{
+				WithExposeAdd("8080"),
+			},
+			ref:      "ocidir://testrepo:a1",
 			wantSame: true,
 		},
 		{
@@ -198,6 +214,14 @@ func TestMod(t *testing.T) {
 				WithLayerTimestampMax(time.Now()),
 			},
 			ref:      "ocidir://testrepo:v1",
+			wantSame: true,
+		},
+		{
+			name: "Layer Timestamp Artifact",
+			opts: []Opts{
+				WithLayerTimestampMax(tTime),
+			},
+			ref:      "ocidir://testrepo:a1",
 			wantSame: true,
 		},
 		{
@@ -391,4 +415,17 @@ func TestMod(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestInList(t *testing.T) {
+	t.Run("match", func(t *testing.T) {
+		if !inListStr(types.MediaTypeDocker2LayerGzip, mtWLTar) {
+			t.Errorf("did not find docker layer in tar whitelist")
+		}
+	})
+	t.Run("mismatch", func(t *testing.T) {
+		if inListStr(types.MediaTypeDocker2LayerGzip, mtWLConfig) {
+			t.Errorf("found docker layer in config whitelist")
+		}
+	})
 }

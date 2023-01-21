@@ -8,10 +8,12 @@ release="scratch"
 push_tags=""
 
 # CLI options to override image, platform, base digest, and comma separated list of tags to push
+opt_c=0
 opt_h=0
-while getopts 'b:d:hi:p:r:t:' option; do
+while getopts 'b:cd:hi:p:r:t:' option; do
   case $option in
     b) base_name="$OPTARG";;
+    c) opt_c=1;;
     d) base_digest="$OPTARG";;
     h) opt_h=1;;
     i) image="$OPTARG";;
@@ -25,6 +27,7 @@ shift $(expr $OPTIND - 1)
 if [ $# -gt 0 -o "$opt_h" = "1" ]; then
   echo "Usage: $0 [opts]"
   echo " -b: base image name"
+  echo " -c: use cache"
   echo " -d: base image digest"
   echo " -h: this help message"
   echo " -i: image to build (${image})"
@@ -62,6 +65,10 @@ elif [ -n "$base_name" ] && [ -n "$base_digest" ]; then
 fi
 
 [ -d "output" ] || mkdir -p output
+build_opts=""
+if [ "${opt_c}" = "0" ]; then
+  build_opts="$build_opts --no-cache"
+fi
 docker buildx build --platform="$platforms" -f "build/Dockerfile.${image}.buildkit" \
   -o "type=oci,dest=output/${image}-${release}.tar" --metadata-file "output/${image}-${release}.json" \
   --target "release-${release}" ${buildx_opts} \
@@ -69,7 +76,7 @@ docker buildx build --platform="$platforms" -f "build/Dockerfile.${image}.buildk
   --label org.opencontainers.image.source=${vcs_repo} \
   --label org.opencontainers.image.version=${vcs_version} \
   --label org.opencontainers.image.revision=${vcs_sha} \
-  --no-cache .
+  ${build_opts} .
 echo "Importing tar"
 regctl image import "ocidir://output/${image}:${release}" "output/${image}-${release}.tar"
 echo "Modding image"

@@ -88,7 +88,7 @@ func dagGet(ctx context.Context, rc *regclient.RegClient, r ref.Ref, d types.Des
 		cd, err := mi.GetConfig()
 		if err != nil && !errors.Is(err, types.ErrUnsupportedMediaType) {
 			return nil, err
-		} else if err == nil {
+		} else if err == nil && inListStr(cd.MediaType, mtWLConfig) {
 			oc, err := rc.BlobGetOCIConfig(ctx, r, cd)
 			if err != nil {
 				return nil, err
@@ -192,8 +192,10 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 		oc := v1.Image{}
 		iConfig := -1
 		if dm.config != nil {
-			iConfig = 0
 			oc = dm.config.oc.GetConfig()
+			if oc.History != nil {
+				iConfig = 0
+			}
 		}
 
 		// first pass to add/modify layers
@@ -209,7 +211,9 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 				}
 			}
 			if layer.mod == deleted {
-				iConfig++
+				if iConfig >= 0 {
+					iConfig++
+				}
 				continue
 			}
 			// handle data field
@@ -238,12 +242,16 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 			if layer.mod == added {
 				if len(ociM.Layers) == i {
 					ociM.Layers = append(ociM.Layers, d)
-					oc.RootFS.DiffIDs = append(oc.RootFS.DiffIDs, layer.ucDigest)
+					if oc.RootFS.DiffIDs != nil && len(oc.RootFS.DiffIDs) == i {
+						oc.RootFS.DiffIDs = append(oc.RootFS.DiffIDs, layer.ucDigest)
+					}
 				} else {
 					ociM.Layers = append(ociM.Layers[:i+1], ociM.Layers[i:]...)
 					ociM.Layers[i] = d
-					oc.RootFS.DiffIDs = append(oc.RootFS.DiffIDs[:i+1], oc.RootFS.DiffIDs[i:]...)
-					oc.RootFS.DiffIDs[i] = layer.ucDigest
+					if oc.RootFS.DiffIDs != nil && len(oc.RootFS.DiffIDs) >= i {
+						oc.RootFS.DiffIDs = append(oc.RootFS.DiffIDs[:i+1], oc.RootFS.DiffIDs[i:]...)
+						oc.RootFS.DiffIDs[i] = layer.ucDigest
+					}
 				}
 				newHistory := v1.History{
 					Created: &timeStart,
@@ -260,12 +268,14 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 				changed = true
 			} else if layer.mod == replaced || !bytes.Equal(ociM.Layers[i].Data, d.Data) {
 				ociM.Layers[i] = d
-				if layer.ucDigest != "" {
+				if oc.RootFS.DiffIDs != nil && len(oc.RootFS.DiffIDs) >= i+1 && layer.ucDigest != "" {
 					oc.RootFS.DiffIDs[i] = layer.ucDigest
 				}
 				changed = true
 			}
-			iConfig++
+			if iConfig >= 0 {
+				iConfig++
+			}
 		}
 		// second pass in reverse to delete entries
 		iConfig = len(oc.History) - 1
@@ -275,16 +285,20 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 				iConfig--
 			}
 			if layer.mod != deleted {
-				iConfig--
+				if iConfig >= 0 {
+					iConfig--
+				}
 				continue
 			}
 			ociM.Layers = append(ociM.Layers[:i], ociM.Layers[i+1:]...)
-			oc.RootFS.DiffIDs = append(oc.RootFS.DiffIDs[:i], oc.RootFS.DiffIDs[i+1:]...)
+			if oc.RootFS.DiffIDs != nil && len(oc.RootFS.DiffIDs) >= i+1 {
+				oc.RootFS.DiffIDs = append(oc.RootFS.DiffIDs[:i], oc.RootFS.DiffIDs[i+1:]...)
+			}
 			if iConfig >= 0 {
 				oc.History = append(oc.History[:iConfig], oc.History[iConfig+1:]...)
+				iConfig--
 			}
 			changed = true
-			iConfig--
 		}
 		if changed && dm.config != nil {
 			dm.config.oc.SetConfig(oc)
