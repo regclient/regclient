@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"syscall"
@@ -56,6 +57,7 @@ the contents of the file, e.g. --cacert "$(cat reg-ca.crt)"`,
 }
 var registryOpts struct {
 	user, pass           string // login opts
+	passStdin            bool
 	credHelper           string
 	hostname, pathPrefix string
 	cacert, tls          string // set opts
@@ -73,6 +75,7 @@ var registryOpts struct {
 func init() {
 	registryLoginCmd.Flags().StringVarP(&registryOpts.user, "user", "u", "", "Username")
 	registryLoginCmd.Flags().StringVarP(&registryOpts.pass, "pass", "p", "", "Password")
+	registryLoginCmd.Flags().BoolVarP(&registryOpts.passStdin, "pass-stdin", "", false, "Read password from stdin")
 	registryLoginCmd.RegisterFlagCompletionFunc("user", completeArgNone)
 	registryLoginCmd.RegisterFlagCompletionFunc("pass", completeArgNone)
 
@@ -181,6 +184,8 @@ func runRegistryLogin(cmd *cobra.Command, args []string) error {
 	}
 	if flagChanged(cmd, "user") {
 		h.User = registryOpts.user
+	} else if registryOpts.passStdin {
+		return fmt.Errorf("user must be provided to read password from stdin")
 	} else {
 		// prompt for username
 		reader := bufio.NewReader(os.Stdin)
@@ -200,6 +205,18 @@ func runRegistryLogin(cmd *cobra.Command, args []string) error {
 	}
 	if flagChanged(cmd, "pass") {
 		h.Pass = registryOpts.pass
+	} else if registryOpts.passStdin {
+		pass, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("failed to read password from stdin: %w", err)
+		}
+		passwd := strings.TrimRight(string(pass), "\n")
+		if passwd != "" {
+			h.Pass = passwd
+		} else {
+			log.Error("Password is required")
+			return ErrMissingInput
+		}
 	} else {
 		// prompt for a password
 		fmt.Print("Enter Password: ")
@@ -207,7 +224,7 @@ func runRegistryLogin(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("unable to read from tty (resolve by using \"-p\" flag, or winpty on Windows): %w", err)
 		}
-		passwd := strings.TrimSpace(string(pass))
+		passwd := strings.TrimRight(string(pass), "\n")
 		fmt.Print("\n")
 		if passwd != "" {
 			h.Pass = passwd
