@@ -197,6 +197,138 @@ func WithLabelToAnnotation() Opts {
 	}
 }
 
+// WithManifestToOCI converts the manifest to OCI media types
+func WithManifestToOCI() Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, r ref.Ref, dm *dagManifest) error {
+			if dm.mod == deleted {
+				return nil
+			}
+			switch dm.m.GetDescriptor().MediaType {
+			case types.MediaTypeOCI1Manifest, types.MediaTypeOCI1ManifestList:
+				return nil
+			}
+			om := dm.m.GetOrig()
+			if dm.m.IsList() {
+				ociM, err := manifest.OCIIndexFromAny(om)
+				if err != nil {
+					return err
+				}
+				om = ociM
+			} else {
+				ociM, err := manifest.OCIManifestFromAny(om)
+				if err != nil {
+					return err
+				}
+				ociM.Config.MediaType = types.MediaTypeOCI1ImageConfig
+				for i, l := range ociM.Layers {
+					if l.MediaType == types.MediaTypeDocker2LayerGzip {
+						ociM.Layers[i].MediaType = types.MediaTypeOCI1LayerGzip
+					}
+				}
+				om = ociM
+			}
+			newM, err := manifest.New(manifest.WithOrig(om))
+			if err != nil {
+				return err
+			}
+			dm.m = newM
+			dm.newDesc = dm.m.GetDescriptor()
+			dm.mod = replaced
+			return nil
+		})
+		return nil
+	}
+}
+
+// WithManifestToOCIReferrers converts other referrer types to OCI subject/referrers
+func WithManifestToOCIReferrers() Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, r ref.Ref, dm *dagManifest) error {
+			if dm.mod == deleted {
+				return nil
+			}
+			if dm.m.IsList() {
+				changed := false
+				dmLU := map[string]*dagManifest{
+					dm.m.GetDescriptor().Digest.String(): dm,
+				}
+				for _, childDM := range dm.manifests {
+					dmLU[childDM.m.GetDescriptor().Digest.String()] = childDM
+				}
+				mi, ok := dm.m.(manifest.Indexer)
+				if !ok {
+					return fmt.Errorf("manifest list is not an indexer")
+				}
+				ml, err := mi.GetManifestList()
+				if err != nil {
+					return fmt.Errorf("failed to get manifest list: %w", err)
+				}
+				mlNew := []types.Descriptor{}
+				i := 0
+				for _, desc := range ml {
+					if len(desc.Annotations) == 0 || desc.Annotations["vnd.docker.reference.type"] == "" || desc.Annotations["vnd.docker.reference.digest"] == "" {
+						mlNew = append(mlNew, desc)
+						i++
+						continue
+					}
+					if i >= len(dm.manifests) {
+						return fmt.Errorf("missing manifest from dag, i=%d", i)
+					}
+					// convert docker reference type
+					changed = true
+					// move dm to referrers list
+					dmMove := dm.manifests[i]
+					if i+1 >= len(dm.manifests) {
+						// delete from tail
+						dm.manifests = dm.manifests[:i]
+					} else {
+						// delete from middle
+						dm.manifests = append(dm.manifests[:i], dm.manifests[i+1:]...)
+					}
+					dmTgt, ok := dmLU[desc.Annotations["vnd.docker.reference.digest"]]
+					if !ok {
+						return fmt.Errorf("could not find digest, convert referrers before any other mod, digest=%s", desc.Annotations["vnd.docker.reference.digest"])
+					}
+					dmMove.mod = added
+					sm, ok := dmMove.m.(manifest.Subjecter)
+					if !ok {
+						return fmt.Errorf("docker reference type does not support subject, mt=%s", dmMove.m.GetDescriptor().MediaType)
+					}
+					am, ok := dmMove.m.(manifest.Annotator)
+					if !ok {
+						return fmt.Errorf("docker reference type does not support annotations, mt=%s", dmMove.m.GetDescriptor().MediaType)
+					}
+					tgtDesc := dmTgt.m.GetDescriptor()
+					tgtDesc.Annotations = nil
+					tgtDesc.ArtifactType = ""
+					err = am.SetAnnotation("vnd.docker.reference.type", desc.Annotations["vnd.docker.reference.type"])
+					if err != nil {
+						return fmt.Errorf("failed to set annotations: %w", err)
+					}
+					err = sm.SetSubject(&tgtDesc)
+					if err != nil {
+						return fmt.Errorf("failed to set subject: %w", err)
+					}
+					dmTgt.referrers = append(dmTgt.referrers, dmMove)
+				}
+				if changed {
+					err = mi.SetManifestList(mlNew)
+					if err != nil {
+						return fmt.Errorf("failed to set manifest list: %w", err)
+					}
+					if dm.mod == unchanged {
+						dm.mod = replaced
+					}
+					dm.newDesc = dm.m.GetDescriptor()
+				}
+			}
+			return nil
+		})
+		return nil
+	}
+}
+
 // WithExternalURLsRm strips external URLs from descriptors and adjusts media type to match
 func WithExternalURLsRm() Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {

@@ -43,6 +43,7 @@ type dagManifest struct {
 	config    *dagOCIConfig
 	layers    []*dagLayer
 	manifests []*dagManifest
+	referrers []*dagManifest
 }
 
 type dagOCIConfig struct {
@@ -75,7 +76,10 @@ func dagGet(ctx context.Context, rc *regclient.RegClient, r ref.Ref, d types.Des
 			return nil, err
 		}
 		for _, desc := range dl {
-			curMM, err := dagGet(ctx, rc, r, desc)
+			rGet := r
+			rGet.Tag = ""
+			rGet.Digest = desc.Digest.String()
+			curMM, err := dagGet(ctx, rc, rGet, desc)
 			if err != nil {
 				return nil, err
 			}
@@ -107,6 +111,26 @@ func dagGet(ctx context.Context, rc *regclient.RegClient, r ref.Ref, d types.Des
 			}
 			dm.layers = append(dm.layers, &dl)
 		}
+	}
+	// get a list of referrers
+	rl, err := rc.ReferrerList(ctx, r)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get referrers: %w", err)
+	}
+	for _, desc := range rl.Descriptors {
+		// strip referrers metadata from descriptor (annotations and artifact type)
+		desc.ArtifactType = ""
+		if len(desc.Annotations) > 0 {
+			desc.Annotations = nil
+		}
+		rGet := r
+		rGet.Tag = ""
+		rGet.Digest = desc.Digest.String()
+		curMM, err := dagGet(ctx, rc, rGet, desc)
+		if err != nil {
+			return nil, err
+		}
+		dm.referrers = append(dm.manifests, curMM)
 	}
 	return &dm, nil
 }
@@ -351,8 +375,26 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 			return err
 		}
 	}
+	// push new/modified manifest
 	if dm.mod == replaced || dm.mod == added {
 		dm.newDesc = dm.m.GetDescriptor()
+		// update subject on all referrers
+		for i := range dm.referrers {
+			if dm.referrers[i].mod == deleted {
+				continue
+			}
+			sm, ok := dm.referrers[i].m.(manifest.Subjecter)
+			if !ok {
+				return fmt.Errorf("referrer does not support subject field, mt=%s", dm.referrers[i].m.GetDescriptor().MediaType)
+			}
+			err = sm.SetSubject(&dm.newDesc)
+			if err != nil {
+				return fmt.Errorf("failed to set subject: %w", err)
+			}
+			if dm.referrers[i].mod == unchanged {
+				dm.referrers[i].mod = replaced
+			}
+		}
 		mpOpts := []regclient.ManifestOpts{}
 		if !dm.top {
 			mpOpts = append(mpOpts, regclient.WithManifestChild())
@@ -365,7 +407,27 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 			return err
 		}
 	}
-
+	// push/delete referrers
+	for _, child := range dm.referrers {
+		if child.mod == unchanged {
+			continue
+		}
+		child.newDesc = child.m.GetDescriptor()
+		rChild := r
+		rChild.Digest = child.newDesc.Digest.String()
+		rChild.Tag = ""
+		if child.mod == deleted {
+			err = rc.ManifestDelete(ctx, rChild, regclient.WithManifestCheckReferrers())
+			if err != nil {
+				return fmt.Errorf("failed to delete referrer: %w", err)
+			}
+		} else {
+			err = rc.ManifestPut(ctx, rChild, child.m, regclient.WithManifestChild())
+			if err != nil {
+				return fmt.Errorf("failed to put referrer: %w", err)
+			}
+		}
+	}
 	return nil
 }
 
