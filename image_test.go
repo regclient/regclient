@@ -79,26 +79,21 @@ func TestImageCheckBase(t *testing.T) {
 			expectErr: types.ErrMismatch,
 		},
 		{
-			name: "manual v1, b1",
-			r:    r1,
+			name: "manual v2, b1",
+			r:    r2,
 			opts: []ImageOpts{ImageWithCheckBaseRef(rb1.CommonName())},
 		},
 		{
-			name:      "manual v1, b2",
-			r:         r1,
+			name:      "manual v2, b2",
+			r:         r2,
 			opts:      []ImageOpts{ImageWithCheckBaseRef(rb2.CommonName())},
 			expectErr: types.ErrMismatch,
 		},
 		{
-			name:      "manual v1, b3",
-			r:         r1,
+			name:      "manual v2, b3",
+			r:         r2,
 			opts:      []ImageOpts{ImageWithCheckBaseRef(rb3.CommonName())},
 			expectErr: types.ErrMismatch,
-		},
-		{
-			name: "manual v2, b1",
-			r:    r2,
-			opts: []ImageOpts{ImageWithCheckBaseRef(rb1.CommonName())},
 		},
 		{
 			name: "manual v3, b1",

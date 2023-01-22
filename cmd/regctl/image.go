@@ -474,6 +474,20 @@ func init() {
 		},
 	}, "to-oci", "", `convert to OCI media types`)
 	flagOCI.NoOptDefVal = "true"
+	flagOCIReferrers := imageModCmd.Flags().VarPF(&modFlagFunc{
+		t: "bool",
+		f: func(val string) error {
+			b, err := strconv.ParseBool(val)
+			if err != nil {
+				return fmt.Errorf("unable to parse value %s: %w", val, err)
+			}
+			if b {
+				imageOpts.modOpts = append(imageOpts.modOpts, mod.WithManifestToOCIReferrers())
+			}
+			return nil
+		},
+	}, "to-oci-referrers", "", `convert to OCI referrers`)
+	flagOCIReferrers.NoOptDefVal = "true"
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {

@@ -97,6 +97,14 @@ func TestMod(t *testing.T) {
 			wantSame: true,
 		},
 		{
+			name: "To OCI Referrers",
+			opts: []Opts{
+				WithManifestToOCIReferrers(),
+			},
+			ref:      "ocidir://testrepo:v1",
+			wantSame: false,
+		},
+		{
 			name: "Add Annotation",
 			opts: []Opts{
 				WithAnnotation("test", "hello"),
@@ -281,14 +289,14 @@ func TestMod(t *testing.T) {
 			opts: []Opts{
 				WithVolumeAdd("/new"),
 			},
-			ref: "ocidir://testrepo:v1",
+			ref: "ocidir://testrepo:v2",
 		},
 		{
 			name: "Add volume again",
 			opts: []Opts{
 				WithVolumeAdd("/volume"),
 			},
-			ref:      "ocidir://testrepo:v1",
+			ref:      "ocidir://testrepo:v2",
 			wantSame: true,
 		},
 		{
@@ -362,7 +370,7 @@ func TestMod(t *testing.T) {
 			opts: []Opts{
 				WithRebaseRefs(rb1, rb2),
 			},
-			ref: "ocidir://testrepo:v1",
+			ref: "ocidir://testrepo:v2",
 		},
 		{
 			name: "Rebase mismatch",
