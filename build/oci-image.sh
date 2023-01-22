@@ -82,6 +82,7 @@ regctl image import "ocidir://output/${image}:${release}" "output/${image}-${rel
 echo "Modding image"
 regctl image mod \
   "ocidir://output/${image}:${release}" --replace \
+  --to-oci-referrers \
   --time-max "${vcs_date}" \
   --annotation "oci.opencontainers.image.created=${vcs_date}" \
   --annotation "oci.opencontainers.image.source=${vcs_repo}" \

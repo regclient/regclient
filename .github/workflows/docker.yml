@@ -136,6 +136,7 @@ jobs:
         echo "Loading ${local_tag} from output/${{matrix.image}}-${{matrix.type}}.tar"
         regctl image import "${local_tag}" "output/${{matrix.image}}-${{matrix.type}}.tar"
         regctl image mod "${local_tag}" --replace \
+          --to-oci-referrers \
           --time-max "${vcs_date}" \
           --annotation "oci.opencontainers.image.created=${vcs_date}" \
           --annotation "oci.opencontainers.image.source=${{ steps.prep.outputs.repo_url }}" \
@@ -148,7 +149,7 @@ jobs:
         # loop over the tags
         for tag in $(echo ${{ steps.prep.outputs.tags }} | tr , ' '); do
           echo "Updating ${tag}"
-          regctl image copy "${local_tag}" "${tag}"
+          regctl image copy --referrers "${local_tag}" "${tag}"
         done
         echo "digest=$(regctl image digest ${local_tag})" >>$GITHUB_OUTPUT
 
