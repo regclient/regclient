@@ -102,6 +102,48 @@ jobs:
           ./artifacts/regsync-linux-ppc64le
           ./artifacts/regsync-linux-s390x
           ./artifacts/regsync-windows-amd64.exe
+          ./artifacts/regbot-darwin-amd64.cyclonedx.json
+          ./artifacts/regbot-darwin-arm64.cyclonedx.json
+          ./artifacts/regbot-linux-amd64.cyclonedx.json
+          ./artifacts/regbot-linux-arm64.cyclonedx.json
+          ./artifacts/regbot-linux-ppc64le.cyclonedx.json
+          ./artifacts/regbot-linux-s390x.cyclonedx.json
+          ./artifacts/regbot-windows-amd64.cyclonedx.json
+          ./artifacts/regctl-darwin-amd64.cyclonedx.json
+          ./artifacts/regctl-darwin-arm64.cyclonedx.json
+          ./artifacts/regctl-linux-amd64.cyclonedx.json
+          ./artifacts/regctl-linux-arm64.cyclonedx.json
+          ./artifacts/regctl-linux-ppc64le.cyclonedx.json
+          ./artifacts/regctl-linux-s390x.cyclonedx.json
+          ./artifacts/regctl-windows-amd64.cyclonedx.json
+          ./artifacts/regsync-darwin-amd64.cyclonedx.json
+          ./artifacts/regsync-darwin-arm64.cyclonedx.json
+          ./artifacts/regsync-linux-amd64.cyclonedx.json
+          ./artifacts/regsync-linux-arm64.cyclonedx.json
+          ./artifacts/regsync-linux-ppc64le.cyclonedx.json
+          ./artifacts/regsync-linux-s390x.cyclonedx.json
+          ./artifacts/regsync-windows-amd64.cyclonedx.json
+          ./artifacts/regbot-darwin-amd64.spdx.json
+          ./artifacts/regbot-darwin-arm64.spdx.json
+          ./artifacts/regbot-linux-amd64.spdx.json
+          ./artifacts/regbot-linux-arm64.spdx.json
+          ./artifacts/regbot-linux-ppc64le.spdx.json
+          ./artifacts/regbot-linux-s390x.spdx.json
+          ./artifacts/regbot-windows-amd64.spdx.json
+          ./artifacts/regctl-darwin-amd64.spdx.json
+          ./artifacts/regctl-darwin-arm64.spdx.json
+          ./artifacts/regctl-linux-amd64.spdx.json
+          ./artifacts/regctl-linux-arm64.spdx.json
+          ./artifacts/regctl-linux-ppc64le.spdx.json
+          ./artifacts/regctl-linux-s390x.spdx.json
+          ./artifacts/regctl-windows-amd64.spdx.json
+          ./artifacts/regsync-darwin-amd64.spdx.json
+          ./artifacts/regsync-darwin-arm64.spdx.json
+          ./artifacts/regsync-linux-amd64.spdx.json
+          ./artifacts/regsync-linux-arm64.spdx.json
+          ./artifacts/regsync-linux-ppc64le.spdx.json
+          ./artifacts/regsync-linux-s390x.spdx.json
+          ./artifacts/regsync-windows-amd64.spdx.json
 
     - name: Save artifacts
       if: github.ref == 'refs/heads/main' && matrix.gover == env.RELEASE_GO_VER

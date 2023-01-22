@@ -42,6 +42,7 @@ set -e
 git_root="$(git rev-parse --show-toplevel)"
 cd "${git_root}"
 export PATH="$PATH:${git_root}/bin"
+now_date="$(date +%Y-%m-%dT%H:%M:%SZ --utc)"
 vcs_date="$(date -d "@$(git log -1 --format=%at)" +%Y-%m-%dT%H:%M:%SZ --utc)"
 vcs_repo="https://github.com/regclient/regclient.git"
 vcs_sha="$(git rev-list -1 HEAD)"
@@ -70,7 +71,7 @@ if [ "${opt_c}" = "0" ]; then
   build_opts="$build_opts --no-cache"
 fi
 docker buildx build --platform="$platforms" -f "build/Dockerfile.${image}.buildkit" \
-  -o "type=oci,dest=output/${image}-${release}.tar" --metadata-file "output/${image}-${release}.json" \
+  -o "type=oci,dest=output/${image}-${release}.tar" \
   --target "release-${release}" ${buildx_opts} \
   --label org.opencontainers.image.created=${vcs_date} \
   --label org.opencontainers.image.source=${vcs_repo} \
@@ -78,6 +79,7 @@ docker buildx build --platform="$platforms" -f "build/Dockerfile.${image}.buildk
   --label org.opencontainers.image.revision=${vcs_sha} \
   ${build_opts} .
 echo "Importing tar"
+regctl manifest rm --referrers "ocidir://output/${image}:${release}" 2>/dev/null || true
 regctl image import "ocidir://output/${image}:${release}" "output/${image}-${release}.tar"
 echo "Modding image"
 regctl image mod \
@@ -96,6 +98,25 @@ if [ -n "$base_name" ] && [ -n "$base_digest" ]; then
     --annotation "oci.opencontainers.image.base.digest=${base_digest}" \
     >/dev/null
 fi
+
+# attach sboms to each platform
+echo "Attaching SBOMs"
+for digest in $(regctl manifest get ocidir://output/${image}:${release} --format '{{range .Manifests}}{{printf "%s\n" .Digest}}{{end}}'); do
+  regctl image copy ocidir://output/${image}@${digest} ocidir://output/${image}-sbom
+  syft packages -q "oci-dir:output/${image}-sbom" --name "docker:docker.io/regclient/${image}@${digest}" -o cyclonedx-json \
+    | regctl artifact put --subject "ocidir://output/${image}@${digest}" \
+        --artifact-type application/vnd.cyclonedx+json \
+        -m application/vnd.cyclonedx+json \
+        --annotation "org.opencontainers.artifact.created=${now_date}" \
+        --annotation "org.opencontainers.artifact.description=CycloneDX JSON SBOM"
+  syft packages -q "oci-dir:output/${image}-sbom" --name "docker:docker.io/regclient/${image}@${digest}" -o spdx-json \
+    | regctl artifact put --subject "ocidir://output/${image}@${digest}" \
+        --artifact-type application/spdx+json \
+        -m application/spdx+json \
+        --annotation "org.opencontainers.artifact.created=${now_date}" \
+        --annotation "org.opencontainers.artifact.description=SPDX JSON SBOM"
+  rm -r output/${image}-sbom
+done
 
 echo "\033[32mDigest for ${image}-${release}:\033[0m $(regctl image digest "ocidir://output/${image}:${release}")"
 
