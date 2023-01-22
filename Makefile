@@ -25,6 +25,14 @@ ifeq "$(strip $(VER_BUMP))" ''
 		-u "$(shell id -u):$(shell id -g)" \
 		$(VER_BUMP_CONTAINER)
 endif
+SYFT?=$(shell command -v syft 2>/dev/null)
+SYFT_CONTAINER?=anchore/syft:latest
+ifeq "$(strip $(SYFT))" ''
+	SYFT=docker run --rm \
+		-v "$(shell pwd)/:$(shell pwd)/" -w "$(shell pwd)" \
+		-u "$(shell id -u):$(shell id -g)" \
+		$(SYFT_CONTAINER)
+endif
 
 .PHONY: all fmt vet test lint lint-go lint-md vendor binaries docker artifacts artifact-pre plugin-user plugin-host .FORCE
 
@@ -91,7 +99,9 @@ artifacts/%: artifact-pre .FORCE
 	echo export GOOS=$${GOOS}; \
 	echo export GOARCH=$${GOARCH}; \
 	echo go build ${GO_BUILD_FLAGS} -o "$@" ./cmd/$${command}/; \
-	CGO_ENABLED=0 go build ${GO_BUILD_FLAGS} -o "$@" ./cmd/$${command}/
+	CGO_ENABLED=0 go build ${GO_BUILD_FLAGS} -o "$@" ./cmd/$${command}/; \
+	$(SYFT) packages -q "file:$@" --name "$${command}" -o cyclonedx-json >"artifacts/$${command}-$${platform}.cyclonedx.json"; \
+	$(SYFT) packages -q "file:$@" --name "$${command}" -o spdx-json >"artifacts/$${command}-$${platform}.spdx.json"
 
 plugin-user:
 	mkdir -p ${HOME}/.docker/cli-plugins/
