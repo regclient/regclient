@@ -110,6 +110,11 @@ plugin-user:
 plugin-host:
 	sudo cp docker-plugin/docker-regclient /usr/libexec/docker/cli-plugins/docker-regctl
 
+util-golang-update:
+	go get -u
+	go mod tidy
+	go mod vendor
+	
 util-version-check:
 	$(VER_BUMP) check
 
