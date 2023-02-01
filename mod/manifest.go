@@ -204,29 +204,44 @@ func WithManifestToOCI() Opts {
 			if dm.mod == deleted {
 				return nil
 			}
-			switch dm.m.GetDescriptor().MediaType {
-			case types.MediaTypeOCI1Manifest, types.MediaTypeOCI1ManifestList:
-				return nil
-			}
+			changed := false
 			om := dm.m.GetOrig()
 			if dm.m.IsList() {
 				ociM, err := manifest.OCIIndexFromAny(om)
 				if err != nil {
 					return err
 				}
-				om = ociM
+				if dm.m.GetDescriptor().MediaType != types.MediaTypeOCI1ManifestList {
+					changed = true
+					om = ociM
+				}
 			} else {
 				ociM, err := manifest.OCIManifestFromAny(om)
 				if err != nil {
 					return err
 				}
-				ociM.Config.MediaType = types.MediaTypeOCI1ImageConfig
+				if dm.m.GetDescriptor().MediaType != types.MediaTypeOCI1Manifest {
+					changed = true
+				}
+				if ociM.Config.MediaType != types.MediaTypeOCI1ImageConfig {
+					ociM.Config.MediaType = types.MediaTypeOCI1ImageConfig
+					changed = true
+				}
 				for i, l := range ociM.Layers {
 					if l.MediaType == types.MediaTypeDocker2LayerGzip {
 						ociM.Layers[i].MediaType = types.MediaTypeOCI1LayerGzip
+						changed = true
+					} else if l.MediaType == types.MediaTypeDocker2ForeignLayer {
+						ociM.Layers[i].MediaType = types.MediaTypeOCI1ForeignLayerGzip
+						changed = true
 					}
 				}
-				om = ociM
+				if changed {
+					om = ociM
+				}
+			}
+			if !changed {
+				return nil
 			}
 			newM, err := manifest.New(manifest.WithOrig(om))
 			if err != nil {
