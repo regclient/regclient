@@ -16,10 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        gover: ["1.17", "1.18", "1.19"]
+        gover: ["1.18", "1.19", "1.20"]
 
     env:
-      RELEASE_GO_VER: "1.19"
+      RELEASE_GO_VER: "1.20"
 
     steps:
     - name: "Set up Go ${{ matrix.gover }}"
@@ -45,6 +45,7 @@ jobs:
       run: make test
 
     - name: Linting
+      if: matrix.gover == env.RELEASE_GO_VER
       run: make lint
 
     - name: Build artifacts
