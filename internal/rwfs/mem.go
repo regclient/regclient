@@ -365,6 +365,20 @@ func (mfp *MemFileFP) Read(b []byte) (int, error) {
 	return lc, nil
 }
 
+func (mfp *MemFileFP) Seek(offset int64, whence int) (int64, error) {
+	switch whence {
+	case io.SeekStart:
+		mfp.cur = whence
+	case io.SeekEnd:
+		mfp.cur = int(int64(len(mfp.f.b)) + offset)
+	case io.SeekCurrent:
+		mfp.cur += int(offset)
+	default:
+		return -1, fmt.Errorf("unknown whence value: %d", whence)
+	}
+	return int64(mfp.cur), nil
+}
+
 func (mfp *MemFileFP) Stat() (fs.FileInfo, error) {
 	fi := NewFI(mfp.name, int64(len(mfp.f.b)), time.Time{}, 0)
 	return fi, nil
