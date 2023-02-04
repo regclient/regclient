@@ -96,6 +96,7 @@ func WithManifest(m manifest.Manifest) ManifestOpts {
 type ReferrerConfig struct {
 	FilterArtifactType string
 	FilterAnnotation   map[string]string
+	Platform           string
 }
 
 // ReferrerOpts is used to set options on referrer APIs
@@ -118,6 +119,13 @@ func WithReferrerAnnotations(annotations map[string]string) ReferrerOpts {
 				config.FilterAnnotation[k] = v
 			}
 		}
+	}
+}
+
+// WithReferrerPlatform gets referrers for a single platform from a multi-platform manifest
+func WithReferrerPlatform(platform string) ReferrerOpts {
+	return func(config *ReferrerConfig) {
+		config.Platform = platform
 	}
 }
 

@@ -20,6 +20,7 @@ import (
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	v1 "github.com/regclient/regclient/types/oci/v1"
+	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/spf13/cobra"
 )
@@ -92,6 +93,7 @@ var artifactOpts struct {
 	formatList     string
 	formatPut      string
 	outputDir      string
+	platform       string
 	refers         string
 	stripDirs      bool
 	subject        string
@@ -99,6 +101,7 @@ var artifactOpts struct {
 
 func init() {
 	artifactGetCmd.Flags().StringVarP(&artifactOpts.subject, "subject", "", "", "Get a referrer to the subject reference")
+	artifactGetCmd.Flags().StringVarP(&artifactOpts.platform, "platform", "p", "", "Specify platform of a subject (e.g. linux/amd64 or local)")
 	artifactGetCmd.Flags().StringVarP(&artifactOpts.filterAT, "filter-artifact-type", "", "", "Filter referrers by artifactType")
 	artifactGetCmd.Flags().StringArrayVarP(&artifactOpts.filterAnnot, "filter-annotation", "", []string{}, "Filter referrers by annotation (key=value)")
 	artifactGetCmd.Flags().StringVarP(&artifactOpts.artifactConfig, "config-file", "", "", "Config filename to output")
@@ -109,12 +112,13 @@ func init() {
 	})
 	artifactGetCmd.Flags().StringVarP(&artifactOpts.outputDir, "output", "o", "", "Output directory for multiple artifacts")
 	artifactGetCmd.Flags().BoolVarP(&artifactOpts.stripDirs, "strip-dirs", "", false, "Strip directories from filenames in output dir")
-	artifactGetCmd.Flags().StringVarP(&artifactOpts.refers, "refers", "", "", "EXPERIMENTAL: Get a referrer to the reference")
+	artifactGetCmd.Flags().StringVarP(&artifactOpts.refers, "refers", "", "", "Deprecated: Get a referrer to the reference")
 	artifactGetCmd.Flags().MarkHidden("refers")
 
 	artifactListCmd.Flags().StringVarP(&artifactOpts.filterAT, "filter-artifact-type", "", "", "Filter descriptors by artifactType")
 	artifactListCmd.Flags().StringArrayVarP(&artifactOpts.filterAnnot, "filter-annotation", "", []string{}, "Filter descriptors by annotation (key=value)")
 	artifactListCmd.Flags().StringVarP(&artifactOpts.formatList, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+	artifactListCmd.Flags().StringVarP(&artifactOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 
 	artifactPutCmd.Flags().StringVarP(&artifactOpts.artifactMT, "media-type", "", types.MediaTypeOCI1Manifest, "Manifest media-type")
 	artifactPutCmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -135,6 +139,7 @@ func init() {
 	artifactPutCmd.Flags().StringVarP(&artifactOpts.formatPut, "format", "", "", "Format output with go template syntax")
 	artifactPutCmd.Flags().StringVarP(&artifactOpts.subject, "subject", "", "", "Set the subject to a reference (used for referrer queries)")
 	artifactPutCmd.Flags().BoolVarP(&artifactOpts.stripDirs, "strip-dirs", "", false, "Strip directories from filenames in artifact")
+	artifactPutCmd.Flags().StringVarP(&artifactOpts.platform, "platform", "p", "", "Specify platform of a subject (e.g. linux/amd64 or local)")
 	artifactPutCmd.Flags().StringVarP(&artifactOpts.refers, "refers", "", "", "EXPERIMENTAL: Set a referrer to the reference")
 	artifactPutCmd.Flags().MarkHidden("refers")
 
@@ -188,6 +193,9 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 				}
 			}
 			referrerOpts = append(referrerOpts, scheme.WithReferrerAnnotations(af))
+		}
+		if artifactOpts.platform != "" {
+			referrerOpts = append(referrerOpts, scheme.WithReferrerPlatform(artifactOpts.platform))
 		}
 
 		rl, err := rc.ReferrerList(ctx, rSubject, referrerOpts...)
@@ -399,6 +407,9 @@ func runArtifactList(cmd *cobra.Command, args []string) error {
 		}
 		referrerOpts = append(referrerOpts, scheme.WithReferrerAnnotations(af))
 	}
+	if artifactOpts.platform != "" {
+		referrerOpts = append(referrerOpts, scheme.WithReferrerPlatform(artifactOpts.platform))
+	}
 
 	rl, err := rc.ReferrerList(ctx, rSubject, referrerOpts...)
 	if err != nil {
@@ -494,8 +505,24 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("unable to find subject manifest: %w", err)
 		}
-		d := smh.GetDescriptor()
-		subjectDesc = &types.Descriptor{MediaType: d.MediaType, Digest: d.Digest, Size: d.Size}
+		if smh.IsList() && artifactOpts.platform != "" {
+			sml, err := rc.ManifestGet(ctx, rSubject)
+			if err != nil {
+				return fmt.Errorf("unable to get subject manifest: %w", err)
+			}
+			plat, err := platform.Parse(artifactOpts.platform)
+			if err != nil {
+				return fmt.Errorf("failed to parse platform: %w", err)
+			}
+			d, err := manifest.GetPlatformDesc(sml, &plat)
+			if err != nil {
+				return fmt.Errorf("failed to get platform descriptor: %w", err)
+			}
+			subjectDesc = &types.Descriptor{MediaType: d.MediaType, Digest: d.Digest, Size: d.Size}
+		} else {
+			d := smh.GetDescriptor()
+			subjectDesc = &types.Descriptor{MediaType: d.MediaType, Digest: d.Digest, Size: d.Size}
+		}
 	}
 
 	// read config, or initialize to an empty json config
