@@ -960,7 +960,7 @@ func (rc *RegClient) imageImportDockerAddLayerHandlers(ctx context.Context, ref 
 	trd.dockerManifest.Layers = make([]types.Descriptor, len(trd.dockerManifestList[0].Layers))
 
 	// add handler for config
-	trd.handlers[trd.dockerManifestList[0].Config] = func(header *tar.Header, trd *tarReadData) error {
+	trd.handlers[filepath.Clean(trd.dockerManifestList[0].Config)] = func(header *tar.Header, trd *tarReadData) error {
 		// upload blob, digest is unknown
 		d, err := rc.BlobPut(ctx, ref, types.Descriptor{Size: header.Size}, trd.tr)
 		if err != nil {
@@ -978,7 +978,7 @@ func (rc *RegClient) imageImportDockerAddLayerHandlers(ctx context.Context, ref 
 	// add handlers for each layer
 	for i, layerFile := range trd.dockerManifestList[0].Layers {
 		func(i int) {
-			trd.handlers[layerFile] = func(header *tar.Header, trd *tarReadData) error {
+			trd.handlers[filepath.Clean(layerFile)] = func(header *tar.Header, trd *tarReadData) error {
 				// ensure blob is compressed with gzip to match media type
 				gzipR, err := archive.Compress(trd.tr, archive.CompressGzip)
 				if err != nil {
@@ -1271,14 +1271,15 @@ func (trd *tarReadData) tarReadAll(rs io.ReadSeeker) error {
 			} else if err != nil {
 				return err
 			}
+			name := filepath.Clean(header.Name)
 			// if a handler exists, run it, remove handler, and check if we are done
-			if trd.handlers[header.Name] != nil {
-				err = trd.handlers[header.Name](header, trd)
+			if trd.handlers[name] != nil {
+				err = trd.handlers[name](header, trd)
 				if err != nil {
 					return err
 				}
-				delete(trd.handlers, header.Name)
-				trd.processed[header.Name] = true
+				delete(trd.handlers, name)
+				trd.processed[name] = true
 				// return if last handler processed
 				if len(trd.handlers) == 0 {
 					return nil
@@ -1287,7 +1288,7 @@ func (trd *tarReadData) tarReadAll(rs io.ReadSeeker) error {
 		}
 		// if entire file read without adding a new handler, fail
 		if !trd.handleAdded {
-			return fmt.Errorf("unable to export all files from tar: %w", types.ErrNotFound)
+			return fmt.Errorf("unable to read all files from tar: %w", types.ErrNotFound)
 		}
 	}
 }
@@ -1360,5 +1361,5 @@ func (td *tarWriteData) tarWriteFileJSON(filename string, data interface{}) erro
 }
 
 func tarOCILayoutDescPath(d types.Descriptor) string {
-	return fmt.Sprintf("blobs/%s/%s", d.Digest.Algorithm(), d.Digest.Encoded())
+	return filepath.Clean(fmt.Sprintf("blobs/%s/%s", d.Digest.Algorithm(), d.Digest.Encoded()))
 }
