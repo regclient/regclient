@@ -72,7 +72,7 @@ var imageDigestCmd = &cobra.Command{
 	Short:             "show digest for pinning, same as \"manifest digest\"",
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: completeArgTag,
-	RunE:              runManifestDigest,
+	RunE:              runManifestHead,
 }
 var imageExportCmd = &cobra.Command{
 	Use:   "export <image_ref> [filename]",
@@ -194,7 +194,7 @@ func init() {
 	imageManifestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Output manifest list if available (enabled by default)")
 	imageManifestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageManifestCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
-	imageManifestCmd.Flags().StringVarP(&manifestOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax (use \"raw-body\" for the original manifest)")
+	imageManifestCmd.Flags().StringVarP(&manifestOpts.formatGet, "format", "", "{{printPretty .}}", "Format output with go template syntax (use \"raw-body\" for the original manifest)")
 	imageManifestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	imageManifestCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 	imageManifestCmd.Flags().MarkHidden("list")

@@ -64,6 +64,15 @@ var blobGetFileCmd = &cobra.Command{
 	ValidArgs: []string{}, // do not auto complete repository, digest, or filenames
 	RunE:      runBlobGetFile,
 }
+var blobHeadCmd = &cobra.Command{
+	Use:       "head <repository> <digest>",
+	Aliases:   []string{"digest"},
+	Short:     "http head request for a blob",
+	Long:      `Shows the headers for a blob head request.`,
+	Args:      cobra.ExactArgs(2),
+	ValidArgs: []string{}, // do not auto complete repository or digest
+	RunE:      runBlobHead,
+}
 var blobPutCmd = &cobra.Command{
 	Use:     "put <repository>",
 	Aliases: []string{"push"},
@@ -79,8 +88,9 @@ var blobOpts struct {
 	diffCtx        int
 	diffFullCtx    bool
 	diffIgnoreTime bool
-	format         string
+	formatGet      string
 	formatFile     string
+	formatHead     string
 	formatPut      string
 	mt             string
 	digest         string
@@ -94,7 +104,7 @@ func init() {
 	blobDiffLayerCmd.Flags().BoolVarP(&blobOpts.diffFullCtx, "context-full", "", false, "Show all lines of context")
 	blobDiffLayerCmd.Flags().BoolVarP(&blobOpts.diffIgnoreTime, "ignore-timestamp", "", false, "Ignore timestamps on files")
 
-	blobGetCmd.Flags().StringVarP(&blobOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+	blobGetCmd.Flags().StringVarP(&blobOpts.formatGet, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	blobGetCmd.Flags().StringVarP(&blobOpts.mt, "media-type", "", "", "Set the requested mediaType (deprecated)")
 	blobGetCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 	blobGetCmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -105,6 +115,9 @@ func init() {
 	blobGetCmd.Flags().MarkHidden("media-type")
 
 	blobGetFileCmd.Flags().StringVarP(&blobOpts.formatFile, "format", "", "", "Format output with go template syntax")
+
+	blobHeadCmd.Flags().StringVarP(&blobOpts.formatHead, "format", "", "", "Format output with go template syntax")
+	blobHeadCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
 	blobPutCmd.Flags().StringVarP(&blobOpts.mt, "content-type", "", "", "Set the requested content type (deprecated)")
 	blobPutCmd.Flags().StringVarP(&blobOpts.digest, "digest", "", "", "Set the expected digest")
@@ -121,6 +134,7 @@ func init() {
 	blobCmd.AddCommand(blobDiffLayerCmd)
 	blobCmd.AddCommand(blobGetCmd)
 	blobCmd.AddCommand(blobGetFileCmd)
+	blobCmd.AddCommand(blobHeadCmd)
 	blobCmd.AddCommand(blobPutCmd)
 	rootCmd.AddCommand(blobCmd)
 }
@@ -285,20 +299,20 @@ func runBlobGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	switch blobOpts.format {
+	switch blobOpts.formatGet {
 	case "raw":
-		blobOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .RawBody}}"
+		blobOpts.formatGet = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .RawBody}}"
 	case "rawBody", "raw-body", "body":
 		_, err = io.Copy(os.Stdout, blob)
 		return err
 	case "rawHeaders", "raw-headers", "headers":
-		blobOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
+		blobOpts.formatGet = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	case "{{printPretty .}}":
 		_, err = io.Copy(os.Stdout, blob)
 		return err
 	}
 
-	return template.Writer(os.Stdout, blobOpts.format, blob)
+	return template.Writer(os.Stdout, blobOpts.formatGet, blob)
 }
 
 func runBlobGetFile(cmd *cobra.Command, args []string) error {
@@ -359,6 +373,37 @@ func runBlobGetFile(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	return nil
+}
+
+func runBlobHead(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	r, err := ref.New(args[0])
+	if err != nil {
+		return err
+	}
+	d, err := digest.Parse(args[1])
+	if err != nil {
+		return err
+	}
+	rc := newRegClient()
+	defer rc.Close(ctx, r)
+
+	log.WithFields(logrus.Fields{
+		"host":       r.Registry,
+		"repository": r.Repository,
+		"digest":     args[1],
+	}).Debug("Blob head")
+	blob, err := rc.BlobHead(ctx, r, types.Descriptor{Digest: d})
+	if err != nil {
+		return err
+	}
+
+	switch blobOpts.formatHead {
+	case "", "rawHeaders", "raw-headers", "headers":
+		blobOpts.formatHead = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
+	}
+
+	return template.Writer(os.Stdout, blobOpts.formatHead, blob)
 }
 
 func runBlobPut(cmd *cobra.Command, args []string) error {

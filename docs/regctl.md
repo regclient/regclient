@@ -178,8 +178,8 @@ Usage:
 Available Commands:
   delete      delete a manifest
   diff        compare manifests
-  digest      retrieve digest of manifest
   get         retrieve manifest or manifest list
+  head        http head request for manifest
   put         push manifest or manifest list
 ```
 
@@ -191,10 +191,12 @@ Use `tag delete` to remove a single tag.
 The `diff` command compares two manifests and shows what has changed between these manifests.
 See also the `blob diff-config` and `blob diff-layer` commands.
 
-The `digest` command is useful to pin the image used within your deployment to an immutable sha256 checksum.
-
 The `get` command retrieves the manifest from the registry, showing individual components of an image.
 This is also useful for analyzing multi-platform manifest lists to see what platforms are available for a particular image.
+
+The `head` command defaults to returning the digest.
+This is useful to pin the image used within your deployment to an immutable sha256 checksum.
+Other headers can be retrieved with `--format headers`.
 
 The `put` command uploads the manifest to the registry.
 This can be used to create or modify an image.
@@ -213,6 +215,7 @@ Available Commands:
   diff-config diff two image configs
   diff-layer  diff two tar layers
   get         download a blob/layer
+  head        http head request for a blob
   put         upload a blob/layer
 ```
 
@@ -284,6 +287,9 @@ $ regctl blob get busybox sha256:6858809bf669cc5da7cb6af83d0fae838284d12e1be0182
 ```
 
 The `get-file` command returns the contents of a file from a layer.
+
+The `head` command performs an http head request.
+This is useful for checking the existence of a blob and checking headers for the size of the blob.
 
 The `put` command uploads a blob to the registry.
 The digest of the blob is output.
