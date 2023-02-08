@@ -19,6 +19,7 @@ import (
 	"github.com/regclient/regclient/types/docker/schema2"
 	"github.com/regclient/regclient/types/manifest"
 	v1 "github.com/regclient/regclient/types/oci/v1"
+	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/sirupsen/logrus"
 )
@@ -28,6 +29,7 @@ func TestReferrer(t *testing.T) {
 	ctx := context.Background()
 	repoPath := "/proj"
 	tagV1 := "v1"
+	tagV1List := "v1-list"
 	extraAnnot := "org.opencontainers.artifact.sbom.format"
 	extraValue := "json"
 	extraValue2 := "x509"
@@ -35,6 +37,7 @@ func TestReferrer(t *testing.T) {
 	digest2 := digest.FromString("example2")
 	configMTA := "application/vnd.example.sbom"
 	configMTB := "application/vnd.example.sig"
+	platStr := "linux/amd64"
 	// manifest being referenced
 	m := schema2.Manifest{
 		Versioned: schema2.ManifestSchemaVersion,
@@ -57,6 +60,36 @@ func TestReferrer(t *testing.T) {
 	}
 	mDigest := digest.FromBytes(mBody)
 	mLen := len(mBody)
+	// manifest list
+	mList := schema2.ManifestList{
+		Versioned: schema2.ManifestListSchemaVersion,
+		Manifests: []types.Descriptor{
+			{
+				MediaType: types.MediaTypeDocker2Manifest,
+				Digest:    mDigest,
+				Size:      int64(mLen),
+				Platform: &platform.Platform{
+					OS:           "linux",
+					Architecture: "amd64",
+				},
+			},
+			{
+				MediaType: types.MediaTypeDocker2Manifest,
+				Digest:    digest.FromString("missing"),
+				Size:      int64(1234),
+				Platform: &platform.Platform{
+					OS:           "linux",
+					Architecture: "arm64",
+				},
+			},
+		},
+	}
+	mlBody, err := json.Marshal(mList)
+	if err != nil {
+		t.Errorf("Failed to marshal manifest list: %v", err)
+	}
+	mlDigest := digest.FromBytes(mlBody)
+	mlLen := len(mlBody)
 	// artifact being attached
 	artifactAnnot := map[string]string{
 		extraAnnot: extraValue,
@@ -233,6 +266,37 @@ func TestReferrer(t *testing.T) {
 					"Docker-Content-Digest": []string{mDigest.String()},
 				},
 				Body: mBody,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "Head",
+				Method: "HEAD",
+				Path:   "/v2" + repoPath + "/manifests/" + tagV1List,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", mlLen)},
+					"Content-Type":          []string{types.MediaTypeDocker2ManifestList},
+					"Docker-Content-Digest": []string{mlDigest.String()},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "Get",
+				Method: "GET",
+				Path:   "/v2" + repoPath + "/manifests/" + tagV1List,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", mlLen)},
+					"Content-Type":          []string{types.MediaTypeDocker2ManifestList},
+					"Docker-Content-Digest": []string{mlDigest.String()},
+				},
+				Body: mlBody,
 			},
 		},
 		{
@@ -1040,6 +1104,22 @@ func TestReferrer(t *testing.T) {
 		}
 		if len(rl.Descriptors) > 0 {
 			t.Errorf("unexpected descriptors: %v", rl.Descriptors)
+			return
+		}
+	})
+	t.Run("List for platform", func(t *testing.T) {
+		r, err := ref.New(tsURLAPI.Host + repoPath + ":" + tagV1List)
+		if err != nil {
+			t.Errorf("Failed creating getRef: %v", err)
+			return
+		}
+		rl, err := reg.ReferrerList(ctx, r, scheme.WithReferrerPlatform(platStr))
+		if err != nil {
+			t.Errorf("Failed running ReferrerList: %v", err)
+			return
+		}
+		if len(rl.Descriptors) != 2 {
+			t.Errorf("descriptor list expected 2, received %d", len(rl.Descriptors))
 			return
 		}
 	})

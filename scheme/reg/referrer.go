@@ -13,6 +13,7 @@ import (
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	v1 "github.com/regclient/regclient/types/oci/v1"
+	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/regclient/regclient/types/referrer"
 )
@@ -26,6 +27,30 @@ func (reg *Reg) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Refe
 	rl := referrer.ReferrerList{
 		Subject: r,
 		Tags:    []string{},
+	}
+	// select a platform from a manifest list
+	if config.Platform != "" {
+		m, err := reg.ManifestHead(ctx, r)
+		if err != nil {
+			return rl, err
+		}
+		if m.IsList() {
+			m, err = reg.ManifestGet(ctx, r)
+			if err != nil {
+				return rl, err
+			}
+			plat, err := platform.Parse(config.Platform)
+			if err != nil {
+				return rl, err
+			}
+			d, err := manifest.GetPlatformDesc(m, &plat)
+			if err != nil {
+				return rl, err
+			}
+			r.Digest = d.Digest.String()
+		} else {
+			r.Digest = m.GetDescriptor().Digest.String()
+		}
 	}
 	// if ref is a tag, run a head request for the digest
 	if r.Digest == "" {
