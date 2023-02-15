@@ -271,6 +271,15 @@ func TestReferrer(t *testing.T) {
 			t.Errorf("unexpected descriptors")
 			return
 		}
+		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerAnnotations(map[string]string{extraAnnot: ""}))
+		if err != nil {
+			t.Errorf("Failed running ReferrerList: %v", err)
+			return
+		}
+		if len(rl.Descriptors) != 2 {
+			t.Errorf("descriptor list length, expected 2, received %d", len(rl.Descriptors))
+			return
+		}
 	})
 	// list platform=linux/amd64
 	t.Run("List Annotation for Platform", func(t *testing.T) {

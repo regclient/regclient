@@ -332,6 +332,7 @@ Available Commands:
   get         download artifacts
   list        list artifacts that have a subject to the given reference
   put         upload artifacts
+  tree        tree listing of artifacts
 ```
 
 The `get` command retrieves an artifact from the registry.
@@ -355,6 +356,9 @@ A single file may be pushed using stdin.
 To set annotations on the manifest, use `--annotation name=value`, and repeat the flag for additional annotations.
 The format option includes `.Manifest` which supports methods from [manifest.Manifest](https://pkg.go.dev/github.com/regclient/regclient/types/manifest#Manifest).
 
+The `tree` command is useful for visualizing a multi-level structure of manifests and artifacts referring to the manifests.
+Referrers may be filtered by artifact type and annotation with `--filter-artifact-type` and `--filter-annotation`.
+
 The following demonstrates uploading a simple artifact from stdin/stdout:
 
 ```shell
@@ -365,24 +369,24 @@ $ regctl artifact put \
 Test artifact from regctl.
 This follows the OCI artifact format
 EOF
-sha256:36484d44383fc9ffd34be11da4a617a96cb06b912c98114bfdb6ad2dddd443e2
+sha256:5ff19e3084ae3e7b2317904db06012a71323fcae0a29e31373031ae1446384f6
 
 $ regctl manifest get localhost:5000/artifact:demo
 Name:        localhost:5000/artifact:demo
 MediaType:   application/vnd.oci.image.manifest.v1+json
-Digest:      sha256:36484d44383fc9ffd34be11da4a617a96cb06b912c98114bfdb6ad2dddd443e2
-Annotations: 
+Digest:      sha256:5ff19e3084ae3e7b2317904db06012a71323fcae0a29e31373031ae1446384f6
+Annotations:
   demo:      true
   format:    oci
 Total Size:  64B
-             
-Config:      
+
+Config:
   Digest:    sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a
-  MediaType: application/vnd.unknown.config.v1+json
+  MediaType: application/vnd.unknown.config+json
   Size:      2B
-             
-Layers:      
-             
+
+Layers:
+
   Digest:    sha256:7f8028bb058b780630dcd31cde93cb3efe96d60108ffbfe2727e4e76fdf4c9dc
   MediaType: application/octet-stream
   Size:      64B
@@ -446,6 +450,25 @@ $ regctl artifact get \
 Version: 1
 Type: OCI
 Contains: Image
+```
+
+The `tree` command shows the multi-platform image and the referrers on the root of the tree.
+
+```shell
+$ regctl artifact tree localhost:5000/artifacts:v1
+Ref: localhost:5000/artifacts:v1
+Digest: sha256:bc41182d7ef5ffc53a40b044e725193bc10142a1243f395ee852a8d9730fc2ad
+Children:
+  - sha256:1304f174557314a7ed9eddb4eab12fed12cb0cd9809e4c28f29af86979a3c870 [linux/amd64]
+  - sha256:5da989a9a3a08357bc7c00bd46c3ed782e1aeefc833e0049e6834ec1dcad8a42 [linux/arm/v6]
+  - sha256:0c673ee68853a04014c0c623ba5ee21ee700e1d71f7ac1160ddb2e31c6fdbb18 [linux/arm/v7]
+  - sha256:ed73e2bee79b3428995b16fce4221fc715a849152f364929cdccdc83db5f3d5c [linux/arm64]
+  - sha256:1d96e60e5270815238e999aed0ae61d22ac6f5e5f976054b24796d0e0158b39c [linux/386]
+  - sha256:fa30af02cc8c339dd7ffecb0703cd4a3db175e56875c413464c5ba46821253a8 [linux/ppc64le]
+  - sha256:c2046a6c3d2db4f75bfb8062607cc8ff47896f2d683b7f18fe6b6cf368af3c60 [linux/s390x]
+Referrers:
+  - sha256:80024f564d15a8e3593aac53d2ebaf62cad3db0b873ab66946b016cd65cc5728: application/vnd.example.sbom
+  - sha256:70440b27e1ebccf4627b10100421db022202a06a43d218ebadfdfd64c92f4c94: application/vnd.example.sbom
 ```
 
 ## Format Flag
