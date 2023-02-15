@@ -1055,6 +1055,15 @@ func TestReferrer(t *testing.T) {
 			t.Errorf("unexpected descriptors: %v", rl.Descriptors)
 			return
 		}
+		rl, err = reg.ReferrerList(ctx, r, scheme.WithReferrerAnnotations(map[string]string{extraAnnot: ""}))
+		if err != nil {
+			t.Errorf("Failed running ReferrerList: %v", err)
+			return
+		}
+		if len(rl.Descriptors) != 2 {
+			t.Errorf("descriptor list mismatch: %v", rl.Descriptors)
+			return
+		}
 	})
 
 	t.Run("List with artifact filter Ext API", func(t *testing.T) {
