@@ -29,6 +29,7 @@ func TestManifest(t *testing.T) {
 	getTag := "get"
 	headTag := "head"
 	noheadTag := "nohead"
+	nodigestTag := "nodigest"
 	missingTag := "missing"
 	digest1 := digest.FromString("example1")
 	digest2 := digest.FromString("example2")
@@ -99,6 +100,36 @@ func TestManifest(t *testing.T) {
 					"Content-Length":        {fmt.Sprintf("%d", mLen)},
 					"Content-Type":          []string{types.MediaTypeDocker2Manifest},
 					"Docker-Content-Digest": []string{mDigest.String()},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "Get nodigest",
+				Method: "GET",
+				Path:   "/v2" + repoPath + "/manifests/" + nodigestTag,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", mLen)},
+					"Content-Type":          []string{types.MediaTypeDocker2Manifest},
+					"Docker-Content-Digest": []string{mDigest.String()},
+				},
+				Body: mBody,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "Head nodigest",
+				Method: "HEAD",
+				Path:   "/v2" + repoPath + "/manifests/" + nodigestTag,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", mLen)},
+					"Content-Type":   []string{types.MediaTypeDocker2Manifest},
 				},
 			},
 		},
@@ -202,6 +233,23 @@ func TestManifest(t *testing.T) {
 			t.Errorf("Failed creating getRef: %v", err)
 		}
 		mHead, err := rc.ManifestHead(ctx, headRef)
+		if err != nil {
+			t.Errorf("Failed running ManifestHead: %v", err)
+			return
+		}
+		if manifest.GetMediaType(mHead) != types.MediaTypeDocker2Manifest {
+			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mHead))
+		}
+		if mHead.GetDescriptor().Digest != mDigest {
+			t.Errorf("Unexpected digest: %s", mHead.GetDescriptor().Digest.String())
+		}
+	})
+	t.Run("Head no digest", func(t *testing.T) {
+		headRef, err := ref.New(tsURL.Host + repoPath + ":" + nodigestTag)
+		if err != nil {
+			t.Errorf("Failed creating getRef: %v", err)
+		}
+		mHead, err := rc.ManifestHead(ctx, headRef, WithManifestRequireDigest())
 		if err != nil {
 			t.Errorf("Failed running ManifestHead: %v", err)
 			return

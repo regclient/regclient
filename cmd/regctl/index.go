@@ -350,7 +350,7 @@ func indexBuildDescList(ctx context.Context, rc *regclient.RegClient, r ref.Ref)
 		if err != nil {
 			return nil, err
 		}
-		mCopy, err := rc.ManifestHead(ctx, srcRef)
+		mCopy, err := rc.ManifestHead(ctx, srcRef, regclient.WithManifestRequireDigest())
 		if err != nil {
 			return nil, err
 		}

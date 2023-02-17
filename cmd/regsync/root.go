@@ -574,7 +574,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 
 // process a sync step
 func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action string) error {
-	mSrc, err := rc.ManifestHead(ctx, src)
+	mSrc, err := rc.ManifestHead(ctx, src, regclient.WithManifestRequireDigest())
 	if err != nil && errors.Is(err, types.ErrUnsupportedAPI) {
 		mSrc, err = rc.ManifestGet(ctx, src)
 	}
@@ -585,7 +585,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 		}).Error("Failed to lookup source manifest")
 		return err
 	}
-	mTgt, err := rc.ManifestHead(ctx, tgt)
+	mTgt, err := rc.ManifestHead(ctx, tgt, regclient.WithManifestRequireDigest())
 	tgtExists := (err == nil)
 	tgtMatches := false
 	if err == nil && manifest.GetDigest(mSrc).String() == manifest.GetDigest(mTgt).String() {

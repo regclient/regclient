@@ -390,7 +390,7 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		defer rdr.Close()
-		io.Copy(os.Stdout, rdr)
+		io.Copy(cmd.OutOrStdout(), rdr)
 	}
 
 	return nil
@@ -440,7 +440,7 @@ func runArtifactList(cmd *cobra.Command, args []string) error {
 	case "rawHeaders", "raw-headers", "headers":
 		artifactOpts.formatList = "{{ range $key,$vals := .Manifest.RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
-	return template.Writer(os.Stdout, artifactOpts.formatList, rl)
+	return template.Writer(cmd.OutOrStdout(), artifactOpts.formatList, rl)
 }
 
 func runArtifactPut(cmd *cobra.Command, args []string) error {
@@ -518,7 +518,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 
 	var subjectDesc *types.Descriptor
 	if !rSubject.IsZero() {
-		smh, err := rc.ManifestHead(ctx, rSubject)
+		smh, err := rc.ManifestHead(ctx, rSubject, regclient.WithManifestRequireDigest())
 		if err != nil {
 			return fmt.Errorf("unable to find subject manifest: %w", err)
 		}
@@ -711,7 +711,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	if artifactOpts.byDigest && artifactOpts.formatPut == "" {
 		artifactOpts.formatPut = "{{ printf \"%s\\n\" .Manifest.GetDescriptor.Digest }}"
 	}
-	return template.Writer(os.Stdout, artifactOpts.formatPut, result)
+	return template.Writer(cmd.OutOrStdout(), artifactOpts.formatPut, result)
 }
 
 func runArtifactTree(cmd *cobra.Command, args []string) error {

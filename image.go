@@ -200,7 +200,7 @@ func (rc *RegClient) ImageCheckBase(ctx context.Context, r ref.Ref, opts ...Imag
 
 	// if the digest is available, check if that matches the base name
 	if opt.checkBaseDigest != "" {
-		baseMH, err := rc.ManifestHead(ctx, baseR)
+		baseMH, err := rc.ManifestHead(ctx, baseR, WithManifestRequireDigest())
 		if err != nil {
 			return err
 		}
@@ -398,7 +398,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 		opt.forceRecursive = true
 	}
 	// check if source and destination already match
-	mdh, errD := rc.ManifestHead(ctx, refTgt)
+	mdh, errD := rc.ManifestHead(ctx, refTgt, WithManifestRequireDigest())
 	if opt.forceRecursive {
 		// copy forced, unable to run below skips
 	} else if errD == nil && refTgt.Digest != "" && digest.Digest(refTgt.Digest) == mdh.GetDescriptor().Digest {
@@ -408,7 +408,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 		}).Info("Copy not needed, target already up to date")
 		return nil
 	} else if errD == nil && refTgt.Digest == "" {
-		msh, errS := rc.ManifestHead(ctx, refSrc)
+		msh, errS := rc.ManifestHead(ctx, refSrc, WithManifestRequireDigest())
 		if errS == nil && msh.GetDescriptor().Digest == mdh.GetDescriptor().Digest {
 			rc.log.WithFields(logrus.Fields{
 				"source": refSrc.Reference,
