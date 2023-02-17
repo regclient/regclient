@@ -10,8 +10,9 @@ import (
 )
 
 type manifestOpt struct {
-	d          types.Descriptor
-	schemeOpts []scheme.ManifestOpts
+	d             types.Descriptor
+	schemeOpts    []scheme.ManifestOpts
+	requireDigest bool
 }
 
 // ManifestOpts define options for the Manifest* commands
@@ -43,6 +44,13 @@ func WithManifestChild() ManifestOpts {
 func WithManifestDesc(d types.Descriptor) ManifestOpts {
 	return func(opts *manifestOpt) {
 		opts.d = d
+	}
+}
+
+// WithManifestRequireDigest falls back from a HEAD to a GET request when digest headers aren't received.
+func WithManifestRequireDigest() ManifestOpts {
+	return func(opts *manifestOpt) {
+		opts.requireDigest = true
 	}
 }
 
@@ -86,12 +94,23 @@ func (rc *RegClient) ManifestGet(ctx context.Context, r ref.Ref, opts ...Manifes
 }
 
 // ManifestHead queries for the existence of a manifest and returns metadata (digest, media-type, size)
-func (rc *RegClient) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest, error) {
+func (rc *RegClient) ManifestHead(ctx context.Context, r ref.Ref, opts ...ManifestOpts) (manifest.Manifest, error) {
+	opt := manifestOpt{schemeOpts: []scheme.ManifestOpts{}}
+	for _, fn := range opts {
+		fn(&opt)
+	}
 	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
 		return nil, err
 	}
-	return schemeAPI.ManifestHead(ctx, r)
+	m, err := schemeAPI.ManifestHead(ctx, r)
+	if err != nil {
+		return m, err
+	}
+	if opt.requireDigest && m.GetDescriptor().Digest.String() == "" {
+		m, err = schemeAPI.ManifestGet(ctx, r)
+	}
+	return m, err
 }
 
 // ManifestPut pushes a manifest
