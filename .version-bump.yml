@@ -10,6 +10,12 @@ files:
   ".github/workflows/*.yml":
     scans:
       - gha-uses
+  "Makefile":
+    scans:
+      - makefile-staticcheck
+      - makefile-syft-version
+      - makefile-syft-version2
+      - makefile-syft-digest
 
 scans:
   docker-arg-alpine:
@@ -57,13 +63,60 @@ scans:
     source: "gha-uses"
     args:
       regexp: '^\s+-?\s+uses: (?P<Repo>[^@]+)@(?P<Version>v\d+)\s*$'
+  makefile-staticcheck:
+    type: "regexp"
+    source: "git-tag-semver"
+    args:
+      regexp: '^STATICCHECK_VER\?=(?P<Version>v[0-9\.]+)\s*$'
+      repo: "github.com/dominikh/go-tools"
+  makefile-syft-version:
+    type: "regexp"
+    source: "registry-tag-arg-semver"
+    args:
+      regexp: '^SYFT_VERSION\?=(?P<Version>v[0-9\.]+)\s*$'
+      repo: "anchore/syft"
+  makefile-syft-version2:
+    type: "regexp"
+    source: "registry-tag-match-semver"
+    args:
+      regexp: '^SYFT_CONTAINER\?=(?P<Repo>[^:]*):(?P<Version>v[0-9\.]+)@(?P<Digest>sha256:[0-9a-f]+)\s*$'
+  makefile-syft-digest:
+    type: "regexp"
+    source: "registry-digest-match"
+    args:
+      regexp: '^SYFT_CONTAINER\?=(?P<Image>[^:]*):(?P<Tag>v[0-9\.]+)@(?P<Version>sha256:[0-9a-f]+)\s*$'
 
 sources:
+  registry-tag-arg-semver:
+    type: "registry"
+    key: "{{ .ScanArgs.repo }}"
+    args:
+      type: "tag"
+      repo: "{{ .ScanArgs.repo }}"
+    filter:
+      expr: '^v[0-9]+\.[0-9]+\.[0-9]+$'
+    sort:
+      method: "semver"
+  registry-tag-match-semver:
+    type: "registry"
+    key: "{{ .ScanMatch.Repo }}"
+    args:
+      type: "tag"
+      repo: "{{ .ScanMatch.Repo }}"
+    filter:
+      expr: '^v[0-9]+\.[0-9]+\.[0-9]+$'
+    sort:
+      method: "semver"
   registry-digest-arg:
     type: "registry"
     key: "{{ .ScanArgs.image }}:{{.ScanMatch.Tag}}"
     args:
       image: "{{ .ScanArgs.image }}:{{.ScanMatch.Tag}}"
+  registry-digest-match:
+    type: "registry"
+    key: "{{ .ScanMatch.Image }}:{{.ScanMatch.Tag}}"
+    args:
+      image: "{{ .ScanMatch.Image }}:{{.ScanMatch.Tag}}"
   gha-uses:
     type: "git"
     key: "{{ .ScanMatch.Repo }}"
@@ -72,6 +125,8 @@ sources:
       url: "https://github.com/{{ .ScanMatch.Repo }}.git"
     filter:
       expr: '^v\d+$'
+    sort:
+      method: "semver"
   git-commit:
     type: "git"
     key: "{{ .ScanArgs.repo }}:{{ .ScanArgs.ref }}"
@@ -80,3 +135,13 @@ sources:
       url: "{{ .ScanArgs.repo }}"
     filter:
       expr: '^{{ .ScanArgs.ref }}$'
+  git-tag-semver:
+    type: "git"
+    key: "{{ .ScanArgs.repo }}"
+    args:
+      type: "tag"
+      url: "https://{{ .ScanArgs.repo }}.git"
+    filter:
+      expr: '^v[0-9]+\.[0-9]+\.[0-9]+$'
+    sort:
+      method: "semver"

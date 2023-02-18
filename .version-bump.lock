@@ -10,6 +10,10 @@
 {"name":"git-commit","key":"https://github.com/awslabs/amazon-ecr-credential-helper.git:main","version":"feb497de7dbcd593de0ef828a114dbb6cab6d6f5"}
 {"name":"git-commit","key":"https://github.com/grafi-tt/lunajson.git:master","version":"e6063d37de97dfdfe2749e24de949472bfad0945"}
 {"name":"git-commit","key":"https://github.com/kikito/semver.lua.git:master","version":"af495adc857d51fd1507a112be18523828a1da0d"}
+{"name":"git-tag-semver","key":"github.com/dominikh/go-tools","version":"v0.4.2"}
 {"name":"registry-digest-arg","key":"alpine:3","version":"sha256:69665d02cb32192e52e07644d76bc6f25abeb5410edc1c7a81a10ba3f0efb90a"}
 {"name":"registry-digest-arg","key":"golang:1.19-alpine","version":"sha256:2381c1e5f8350a901597d633b2e517775eeac7a6682be39225a93b22cfd0f8bb"}
 {"name":"registry-digest-arg","key":"golang:1.20-alpine","version":"sha256:48f336ef8366b9d6246293e3047259d0f614ee167db1869bdbc343d6e09aed8a"}
+{"name":"registry-digest-match","key":"anchore/syft:v0.72.0","version":"sha256:f4735b4c31d4b9ad979eb650712cdcdb1156afe80c7d63653ac87439b379e468"}
+{"name":"registry-tag-arg-semver","key":"anchore/syft","version":"v0.72.0"}
+{"name":"registry-tag-match-semver","key":"anchore/syft","version":"v0.72.0"}
