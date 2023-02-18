@@ -26,13 +26,16 @@ ifeq "$(strip $(VER_BUMP))" ''
 		$(VER_BUMP_CONTAINER)
 endif
 SYFT?=$(shell command -v syft 2>/dev/null)
-SYFT_CONTAINER?=anchore/syft:latest
-ifeq "$(strip $(SYFT))" ''
+SYFT_CMD_VER:=$(shell [ -x "$(SYFT)" ] && echo "v$$($(SYFT) version | awk '/^Version: / {print $$2}')" || echo "0")
+SYFT_VERSION?=v0.72.0
+SYFT_CONTAINER?=anchore/syft:v0.72.0@sha256:f4735b4c31d4b9ad979eb650712cdcdb1156afe80c7d63653ac87439b379e468
+ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 	SYFT=docker run --rm \
 		-v "$(shell pwd)/:$(shell pwd)/" -w "$(shell pwd)" \
 		-u "$(shell id -u):$(shell id -g)" \
 		$(SYFT_CONTAINER)
 endif
+STATICCHECK_VER?=v0.4.2
 
 .PHONY: all fmt vet test lint lint-go lint-md vendor binaries docker artifacts artifact-pre plugin-user plugin-host .FORCE
 
@@ -121,8 +124,10 @@ util-version-check:
 util-version-update:
 	$(VER_BUMP) update
 
-$(GOPATH)/bin/staticcheck: 
-	go install "honnef.co/go/tools/cmd/staticcheck@latest"
+$(GOPATH)/bin/staticcheck: .FORCE
+	@[ -f $(GOPATH)/bin/staticcheck ] \
+	&& [ "$$($(GOPATH)/bin/staticcheck -version | cut -f 3 -d ' ' | tr -d '()')" = "$(STATICCHECK_VER)" ] \
+	|| go install "honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VER)"
 
 help: # Display help
 	@awk -F ':|##' '/^[^\t].+?:.*?##/ { printf "\033[36m%-30s\033[0m %s\n", $$1, $$NF }' $(MAKEFILE_LIST)
