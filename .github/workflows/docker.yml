@@ -18,8 +18,8 @@ jobs:
     permissions:
       # id-token is used by cosign's OIDC based signing
       # https://blog.chainguard.dev/zero-friction-keyless-signing-with-github-actions/
-      # TODO: make token conditional: "${{ github.event_name != 'pull_request' && github.repository_owner == 'regclient' && 'write' || 'none' }}"
       id-token: 'write'
+      contents: 'read'
 
     strategy:
       matrix:
@@ -111,13 +111,15 @@ jobs:
           org.opencontainers.image.revision=${{ github.sha }}
 
     - name: Install cosign
+      if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       uses: sigstore/cosign-installer@main
     
     - name: Install syft
+      if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       uses: anchore/sbom-action/download-syft@v0.13.1
       id: syft
       with:
-        syft-version: "v0.68.0"
+        syft-version: "v0.72.0"
     
     # Dogfooding, use regctl to modify regclient images to improve reproducibility
     - name: Install regctl

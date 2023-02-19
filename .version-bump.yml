@@ -2,6 +2,7 @@ files:
   "build/Dockerfile*":
     scans:
       - docker-arg-alpine
+      - docker-arg-go-tag
       - docker-arg-go
       - git-commit-ecr
       - git-commit-gcr
@@ -9,7 +10,10 @@ files:
       - git-commit-semver
   ".github/workflows/*.yml":
     scans:
+      - gha-golang-matrix
+      - gha-golang-release
       - gha-uses
+      - gha-syft-version
   "Makefile":
     scans:
       - makefile-staticcheck
@@ -24,6 +28,11 @@ scans:
     args:
       regexp: '^ARG ALPINE_VER=(?P<Tag>[a-z0-9\-\.]+)@(?P<Version>sha256:[0-9a-f]+)\s*$'
       image: "alpine"
+  docker-arg-go-tag:
+    type: "regexp"
+    source: "registry-golang-latest"
+    args:
+      regexp: '^ARG GO_VER=(?P<Version>[a-z0-9\-\.]+)-alpine@(?P<SHA>sha256:[0-9a-f]+)\s*$'
   docker-arg-go:
     type: "regexp"
     source: "registry-digest-arg"
@@ -63,6 +72,22 @@ scans:
     source: "gha-uses"
     args:
       regexp: '^\s+-?\s+uses: (?P<Repo>[^@]+)@(?P<Version>v\d+)\s*$'
+  gha-golang-matrix:
+    type: "regexp"
+    source: "registry-golang-matrix"
+    args:
+      regexp: '^\s*gover: (?P<Version>\[["0-9, \.]+\])\s*$'
+  gha-golang-release:
+    type: "regexp"
+    source: "registry-golang-latest"
+    args:
+      regexp: '^\s*RELEASE_GO_VER: "(?P<Version>[0-9\.]+)"\s*$'
+  gha-syft-version:
+    type: "regexp"
+    source: "registry-tag-arg-semver"
+    args:
+      regexp: '^\s*syft-version: "(?P<Version>v[0-9\.]+)"\s*$'
+      repo: "anchore/syft"
   makefile-staticcheck:
     type: "regexp"
     source: "git-tag-semver"
@@ -117,6 +142,27 @@ sources:
     key: "{{ .ScanMatch.Image }}:{{.ScanMatch.Tag}}"
     args:
       image: "{{ .ScanMatch.Image }}:{{.ScanMatch.Tag}}"
+  registry-golang-latest:
+    type: "registry"
+    key: "golang-latest"
+    args:
+      repo: "golang"
+      type: "tag"
+    filter:
+      expr: '^\d+\.\d+$'
+    sort:
+      method: "semver"
+  registry-golang-matrix:
+    type: "registry"
+    key: "golang-matrix"
+    args:
+      repo: "golang"
+      type: "tag"
+    filter:
+      expr: '^\d+\.\d+$'
+    sort:
+      method: "semver"
+    template: '["{{ index .VerMap ( index .VerList 2 ) }}", "{{ index .VerMap ( index .VerList 1 ) }}", "{{ index .VerMap ( index .VerList 0 ) }}"]'
   gha-uses:
     type: "git"
     key: "{{ .ScanMatch.Repo }}"
