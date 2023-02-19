@@ -15,5 +15,7 @@
 {"name":"registry-digest-arg","key":"golang:1.19-alpine","version":"sha256:2381c1e5f8350a901597d633b2e517775eeac7a6682be39225a93b22cfd0f8bb"}
 {"name":"registry-digest-arg","key":"golang:1.20-alpine","version":"sha256:48f336ef8366b9d6246293e3047259d0f614ee167db1869bdbc343d6e09aed8a"}
 {"name":"registry-digest-match","key":"anchore/syft:v0.72.0","version":"sha256:f4735b4c31d4b9ad979eb650712cdcdb1156afe80c7d63653ac87439b379e468"}
+{"name":"registry-golang-latest","key":"golang-latest","version":"1.20"}
+{"name":"registry-golang-matrix","key":"golang-matrix","version":"[\"1.18\", \"1.19\", \"1.20\"]"}
 {"name":"registry-tag-arg-semver","key":"anchore/syft","version":"v0.72.0"}
 {"name":"registry-tag-match-semver","key":"anchore/syft","version":"v0.72.0"}
