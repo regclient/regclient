@@ -73,26 +73,7 @@ func (reg *Reg) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Refe
 	if err != nil {
 		return rl, err
 	}
-
-	// filter resulting descriptor list
-	if config.FilterArtifactType != "" && len(rl.Descriptors) > 0 {
-		for i := len(rl.Descriptors) - 1; i >= 0; i-- {
-			if rl.Descriptors[i].ArtifactType != config.FilterArtifactType {
-				rl.Descriptors = append(rl.Descriptors[:i], rl.Descriptors[i+1:]...)
-			}
-		}
-	}
-	for k, v := range config.FilterAnnotation {
-		if len(rl.Descriptors) > 0 {
-			for i := len(rl.Descriptors) - 1; i >= 0; i-- {
-				if rl.Descriptors[i].Annotations == nil {
-					rl.Descriptors = append(rl.Descriptors[:i], rl.Descriptors[i+1:]...)
-				} else if rlVal, ok := rl.Descriptors[i].Annotations[k]; !ok || v != "" && rlVal != v {
-					rl.Descriptors = append(rl.Descriptors[:i], rl.Descriptors[i+1:]...)
-				}
-			}
-		}
-	}
+	rl = scheme.ReferrerFilter(config, rl)
 
 	return rl, nil
 }
