@@ -122,6 +122,37 @@ func WithReferrerAnnotations(annotations map[string]string) ReferrerOpts {
 	}
 }
 
+// ReferrerFilter filters the referrer list according to the config
+func ReferrerFilter(config ReferrerConfig, rlIn referrer.ReferrerList) referrer.ReferrerList {
+	rlOut := referrer.ReferrerList{
+		Subject:     rlIn.Subject,
+		Manifest:    rlIn.Manifest,
+		Annotations: rlIn.Annotations,
+		Tags:        rlIn.Tags,
+	}
+	rlOut.Descriptors = make([]types.Descriptor, len(rlIn.Descriptors))
+	copy(rlOut.Descriptors, rlIn.Descriptors)
+	if config.FilterArtifactType != "" && len(rlOut.Descriptors) > 0 {
+		for i := len(rlOut.Descriptors) - 1; i >= 0; i-- {
+			if rlOut.Descriptors[i].ArtifactType != config.FilterArtifactType {
+				rlOut.Descriptors = append(rlOut.Descriptors[:i], rlOut.Descriptors[i+1:]...)
+			}
+		}
+	}
+	for k, v := range config.FilterAnnotation {
+		if len(rlOut.Descriptors) > 0 {
+			for i := len(rlOut.Descriptors) - 1; i >= 0; i-- {
+				if rlOut.Descriptors[i].Annotations == nil {
+					rlOut.Descriptors = append(rlOut.Descriptors[:i], rlOut.Descriptors[i+1:]...)
+				} else if rlVal, ok := rlOut.Descriptors[i].Annotations[k]; !ok || v != "" && rlVal != v {
+					rlOut.Descriptors = append(rlOut.Descriptors[:i], rlOut.Descriptors[i+1:]...)
+				}
+			}
+		}
+	}
+	return rlOut
+}
+
 // WithReferrerPlatform gets referrers for a single platform from a multi-platform manifest
 func WithReferrerPlatform(platform string) ReferrerOpts {
 	return func(config *ReferrerConfig) {

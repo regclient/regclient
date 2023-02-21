@@ -35,18 +35,20 @@ type Config struct {
 
 // ConfigDefaults is uses for general options and defaults for ConfigSync entries
 type ConfigDefaults struct {
-	Backup          string          `yaml:"backup" json:"backup"`
-	Interval        time.Duration   `yaml:"interval" json:"interval"`
-	Schedule        string          `yaml:"schedule" json:"schedule"`
-	RateLimit       ConfigRateLimit `yaml:"ratelimit" json:"ratelimit"`
-	Parallel        int             `yaml:"parallel" json:"parallel"`
-	DigestTags      *bool           `yaml:"digestTags" json:"digestTags"`
-	ForceRecursive  *bool           `yaml:"forceRecursive" json:"forceRecursive"`
-	IncludeExternal *bool           `yaml:"includeExternal" json:"includeExternal"`
-	MediaTypes      []string        `yaml:"mediaTypes" json:"mediaTypes"`
-	SkipDockerConf  bool            `yaml:"skipDockerConfig" json:"skipDockerConfig"`
-	Hooks           ConfigHooks     `yaml:"hooks" json:"hooks"`
-	UserAgent       string          `yaml:"userAgent" json:"userAgent"`
+	Backup          string                 `yaml:"backup" json:"backup"`
+	Interval        time.Duration          `yaml:"interval" json:"interval"`
+	Schedule        string                 `yaml:"schedule" json:"schedule"`
+	RateLimit       ConfigRateLimit        `yaml:"ratelimit" json:"ratelimit"`
+	Parallel        int                    `yaml:"parallel" json:"parallel"`
+	DigestTags      *bool                  `yaml:"digestTags" json:"digestTags"`
+	Referrers       *bool                  `yaml:"referrers" json:"referrers"`
+	ReferrerFilters []ConfigReferrerFilter `yaml:"referrerFilters" json:"referrerFilters"`
+	ForceRecursive  *bool                  `yaml:"forceRecursive" json:"forceRecursive"`
+	IncludeExternal *bool                  `yaml:"includeExternal" json:"includeExternal"`
+	MediaTypes      []string               `yaml:"mediaTypes" json:"mediaTypes"`
+	SkipDockerConf  bool                   `yaml:"skipDockerConfig" json:"skipDockerConfig"`
+	Hooks           ConfigHooks            `yaml:"hooks" json:"hooks"`
+	UserAgent       string                 `yaml:"userAgent" json:"userAgent"`
 }
 
 // ConfigRateLimit is for rate limit settings
@@ -57,27 +59,34 @@ type ConfigRateLimit struct {
 
 // ConfigSync defines a source/target repository to sync
 type ConfigSync struct {
-	Source          string          `yaml:"source" json:"source"`
-	Target          string          `yaml:"target" json:"target"`
-	Type            string          `yaml:"type" json:"type"`
-	Tags            ConfigTags      `yaml:"tags" json:"tags"`
-	DigestTags      *bool           `yaml:"digestTags" json:"digestTags"`
-	Platform        string          `yaml:"platform" json:"platform"`
-	Platforms       []string        `yaml:"platforms" json:"platforms"`
-	ForceRecursive  *bool           `yaml:"forceRecursive" json:"forceRecursive"`
-	IncludeExternal *bool           `yaml:"includeExternal" json:"includeExternal"`
-	Backup          string          `yaml:"backup" json:"backup"`
-	Interval        time.Duration   `yaml:"interval" json:"interval"`
-	Schedule        string          `yaml:"schedule" json:"schedule"`
-	RateLimit       ConfigRateLimit `yaml:"ratelimit" json:"ratelimit"`
-	MediaTypes      []string        `yaml:"mediaTypes" json:"mediaTypes"`
-	Hooks           ConfigHooks     `yaml:"hooks" json:"hooks"`
+	Source          string                 `yaml:"source" json:"source"`
+	Target          string                 `yaml:"target" json:"target"`
+	Type            string                 `yaml:"type" json:"type"`
+	Tags            ConfigTags             `yaml:"tags" json:"tags"`
+	DigestTags      *bool                  `yaml:"digestTags" json:"digestTags"`
+	Referrers       *bool                  `yaml:"referrers" json:"referrers"`
+	ReferrerFilters []ConfigReferrerFilter `yaml:"referrerFilters" json:"referrerFilters"`
+	Platform        string                 `yaml:"platform" json:"platform"`
+	Platforms       []string               `yaml:"platforms" json:"platforms"`
+	ForceRecursive  *bool                  `yaml:"forceRecursive" json:"forceRecursive"`
+	IncludeExternal *bool                  `yaml:"includeExternal" json:"includeExternal"`
+	Backup          string                 `yaml:"backup" json:"backup"`
+	Interval        time.Duration          `yaml:"interval" json:"interval"`
+	Schedule        string                 `yaml:"schedule" json:"schedule"`
+	RateLimit       ConfigRateLimit        `yaml:"ratelimit" json:"ratelimit"`
+	MediaTypes      []string               `yaml:"mediaTypes" json:"mediaTypes"`
+	Hooks           ConfigHooks            `yaml:"hooks" json:"hooks"`
 }
 
 // ConfigTags is an allow and deny list of tag regex strings
 type ConfigTags struct {
 	Allow []string `yaml:"allow" json:"allow"`
 	Deny  []string `yaml:"deny" json:"deny"`
+}
+
+type ConfigReferrerFilter struct {
+	ArtifactType string            `yaml:"artifactType" json:"artifactType"`
+	Annotations  map[string]string `yaml:"annotations" json:"annotations"`
 }
 
 // ConfigHooks for commands that run during the sync
@@ -143,6 +152,11 @@ func ConfigLoadFile(filename string) (*Config, error) {
 		return c, nil
 	}
 	return nil, err
+}
+
+// ConfigWrite outputs the processed config
+func ConfigWrite(c *Config, w io.Writer) error {
+	return yaml.NewEncoder(w).Encode(c)
 }
 
 // expand templates in various parts of the config
@@ -218,6 +232,13 @@ func syncSetDefaults(s *ConfigSync, d ConfigDefaults) {
 	if s.DigestTags == nil {
 		b := (d.DigestTags != nil && *d.DigestTags)
 		s.DigestTags = &b
+	}
+	if s.Referrers == nil {
+		b := (d.Referrers != nil && *d.Referrers)
+		s.Referrers = &b
+	}
+	if s.ReferrerFilters == nil {
+		s.ReferrerFilters = d.ReferrerFilters
 	}
 	if s.ForceRecursive == nil {
 		b := (d.ForceRecursive != nil && *d.ForceRecursive)

@@ -21,6 +21,7 @@ import (
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/pkg/template"
+	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/platform"
@@ -89,6 +90,14 @@ sync step is finished.`,
 	RunE: runOnce,
 }
 
+var configCmd = &cobra.Command{
+	Use:   "config",
+	Short: "Show the config",
+	Long:  `Show the config`,
+	Args:  cobra.RangeArgs(0, 0),
+	RunE:  runConfig,
+}
+
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show the version",
@@ -113,10 +122,12 @@ func init() {
 	serverCmd.MarkPersistentFlagRequired("config")
 	checkCmd.MarkPersistentFlagRequired("config")
 	onceCmd.MarkPersistentFlagRequired("config")
+	configCmd.MarkPersistentFlagRequired("config")
 
 	rootCmd.AddCommand(serverCmd)
 	rootCmd.AddCommand(checkCmd)
 	rootCmd.AddCommand(onceCmd)
+	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(versionCmd)
 
 	rootCmd.PersistentPreRunE = rootPreRun
@@ -140,6 +151,16 @@ func rootPreRun(cmd *cobra.Command, args []string) error {
 func runVersion(cmd *cobra.Command, args []string) error {
 	info := version.GetInfo()
 	return template.Writer(os.Stdout, rootOpts.format, info)
+}
+
+// runConfig processes the file in one pass, ignoring cron
+func runConfig(cmd *cobra.Command, args []string) error {
+	err := loadConf()
+	if err != nil {
+		return err
+	}
+
+	return ConfigWrite(conf, cmd.OutOrStdout())
 }
 
 // runOnce processes the file in one pass, ignoring cron
@@ -770,6 +791,22 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 	opts := []regclient.ImageOpts{}
 	if s.DigestTags != nil && *s.DigestTags {
 		opts = append(opts, regclient.ImageWithDigestTags())
+	}
+	if s.Referrers != nil && *s.Referrers {
+		if s.ReferrerFilters == nil || len(s.ReferrerFilters) == 0 {
+			opts = append(opts, regclient.ImageWithReferrers())
+		} else {
+			for _, filter := range s.ReferrerFilters {
+				rOpts := []scheme.ReferrerOpts{}
+				if filter.ArtifactType != "" {
+					rOpts = append(rOpts, scheme.WithReferrerAT(filter.ArtifactType))
+				}
+				if filter.Annotations != nil {
+					rOpts = append(rOpts, scheme.WithReferrerAnnotations(filter.Annotations))
+				}
+				opts = append(opts, regclient.ImageWithReferrers(rOpts...))
+			}
+		}
 	}
 	if s.ForceRecursive != nil && *s.ForceRecursive {
 		opts = append(opts, regclient.ImageWithForceRecursive())

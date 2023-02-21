@@ -17,6 +17,7 @@ import (
 
 	digest "github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/pkg/archive"
+	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/docker/schema2"
 	"github.com/regclient/regclient/types/manifest"
@@ -78,7 +79,7 @@ type imageOpt struct {
 	digestTags      bool
 	platform        string
 	platforms       []string
-	referrers       bool
+	referrerConfs   []scheme.ReferrerConfig
 	tagList         []string
 }
 
@@ -153,9 +154,16 @@ func ImageWithPlatforms(p []string) ImageOpts {
 }
 
 // ImageWithReferrers recursively includes images that refer to this.
-func ImageWithReferrers() ImageOpts {
+func ImageWithReferrers(rOpts ...scheme.ReferrerOpts) ImageOpts {
 	return func(opts *imageOpt) {
-		opts.referrers = true
+		if opts.referrerConfs == nil {
+			opts.referrerConfs = []scheme.ReferrerConfig{}
+		}
+		rConf := scheme.ReferrerConfig{}
+		for _, rOpt := range rOpts {
+			rOpt(&rConf)
+		}
+		opts.referrerConfs = append(opts.referrerConfs, rConf)
 	}
 }
 
@@ -575,13 +583,22 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 
 	// copy referrers
 	referrerTags := []string{}
-	if opt.referrers {
+	if opt.referrerConfs != nil {
 		rl, err := rc.ReferrerList(ctx, refSrc)
 		if err != nil {
 			return err
 		}
 		referrerTags = append(referrerTags, rl.Tags...)
-		for _, rDesc := range rl.Descriptors {
+		descList := []types.Descriptor{}
+		if len(opt.referrerConfs) == 0 {
+			descList = rl.Descriptors
+		} else {
+			for _, rConf := range opt.referrerConfs {
+				rlFilter := scheme.ReferrerFilter(rConf, rl)
+				descList = append(descList, rlFilter.Descriptors...)
+			}
+		}
+		for _, rDesc := range descList {
 			referrerSrc := refSrc
 			referrerSrc.Tag = ""
 			referrerSrc.Digest = rDesc.Digest.String()
