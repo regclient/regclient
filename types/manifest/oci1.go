@@ -33,6 +33,8 @@ type oci1Index struct {
 	common
 	v1.Index
 }
+
+// oci1Artifact is EXPERIMENTAL
 type oci1Artifact struct {
 	common
 	v1.ArtifactManifest
