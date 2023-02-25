@@ -207,5 +207,5 @@ jobs:
         # experimental support needed for GitHub OIDC signing
         COSIGN_EXPERIMENTAL: "true"
       run: |
-        cosign sign ${{ steps.prep.outputs.image_hub }}@${{ steps.mutate.outputs.digest }}
-        cosign sign ${{ steps.prep.outputs.image_ghcr }}@${{ steps.mutate.outputs.digest }}
+        cosign sign -y ${{ steps.prep.outputs.image_hub }}@${{ steps.mutate.outputs.digest }}
+        cosign sign -y ${{ steps.prep.outputs.image_ghcr }}@${{ steps.mutate.outputs.digest }}

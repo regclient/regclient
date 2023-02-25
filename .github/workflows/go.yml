@@ -101,7 +101,7 @@ jobs:
             regsync-linux-s390x \
             regsync-windows-amd64.exe \
           ; do
-          cosign sign-blob --output-signature "${artifact%.exe}.sig" --output-certificate "${artifact%.exe}.pem" "${artifact}"
+          cosign sign-blob -y --output-signature "${artifact%.exe}.sig" --output-certificate "${artifact%.exe}.pem" "${artifact}"
         done
         tar -cvzf metadata.tgz *.sig *.pem *.json
 
