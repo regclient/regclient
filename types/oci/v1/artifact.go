@@ -4,7 +4,7 @@ import (
 	"github.com/regclient/regclient/types"
 )
 
-// ArtifactManifest defines an OCI Artifact
+// ArtifactManifest EXPERIMENTAL defines an OCI Artifact
 type ArtifactManifest struct {
 	// MediaType is the media type of the object this schema refers to.
 	MediaType string `json:"mediaType"`

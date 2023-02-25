@@ -35,7 +35,6 @@ const (
 
 var manifestKnownTypes = []string{
 	types.MediaTypeOCI1Manifest,
-	types.MediaTypeOCI1Artifact,
 }
 var artifactFileKnownTypes = []string{
 	"application/octet-stream",
@@ -132,10 +131,11 @@ func init() {
 	artifactListCmd.Flags().StringVarP(&artifactOpts.formatList, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	artifactListCmd.Flags().StringVarP(&artifactOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 
-	artifactPutCmd.Flags().StringVarP(&artifactOpts.artifactMT, "media-type", "", types.MediaTypeOCI1Manifest, "Manifest media-type")
+	artifactPutCmd.Flags().StringVarP(&artifactOpts.artifactMT, "media-type", "", types.MediaTypeOCI1Manifest, "EXPERIMENTAL: Manifest media-type")
 	artifactPutCmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return manifestKnownTypes, cobra.ShellCompDirectiveNoFileComp
 	})
+	artifactPutCmd.Flags().MarkHidden("media-type")
 	artifactPutCmd.Flags().StringVarP(&artifactOpts.artifactType, "artifact-type", "", "", "Artifact type or config mediaType")
 	artifactPutCmd.RegisterFlagCompletionFunc("artifact-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return configKnownTypes, cobra.ShellCompDirectiveNoFileComp
@@ -452,6 +452,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 
 	switch artifactOpts.artifactMT {
 	case types.MediaTypeOCI1Artifact:
+		log.Warnf("changing media-type is experimental and non-portable")
 		hasConfig = false
 	case "", types.MediaTypeOCI1Manifest:
 		hasConfig = true

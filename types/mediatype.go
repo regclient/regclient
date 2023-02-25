@@ -11,7 +11,7 @@ const (
 	MediaTypeDocker2ManifestList = "application/vnd.docker.distribution.manifest.list.v2+json"
 	// MediaTypeDocker2ImageConfig is for the configuration json object media type
 	MediaTypeDocker2ImageConfig = "application/vnd.docker.container.image.v1+json"
-	// MediaTypeOCI1Artifact OCI v1 artifact media type
+	// MediaTypeOCI1Artifact EXPERIMENTAL OCI v1 artifact media type
 	MediaTypeOCI1Artifact = "application/vnd.oci.artifact.manifest.v1+json"
 	// MediaTypeOCI1Manifest OCI v1 manifest media type
 	MediaTypeOCI1Manifest = "application/vnd.oci.image.manifest.v1+json"
