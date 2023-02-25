@@ -4,7 +4,6 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -170,9 +169,8 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 				if err != nil {
 					return err
 				}
-				// base64 encode, update data field
-				mB64 := []byte(base64.StdEncoding.EncodeToString(mBytes))
-				d.Data = mB64
+				// set data field
+				d.Data = mBytes
 			} else if d.Size > mc.maxDataSize && len(d.Data) > 0 {
 				// strip data fields if above max size
 				d.Data = []byte{}
@@ -256,9 +254,8 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 				if err != nil {
 					return err
 				}
-				// base64 encode, update data field
-				bB64 := []byte(base64.StdEncoding.EncodeToString(bBytes))
-				d.Data = bB64
+				// set data field
+				d.Data = bBytes
 			} else if d.Size > mc.maxDataSize && len(d.Data) > 0 {
 				// strip data fields if above max size
 				d.Data = []byte{}
@@ -347,11 +344,8 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 			}
 			// handle config data field
 			if ociM.Config.Size <= mc.maxDataSize || (mc.maxDataSize < 0 && len(ociM.Config.Data) > 0) {
-				// if data field should be set
-				// base64 encode, update data field
-				cB64 := []byte(base64.StdEncoding.EncodeToString(cBytes))
-				if !bytes.Equal(ociM.Config.Data, cB64) {
-					ociM.Config.Data = cB64
+				if !bytes.Equal(ociM.Config.Data, cBytes) {
+					ociM.Config.Data = cBytes
 					changed = true
 				}
 			} else if ociM.Config.Size > mc.maxDataSize && len(ociM.Config.Data) > 0 {

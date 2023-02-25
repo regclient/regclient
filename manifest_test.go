@@ -3,7 +3,6 @@ package regclient
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -310,7 +309,7 @@ func TestManifest(t *testing.T) {
 			MediaType: types.MediaTypeDocker2Manifest,
 			Size:      int64(mLen),
 			Digest:    mDigest,
-			Data:      []byte(base64.StdEncoding.EncodeToString(mBody)),
+			Data:      mBody,
 		}
 		mGet, err := rc.ManifestGet(ctx, dataRef, WithManifestDesc(d))
 		if err != nil {
@@ -333,7 +332,7 @@ func TestManifest(t *testing.T) {
 			MediaType: types.MediaTypeDocker2Manifest,
 			Size:      int64(mLen),
 			Digest:    mDigest,
-			Data:      []byte(base64.StdEncoding.EncodeToString([]byte("invalid data"))),
+			Data:      []byte("invalid data"),
 		}
 		_, err = rc.ManifestGet(ctx, getRef, WithManifestDesc(d))
 		if err != nil {
@@ -350,7 +349,7 @@ func TestManifest(t *testing.T) {
 			MediaType: types.MediaTypeDocker2Manifest,
 			Size:      int64(mLen),
 			Digest:    mDigest,
-			Data:      []byte(base64.StdEncoding.EncodeToString([]byte("invalid data"))),
+			Data:      []byte("invalid data"),
 		}
 		_, err = rc.ManifestGet(ctx, missingRef, WithManifestDesc(d))
 		if err != nil {
@@ -367,7 +366,7 @@ func TestManifest(t *testing.T) {
 			MediaType: types.MediaTypeDocker2Manifest,
 			Size:      int64(mLen),
 			Digest:    missingDigest,
-			Data:      []byte(base64.StdEncoding.EncodeToString([]byte("invalid data"))),
+			Data:      []byte("invalid data"),
 		}
 		_, err = rc.ManifestGet(ctx, missingRef, WithManifestDesc(d))
 		if err == nil {
