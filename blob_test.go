@@ -3,7 +3,6 @@ package regclient
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -208,7 +207,7 @@ func TestBlobGet(t *testing.T) {
 		desc := types.Descriptor{
 			Digest: d1,
 			Size:   int64(len(blob1)),
-			Data:   []byte(base64.StdEncoding.EncodeToString(blob1)),
+			Data:   blob1,
 		}
 		br, err := rc.BlobGet(ctx, ref, desc)
 		if err != nil {

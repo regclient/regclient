@@ -2,7 +2,9 @@ package types
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/opencontainers/go-digest"
@@ -26,22 +28,12 @@ func TestDescriptorData(t *testing.T) {
 			wantErr: ErrParsingFailed,
 		},
 		{
-			name: "Bad Data",
-			d: Descriptor{
-				MediaType: MediaTypeOCI1LayerGzip,
-				Size:      1234,
-				Digest:    digest.Digest("sha256:f6e2d7fa40092cf3d9817bf6ff54183d68d108a47fdf5a5e476c612626c80e14"),
-				Data:      []byte("Invalid data string"),
-			},
-			wantErr: ErrParsingFailed,
-		},
-		{
 			name: "Bad Digest",
 			d: Descriptor{
 				MediaType: MediaTypeOCI1LayerGzip,
 				Size:      10,
 				Digest:    digest.Digest("sha256:e4a380728755139f156563e8b795581d5915dcc947fe937c524c6d52fd604b99"),
-				Data:      []byte("R29vZCBkYXRhCg=="),
+				Data:      []byte("example data"),
 			},
 			wantErr: ErrParsingFailed,
 		},
@@ -50,8 +42,8 @@ func TestDescriptorData(t *testing.T) {
 			d: Descriptor{
 				MediaType: MediaTypeOCI1LayerGzip,
 				Size:      1000,
-				Digest:    digest.Digest("sha256:e4a380728755139f156563e8b795581d5915dcc947fe937c524c6d52fd604b88"),
-				Data:      []byte("R29vZCBkYXRhCg=="),
+				Digest:    digest.Digest("sha256:44752f37272e944fd2c913a35342eaccdd1aaf189bae50676b301ab213fc5061"),
+				Data:      []byte("example data"),
 			},
 			wantErr: ErrParsingFailed,
 		},
@@ -59,11 +51,11 @@ func TestDescriptorData(t *testing.T) {
 			name: "Good data",
 			d: Descriptor{
 				MediaType: MediaTypeOCI1LayerGzip,
-				Size:      10,
-				Digest:    digest.Digest("sha256:e4a380728755139f156563e8b795581d5915dcc947fe937c524c6d52fd604b88"),
-				Data:      []byte("R29vZCBkYXRhCg=="),
+				Size:      12,
+				Digest:    digest.Digest("sha256:44752f37272e944fd2c913a35342eaccdd1aaf189bae50676b301ab213fc5061"),
+				Data:      []byte("example data"),
 			},
-			wantData: []byte("Good data\n"),
+			wantData: []byte("example data"),
 		},
 	}
 	for _, tt := range tests {
@@ -448,6 +440,93 @@ func TestDescriptorEq(t *testing.T) {
 			}
 			if tt.d1.Same(tt.d2) != tt.expectSame {
 				t.Errorf("same is not %v", tt.expectSame)
+			}
+		})
+	}
+}
+
+func TestDataJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		dJSON    []byte
+		wantData []byte
+		wantErr  error
+	}{
+		{
+			name: "No Data",
+			dJSON: []byte(`{
+				"mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
+				"size":      941,
+				"digest":    "sha256:f6e2d7fa40092cf3d9817bf6ff54183d68d108a47fdf5a5e476c612626c80e14"
+			}`),
+			wantErr: ErrParsingFailed,
+		},
+		{
+			name: "Bad Data",
+			dJSON: []byte(`{
+				"mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+				"size":      1234,
+				"digest":    "sha256:f6e2d7fa40092cf3d9817bf6ff54183d68d108a47fdf5a5e476c612626c80e14",
+				"data":      "Invalid data string"
+			}`),
+			wantErr: fmt.Errorf("illegal base64 data at input byte 7"),
+		},
+		{
+			name: "Bad Digest",
+			dJSON: []byte(`{
+				"mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+				"size":      10,
+				"digest":    "sha256:e4a380728755139f156563e8b795581d5915dcc947fe937c524c6d52fd604b99",
+				"data":      "ZXhhbXBsZSBkYXRh"
+			}`),
+			wantErr: ErrParsingFailed,
+		},
+		{
+			name: "Bad Size",
+			dJSON: []byte(`{
+				"mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+				"size":      1000,
+				"digest":    "sha256:44752f37272e944fd2c913a35342eaccdd1aaf189bae50676b301ab213fc5061",
+				"data":      "ZXhhbXBsZSBkYXRh"
+			}`),
+			wantErr: ErrParsingFailed,
+		},
+		{
+			name: "Good data",
+			dJSON: []byte(`{
+				"mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+				"size":      12,
+				"digest":    "sha256:44752f37272e944fd2c913a35342eaccdd1aaf189bae50676b301ab213fc5061",
+				"data":      "ZXhhbXBsZSBkYXRh"
+			}`),
+			wantData: []byte("example data"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			desc := Descriptor{}
+			err := json.Unmarshal(tt.dJSON, &desc)
+			if err != nil {
+				if tt.wantErr == nil {
+					t.Errorf("failed to parse json: %v", err)
+				} else if !errors.Is(err, tt.wantErr) && err.Error() != tt.wantErr.Error() {
+					t.Errorf("expected error %v, received %v", tt.wantErr, err)
+				}
+				return
+			}
+			out, err := desc.GetData()
+			if tt.wantErr != nil {
+				if err == nil || (!errors.Is(err, tt.wantErr) && err.Error() != tt.wantErr.Error()) {
+					t.Errorf("expected error %v, received %v", tt.wantErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("received error %v", err)
+				return
+			}
+			if !bytes.Equal(out, tt.wantData) {
+				t.Errorf("data mismatch, expected %s, received %s", string(tt.wantData), string(out))
 			}
 		})
 	}
