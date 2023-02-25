@@ -112,11 +112,13 @@ jobs:
 
     - name: Install cosign
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
-      uses: sigstore/cosign-installer@main
+      uses: sigstore/cosign-installer@v2.8.1
+      with:
+        cosign-release: "v2.0.0"
     
     - name: Install syft
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
-      uses: anchore/sbom-action/download-syft@v0.13.1
+      uses: anchore/sbom-action/download-syft@v0.13.3
       id: syft
       with:
         syft-version: "v0.73.0"

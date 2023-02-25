@@ -12,8 +12,10 @@ files:
     scans:
       - gha-golang-matrix
       - gha-golang-release
-      - gha-uses
+      - gha-uses-vx
+      - gha-uses-semver
       - gha-syft-version
+      - gha-cosign-version
   "Makefile":
     scans:
       - makefile-staticcheck
@@ -67,11 +69,16 @@ scans:
       regexp: '^ARG SEMVER_COMMIT=(?P<Version>[0-9a-f]+)\s*$'
       repo: "https://github.com/kikito/semver.lua.git"
       ref: master
-  gha-uses:
+  gha-uses-vx:
     type: "regexp"
-    source: "gha-uses"
+    source: "gha-uses-vx"
     args:
       regexp: '^\s+-?\s+uses: (?P<Repo>[^@]+)@(?P<Version>v\d+)\s*$'
+  gha-uses-semver:
+    type: "regexp"
+    source: "gha-uses-semver"
+    args:
+      regexp: '^\s+-?\s+uses: (?P<Repo>[^@/]+/[^@/]+)[^@]*@(?P<Version>v\d+\.\d+\.\d+)\s*$'
   gha-golang-matrix:
     type: "regexp"
     source: "registry-golang-matrix"
@@ -88,6 +95,12 @@ scans:
     args:
       regexp: '^\s*syft-version: "(?P<Version>v[0-9\.]+)"\s*$'
       repo: "anchore/syft"
+  gha-cosign-version:
+    type: "regexp"
+    source: "git-tag-semver"
+    args:
+      regexp: '^\s*cosign-release: "(?P<Version>v[0-9\.]+)"\s*$'
+      repo: "github.com/sigstore/cosign"
   makefile-staticcheck:
     type: "regexp"
     source: "git-tag-semver"
@@ -163,7 +176,7 @@ sources:
     sort:
       method: "semver"
     template: '["{{ index .VerMap ( index .VerList 2 ) }}", "{{ index .VerMap ( index .VerList 1 ) }}", "{{ index .VerMap ( index .VerList 0 ) }}"]'
-  gha-uses:
+  gha-uses-vx:
     type: "git"
     key: "{{ .ScanMatch.Repo }}"
     args:
@@ -171,6 +184,16 @@ sources:
       url: "https://github.com/{{ .ScanMatch.Repo }}.git"
     filter:
       expr: '^v\d+$'
+    sort:
+      method: "semver"
+  gha-uses-semver:
+    type: "git"
+    key: "{{ .ScanMatch.Repo }}"
+    args:
+      type: "tag"
+      url: "https://github.com/{{ .ScanMatch.Repo }}.git"
+    filter:
+      expr: '^v\d+\.\d+\.\d+$'
     sort:
       method: "semver"
   git-commit:
