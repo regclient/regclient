@@ -13,7 +13,6 @@ import (
 
 	digest "github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/internal/units"
-	"github.com/regclient/regclient/internal/wraperr"
 	"github.com/regclient/regclient/types"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/platform"
@@ -34,6 +33,8 @@ type oci1Index struct {
 	common
 	v1.Index
 }
+
+// oci1Artifact is EXPERIMENTAL
 type oci1Artifact struct {
 	common
 	v1.ArtifactManifest
@@ -41,58 +42,73 @@ type oci1Artifact struct {
 
 func (m *oci1Manifest) GetAnnotations() (map[string]string, error) {
 	if !m.manifSet {
-		return nil, fmt.Errorf("manifest is not set")
+		return nil, types.ErrManifestNotSet
 	}
 	return m.Annotations, nil
 }
 func (m *oci1Manifest) GetConfig() (types.Descriptor, error) {
+	if !m.manifSet {
+		return types.Descriptor{}, types.ErrManifestNotSet
+	}
 	return m.Config, nil
 }
 func (m *oci1Manifest) GetConfigDigest() (digest.Digest, error) {
+	if !m.manifSet {
+		return digest.Digest(""), types.ErrManifestNotSet
+	}
 	return m.Config.Digest, nil
 }
 func (m *oci1Index) GetAnnotations() (map[string]string, error) {
 	if !m.manifSet {
-		return nil, fmt.Errorf("manifest is not set")
+		return nil, types.ErrManifestNotSet
 	}
 	return m.Annotations, nil
 }
 func (m *oci1Index) GetConfig() (types.Descriptor, error) {
-	return types.Descriptor{}, wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return types.Descriptor{}, fmt.Errorf("config digest not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 func (m *oci1Index) GetConfigDigest() (digest.Digest, error) {
-	return "", wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return "", fmt.Errorf("config digest not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 func (m *oci1Artifact) GetAnnotations() (map[string]string, error) {
 	if !m.manifSet {
-		return nil, fmt.Errorf("manifest is not set")
+		return nil, types.ErrManifestNotSet
 	}
 	return m.Annotations, nil
 }
 func (m *oci1Artifact) GetConfig() (types.Descriptor, error) {
-	return types.Descriptor{}, wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return types.Descriptor{}, fmt.Errorf("config digest not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 func (m *oci1Artifact) GetConfigDigest() (digest.Digest, error) {
-	return "", wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return "", fmt.Errorf("config digest not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 
 func (m *oci1Manifest) GetManifestList() ([]types.Descriptor, error) {
-	return []types.Descriptor{}, wraperr.New(fmt.Errorf("platform descriptor list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return []types.Descriptor{}, fmt.Errorf("platform descriptor list not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 func (m *oci1Index) GetManifestList() ([]types.Descriptor, error) {
+	if !m.manifSet {
+		return nil, types.ErrManifestNotSet
+	}
 	return m.Manifests, nil
 }
 func (m *oci1Artifact) GetManifestList() ([]types.Descriptor, error) {
-	return []types.Descriptor{}, wraperr.New(fmt.Errorf("platform descriptor list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return []types.Descriptor{}, fmt.Errorf("platform descriptor list not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 
 func (m *oci1Manifest) GetLayers() ([]types.Descriptor, error) {
+	if !m.manifSet {
+		return nil, types.ErrManifestNotSet
+	}
 	return m.Layers, nil
 }
 func (m *oci1Index) GetLayers() ([]types.Descriptor, error) {
-	return []types.Descriptor{}, wraperr.New(fmt.Errorf("layers are not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return []types.Descriptor{}, fmt.Errorf("layers are not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 func (m *oci1Artifact) GetLayers() ([]types.Descriptor, error) {
+	if !m.manifSet {
+		return nil, types.ErrManifestNotSet
+	}
 	return m.Blobs, nil
 }
 
@@ -107,7 +123,7 @@ func (m *oci1Artifact) GetOrig() interface{} {
 }
 
 func (m *oci1Manifest) GetPlatformDesc(p *platform.Platform) (*types.Descriptor, error) {
-	return nil, wraperr.New(fmt.Errorf("platform lookup not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return nil, fmt.Errorf("platform lookup not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 func (m *oci1Index) GetPlatformDesc(p *platform.Platform) (*types.Descriptor, error) {
 	dl, err := m.GetManifestList()
@@ -117,11 +133,11 @@ func (m *oci1Index) GetPlatformDesc(p *platform.Platform) (*types.Descriptor, er
 	return getPlatformDesc(p, dl)
 }
 func (m *oci1Artifact) GetPlatformDesc(p *platform.Platform) (*types.Descriptor, error) {
-	return nil, wraperr.New(fmt.Errorf("platform lookup not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return nil, fmt.Errorf("platform lookup not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 
 func (m *oci1Manifest) GetPlatformList() ([]*platform.Platform, error) {
-	return nil, wraperr.New(fmt.Errorf("platform list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return nil, fmt.Errorf("platform list not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 func (m *oci1Index) GetPlatformList() ([]*platform.Platform, error) {
 	dl, err := m.GetManifestList()
@@ -131,12 +147,12 @@ func (m *oci1Index) GetPlatformList() ([]*platform.Platform, error) {
 	return getPlatformList(dl)
 }
 func (m *oci1Artifact) GetPlatformList() ([]*platform.Platform, error) {
-	return nil, wraperr.New(fmt.Errorf("platform list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return nil, fmt.Errorf("platform list not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 
 func (m *oci1Manifest) MarshalJSON() ([]byte, error) {
 	if !m.manifSet {
-		return []byte{}, wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
+		return []byte{}, types.ErrManifestNotSet
 	}
 
 	if len(m.rawBody) > 0 {
@@ -147,7 +163,7 @@ func (m *oci1Manifest) MarshalJSON() ([]byte, error) {
 }
 func (m *oci1Manifest) GetSubject() (*types.Descriptor, error) {
 	if !m.manifSet {
-		return nil, wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
+		return nil, types.ErrManifestNotSet
 	}
 	// TODO: remove fall back support for refers in a future release
 	if m.Manifest.Subject == nil && m.Manifest.Refers != nil {
@@ -157,7 +173,7 @@ func (m *oci1Manifest) GetSubject() (*types.Descriptor, error) {
 }
 func (m *oci1Artifact) GetSubject() (*types.Descriptor, error) {
 	if !m.manifSet {
-		return nil, wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
+		return nil, types.ErrManifestNotSet
 	}
 	// TODO: remove fall back support for refers in a future release
 	if m.ArtifactManifest.Subject == nil && m.ArtifactManifest.Refers != nil {
@@ -168,7 +184,7 @@ func (m *oci1Artifact) GetSubject() (*types.Descriptor, error) {
 
 func (m *oci1Index) MarshalJSON() ([]byte, error) {
 	if !m.manifSet {
-		return []byte{}, wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
+		return []byte{}, types.ErrManifestNotSet
 	}
 
 	if len(m.rawBody) > 0 {
@@ -179,7 +195,7 @@ func (m *oci1Index) MarshalJSON() ([]byte, error) {
 }
 func (m *oci1Artifact) MarshalJSON() ([]byte, error) {
 	if !m.manifSet {
-		return []byte{}, wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
+		return []byte{}, types.ErrManifestNotSet
 	}
 
 	if len(m.rawBody) > 0 {
@@ -334,7 +350,7 @@ func (m *oci1Artifact) MarshalPretty() ([]byte, error) {
 
 func (m *oci1Manifest) SetAnnotation(key, val string) error {
 	if !m.manifSet {
-		return fmt.Errorf("manifest is not set")
+		return types.ErrManifestNotSet
 	}
 	if m.Annotations == nil {
 		m.Annotations = map[string]string{}
@@ -344,7 +360,7 @@ func (m *oci1Manifest) SetAnnotation(key, val string) error {
 }
 func (m *oci1Index) SetAnnotation(key, val string) error {
 	if !m.manifSet {
-		return fmt.Errorf("manifest is not set")
+		return types.ErrManifestNotSet
 	}
 	if m.Annotations == nil {
 		m.Annotations = map[string]string{}
@@ -354,7 +370,7 @@ func (m *oci1Index) SetAnnotation(key, val string) error {
 }
 func (m *oci1Artifact) SetAnnotation(key, val string) error {
 	if !m.manifSet {
-		return fmt.Errorf("manifest is not set")
+		return types.ErrManifestNotSet
 	}
 	if m.Annotations == nil {
 		m.Annotations = map[string]string{}
@@ -364,12 +380,12 @@ func (m *oci1Artifact) SetAnnotation(key, val string) error {
 }
 
 func (m *oci1Artifact) SetConfig(d types.Descriptor) error {
-	return wraperr.New(fmt.Errorf("set config not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return fmt.Errorf("set config not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 
 func (m *oci1Manifest) SetConfig(d types.Descriptor) error {
 	if !m.manifSet {
-		return fmt.Errorf("manifest is not set")
+		return types.ErrManifestNotSet
 	}
 	m.Config = d
 	return m.updateDesc()
@@ -377,7 +393,7 @@ func (m *oci1Manifest) SetConfig(d types.Descriptor) error {
 
 func (m *oci1Artifact) SetLayers(dl []types.Descriptor) error {
 	if !m.manifSet {
-		return fmt.Errorf("manifest is not set")
+		return types.ErrManifestNotSet
 	}
 	m.Blobs = dl
 	return m.updateDesc()
@@ -385,7 +401,7 @@ func (m *oci1Artifact) SetLayers(dl []types.Descriptor) error {
 
 func (m *oci1Manifest) SetLayers(dl []types.Descriptor) error {
 	if !m.manifSet {
-		return fmt.Errorf("manifest is not set")
+		return types.ErrManifestNotSet
 	}
 	m.Layers = dl
 	return m.updateDesc()
@@ -393,7 +409,7 @@ func (m *oci1Manifest) SetLayers(dl []types.Descriptor) error {
 
 func (m *oci1Index) SetManifestList(dl []types.Descriptor) error {
 	if !m.manifSet {
-		return fmt.Errorf("manifest is not set")
+		return types.ErrManifestNotSet
 	}
 	m.Manifests = dl
 	return m.updateDesc()
@@ -431,14 +447,14 @@ func (m *oci1Index) SetOrig(origIn interface{}) error {
 
 func (m *oci1Artifact) SetSubject(d *types.Descriptor) error {
 	if !m.manifSet {
-		return wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
+		return types.ErrManifestNotSet
 	}
 	m.ArtifactManifest.Subject = d
 	return m.updateDesc()
 }
 func (m *oci1Manifest) SetSubject(d *types.Descriptor) error {
 	if !m.manifSet {
-		return wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
+		return types.ErrManifestNotSet
 	}
 	m.Manifest.Subject = d
 	return m.updateDesc()

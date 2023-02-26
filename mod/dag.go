@@ -4,7 +4,6 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -43,6 +42,7 @@ type dagManifest struct {
 	config    *dagOCIConfig
 	layers    []*dagLayer
 	manifests []*dagManifest
+	referrers []*dagManifest
 }
 
 type dagOCIConfig struct {
@@ -75,7 +75,10 @@ func dagGet(ctx context.Context, rc *regclient.RegClient, r ref.Ref, d types.Des
 			return nil, err
 		}
 		for _, desc := range dl {
-			curMM, err := dagGet(ctx, rc, r, desc)
+			rGet := r
+			rGet.Tag = ""
+			rGet.Digest = desc.Digest.String()
+			curMM, err := dagGet(ctx, rc, rGet, desc)
 			if err != nil {
 				return nil, err
 			}
@@ -88,7 +91,7 @@ func dagGet(ctx context.Context, rc *regclient.RegClient, r ref.Ref, d types.Des
 		cd, err := mi.GetConfig()
 		if err != nil && !errors.Is(err, types.ErrUnsupportedMediaType) {
 			return nil, err
-		} else if err == nil {
+		} else if err == nil && inListStr(cd.MediaType, mtWLConfig) {
 			oc, err := rc.BlobGetOCIConfig(ctx, r, cd)
 			if err != nil {
 				return nil, err
@@ -107,6 +110,26 @@ func dagGet(ctx context.Context, rc *regclient.RegClient, r ref.Ref, d types.Des
 			}
 			dm.layers = append(dm.layers, &dl)
 		}
+	}
+	// get a list of referrers
+	rl, err := rc.ReferrerList(ctx, r)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get referrers: %w", err)
+	}
+	for _, desc := range rl.Descriptors {
+		// strip referrers metadata from descriptor (annotations and artifact type)
+		desc.ArtifactType = ""
+		if len(desc.Annotations) > 0 {
+			desc.Annotations = nil
+		}
+		rGet := r
+		rGet.Tag = ""
+		rGet.Digest = desc.Digest.String()
+		curMM, err := dagGet(ctx, rc, rGet, desc)
+		if err != nil {
+			return nil, err
+		}
+		dm.referrers = append(dm.manifests, curMM)
 	}
 	return &dm, nil
 }
@@ -146,9 +169,8 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 				if err != nil {
 					return err
 				}
-				// base64 encode, update data field
-				mB64 := []byte(base64.StdEncoding.EncodeToString(mBytes))
-				d.Data = mB64
+				// set data field
+				d.Data = mBytes
 			} else if d.Size > mc.maxDataSize && len(d.Data) > 0 {
 				// strip data fields if above max size
 				d.Data = []byte{}
@@ -192,8 +214,10 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 		oc := v1.Image{}
 		iConfig := -1
 		if dm.config != nil {
-			iConfig = 0
 			oc = dm.config.oc.GetConfig()
+			if oc.History != nil {
+				iConfig = 0
+			}
 		}
 
 		// first pass to add/modify layers
@@ -209,7 +233,9 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 				}
 			}
 			if layer.mod == deleted {
-				iConfig++
+				if iConfig >= 0 {
+					iConfig++
+				}
 				continue
 			}
 			// handle data field
@@ -228,9 +254,8 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 				if err != nil {
 					return err
 				}
-				// base64 encode, update data field
-				bB64 := []byte(base64.StdEncoding.EncodeToString(bBytes))
-				d.Data = bB64
+				// set data field
+				d.Data = bBytes
 			} else if d.Size > mc.maxDataSize && len(d.Data) > 0 {
 				// strip data fields if above max size
 				d.Data = []byte{}
@@ -238,12 +263,16 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 			if layer.mod == added {
 				if len(ociM.Layers) == i {
 					ociM.Layers = append(ociM.Layers, d)
-					oc.RootFS.DiffIDs = append(oc.RootFS.DiffIDs, layer.ucDigest)
+					if oc.RootFS.DiffIDs != nil && len(oc.RootFS.DiffIDs) == i {
+						oc.RootFS.DiffIDs = append(oc.RootFS.DiffIDs, layer.ucDigest)
+					}
 				} else {
 					ociM.Layers = append(ociM.Layers[:i+1], ociM.Layers[i:]...)
 					ociM.Layers[i] = d
-					oc.RootFS.DiffIDs = append(oc.RootFS.DiffIDs[:i+1], oc.RootFS.DiffIDs[i:]...)
-					oc.RootFS.DiffIDs[i] = layer.ucDigest
+					if oc.RootFS.DiffIDs != nil && len(oc.RootFS.DiffIDs) >= i {
+						oc.RootFS.DiffIDs = append(oc.RootFS.DiffIDs[:i+1], oc.RootFS.DiffIDs[i:]...)
+						oc.RootFS.DiffIDs[i] = layer.ucDigest
+					}
 				}
 				newHistory := v1.History{
 					Created: &timeStart,
@@ -260,12 +289,14 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 				changed = true
 			} else if layer.mod == replaced || !bytes.Equal(ociM.Layers[i].Data, d.Data) {
 				ociM.Layers[i] = d
-				if layer.ucDigest != "" {
+				if oc.RootFS.DiffIDs != nil && len(oc.RootFS.DiffIDs) >= i+1 && layer.ucDigest != "" {
 					oc.RootFS.DiffIDs[i] = layer.ucDigest
 				}
 				changed = true
 			}
-			iConfig++
+			if iConfig >= 0 {
+				iConfig++
+			}
 		}
 		// second pass in reverse to delete entries
 		iConfig = len(oc.History) - 1
@@ -275,16 +306,20 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 				iConfig--
 			}
 			if layer.mod != deleted {
-				iConfig--
+				if iConfig >= 0 {
+					iConfig--
+				}
 				continue
 			}
 			ociM.Layers = append(ociM.Layers[:i], ociM.Layers[i+1:]...)
-			oc.RootFS.DiffIDs = append(oc.RootFS.DiffIDs[:i], oc.RootFS.DiffIDs[i+1:]...)
+			if oc.RootFS.DiffIDs != nil && len(oc.RootFS.DiffIDs) >= i+1 {
+				oc.RootFS.DiffIDs = append(oc.RootFS.DiffIDs[:i], oc.RootFS.DiffIDs[i+1:]...)
+			}
 			if iConfig >= 0 {
 				oc.History = append(oc.History[:iConfig], oc.History[iConfig+1:]...)
+				iConfig--
 			}
 			changed = true
-			iConfig--
 		}
 		if changed && dm.config != nil {
 			dm.config.oc.SetConfig(oc)
@@ -309,11 +344,8 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 			}
 			// handle config data field
 			if ociM.Config.Size <= mc.maxDataSize || (mc.maxDataSize < 0 && len(ociM.Config.Data) > 0) {
-				// if data field should be set
-				// base64 encode, update data field
-				cB64 := []byte(base64.StdEncoding.EncodeToString(cBytes))
-				if !bytes.Equal(ociM.Config.Data, cB64) {
-					ociM.Config.Data = cB64
+				if !bytes.Equal(ociM.Config.Data, cBytes) {
+					ociM.Config.Data = cBytes
 					changed = true
 				}
 			} else if ociM.Config.Size > mc.maxDataSize && len(ociM.Config.Data) > 0 {
@@ -337,8 +369,26 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 			return err
 		}
 	}
+	// push new/modified manifest
 	if dm.mod == replaced || dm.mod == added {
 		dm.newDesc = dm.m.GetDescriptor()
+		// update subject on all referrers
+		for i := range dm.referrers {
+			if dm.referrers[i].mod == deleted {
+				continue
+			}
+			sm, ok := dm.referrers[i].m.(manifest.Subjecter)
+			if !ok {
+				return fmt.Errorf("referrer does not support subject field, mt=%s", dm.referrers[i].m.GetDescriptor().MediaType)
+			}
+			err = sm.SetSubject(&dm.newDesc)
+			if err != nil {
+				return fmt.Errorf("failed to set subject: %w", err)
+			}
+			if dm.referrers[i].mod == unchanged {
+				dm.referrers[i].mod = replaced
+			}
+		}
 		mpOpts := []regclient.ManifestOpts{}
 		if !dm.top {
 			mpOpts = append(mpOpts, regclient.WithManifestChild())
@@ -351,7 +401,27 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 			return err
 		}
 	}
-
+	// push/delete referrers
+	for _, child := range dm.referrers {
+		if child.mod == unchanged {
+			continue
+		}
+		child.newDesc = child.m.GetDescriptor()
+		rChild := r
+		rChild.Digest = child.newDesc.Digest.String()
+		rChild.Tag = ""
+		if child.mod == deleted {
+			err = rc.ManifestDelete(ctx, rChild, regclient.WithManifestCheckReferrers())
+			if err != nil {
+				return fmt.Errorf("failed to delete referrer: %w", err)
+			}
+		} else {
+			err = rc.ManifestPut(ctx, rChild, child.m, regclient.WithManifestChild())
+			if err != nil {
+				return fmt.Errorf("failed to put referrer: %w", err)
+			}
+		}
+	}
 	return nil
 }
 

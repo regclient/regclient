@@ -12,12 +12,25 @@ import (
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/pkg/archive"
 	"github.com/regclient/regclient/types"
-	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
 )
 
 // Opts defines options for Apply
 type Opts func(*dagConfig, *dagManifest) error
+
+var (
+	// whitelist of tar media types
+	mtWLTar = []string{
+		types.MediaTypeDocker2LayerGzip,
+		types.MediaTypeOCI1Layer,
+		types.MediaTypeOCI1LayerGzip,
+		types.MediaTypeOCI1LayerZstd,
+	}
+	mtWLConfig = []string{
+		types.MediaTypeDocker2ImageConfig,
+		types.MediaTypeOCI1ImageConfig,
+	}
+)
 
 // Apply applies a set of modifications to an image (manifest, configs, and layers)
 func Apply(ctx context.Context, rc *regclient.RegClient, r ref.Ref, opts ...Opts) (ref.Ref, error) {
@@ -96,7 +109,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, r ref.Ref, opts ...Opts
 					return nil, err
 				}
 			}
-			if len(dc.stepsLayerFile) > 0 && dl.mod != deleted {
+			if len(dc.stepsLayerFile) > 0 && dl.mod != deleted && inListStr(dl.desc.MediaType, mtWLTar) {
 				changed := false
 				empty := true
 				// setup tar reader to process layer
@@ -227,43 +240,11 @@ func WithData(maxDataSize int64) Opts {
 	}
 }
 
-// WithManifestToOCI converts the manifest to OCI media types
-func WithManifestToOCI() Opts {
-	return func(dc *dagConfig, dm *dagManifest) error {
-		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, r ref.Ref, dm *dagManifest) error {
-			switch dm.m.GetDescriptor().MediaType {
-			case types.MediaTypeOCI1Manifest, types.MediaTypeOCI1ManifestList:
-				return nil
-			}
-			om := dm.m.GetOrig()
-			if dm.m.IsList() {
-				ociM, err := manifest.OCIIndexFromAny(om)
-				if err != nil {
-					return err
-				}
-				om = ociM
-			} else {
-				ociM, err := manifest.OCIManifestFromAny(om)
-				if err != nil {
-					return err
-				}
-				ociM.Config.MediaType = types.MediaTypeOCI1ImageConfig
-				for i, l := range ociM.Layers {
-					if l.MediaType == types.MediaTypeDocker2LayerGzip {
-						ociM.Layers[i].MediaType = types.MediaTypeOCI1LayerGzip
-					}
-				}
-				om = ociM
-			}
-			newM, err := manifest.New(manifest.WithOrig(om))
-			if err != nil {
-				return err
-			}
-			dm.m = newM
-			dm.newDesc = dm.m.GetDescriptor()
-			dm.mod = replaced
-			return nil
-		})
-		return nil
+func inListStr(str string, list []string) bool {
+	for _, s := range list {
+		if str == s {
+			return true
+		}
 	}
+	return false
 }

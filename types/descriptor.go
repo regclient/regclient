@@ -1,7 +1,6 @@
 package types
 
 import (
-	"encoding/base64"
 	"fmt"
 	"strings"
 	"text/tabwriter"
@@ -66,22 +65,17 @@ func (d Descriptor) GetData() ([]byte, error) {
 	if len(d.Data) == 0 && d.Digest != emptyDigest {
 		return nil, ErrParsingFailed
 	}
-	// base64 decode data field
-	dBytes, err := base64.StdEncoding.DecodeString(string(d.Data))
-	if err != nil {
-		return nil, ErrParsingFailed
-	}
 	// verify length
-	if int64(len(dBytes)) != d.Size {
+	if int64(len(d.Data)) != d.Size {
 		return nil, ErrParsingFailed
 	}
 	// generate and verify digest
-	dDig := digest.FromBytes(dBytes)
+	dDig := digest.FromBytes(d.Data)
 	if d.Digest != dDig {
 		return nil, ErrParsingFailed
 	}
 	// return data
-	return dBytes, nil
+	return d.Data, nil
 }
 
 // Equal indicates the two descriptors are identical, effectively a DeepEqual.

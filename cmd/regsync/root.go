@@ -2,11 +2,8 @@ package main
 
 import (
 	"context"
-	"embed"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/signal"
 	"regexp"
@@ -22,7 +19,9 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
+	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/pkg/template"
+	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/platform"
@@ -47,18 +46,11 @@ var rootOpts struct {
 	format    string // for Go template formatting of various commands
 }
 
-//go:embed embed/*
-var embedFS embed.FS
-
 var (
-	// VCSRef and VCSTag are populated from an embed at build time
-	// These are used to version the UserAgent header
-	VCSRef = ""
-	VCSTag = ""
-	conf   *Config
-	log    *logrus.Logger
-	rc     *regclient.RegClient
-	sem    *semaphore.Weighted
+	conf *Config
+	log  *logrus.Logger
+	rc   *regclient.RegClient
+	sem  *semaphore.Weighted
 )
 
 var rootCmd = &cobra.Command{
@@ -98,6 +90,14 @@ sync step is finished.`,
 	RunE: runOnce,
 }
 
+var configCmd = &cobra.Command{
+	Use:   "config",
+	Short: "Show the config",
+	Long:  `Show the config`,
+	Args:  cobra.RangeArgs(0, 0),
+	RunE:  runConfig,
+}
+
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show the version",
@@ -113,20 +113,21 @@ func init() {
 		Hooks:     make(logrus.LevelHooks),
 		Level:     logrus.InfoLevel,
 	}
-	setupVCSVars()
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.confFile, "config", "c", "", "Config file")
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.InfoLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
 	rootCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
-	versionCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{jsonPretty .}}", "Format output with go template syntax")
+	versionCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 
 	rootCmd.MarkPersistentFlagFilename("config")
 	serverCmd.MarkPersistentFlagRequired("config")
 	checkCmd.MarkPersistentFlagRequired("config")
 	onceCmd.MarkPersistentFlagRequired("config")
+	configCmd.MarkPersistentFlagRequired("config")
 
 	rootCmd.AddCommand(serverCmd)
 	rootCmd.AddCommand(checkCmd)
 	rootCmd.AddCommand(onceCmd)
+	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(versionCmd)
 
 	rootCmd.PersistentPreRunE = rootPreRun
@@ -148,14 +149,18 @@ func rootPreRun(cmd *cobra.Command, args []string) error {
 }
 
 func runVersion(cmd *cobra.Command, args []string) error {
-	ver := struct {
-		VCSRef string
-		VCSTag string
-	}{
-		VCSRef: VCSRef,
-		VCSTag: VCSTag,
+	info := version.GetInfo()
+	return template.Writer(os.Stdout, rootOpts.format, info)
+}
+
+// runConfig processes the file in one pass, ignoring cron
+func runConfig(cmd *cobra.Command, args []string) error {
+	err := loadConf()
+	if err != nil {
+		return err
 	}
-	return template.Writer(os.Stdout, rootOpts.format, ver)
+
+	return ConfigWrite(conf, cmd.OutOrStdout())
 }
 
 // runOnce processes the file in one pass, ignoring cron
@@ -340,12 +345,13 @@ func loadConf() error {
 	}
 	if conf.Defaults.UserAgent != "" {
 		rcOpts = append(rcOpts, regclient.WithUserAgent(conf.Defaults.UserAgent))
-	} else if VCSTag != "" {
-		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+VCSTag+")"))
-	} else if VCSRef != "" {
-		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+VCSRef+")"))
 	} else {
-		rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" (unknown)"))
+		info := version.GetInfo()
+		if info.VCSTag != "" {
+			rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+info.VCSTag+")"))
+		} else {
+			rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+info.VCSRef+")"))
+		}
 	}
 	if !conf.Defaults.SkipDockerConf {
 		rcOpts = append(rcOpts, regclient.WithDockerCreds(), regclient.WithDockerCerts())
@@ -589,7 +595,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 
 // process a sync step
 func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action string) error {
-	mSrc, err := rc.ManifestHead(ctx, src)
+	mSrc, err := rc.ManifestHead(ctx, src, regclient.WithManifestRequireDigest())
 	if err != nil && errors.Is(err, types.ErrUnsupportedAPI) {
 		mSrc, err = rc.ManifestGet(ctx, src)
 	}
@@ -600,7 +606,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 		}).Error("Failed to lookup source manifest")
 		return err
 	}
-	mTgt, err := rc.ManifestHead(ctx, tgt)
+	mTgt, err := rc.ManifestHead(ctx, tgt, regclient.WithManifestRequireDigest())
 	tgtExists := (err == nil)
 	tgtMatches := false
 	if err == nil && manifest.GetDigest(mSrc).String() == manifest.GetDigest(mTgt).String() {
@@ -786,6 +792,22 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 	if s.DigestTags != nil && *s.DigestTags {
 		opts = append(opts, regclient.ImageWithDigestTags())
 	}
+	if s.Referrers != nil && *s.Referrers {
+		if s.ReferrerFilters == nil || len(s.ReferrerFilters) == 0 {
+			opts = append(opts, regclient.ImageWithReferrers())
+		} else {
+			for _, filter := range s.ReferrerFilters {
+				rOpts := []scheme.ReferrerOpts{}
+				if filter.ArtifactType != "" {
+					rOpts = append(rOpts, scheme.WithReferrerAT(filter.ArtifactType))
+				}
+				if filter.Annotations != nil {
+					rOpts = append(rOpts, scheme.WithReferrerAnnotations(filter.Annotations))
+				}
+				opts = append(opts, regclient.ImageWithReferrers(rOpts...))
+			}
+		}
+	}
 	if s.ForceRecursive != nil && *s.ForceRecursive {
 		opts = append(opts, regclient.ImageWithForceRecursive())
 	}
@@ -911,30 +933,4 @@ func getPlatformDigest(ctx context.Context, r ref.Ref, platStr string, origMan m
 		return "", ErrNotFound
 	}
 	return descPlat.Digest, nil
-}
-
-func setupVCSVars() {
-	verS := struct {
-		VCSRef string
-		VCSTag string
-	}{}
-
-	verB, err := embedFS.ReadFile("embed/version.json")
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return
-	}
-
-	if len(verB) > 0 {
-		err = json.Unmarshal(verB, &verS)
-		if err != nil {
-			return
-		}
-	}
-
-	if verS.VCSRef != "" {
-		VCSRef = verS.VCSRef
-	}
-	if verS.VCSTag != "" {
-		VCSTag = verS.VCSTag
-	}
 }

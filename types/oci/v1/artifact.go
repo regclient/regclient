@@ -4,13 +4,13 @@ import (
 	"github.com/regclient/regclient/types"
 )
 
-// ArtifactManifest defines an OCI Artifact
+// ArtifactManifest EXPERIMENTAL defines an OCI Artifact
 type ArtifactManifest struct {
 	// MediaType is the media type of the object this schema refers to.
 	MediaType string `json:"mediaType"`
 
 	// ArtifactType is the media type of the artifact this schema refers to.
-	ArtifactType string `json:"artifactType"`
+	ArtifactType string `json:"artifactType,omitempty"`
 
 	// Blobs is a collection of blobs referenced by this manifest.
 	Blobs []types.Descriptor `json:"blobs,omitempty"`

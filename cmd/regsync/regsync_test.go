@@ -21,7 +21,7 @@ func TestRegsyncOnce(t *testing.T) {
 	// setup sample source with an in-memory ocidir directory
 	fsOS := rwfs.OSNew("")
 	fsMem := rwfs.MemNew()
-	err := rwfs.CopyRecursive(fsOS, "testdata", fsMem, ".")
+	err := rwfs.CopyRecursive(fsOS, "../../testdata", fsMem, ".")
 	if err != nil {
 		t.Errorf("failed to setup memfs copy: %v", err)
 		return
@@ -61,11 +61,11 @@ func TestRegsyncOnce(t *testing.T) {
 			desired: []string{
 				"test1/index.json",
 				"test1/oci-layout",
-				"test1/blobs/sha256/94ec59b4c55eb2341b63ea9a0abab63590a923e7cb5cd682217ca209ef362694", // v1
-				"test1/blobs/sha256/aa962da1b4176a25590e0daad1117723ad155486bffea9f3f1360d312b9aa832", // amd64
-				"test1/blobs/sha256/6d4b840cb62c293cb95f29d19fe1ef098354ca1cbc8be9222e7a8e31cb5e1caf",
-				"test1/blobs/sha256/9fc9590240f5264b6470ceca1aa90197f9223973890bebbb082011fc985e4412",
-				"test1/blobs/sha256/2ea09753fab80a36c32fc7a959537a38a7bcbf09eddba48671c51c29b2c943ac", // arm64
+				"test1/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40", // v1
+				"test1/blobs/sha256/5283ed7b662424a7f9edc47f8e0e266d47f8ce997da51949d454b30eaafb5251", // amd64
+				"test1/blobs/sha256/3f4eb4d2ca4fe85d3da97aab1a56422cb4a05334274a2e275cf848db90a41b18",
+				"test1/blobs/sha256/d4ebbdee222ac2d37f728e9fb4f265ff4b31b9ef5de7a701d093d970f8141f0f",
+				"test1/blobs/sha256/a7f0466d930515f984dc334bf786a569973119a3afaa2d4290f2268c62a19b12", // arm64
 			},
 			expErr: nil,
 		},
@@ -80,9 +80,9 @@ func TestRegsyncOnce(t *testing.T) {
 			desired: []string{
 				"test2/index.json",
 				"test2/oci-layout",
-				"test2/blobs/sha256/94ec59b4c55eb2341b63ea9a0abab63590a923e7cb5cd682217ca209ef362694", // v1
-				"test2/blobs/sha256/3fadbd1aeb4e8c0fe8328c4007012b7a6fdbc7c578ad4880b3480706a3432be1", // v2
-				"test2/blobs/sha256/a4bdb3dbc74b4fce1d2064f346ddb767cd36e4f959e570c01970036912c2c0fb", // v3
+				"test2/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40", // v1
+				"test2/blobs/sha256/adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8", // v2
+				"test2/blobs/sha256/2e024d7fe67394cef7f0df9c303f288c7420d1fb27f7657398e897b7eb2ee1d8", // v3
 			},
 			expErr: nil,
 		},
@@ -97,13 +97,15 @@ func TestRegsyncOnce(t *testing.T) {
 			desired: []string{
 				"test1/index.json",
 				"test1/oci-layout",
-				"test2/blobs/sha256/3fadbd1aeb4e8c0fe8328c4007012b7a6fdbc7c578ad4880b3480706a3432be1", // v2
+				"test2/blobs/sha256/adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8", // v2
 			},
 			undesired: []string{
-				"test1/blobs/sha256/94ec59b4c55eb2341b63ea9a0abab63590a923e7cb5cd682217ca209ef362694", // v1
-				"test1/blobs/sha256/aa962da1b4176a25590e0daad1117723ad155486bffea9f3f1360d312b9aa832", // amd64
-				"test1/blobs/sha256/6d4b840cb62c293cb95f29d19fe1ef098354ca1cbc8be9222e7a8e31cb5e1caf",
-				"test1/blobs/sha256/2ea09753fab80a36c32fc7a959537a38a7bcbf09eddba48671c51c29b2c943ac", // arm64
+				"test1/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40", // v1
+				"test1/blobs/sha256/5283ed7b662424a7f9edc47f8e0e266d47f8ce997da51949d454b30eaafb5251", // amd64
+				"test1/blobs/sha256/3f4eb4d2ca4fe85d3da97aab1a56422cb4a05334274a2e275cf848db90a41b18",
+				"test1/blobs/sha256/a7f0466d930515f984dc334bf786a569973119a3afaa2d4290f2268c62a19b12", // arm64
+				"test1/blobs/sha256/fd90fc9bbcdaace19655b8983e3d4efa946332f8c1f1aac40ac5bead09bdf9c9", // v2 referrer sbom
+				"test1/blobs/sha256/b97ab0b611c4224b58c6b701a566b031b7a8fb7b644487668d31797013372cc4", // v2 referrer sig
 			},
 			expErr: nil,
 		},
@@ -121,11 +123,11 @@ func TestRegsyncOnce(t *testing.T) {
 			desired: []string{
 				"test3/index.json",
 				"test3/oci-layout",
-				"test3/blobs/sha256/94ec59b4c55eb2341b63ea9a0abab63590a923e7cb5cd682217ca209ef362694", // v1
-				"test3/blobs/sha256/a4bdb3dbc74b4fce1d2064f346ddb767cd36e4f959e570c01970036912c2c0fb", // v3
+				"test3/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40", // v1
+				"test3/blobs/sha256/2e024d7fe67394cef7f0df9c303f288c7420d1fb27f7657398e897b7eb2ee1d8", // v3
 			},
 			undesired: []string{
-				"test3/blobs/sha256/3fadbd1aeb4e8c0fe8328c4007012b7a6fdbc7c578ad4880b3480706a3432be1", // v2
+				"test3/blobs/sha256/adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8", // v2
 			},
 			expErr: nil,
 		},
@@ -143,11 +145,11 @@ func TestRegsyncOnce(t *testing.T) {
 			desired: []string{
 				"test4/index.json",
 				"test4/oci-layout",
-				"test4/blobs/sha256/94ec59b4c55eb2341b63ea9a0abab63590a923e7cb5cd682217ca209ef362694", // v1
-				"test4/blobs/sha256/a4bdb3dbc74b4fce1d2064f346ddb767cd36e4f959e570c01970036912c2c0fb", // v3
+				"test4/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40", // v1
+				"test4/blobs/sha256/2e024d7fe67394cef7f0df9c303f288c7420d1fb27f7657398e897b7eb2ee1d8", // v3
 			},
 			undesired: []string{
-				"test4/blobs/sha256/3fadbd1aeb4e8c0fe8328c4007012b7a6fdbc7c578ad4880b3480706a3432be1", // v2
+				"test4/blobs/sha256/adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8", // v2
 			},
 			expErr: nil,
 		},
@@ -159,15 +161,67 @@ func TestRegsyncOnce(t *testing.T) {
 				Type:       "image",
 				DigestTags: &boolTrue,
 			},
-			exists: []string{"ocidir://test5:v1", "ocidir://test5:sha256-94ec59b4c55eb2341b63ea9a0abab63590a923e7cb5cd682217ca209ef362694.meta"},
+			exists: []string{"ocidir://test5:v1", "ocidir://test5:sha256-4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40.2e024d7fe67394ce.meta"},
 			desired: []string{
 				"test5/index.json",
 				"test5/oci-layout",
-				"test5/blobs/sha256/94ec59b4c55eb2341b63ea9a0abab63590a923e7cb5cd682217ca209ef362694", // v1
-				"test5/blobs/sha256/a4bdb3dbc74b4fce1d2064f346ddb767cd36e4f959e570c01970036912c2c0fb", // v3 + meta digest tag
+				"test5/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40", // v1
+				"test5/blobs/sha256/2e024d7fe67394cef7f0df9c303f288c7420d1fb27f7657398e897b7eb2ee1d8", // v3 + meta digest tag
 			},
 			undesired: []string{
-				"test5/blobs/sha256/3fadbd1aeb4e8c0fe8328c4007012b7a6fdbc7c578ad4880b3480706a3432be1", // v2
+				"test5/blobs/sha256/adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8", // v2
+			},
+			expErr: nil,
+		},
+		{
+			name: "ImageReferrers",
+			sync: ConfigSync{
+				Source:          "ocidir://testrepo:v2",
+				Target:          "ocidir://test-referrer:v2",
+				Type:            "image",
+				Referrers:       &boolTrue,
+				ReferrerFilters: []ConfigReferrerFilter{},
+			},
+			exists: []string{"ocidir://test-referrer:v2", "ocidir://test-referrer:sha256-adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8"},
+			desired: []string{
+				"test-referrer/index.json",
+				"test-referrer/oci-layout",
+				"test-referrer/blobs/sha256/adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8", // v2
+				"test-referrer/blobs/sha256/ef05efc8cfd478ac3140fce1297bd6b72dc5f5f1df31bfce690aa903a2c20310", // v2 amd64
+				"test-referrer/blobs/sha256/fd90fc9bbcdaace19655b8983e3d4efa946332f8c1f1aac40ac5bead09bdf9c9", // v2 sbom
+				"test-referrer/blobs/sha256/b97ab0b611c4224b58c6b701a566b031b7a8fb7b644487668d31797013372cc4", // v2 sig
+			},
+			undesired: []string{
+				"test-referrer/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40", // v1
+				"test-referrer/blobs/sha256/2e024d7fe67394cef7f0df9c303f288c7420d1fb27f7657398e897b7eb2ee1d8", // v3 + meta digest tag
+			},
+			expErr: nil,
+		},
+		{
+			name: "ImageReferrers",
+			sync: ConfigSync{
+				Source:    "ocidir://testrepo:v2",
+				Target:    "ocidir://test-referrer2:v2",
+				Type:      "image",
+				Referrers: &boolTrue,
+				ReferrerFilters: []ConfigReferrerFilter{
+					{
+						ArtifactType: "application/example.sbom",
+					},
+				},
+			},
+			exists: []string{"ocidir://test-referrer2:v2", "ocidir://test-referrer2:sha256-adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8"},
+			desired: []string{
+				"test-referrer2/index.json",
+				"test-referrer2/oci-layout",
+				"test-referrer2/blobs/sha256/adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8", // v2
+				"test-referrer2/blobs/sha256/ef05efc8cfd478ac3140fce1297bd6b72dc5f5f1df31bfce690aa903a2c20310", // v2 amd64
+				"test-referrer2/blobs/sha256/fd90fc9bbcdaace19655b8983e3d4efa946332f8c1f1aac40ac5bead09bdf9c9", // v2 sbom
+			},
+			undesired: []string{
+				"test-referrer2/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40", // v1
+				"test-referrer2/blobs/sha256/b97ab0b611c4224b58c6b701a566b031b7a8fb7b644487668d31797013372cc4", // v2 sig
+				"test-referrer2/blobs/sha256/2e024d7fe67394cef7f0df9c303f288c7420d1fb27f7657398e897b7eb2ee1d8", // v3 + meta digest tag
 			},
 			expErr: nil,
 		},
@@ -183,14 +237,14 @@ func TestRegsyncOnce(t *testing.T) {
 			desired: []string{
 				"test1/index.json",
 				"test1/oci-layout",
-				"test2/blobs/sha256/3fadbd1aeb4e8c0fe8328c4007012b7a6fdbc7c578ad4880b3480706a3432be1", // v2
-				"test2/blobs/sha256/a4bdb3dbc74b4fce1d2064f346ddb767cd36e4f959e570c01970036912c2c0fb", // v3
+				"test2/blobs/sha256/adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8", // v2
+				"test2/blobs/sha256/2e024d7fe67394cef7f0df9c303f288c7420d1fb27f7657398e897b7eb2ee1d8", // v3
 			},
 			undesired: []string{
-				"test1/blobs/sha256/94ec59b4c55eb2341b63ea9a0abab63590a923e7cb5cd682217ca209ef362694", // v1
-				"test1/blobs/sha256/aa962da1b4176a25590e0daad1117723ad155486bffea9f3f1360d312b9aa832", // amd64
-				"test1/blobs/sha256/6d4b840cb62c293cb95f29d19fe1ef098354ca1cbc8be9222e7a8e31cb5e1caf",
-				"test1/blobs/sha256/2ea09753fab80a36c32fc7a959537a38a7bcbf09eddba48671c51c29b2c943ac", // arm64
+				"test1/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40", // v1
+				"test1/blobs/sha256/5283ed7b662424a7f9edc47f8e0e266d47f8ce997da51949d454b30eaafb5251", // amd64
+				"test1/blobs/sha256/3f4eb4d2ca4fe85d3da97aab1a56422cb4a05334274a2e275cf848db90a41b18",
+				"test1/blobs/sha256/a7f0466d930515f984dc334bf786a569973119a3afaa2d4290f2268c62a19b12", // arm64
 			},
 			expErr: nil,
 		},
@@ -206,12 +260,11 @@ func TestRegsyncOnce(t *testing.T) {
 			desired: []string{
 				"test1/index.json",
 				"test1/oci-layout",
-				"test1/blobs/sha256/94ec59b4c55eb2341b63ea9a0abab63590a923e7cb5cd682217ca209ef362694", // v1
-				// "test1/blobs/sha256/3fadbd1aeb4e8c0fe8328c4007012b7a6fdbc7c578ad4880b3480706a3432be1",   // v2 - with old tag
-				"backups/blobs/sha256/a4bdb3dbc74b4fce1d2064f346ddb767cd36e4f959e570c01970036912c2c0fb", // v3
+				"test1/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40",   // v1
+				"backups/blobs/sha256/2e024d7fe67394cef7f0df9c303f288c7420d1fb27f7657398e897b7eb2ee1d8", // v3
 			},
 			undesired: []string{
-				"test1/blobs/sha256/a4bdb3dbc74b4fce1d2064f346ddb767cd36e4f959e570c01970036912c2c0fb", // v3
+				"test1/blobs/sha256/2e024d7fe67394cef7f0df9c303f288c7420d1fb27f7657398e897b7eb2ee1d8", // v3
 			},
 			expErr: nil,
 		},
@@ -337,7 +390,7 @@ func TestProcess(t *testing.T) {
 	// setup sample source with an in-memory ocidir directory
 	fsOS := rwfs.OSNew("")
 	fsMem := rwfs.MemNew()
-	err := rwfs.CopyRecursive(fsOS, "testdata", fsMem, ".")
+	err := rwfs.CopyRecursive(fsOS, "../../testdata", fsMem, ".")
 	if err != nil {
 		t.Errorf("failed to setup memfs copy: %v", err)
 		return

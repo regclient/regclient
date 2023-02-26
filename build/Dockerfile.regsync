@@ -1,6 +1,8 @@
 ARG REGISTRY=docker.io
-ARG ALPINE_VER=3
-ARG GO_VER=1.19-alpine
+ARG ALPINE_VER=3@sha256:69665d02cb32192e52e07644d76bc6f25abeb5410edc1c7a81a10ba3f0efb90a
+ARG GO_VER=1.20-alpine@sha256:48f336ef8366b9d6246293e3047259d0f614ee167db1869bdbc343d6e09aed8a
+ARG ECR_HELPER_VER=b808c4d0619d1a3ca604521bb09e56d4e450135b
+ARG GCR_HELPER_VER=2063cdd61a5089dcb057624f7b1ab12786981cd8
 
 FROM ${REGISTRY}/library/golang:${GO_VER} as golang
 RUN apk add --no-cache \
@@ -19,21 +21,23 @@ CMD make bin/regsync && bin/regsync
 
 FROM dev as build
 ARG LD_FLAGS
-RUN make bin/regsync
+RUN make vendor bin/regsync
 USER appuser
 CMD [ "bin/regsync" ]
 
 FROM golang as docker-cred-ecr-login
 ARG TARGETOS
 ARG TARGETARCH
-RUN go install github.com/awslabs/amazon-ecr-credential-helper/ecr-login/cli/docker-credential-ecr-login@latest \
+ARG ECR_HELPER_VER
+RUN CGO_ENABLED=0 go install -trimpath -ldflags=-buildid= github.com/awslabs/amazon-ecr-credential-helper/ecr-login/cli/docker-credential-ecr-login@${ECR_HELPER_VER} \
  && ( cp "${GOPATH}/bin/docker-credential-ecr-login" /usr/local/bin/docker-credential-ecr-login \
    || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-ecr-login" /usr/local/bin/docker-credential-ecr-login )
 
 FROM golang as docker-cred-gcr
 ARG TARGETOS
 ARG TARGETARCH
-RUN go install github.com/GoogleCloudPlatform/docker-credential-gcr@latest \
+ARG GCR_HELPER_VER
+RUN CGO_ENABLED=0 go install -trimpath -ldflags=-buildid= github.com/GoogleCloudPlatform/docker-credential-gcr@${GCR_HELPER_VER} \
  && ( cp "${GOPATH}/bin/docker-credential-gcr" /usr/local/bin/docker-credential-gcr \
    || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-gcr" /usr/local/bin/docker-credential-gcr )
 

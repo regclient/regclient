@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"text/tabwriter"
 
 	// crypto libraries included for go-digest
 	_ "crypto/sha256"
 	_ "crypto/sha512"
 
 	digest "github.com/opencontainers/go-digest"
-	"github.com/regclient/regclient/internal/wraperr"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/docker/schema1"
 	"github.com/regclient/regclient/types/platform"
@@ -33,26 +33,30 @@ type docker1SignedManifest struct {
 }
 
 func (m *docker1Manifest) GetConfig() (types.Descriptor, error) {
-	return types.Descriptor{}, wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return types.Descriptor{}, fmt.Errorf("config digest not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 func (m *docker1Manifest) GetConfigDigest() (digest.Digest, error) {
-	return "", wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return "", fmt.Errorf("config digest not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 func (m *docker1SignedManifest) GetConfig() (types.Descriptor, error) {
-	return types.Descriptor{}, wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return types.Descriptor{}, fmt.Errorf("config digest not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 func (m *docker1SignedManifest) GetConfigDigest() (digest.Digest, error) {
-	return "", wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return "", fmt.Errorf("config digest not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 
 func (m *docker1Manifest) GetManifestList() ([]types.Descriptor, error) {
-	return []types.Descriptor{}, wraperr.New(fmt.Errorf("platform descriptor list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return []types.Descriptor{}, fmt.Errorf("platform descriptor list not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 func (m *docker1SignedManifest) GetManifestList() ([]types.Descriptor, error) {
-	return []types.Descriptor{}, wraperr.New(fmt.Errorf("platform descriptor list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return []types.Descriptor{}, fmt.Errorf("platform descriptor list not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 
 func (m *docker1Manifest) GetLayers() ([]types.Descriptor, error) {
+	if !m.manifSet {
+		return []types.Descriptor{}, types.ErrManifestNotSet
+	}
+
 	var dl []types.Descriptor
 	for _, sd := range m.FSLayers {
 		dl = append(dl, types.Descriptor{
@@ -62,6 +66,10 @@ func (m *docker1Manifest) GetLayers() ([]types.Descriptor, error) {
 	return dl, nil
 }
 func (m *docker1SignedManifest) GetLayers() ([]types.Descriptor, error) {
+	if !m.manifSet {
+		return []types.Descriptor{}, types.ErrManifestNotSet
+	}
+
 	var dl []types.Descriptor
 	for _, sd := range m.FSLayers {
 		dl = append(dl, types.Descriptor{
@@ -79,22 +87,22 @@ func (m *docker1SignedManifest) GetOrig() interface{} {
 }
 
 func (m *docker1Manifest) GetPlatformDesc(p *platform.Platform) (*types.Descriptor, error) {
-	return nil, wraperr.New(fmt.Errorf("platform lookup not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return nil, fmt.Errorf("platform lookup not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 func (m *docker1SignedManifest) GetPlatformDesc(p *platform.Platform) (*types.Descriptor, error) {
-	return nil, wraperr.New(fmt.Errorf("platform lookup not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return nil, fmt.Errorf("platform lookup not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 
 func (m *docker1Manifest) GetPlatformList() ([]*platform.Platform, error) {
-	return nil, wraperr.New(fmt.Errorf("platform list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return nil, fmt.Errorf("platform list not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 func (m *docker1SignedManifest) GetPlatformList() ([]*platform.Platform, error) {
-	return nil, wraperr.New(fmt.Errorf("platform list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return nil, fmt.Errorf("platform list not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 
 func (m *docker1Manifest) MarshalJSON() ([]byte, error) {
 	if !m.manifSet {
-		return []byte{}, wraperr.New(fmt.Errorf("Manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
+		return []byte{}, types.ErrManifestNotSet
 	}
 
 	if len(m.rawBody) > 0 {
@@ -105,40 +113,66 @@ func (m *docker1Manifest) MarshalJSON() ([]byte, error) {
 }
 
 func (m *docker1SignedManifest) MarshalJSON() ([]byte, error) {
+	if !m.manifSet {
+		return []byte{}, types.ErrManifestNotSet
+	}
+
 	return m.SignedManifest.MarshalJSON()
 }
 
 func (m *docker1Manifest) MarshalPretty() ([]byte, error) {
+	if m == nil {
+		return []byte{}, nil
+	}
 	buf := &bytes.Buffer{}
-	enc := json.NewEncoder(buf)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	enc.Encode(m.Manifest)
+	tw := tabwriter.NewWriter(buf, 0, 0, 1, ' ', 0)
+	if m.r.Reference != "" {
+		fmt.Fprintf(tw, "Name:\t%s\n", m.r.Reference)
+	}
+	fmt.Fprintf(tw, "MediaType:\t%s\n", m.desc.MediaType)
+	fmt.Fprintf(tw, "Digest:\t%s\n", m.desc.Digest.String())
+	fmt.Fprintf(tw, "\t\n")
+	fmt.Fprintf(tw, "Layers:\t\n")
+	for _, d := range m.FSLayers {
+		fmt.Fprintf(tw, "  Digest:\t%s\n", string(d.BlobSum))
+	}
+	tw.Flush()
 	return buf.Bytes(), nil
 }
 func (m *docker1SignedManifest) MarshalPretty() ([]byte, error) {
+	if m == nil {
+		return []byte{}, nil
+	}
 	buf := &bytes.Buffer{}
-	enc := json.NewEncoder(buf)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	enc.Encode(m.SignedManifest)
+	tw := tabwriter.NewWriter(buf, 0, 0, 1, ' ', 0)
+	if m.r.Reference != "" {
+		fmt.Fprintf(tw, "Name:\t%s\n", m.r.Reference)
+	}
+	fmt.Fprintf(tw, "MediaType:\t%s\n", m.desc.MediaType)
+	fmt.Fprintf(tw, "Digest:\t%s\n", m.desc.Digest.String())
+	fmt.Fprintf(tw, "\t\n")
+	fmt.Fprintf(tw, "Layers:\t\n")
+	for _, d := range m.FSLayers {
+		fmt.Fprintf(tw, "  Digest:\t%s\n", string(d.BlobSum))
+	}
+	tw.Flush()
 	return buf.Bytes(), nil
 }
 
 func (m *docker1Manifest) SetConfig(d types.Descriptor) error {
-	return wraperr.New(fmt.Errorf("set methods not supported for for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return fmt.Errorf("set methods not supported for for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 
 func (m *docker1SignedManifest) SetConfig(d types.Descriptor) error {
-	return wraperr.New(fmt.Errorf("set methods not supported for for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return fmt.Errorf("set methods not supported for for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 
 func (m *docker1Manifest) SetLayers(dl []types.Descriptor) error {
-	return wraperr.New(fmt.Errorf("set methods not supported for for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return fmt.Errorf("set methods not supported for for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 
 func (m *docker1SignedManifest) SetLayers(dl []types.Descriptor) error {
-	return wraperr.New(fmt.Errorf("set methods not supported for for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return fmt.Errorf("set methods not supported for for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 
 func (m *docker1Manifest) SetOrig(origIn interface{}) error {

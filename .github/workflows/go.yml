@@ -16,8 +16,16 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        gover: ["1.17", "1.18", "1.19"]
-        releasever: ["1.19"]
+        gover: ["1.18", "1.19", "1.20"]
+
+    env:
+      RELEASE_GO_VER: "1.20"
+
+    permissions:
+      # id-token is used by cosign's OIDC based signing
+      # https://blog.chainguard.dev/zero-friction-keyless-signing-with-github-actions/
+      id-token: 'write'
+      contents: 'read'
 
     steps:
     - name: "Set up Go ${{ matrix.gover }}"
@@ -43,14 +51,62 @@ jobs:
       run: make test
 
     - name: Linting
+      if: matrix.gover == env.RELEASE_GO_VER
       run: make lint
+
+    - name: Install syft
+      if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main'
+      uses: anchore/sbom-action/download-syft@v0.13.3
+      id: syft
+      with:
+        syft-version: "v0.73.0"
 
     - name: Build artifacts
       if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main'
       run: make artifacts
 
+    - name: Install cosign
+      if: ( startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main' ) && matrix.gover == env.RELEASE_GO_VER
+      uses: sigstore/cosign-installer@v2.8.1
+      with:
+        cosign-release: "v2.0.0"
+
+    - name: Package artifacts
+      if: ( startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main' ) && matrix.gover == env.RELEASE_GO_VER
+      env:
+        # experimental support needed for GitHub OIDC signing
+        COSIGN_EXPERIMENTAL: "true"
+      run: |
+        cd artifacts
+        for artifact in \
+            regbot-darwin-amd64 \
+            regbot-darwin-arm64 \
+            regbot-linux-amd64 \
+            regbot-linux-arm64 \
+            regbot-linux-ppc64le \
+            regbot-linux-s390x \
+            regbot-windows-amd64.exe \
+            regctl-darwin-amd64 \
+            regctl-darwin-arm64 \
+            regctl-linux-amd64 \
+            regctl-linux-arm64 \
+            regctl-linux-ppc64le \
+            regctl-linux-s390x \
+            regctl-windows-amd64.exe \
+            regsync-darwin-amd64 \
+            regsync-darwin-arm64 \
+            regsync-linux-amd64 \
+            regsync-linux-arm64 \
+            regsync-linux-ppc64le \
+            regsync-linux-s390x \
+            regsync-windows-amd64.exe \
+          ; do
+          cosign sign-blob -y --output-signature "${artifact%.exe}.sig" --output-certificate "${artifact%.exe}.pem" "${artifact}"
+        done
+        tar -cvzf metadata.tgz *.sig *.pem *.json
+
     - name: Gather release details
-      if: startsWith( github.ref, 'refs/tags/v' ) && github.repository_owner == 'regclient' && matrix.gover == matrix.releasever
+      if: startsWith( github.ref, 'refs/tags/v' ) && github.repository_owner == 'regclient' && matrix.gover == env.RELEASE_GO_VER
       id: release_details
       run: |
         VERSION=${GITHUB_REF#refs/tags/}
@@ -68,7 +124,7 @@ jobs:
         echo ::set-output name=release_notes::${RELEASE_NOTES}
 
     - name: Create release
-      if: steps.release_details.outputs.valid == 'true' && matrix.gover == matrix.releasever
+      if: steps.release_details.outputs.valid == 'true' && matrix.gover == env.RELEASE_GO_VER
       id: release_create
       uses: softprops/action-gh-release@v1
       env:
@@ -100,9 +156,10 @@ jobs:
           ./artifacts/regsync-linux-ppc64le
           ./artifacts/regsync-linux-s390x
           ./artifacts/regsync-windows-amd64.exe
+          ./artifacts/metadata.tgz
 
     - name: Save artifacts
-      if: github.ref == 'refs/heads/main' && matrix.gover == matrix.releasever
+      if: github.ref == 'refs/heads/main' && matrix.gover == env.RELEASE_GO_VER
       uses: actions/upload-artifact@v3
       with:
         name: binaries

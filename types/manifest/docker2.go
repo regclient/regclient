@@ -13,7 +13,6 @@ import (
 
 	digest "github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/internal/units"
-	"github.com/regclient/regclient/internal/wraperr"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/docker/schema2"
 	"github.com/regclient/regclient/types/platform"
@@ -37,41 +36,53 @@ type docker2ManifestList struct {
 
 func (m *docker2Manifest) GetAnnotations() (map[string]string, error) {
 	if !m.manifSet {
-		return nil, fmt.Errorf("manifest is not set")
+		return nil, types.ErrManifestNotSet
 	}
 	return m.Annotations, nil
 }
 func (m *docker2Manifest) GetConfig() (types.Descriptor, error) {
+	if !m.manifSet {
+		return types.Descriptor{}, types.ErrManifestNotSet
+	}
 	return m.Config, nil
 }
 func (m *docker2Manifest) GetConfigDigest() (digest.Digest, error) {
+	if !m.manifSet {
+		return digest.Digest(""), types.ErrManifestNotSet
+	}
 	return m.Config.Digest, nil
 }
 func (m *docker2ManifestList) GetAnnotations() (map[string]string, error) {
 	if !m.manifSet {
-		return nil, fmt.Errorf("manifest is not set")
+		return nil, types.ErrManifestNotSet
 	}
 	return m.Annotations, nil
 }
 func (m *docker2ManifestList) GetConfig() (types.Descriptor, error) {
-	return types.Descriptor{}, wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return types.Descriptor{}, fmt.Errorf("config digest not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 func (m *docker2ManifestList) GetConfigDigest() (digest.Digest, error) {
-	return "", wraperr.New(fmt.Errorf("config digest not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return "", fmt.Errorf("config digest not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 
 func (m *docker2Manifest) GetManifestList() ([]types.Descriptor, error) {
-	return []types.Descriptor{}, wraperr.New(fmt.Errorf("platform descriptor list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return []types.Descriptor{}, fmt.Errorf("platform descriptor list not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 func (m *docker2ManifestList) GetManifestList() ([]types.Descriptor, error) {
+	if !m.manifSet {
+		return []types.Descriptor{}, types.ErrManifestNotSet
+	}
 	return m.Manifests, nil
 }
 
 func (m *docker2Manifest) GetLayers() ([]types.Descriptor, error) {
+	if !m.manifSet {
+		return []types.Descriptor{}, types.ErrManifestNotSet
+	}
 	return m.Layers, nil
 }
 func (m *docker2ManifestList) GetLayers() ([]types.Descriptor, error) {
-	return []types.Descriptor{}, wraperr.New(fmt.Errorf("layers are not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return []types.Descriptor{}, fmt.Errorf("layers are not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 
 func (m *docker2Manifest) GetOrig() interface{} {
@@ -82,14 +93,14 @@ func (m *docker2ManifestList) GetOrig() interface{} {
 }
 
 func (m *docker2Manifest) GetPlatformDesc(p *platform.Platform) (*types.Descriptor, error) {
-	return nil, wraperr.New(fmt.Errorf("platform lookup not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return nil, fmt.Errorf("platform lookup not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 func (m *docker2ManifestList) GetPlatformDesc(p *platform.Platform) (*types.Descriptor, error) {
 	return getPlatformDesc(p, m.Manifests)
 }
 
 func (m *docker2Manifest) GetPlatformList() ([]*platform.Platform, error) {
-	return nil, wraperr.New(fmt.Errorf("platform list not available for media type %s", m.desc.MediaType), types.ErrUnsupportedMediaType)
+	return nil, fmt.Errorf("platform list not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 func (m *docker2ManifestList) GetPlatformList() ([]*platform.Platform, error) {
 	dl, err := m.GetManifestList()
@@ -101,24 +112,20 @@ func (m *docker2ManifestList) GetPlatformList() ([]*platform.Platform, error) {
 
 func (m *docker2Manifest) MarshalJSON() ([]byte, error) {
 	if !m.manifSet {
-		return []byte{}, wraperr.New(fmt.Errorf("manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
+		return []byte{}, types.ErrManifestNotSet
 	}
-
 	if len(m.rawBody) > 0 {
 		return m.rawBody, nil
 	}
-
 	return json.Marshal((m.Manifest))
 }
 func (m *docker2ManifestList) MarshalJSON() ([]byte, error) {
 	if !m.manifSet {
-		return []byte{}, wraperr.New(fmt.Errorf("manifest unavailable, perform a ManifestGet first"), types.ErrUnavailable)
+		return []byte{}, types.ErrManifestNotSet
 	}
-
 	if len(m.rawBody) > 0 {
 		return m.rawBody, nil
 	}
-
 	return json.Marshal((m.ManifestList))
 }
 
@@ -211,7 +218,7 @@ func (m *docker2ManifestList) MarshalPretty() ([]byte, error) {
 
 func (m *docker2Manifest) SetAnnotation(key, val string) error {
 	if !m.manifSet {
-		return fmt.Errorf("manifest is not set")
+		return types.ErrManifestNotSet
 	}
 	if m.Annotations == nil {
 		m.Annotations = map[string]string{}
@@ -221,7 +228,7 @@ func (m *docker2Manifest) SetAnnotation(key, val string) error {
 }
 func (m *docker2ManifestList) SetAnnotation(key, val string) error {
 	if !m.manifSet {
-		return fmt.Errorf("manifest is not set")
+		return types.ErrManifestNotSet
 	}
 	if m.Annotations == nil {
 		m.Annotations = map[string]string{}
@@ -232,7 +239,7 @@ func (m *docker2ManifestList) SetAnnotation(key, val string) error {
 
 func (m *docker2Manifest) SetConfig(d types.Descriptor) error {
 	if !m.manifSet {
-		return fmt.Errorf("manifest is not set")
+		return types.ErrManifestNotSet
 	}
 	m.Config = d
 	return m.updateDesc()
@@ -240,7 +247,7 @@ func (m *docker2Manifest) SetConfig(d types.Descriptor) error {
 
 func (m *docker2Manifest) SetLayers(dl []types.Descriptor) error {
 	if !m.manifSet {
-		return fmt.Errorf("manifest is not set")
+		return types.ErrManifestNotSet
 	}
 	m.Layers = dl
 	return m.updateDesc()
@@ -248,7 +255,7 @@ func (m *docker2Manifest) SetLayers(dl []types.Descriptor) error {
 
 func (m *docker2ManifestList) SetManifestList(dl []types.Descriptor) error {
 	if !m.manifSet {
-		return fmt.Errorf("manifest is not set")
+		return types.ErrManifestNotSet
 	}
 	m.Manifests = dl
 	return m.updateDesc()

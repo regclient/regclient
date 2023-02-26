@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -14,12 +15,14 @@ import (
 	_ "crypto/sha512"
 
 	"github.com/opencontainers/go-digest"
+	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/pkg/archive"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	v1 "github.com/regclient/regclient/types/oci/v1"
+	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/spf13/cobra"
 )
@@ -32,7 +35,6 @@ const (
 
 var manifestKnownTypes = []string{
 	types.MediaTypeOCI1Manifest,
-	types.MediaTypeOCI1Artifact,
 }
 var artifactFileKnownTypes = []string{
 	"application/octet-stream",
@@ -78,6 +80,15 @@ var artifactPutCmd = &cobra.Command{
 	ValidArgs: []string{}, // do not auto complete repository/tag
 	RunE:      runArtifactPut,
 }
+var artifactTreeCmd = &cobra.Command{
+	Use:       "tree <reference>",
+	Aliases:   []string{},
+	Short:     "tree listing of artifacts",
+	Long:      `Return a graph of manifests and referrers to those manifests.`,
+	Args:      cobra.ExactArgs(1),
+	ValidArgs: []string{}, // do not auto complete repository/tag
+	RunE:      runArtifactTree,
+}
 
 var artifactOpts struct {
 	annotations    []string
@@ -91,7 +102,9 @@ var artifactOpts struct {
 	filterAnnot    []string
 	formatList     string
 	formatPut      string
+	formatTree     string
 	outputDir      string
+	platform       string
 	refers         string
 	stripDirs      bool
 	subject        string
@@ -99,6 +112,7 @@ var artifactOpts struct {
 
 func init() {
 	artifactGetCmd.Flags().StringVarP(&artifactOpts.subject, "subject", "", "", "Get a referrer to the subject reference")
+	artifactGetCmd.Flags().StringVarP(&artifactOpts.platform, "platform", "p", "", "Specify platform of a subject (e.g. linux/amd64 or local)")
 	artifactGetCmd.Flags().StringVarP(&artifactOpts.filterAT, "filter-artifact-type", "", "", "Filter referrers by artifactType")
 	artifactGetCmd.Flags().StringArrayVarP(&artifactOpts.filterAnnot, "filter-annotation", "", []string{}, "Filter referrers by annotation (key=value)")
 	artifactGetCmd.Flags().StringVarP(&artifactOpts.artifactConfig, "config-file", "", "", "Config filename to output")
@@ -109,17 +123,19 @@ func init() {
 	})
 	artifactGetCmd.Flags().StringVarP(&artifactOpts.outputDir, "output", "o", "", "Output directory for multiple artifacts")
 	artifactGetCmd.Flags().BoolVarP(&artifactOpts.stripDirs, "strip-dirs", "", false, "Strip directories from filenames in output dir")
-	artifactGetCmd.Flags().StringVarP(&artifactOpts.refers, "refers", "", "", "EXPERIMENTAL: Get a referrer to the reference")
+	artifactGetCmd.Flags().StringVarP(&artifactOpts.refers, "refers", "", "", "Deprecated: Get a referrer to the reference")
 	artifactGetCmd.Flags().MarkHidden("refers")
 
 	artifactListCmd.Flags().StringVarP(&artifactOpts.filterAT, "filter-artifact-type", "", "", "Filter descriptors by artifactType")
 	artifactListCmd.Flags().StringArrayVarP(&artifactOpts.filterAnnot, "filter-annotation", "", []string{}, "Filter descriptors by annotation (key=value)")
 	artifactListCmd.Flags().StringVarP(&artifactOpts.formatList, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+	artifactListCmd.Flags().StringVarP(&artifactOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 
-	artifactPutCmd.Flags().StringVarP(&artifactOpts.artifactMT, "media-type", "", types.MediaTypeOCI1Manifest, "Manifest media-type")
+	artifactPutCmd.Flags().StringVarP(&artifactOpts.artifactMT, "media-type", "", types.MediaTypeOCI1Manifest, "EXPERIMENTAL: Manifest media-type")
 	artifactPutCmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return manifestKnownTypes, cobra.ShellCompDirectiveNoFileComp
 	})
+	artifactPutCmd.Flags().MarkHidden("media-type")
 	artifactPutCmd.Flags().StringVarP(&artifactOpts.artifactType, "artifact-type", "", "", "Artifact type or config mediaType")
 	artifactPutCmd.RegisterFlagCompletionFunc("artifact-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return configKnownTypes, cobra.ShellCompDirectiveNoFileComp
@@ -135,12 +151,18 @@ func init() {
 	artifactPutCmd.Flags().StringVarP(&artifactOpts.formatPut, "format", "", "", "Format output with go template syntax")
 	artifactPutCmd.Flags().StringVarP(&artifactOpts.subject, "subject", "", "", "Set the subject to a reference (used for referrer queries)")
 	artifactPutCmd.Flags().BoolVarP(&artifactOpts.stripDirs, "strip-dirs", "", false, "Strip directories from filenames in artifact")
+	artifactPutCmd.Flags().StringVarP(&artifactOpts.platform, "platform", "p", "", "Specify platform of a subject (e.g. linux/amd64 or local)")
 	artifactPutCmd.Flags().StringVarP(&artifactOpts.refers, "refers", "", "", "EXPERIMENTAL: Set a referrer to the reference")
 	artifactPutCmd.Flags().MarkHidden("refers")
+
+	artifactTreeCmd.Flags().StringVarP(&artifactOpts.filterAT, "filter-artifact-type", "", "", "Filter descriptors by artifactType")
+	artifactTreeCmd.Flags().StringArrayVarP(&artifactOpts.filterAnnot, "filter-annotation", "", []string{}, "Filter descriptors by annotation (key=value)")
+	artifactTreeCmd.Flags().StringVarP(&artifactOpts.formatTree, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 
 	artifactCmd.AddCommand(artifactGetCmd)
 	artifactCmd.AddCommand(artifactListCmd)
 	artifactCmd.AddCommand(artifactPutCmd)
+	artifactCmd.AddCommand(artifactTreeCmd)
 	rootCmd.AddCommand(artifactCmd)
 }
 
@@ -188,6 +210,9 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 				}
 			}
 			referrerOpts = append(referrerOpts, scheme.WithReferrerAnnotations(af))
+		}
+		if artifactOpts.platform != "" {
+			referrerOpts = append(referrerOpts, scheme.WithReferrerPlatform(artifactOpts.platform))
 		}
 
 		rl, err := rc.ReferrerList(ctx, rSubject, referrerOpts...)
@@ -365,7 +390,7 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		defer rdr.Close()
-		io.Copy(os.Stdout, rdr)
+		io.Copy(cmd.OutOrStdout(), rdr)
 	}
 
 	return nil
@@ -399,6 +424,9 @@ func runArtifactList(cmd *cobra.Command, args []string) error {
 		}
 		referrerOpts = append(referrerOpts, scheme.WithReferrerAnnotations(af))
 	}
+	if artifactOpts.platform != "" {
+		referrerOpts = append(referrerOpts, scheme.WithReferrerPlatform(artifactOpts.platform))
+	}
 
 	rl, err := rc.ReferrerList(ctx, rSubject, referrerOpts...)
 	if err != nil {
@@ -412,7 +440,7 @@ func runArtifactList(cmd *cobra.Command, args []string) error {
 	case "rawHeaders", "raw-headers", "headers":
 		artifactOpts.formatList = "{{ range $key,$vals := .Manifest.RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
-	return template.Writer(os.Stdout, artifactOpts.formatList, rl)
+	return template.Writer(cmd.OutOrStdout(), artifactOpts.formatList, rl)
 }
 
 func runArtifactPut(cmd *cobra.Command, args []string) error {
@@ -424,6 +452,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 
 	switch artifactOpts.artifactMT {
 	case types.MediaTypeOCI1Artifact:
+		log.Warnf("changing media-type is experimental and non-portable")
 		hasConfig = false
 	case "", types.MediaTypeOCI1Manifest:
 		hasConfig = true
@@ -469,7 +498,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 		// all other mis-matches are invalid
 		return fmt.Errorf("one artifact media-type must be set for each artifact file")
 	}
-	if artifactOpts.artifactType == "" {
+	if artifactOpts.artifactType == "" && hasConfig {
 		artifactOpts.artifactType = defaultMTConfig
 	}
 
@@ -490,12 +519,28 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 
 	var subjectDesc *types.Descriptor
 	if !rSubject.IsZero() {
-		smh, err := rc.ManifestHead(ctx, rSubject)
+		smh, err := rc.ManifestHead(ctx, rSubject, regclient.WithManifestRequireDigest())
 		if err != nil {
 			return fmt.Errorf("unable to find subject manifest: %w", err)
 		}
-		d := smh.GetDescriptor()
-		subjectDesc = &types.Descriptor{MediaType: d.MediaType, Digest: d.Digest, Size: d.Size}
+		if smh.IsList() && artifactOpts.platform != "" {
+			sml, err := rc.ManifestGet(ctx, rSubject)
+			if err != nil {
+				return fmt.Errorf("unable to get subject manifest: %w", err)
+			}
+			plat, err := platform.Parse(artifactOpts.platform)
+			if err != nil {
+				return fmt.Errorf("failed to parse platform: %w", err)
+			}
+			d, err := manifest.GetPlatformDesc(sml, &plat)
+			if err != nil {
+				return fmt.Errorf("failed to get platform descriptor: %w", err)
+			}
+			subjectDesc = &types.Descriptor{MediaType: d.MediaType, Digest: d.Digest, Size: d.Size}
+		} else {
+			d := smh.GetDescriptor()
+			subjectDesc = &types.Descriptor{MediaType: d.MediaType, Digest: d.Digest, Size: d.Size}
+		}
 	}
 
 	// read config, or initialize to an empty json config
@@ -667,5 +712,209 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	if artifactOpts.byDigest && artifactOpts.formatPut == "" {
 		artifactOpts.formatPut = "{{ printf \"%s\\n\" .Manifest.GetDescriptor.Digest }}"
 	}
-	return template.Writer(os.Stdout, artifactOpts.formatPut, result)
+	return template.Writer(cmd.OutOrStdout(), artifactOpts.formatPut, result)
+}
+
+func runArtifactTree(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+
+	// validate inputs
+	r, err := ref.New(args[0])
+	if err != nil {
+		return err
+	}
+
+	rc := newRegClient()
+	defer rc.Close(ctx, r)
+
+	referrerOpts := []scheme.ReferrerOpts{}
+	if artifactOpts.filterAT != "" {
+		referrerOpts = append(referrerOpts, scheme.WithReferrerAT(artifactOpts.filterAT))
+	}
+	if artifactOpts.filterAnnot != nil {
+		af := map[string]string{}
+		for _, kv := range artifactOpts.filterAnnot {
+			kvSplit := strings.SplitN(kv, "=", 2)
+			if len(kvSplit) == 2 {
+				af[kvSplit[0]] = kvSplit[1]
+			} else {
+				af[kv] = ""
+			}
+		}
+		referrerOpts = append(referrerOpts, scheme.WithReferrerAnnotations(af))
+	}
+
+	seen := []string{}
+	tr, err := treeAddResult(ctx, rc, r, seen, referrerOpts)
+	if err != nil {
+		return err
+	}
+
+	return template.Writer(cmd.OutOrStdout(), artifactOpts.formatTree, tr)
+}
+
+func treeAddResult(ctx context.Context, rc *regclient.RegClient, r ref.Ref, seen []string, rOpts []scheme.ReferrerOpts) (*treeResult, error) {
+	tr := treeResult{
+		Ref: r,
+	}
+
+	// get manifest
+	m, err := rc.ManifestGet(ctx, r)
+	if err != nil {
+		return nil, err
+	}
+	tr.Manifest = m
+
+	// track already seen manifests
+	dig := m.GetDescriptor().Digest.String()
+	if sliceHasStr(seen, dig) {
+		// loop detected, consider making this an error
+		return &tr, fmt.Errorf("loop detected")
+	}
+	seen = append(seen, dig)
+
+	// get child nodes
+	if m.IsList() {
+		tr.Child = []*treeResult{}
+		mi, ok := m.(manifest.Indexer)
+		if !ok {
+			return nil, fmt.Errorf("failed to convert a manifest list to indexer for %s", r.CommonName())
+		}
+		dl, err := mi.GetManifestList()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get platforms for %s: %w", r.CommonName(), err)
+		}
+		for _, d := range dl {
+			rChild := r
+			rChild.Tag = ""
+			rChild.Digest = d.Digest.String()
+			tChild, err := treeAddResult(ctx, rc, rChild, seen, rOpts)
+			if err != nil {
+				return nil, err
+			}
+			tChild.ArtifactType = d.ArtifactType
+			if d.Platform != nil {
+				pCopy := *d.Platform
+				tChild.Platform = &pCopy
+			}
+			tr.Child = append(tr.Child, tChild)
+		}
+	}
+
+	// get referrers
+	rl, err := rc.ReferrerList(ctx, r, rOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check referrers for %s: %w", r.CommonName(), err)
+	}
+	if len(rl.Descriptors) > 0 {
+		tr.Referrer = []*treeResult{}
+		for _, d := range rl.Descriptors {
+			rReferrer := r
+			rReferrer.Tag = ""
+			rReferrer.Digest = d.Digest.String()
+			tReferrer, err := treeAddResult(ctx, rc, rReferrer, seen, rOpts)
+			if err != nil {
+				return nil, err
+			}
+			tReferrer.ArtifactType = d.ArtifactType
+			if d.Platform != nil {
+				pCopy := *d.Platform
+				tReferrer.Platform = &pCopy
+			}
+			tr.Referrer = append(tr.Referrer, tReferrer)
+		}
+	}
+
+	return &tr, nil
+}
+
+func sliceHasStr(list []string, search string) bool {
+	for _, el := range list {
+		if el == search {
+			return true
+		}
+	}
+	return false
+}
+
+type treeResult struct {
+	Ref          ref.Ref            `json:"reference"`
+	Manifest     manifest.Manifest  `json:"manifest"`
+	Platform     *platform.Platform `json:"platform,omitempty"`
+	ArtifactType string             `json:"artifactType,omitempty"`
+	Child        []*treeResult      `json:"child,omitempty"`
+	Referrer     []*treeResult      `json:"referrer,omitempty"`
+}
+
+func (tr *treeResult) MarshalPretty() ([]byte, error) {
+	mp, err := tr.marshalPretty("")
+	if err != nil {
+		return nil, err
+	}
+	return []byte(fmt.Sprintf("Ref: %s\nDigest: %s", tr.Ref.CommonName(), mp)), nil
+}
+
+func (tr *treeResult) marshalPretty(indent string) ([]byte, error) {
+	result := bytes.NewBufferString("")
+	_, err := result.WriteString(tr.Manifest.GetDescriptor().Digest.String())
+	if err != nil {
+		return nil, err
+	}
+	if tr.Platform != nil {
+		_, err = result.WriteString(" [" + tr.Platform.String() + "]")
+		if err != nil {
+			return nil, err
+		}
+	}
+	if tr.ArtifactType != "" {
+		_, err = result.WriteString(": " + tr.ArtifactType)
+		if err != nil {
+			return nil, err
+		}
+	}
+	_, err = result.WriteString("\n")
+	if err != nil {
+		return nil, err
+	}
+	if len(tr.Child) > 0 {
+		_, err = result.WriteString(indent + "Children:\n")
+		if err != nil {
+			return nil, err
+		}
+		for _, trChild := range tr.Child {
+			_, err = result.WriteString(indent + "  - ")
+			if err != nil {
+				return nil, err
+			}
+			childBytes, err := trChild.marshalPretty(indent + "    ")
+			if err != nil {
+				return nil, err
+			}
+			_, err = result.Write(childBytes)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	if len(tr.Referrer) > 0 {
+		_, err = result.WriteString(indent + "Referrers:\n")
+		if err != nil {
+			return nil, err
+		}
+		for _, trReferrer := range tr.Referrer {
+			_, err = result.WriteString(indent + "  - ")
+			if err != nil {
+				return nil, err
+			}
+			referrerBytes, err := trReferrer.marshalPretty(indent + "    ")
+			if err != nil {
+				return nil, err
+			}
+			_, err = result.Write(referrerBytes)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return result.Bytes(), nil
 }

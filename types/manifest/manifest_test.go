@@ -356,6 +356,7 @@ func TestNew(t *testing.T) {
 		wantR       ref.Ref
 		wantDesc    types.Descriptor
 		wantE       error
+		isSet       bool
 		testAnnot   bool
 		hasAnnot    bool
 		testPlat    string
@@ -380,6 +381,7 @@ func TestNew(t *testing.T) {
 				Digest:    digestDockerSchema2,
 			},
 			wantE:       nil,
+			isSet:       true,
 			testAnnot:   true,
 			testSubject: true,
 			hasAnnot:    true,
@@ -402,6 +404,7 @@ func TestNew(t *testing.T) {
 			testAnnot:   true,
 			testSubject: true,
 			wantE:       nil,
+			isSet:       true,
 			hasAnnot:    true,
 		},
 		{
@@ -415,6 +418,7 @@ func TestNew(t *testing.T) {
 				}),
 			},
 			wantE:       nil,
+			isSet:       true,
 			testAnnot:   true,
 			testSubject: true,
 			hasAnnot:    true,
@@ -432,6 +436,7 @@ func TestNew(t *testing.T) {
 				WithRaw(rawDockerSchema2List),
 			},
 			wantE:       nil,
+			isSet:       true,
 			testAnnot:   true,
 			testSubject: true,
 			hasAnnot:    true,
@@ -453,13 +458,14 @@ func TestNew(t *testing.T) {
 				}),
 			},
 			wantE:       nil,
+			isSet:       true,
 			testAnnot:   true,
 			testSubject: true,
 			hasAnnot:    true,
 			hasSubject:  true,
 		},
 		{
-			name: "Header Request",
+			name: "Header Request Docker 2 Manifest",
 			opts: []Opts{
 				WithRef(r),
 				WithHeader(http.Header{
@@ -476,12 +482,132 @@ func TestNew(t *testing.T) {
 			wantE: nil,
 		},
 		{
+			name: "Header Request Docker 1 Manifest",
+			opts: []Opts{
+				WithRef(r),
+				WithHeader(http.Header{
+					"Content-Type":          []string{types.MediaTypeDocker1Manifest},
+					"Content-Length":        []string{fmt.Sprintf("%d", len(rawDockerSchema2))},
+					"Docker-Content-Digest": []string{digestDockerSchema2.String()},
+				}),
+			},
+			wantDesc: types.Descriptor{
+				MediaType: types.MediaTypeDocker1Manifest,
+				Size:      int64(len(rawDockerSchema2)),
+				Digest:    digestDockerSchema2,
+			},
+			wantE: nil,
+		},
+		{
+			name: "Header Request Docker 1 Manifest Signed",
+			opts: []Opts{
+				WithRef(r),
+				WithHeader(http.Header{
+					"Content-Type":          []string{types.MediaTypeDocker1ManifestSigned},
+					"Content-Length":        []string{fmt.Sprintf("%d", len(rawDockerSchema2))},
+					"Docker-Content-Digest": []string{digestDockerSchema2.String()},
+				}),
+			},
+			wantDesc: types.Descriptor{
+				MediaType: types.MediaTypeDocker1ManifestSigned,
+				Size:      int64(len(rawDockerSchema2)),
+				Digest:    digestDockerSchema2,
+			},
+			wantE: nil,
+		},
+		{
+			name: "Header Request Docker 2 Manifest",
+			opts: []Opts{
+				WithRef(r),
+				WithHeader(http.Header{
+					"Content-Type":          []string{types.MediaTypeDocker2Manifest},
+					"Content-Length":        []string{fmt.Sprintf("%d", len(rawDockerSchema2))},
+					"Docker-Content-Digest": []string{digestDockerSchema2.String()},
+				}),
+			},
+			wantDesc: types.Descriptor{
+				MediaType: types.MediaTypeDocker2Manifest,
+				Size:      int64(len(rawDockerSchema2)),
+				Digest:    digestDockerSchema2,
+			},
+			wantE: nil,
+		},
+		{
+			name: "Header Request Docker 2 Manifest List",
+			opts: []Opts{
+				WithRef(r),
+				WithHeader(http.Header{
+					"Content-Type":          []string{types.MediaTypeDocker2ManifestList},
+					"Content-Length":        []string{fmt.Sprintf("%d", len(rawDockerSchema2))},
+					"Docker-Content-Digest": []string{digestDockerSchema2.String()},
+				}),
+			},
+			wantDesc: types.Descriptor{
+				MediaType: types.MediaTypeDocker2ManifestList,
+				Size:      int64(len(rawDockerSchema2)),
+				Digest:    digestDockerSchema2,
+			},
+			wantE: nil,
+		},
+		{
+			name: "Header Request OCI Manifest",
+			opts: []Opts{
+				WithRef(r),
+				WithHeader(http.Header{
+					"Content-Type":          []string{types.MediaTypeOCI1Manifest},
+					"Content-Length":        []string{fmt.Sprintf("%d", len(rawDockerSchema2))},
+					"Docker-Content-Digest": []string{digestDockerSchema2.String()},
+				}),
+			},
+			wantDesc: types.Descriptor{
+				MediaType: types.MediaTypeOCI1Manifest,
+				Size:      int64(len(rawDockerSchema2)),
+				Digest:    digestDockerSchema2,
+			},
+			wantE: nil,
+		},
+		{
+			name: "Header Request OCI Manifest List",
+			opts: []Opts{
+				WithRef(r),
+				WithHeader(http.Header{
+					"Content-Type":          []string{types.MediaTypeOCI1ManifestList},
+					"Content-Length":        []string{fmt.Sprintf("%d", len(rawDockerSchema2))},
+					"Docker-Content-Digest": []string{digestDockerSchema2.String()},
+				}),
+			},
+			wantDesc: types.Descriptor{
+				MediaType: types.MediaTypeOCI1ManifestList,
+				Size:      int64(len(rawDockerSchema2)),
+				Digest:    digestDockerSchema2,
+			},
+			wantE: nil,
+		},
+		{
+			name: "Header Request OCI Artifact",
+			opts: []Opts{
+				WithRef(r),
+				WithHeader(http.Header{
+					"Content-Type":          []string{types.MediaTypeOCI1Artifact},
+					"Content-Length":        []string{fmt.Sprintf("%d", len(rawDockerSchema2))},
+					"Docker-Content-Digest": []string{digestDockerSchema2.String()},
+				}),
+			},
+			wantDesc: types.Descriptor{
+				MediaType: types.MediaTypeOCI1Artifact,
+				Size:      int64(len(rawDockerSchema2)),
+				Digest:    digestDockerSchema2,
+			},
+			wantE: nil,
+		},
+		{
 			name: "Docker Schema 1 Signed",
 			opts: []Opts{
 				WithRef(r),
 				WithRaw(rawDockerSchema1Signed),
 			},
 			wantE:       nil,
+			isSet:       true,
 			testAnnot:   true,
 			testSubject: true,
 		},
@@ -496,6 +622,7 @@ func TestNew(t *testing.T) {
 				}),
 			},
 			wantE: nil,
+			isSet: true,
 		},
 		{
 			name: "Invalid Http Digest",
@@ -519,6 +646,7 @@ func TestNew(t *testing.T) {
 				}),
 			},
 			wantE: nil,
+			isSet: true,
 		},
 		{
 			name: "Ambiguous OCI Index",
@@ -530,6 +658,7 @@ func TestNew(t *testing.T) {
 				}),
 			},
 			wantE: nil,
+			isSet: true,
 		},
 		{
 			name: "Invalid OCI Index",
@@ -585,6 +714,7 @@ func TestNew(t *testing.T) {
 				WithOrig(manifestDockerSchema2),
 			},
 			wantE:       nil,
+			isSet:       true,
 			testAnnot:   true,
 			testSubject: true,
 			hasAnnot:    true,
@@ -595,6 +725,7 @@ func TestNew(t *testing.T) {
 				WithOrig(manifestOCIArtifact),
 			},
 			wantE:       nil,
+			isSet:       true,
 			testAnnot:   true,
 			testSubject: true,
 			hasAnnot:    true,
@@ -606,6 +737,7 @@ func TestNew(t *testing.T) {
 				WithOrig(manifestDockerSchema1Signed),
 			},
 			wantE: nil,
+			isSet: true,
 		},
 		{
 			name: "Invalid Media Type",
@@ -641,14 +773,16 @@ func TestNew(t *testing.T) {
 				t.Errorf("failed running New: %v", err)
 				return
 			}
-			mp, ok := m.(interface{ MarshalPretty() ([]byte, error) })
-			if ok {
+			// MarshalPretty succeeds even if manifest is not set (it shows available metadata)
+			if mp, ok := m.(interface{ MarshalPretty() ([]byte, error) }); ok {
 				pretty, err := mp.MarshalPretty()
 				if err != nil {
-					t.Errorf("marshal pretty: %v", err)
+					t.Errorf("failed to MarshalPretty: %v", err)
 				} else {
 					t.Logf("marshal pretty:\n%s", string(pretty))
 				}
+			} else {
+				t.Errorf("MarshalPretty not available")
 			}
 			if tt.wantR.Scheme != "" && m.GetRef().CommonName() != tt.wantR.CommonName() {
 				t.Errorf("ref mismatch, expected %s, received %s", tt.wantR.CommonName(), m.GetRef().CommonName())
@@ -658,6 +792,75 @@ func TestNew(t *testing.T) {
 			}
 			if tt.wantDesc.MediaType != "" && GetMediaType(m) != tt.wantDesc.MediaType {
 				t.Errorf("media type mismatch, expected %s, received %s", tt.wantDesc.MediaType, GetMediaType(m))
+			}
+			if !tt.isSet {
+				// test methods on unset manifest
+				if m.IsSet() {
+					t.Errorf("manifest reports it is set")
+				}
+				if _, err := m.RawBody(); !errors.Is(err, types.ErrManifestNotSet) && !errors.Is(err, types.ErrUnsupportedMediaType) {
+					t.Errorf("RawBody did not return ManifestNotSet: %v", err)
+				}
+				if _, err := m.MarshalJSON(); !errors.Is(err, types.ErrManifestNotSet) && !errors.Is(err, types.ErrUnsupportedMediaType) {
+					t.Errorf("MarshalJSON did not return ManifestNotSet: %v", err)
+				}
+				if ma, ok := m.(Annotator); ok {
+					if _, err := ma.GetAnnotations(); !errors.Is(err, types.ErrManifestNotSet) && !errors.Is(err, types.ErrUnsupportedMediaType) {
+						t.Errorf("GetAnnotations did not return ManifestNotSet: %v", err)
+					}
+				}
+				if mi, ok := m.(Indexer); ok {
+					if _, err := mi.GetManifestList(); !errors.Is(err, types.ErrManifestNotSet) && !errors.Is(err, types.ErrUnsupportedMediaType) {
+						t.Errorf("GetManifestList did not return ManifestNotSet: %v", err)
+					}
+				}
+				if mi, ok := m.(Imager); ok {
+					if _, err := mi.GetConfig(); !errors.Is(err, types.ErrManifestNotSet) && !errors.Is(err, types.ErrUnsupportedMediaType) {
+						t.Errorf("GetConfig did not return ManifestNotSet: %v", err)
+					}
+					if _, err := mi.GetLayers(); !errors.Is(err, types.ErrManifestNotSet) && !errors.Is(err, types.ErrUnsupportedMediaType) {
+						t.Errorf("GetLayers did not return ManifestNotSet: %v", err)
+					}
+				}
+				if ms, ok := m.(Subjecter); ok {
+					if _, err := ms.GetSubject(); !errors.Is(err, types.ErrManifestNotSet) && !errors.Is(err, types.ErrUnsupportedMediaType) {
+						t.Errorf("GetSubject did not return ManifestNotSet: %v", err)
+					}
+				}
+			} else {
+				// test methods on set manifest
+				if !m.IsSet() {
+					t.Errorf("manifest reports it is not set")
+				}
+				if _, err := m.RawBody(); errors.Is(err, types.ErrManifestNotSet) {
+					t.Errorf("RawBody returned ManifestNotSet: %v", err)
+				}
+				if _, err := m.MarshalJSON(); errors.Is(err, types.ErrManifestNotSet) {
+					t.Errorf("MarshalJSON returned ManifestNotSet: %v", err)
+				}
+				if ma, ok := m.(Annotator); ok {
+					if _, err := ma.GetAnnotations(); errors.Is(err, types.ErrManifestNotSet) {
+						t.Errorf("GetAnnotations returned ManifestNotSet: %v", err)
+					}
+				}
+				if mi, ok := m.(Indexer); ok {
+					if _, err := mi.GetManifestList(); errors.Is(err, types.ErrManifestNotSet) {
+						t.Errorf("GetManifestList returned ManifestNotSet: %v", err)
+					}
+				}
+				if mi, ok := m.(Imager); ok {
+					if _, err := mi.GetConfig(); errors.Is(err, types.ErrManifestNotSet) {
+						t.Errorf("GetConfig returned ManifestNotSet: %v", err)
+					}
+					if _, err := mi.GetLayers(); errors.Is(err, types.ErrManifestNotSet) {
+						t.Errorf("GetLayers returned ManifestNotSet: %v", err)
+					}
+				}
+				if ms, ok := m.(Subjecter); ok {
+					if _, err := ms.GetSubject(); errors.Is(err, types.ErrManifestNotSet) {
+						t.Errorf("GetSubject returned ManifestNotSet: %v", err)
+					}
+				}
 			}
 			if tt.testAnnot {
 				mr, ok := m.(Annotator)

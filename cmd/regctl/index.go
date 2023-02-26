@@ -61,6 +61,7 @@ var indexOpts struct {
 	annotations     []string
 	byDigest        bool
 	descAnnotations []string
+	descPlatform    string
 	digests         []string
 	format          string
 	mediaType       string
@@ -70,12 +71,14 @@ var indexOpts struct {
 
 func init() {
 	indexAddCmd.Flags().StringArrayVarP(&indexOpts.descAnnotations, "desc-annotation", "", []string{}, "Annotation to add to descriptors of new entries")
+	indexAddCmd.Flags().StringVarP(&indexOpts.descPlatform, "desc-platform", "", "", "Platform to set in descriptors of new entries")
 	indexAddCmd.Flags().StringArrayVarP(&indexOpts.digests, "digest", "", []string{}, "Digest to add")
 	indexAddCmd.Flags().StringArrayVarP(&indexOpts.refs, "ref", "", []string{}, "References to add")
 
 	indexCreateCmd.Flags().StringArrayVarP(&indexOpts.annotations, "annotation", "", []string{}, "Annotation to set on manifest")
 	indexCreateCmd.Flags().BoolVarP(&indexOpts.byDigest, "by-digest", "", false, "Push manifest by digest instead of tag")
 	indexCreateCmd.Flags().StringArrayVarP(&indexOpts.descAnnotations, "desc-annotation", "", []string{}, "Annotation to add to descriptors of new entries")
+	indexCreateCmd.Flags().StringVarP(&indexOpts.descPlatform, "desc-platform", "", "", "Platform to set in descriptors of new entries")
 	indexCreateCmd.Flags().StringArrayVarP(&indexOpts.digests, "digest", "", []string{}, "Digest to include in new index")
 	indexCreateCmd.Flags().StringVarP(&indexOpts.format, "format", "", "", "Format output with go template syntax")
 	indexCreateCmd.Flags().StringVarP(&indexOpts.mediaType, "media-type", "m", types.MediaTypeOCI1ManifestList, "Media-type for manifest list or OCI Index")
@@ -347,7 +350,7 @@ func indexBuildDescList(ctx context.Context, rc *regclient.RegClient, r ref.Ref)
 		if err != nil {
 			return nil, err
 		}
-		mCopy, err := rc.ManifestHead(ctx, srcRef)
+		mCopy, err := rc.ManifestHead(ctx, srcRef, regclient.WithManifestRequireDigest())
 		if err != nil {
 			return nil, err
 		}
@@ -374,7 +377,12 @@ func indexBuildDescList(ctx context.Context, rc *regclient.RegClient, r ref.Ref)
 			return nil, err
 		}
 		desc := mDig.GetDescriptor()
-		plat, err := indexGetPlatform(ctx, rc, rDig, mDig)
+		plat := &platform.Platform{}
+		if indexOpts.descPlatform != "" {
+			*plat, err = platform.Parse(indexOpts.descPlatform)
+		} else {
+			plat, err = indexGetPlatform(ctx, rc, rDig, mDig)
+		}
 		if err == nil {
 			desc.Platform = plat
 		}

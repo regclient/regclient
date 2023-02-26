@@ -2,6 +2,5 @@ hack
 /regctl
 artifacts/
 bin/
+output/
 vendor/
-embed/version.json
-cmd/**/embed/version.json

@@ -46,14 +46,6 @@ var manifestDiffCmd = &cobra.Command{
 	RunE:              runManifestDiff,
 }
 
-var manifestDigestCmd = &cobra.Command{
-	Use:               "digest <image_ref>",
-	Short:             "retrieve digest of manifest",
-	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: completeArgTag,
-	RunE:              runManifestDigest,
-}
-
 var manifestGetCmd = &cobra.Command{
 	Use:               "get <image_ref>",
 	Aliases:           []string{"pull"},
@@ -62,6 +54,16 @@ var manifestGetCmd = &cobra.Command{
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: completeArgTag,
 	RunE:              runManifestGet,
+}
+
+var manifestHeadCmd = &cobra.Command{
+	Use:               "head <image_ref>",
+	Aliases:           []string{"digest"},
+	Short:             "http head request for manifest",
+	Long:              `Shows the digest or headers from an http manifest head request.`,
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeArgTag,
+	RunE:              runManifestHead,
 }
 
 var manifestPutCmd = &cobra.Command{
@@ -80,11 +82,13 @@ var manifestOpts struct {
 	diffCtx       int
 	diffFullCtx   bool
 	forceTagDeref bool
-	format        string
+	formatGet     string
+	formatHead    string
 	formatPut     string
 	list          bool
 	platform      string
 	referrers     bool
+	requireDigest bool
 	requireList   bool
 }
 
@@ -95,16 +99,18 @@ func init() {
 	manifestDiffCmd.Flags().IntVarP(&manifestOpts.diffCtx, "context", "", 3, "Lines of context")
 	manifestDiffCmd.Flags().BoolVarP(&manifestOpts.diffFullCtx, "context-full", "", false, "Show all lines of context")
 
-	manifestDigestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Do not resolve platform from manifest list (enabled by default)")
-	manifestDigestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
-	manifestDigestCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
-	manifestDigestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
-	manifestDigestCmd.Flags().MarkHidden("list")
+	manifestHeadCmd.Flags().StringVarP(&manifestOpts.formatHead, "format", "", "", "Format output with go template syntax (use \"raw-body\" for the original manifest)")
+	manifestHeadCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Do not resolve platform from manifest list (enabled by default)")
+	manifestHeadCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
+	manifestHeadCmd.Flags().BoolVarP(&manifestOpts.requireDigest, "require-digest", "", false, "Fallback to get request if digest is not received")
+	manifestHeadCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
+	manifestHeadCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
+	manifestHeadCmd.Flags().MarkHidden("list")
 
 	manifestGetCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Output manifest list if available (enabled by default)")
 	manifestGetCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	manifestGetCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
-	manifestGetCmd.Flags().StringVarP(&manifestOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax (use \"raw-body\" for the original manifest)")
+	manifestGetCmd.Flags().StringVarP(&manifestOpts.formatGet, "format", "", "{{printPretty .}}", "Format output with go template syntax (use \"raw-body\" for the original manifest)")
 	manifestGetCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	manifestGetCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 	manifestGetCmd.Flags().MarkHidden("list")
@@ -116,7 +122,7 @@ func init() {
 
 	manifestCmd.AddCommand(manifestDeleteCmd)
 	manifestCmd.AddCommand(manifestDiffCmd)
-	manifestCmd.AddCommand(manifestDigestCmd)
+	manifestCmd.AddCommand(manifestHeadCmd)
 	manifestCmd.AddCommand(manifestGetCmd)
 	manifestCmd.AddCommand(manifestPutCmd)
 	rootCmd.AddCommand(manifestCmd)
@@ -208,7 +214,7 @@ func runManifestDelete(cmd *cobra.Command, args []string) error {
 	defer rc.Close(ctx, r)
 
 	if r.Digest == "" && manifestOpts.forceTagDeref {
-		m, err := rc.ManifestHead(ctx, r)
+		m, err := rc.ManifestHead(ctx, r, regclient.WithManifestRequireDigest())
 		if err != nil {
 			return err
 		}
@@ -281,13 +287,13 @@ func runManifestDiff(cmd *cobra.Command, args []string) error {
 
 	mDiff := diff.Diff(strings.Split(string(m1Json), "\n"), strings.Split(string(m2Json), "\n"), diffOpts...)
 
-	_, err = fmt.Fprintln(os.Stdout, strings.Join(mDiff, "\n"))
+	_, err = fmt.Fprintln(cmd.OutOrStdout(), strings.Join(mDiff, "\n"))
 	return err
 	// TODO: support templating
-	// return template.Writer(os.Stdout, manifestOpts.format, mDiff)
+	// return template.Writer(cmd.OutOrStdout(), manifestOpts.format, mDiff)
 }
 
-func runManifestDigest(cmd *cobra.Command, args []string) error {
+func runManifestHead(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	if manifestOpts.platform != "" && !flagChanged(cmd, "list") {
 		manifestOpts.list = false
@@ -305,10 +311,15 @@ func runManifestDigest(cmd *cobra.Command, args []string) error {
 		"host": r.Registry,
 		"repo": r.Repository,
 		"tag":  r.Tag,
-	}).Debug("Manifest digest")
+	}).Debug("Manifest head")
+
+	mOpts := []regclient.ManifestOpts{}
+	if manifestOpts.requireDigest || (!flagChanged(cmd, "require-digest") && !flagChanged(cmd, "format")) {
+		mOpts = append(mOpts, regclient.WithManifestRequireDigest())
+	}
 
 	// attempt to request only the headers, avoids Docker Hub rate limits
-	m, err := rc.ManifestHead(ctx, r)
+	m, err := rc.ManifestHead(ctx, r, mOpts...)
 	if err != nil {
 		return err
 	}
@@ -329,14 +340,19 @@ func runManifestDigest(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("failed retrieving platform specific digest: %w", err)
 		}
 		r.Digest = desc.Digest.String()
-		m, err = rc.ManifestHead(ctx, r)
+		m, err = rc.ManifestHead(ctx, r, mOpts...)
 		if err != nil {
 			return fmt.Errorf("failed retrieving platform specific digest: %w", err)
 		}
 	}
 
-	fmt.Println(manifest.GetDigest(m).String())
-	return nil
+	switch manifestOpts.formatHead {
+	case "", "digest":
+		manifestOpts.formatHead = "{{ printf \"%s\\n\" .GetDescriptor.Digest }}"
+	case "rawHeaders", "raw-headers", "headers":
+		manifestOpts.formatHead = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
+	}
+	return template.Writer(cmd.OutOrStdout(), manifestOpts.formatHead, m)
 }
 
 func runManifestGet(cmd *cobra.Command, args []string) error {
@@ -359,15 +375,15 @@ func runManifestGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	switch manifestOpts.format {
+	switch manifestOpts.formatGet {
 	case "raw":
-		manifestOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .RawBody}}"
+		manifestOpts.formatGet = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .RawBody}}"
 	case "rawBody", "raw-body", "body":
-		manifestOpts.format = "{{printf \"%s\" .RawBody}}"
+		manifestOpts.formatGet = "{{printf \"%s\" .RawBody}}"
 	case "rawHeaders", "raw-headers", "headers":
-		manifestOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
+		manifestOpts.formatGet = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
-	return template.Writer(os.Stdout, manifestOpts.format, m)
+	return template.Writer(cmd.OutOrStdout(), manifestOpts.formatGet, m)
 }
 
 func runManifestPut(cmd *cobra.Command, args []string) error {
@@ -414,5 +430,5 @@ func runManifestPut(cmd *cobra.Command, args []string) error {
 	if manifestOpts.byDigest && manifestOpts.formatPut == "" {
 		manifestOpts.formatPut = "{{ printf \"%s\\n\" .Manifest.GetDescriptor.Digest }}"
 	}
-	return template.Writer(os.Stdout, manifestOpts.formatPut, result)
+	return template.Writer(cmd.OutOrStdout(), manifestOpts.formatPut, result)
 }

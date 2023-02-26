@@ -12,6 +12,7 @@ import (
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	v1 "github.com/regclient/regclient/types/oci/v1"
+	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/sirupsen/logrus"
 )
@@ -39,6 +40,7 @@ func TestReferrer(t *testing.T) {
 	tagName := "v3"
 	aType := "application/example.sbom"
 	bType := "application/example.sig"
+	cType := "application/example.attestation"
 	extraAnnot := "org.opencontainers.artifact.sbom.format"
 	extraValueA := "json"
 	extraValueB := "yaml"
@@ -60,6 +62,17 @@ func TestReferrer(t *testing.T) {
 		extraAnnot: extraValueA,
 	}
 	mDesc := m.GetDescriptor()
+	pAMDStr := "linux/amd64"
+	pAMD, err := platform.Parse(pAMDStr)
+	if err != nil {
+		t.Errorf("failed to parse platform: %v", err)
+		return
+	}
+	mAMDDesc, err := manifest.GetPlatformDesc(m, &pAMD)
+	if err != nil {
+		t.Errorf("failed to get AMD descriptor: %v", err)
+		return
+	}
 	artifactA := v1.Manifest{
 		Versioned: v1.ManifestSchemaVersion,
 		MediaType: types.MediaTypeOCI1Manifest,
@@ -112,6 +125,23 @@ func TestReferrer(t *testing.T) {
 		t.Errorf("failed extracting raw body from artifact: %v", err)
 		return
 	}
+	artifactC := v1.ArtifactManifest{
+		MediaType:    types.MediaTypeOCI1Artifact,
+		ArtifactType: cType,
+		Blobs: []types.Descriptor{
+			{
+				MediaType: types.MediaTypeOCI1LayerGzip,
+				Size:      8,
+				Digest:    digest2,
+			},
+		},
+		Subject: mAMDDesc,
+	}
+	artifactCM, err := manifest.New(manifest.WithOrig(artifactC))
+	if err != nil {
+		t.Errorf("failed creating artifact manifest: %v", err)
+		return
+	}
 
 	// list empty
 	t.Run("List empty", func(t *testing.T) {
@@ -127,7 +157,7 @@ func TestReferrer(t *testing.T) {
 		}
 	})
 
-	// attach to v1 image
+	// attach to image
 	t.Run("Put", func(t *testing.T) {
 		r := mRef
 		r.Tag = ""
@@ -144,6 +174,12 @@ func TestReferrer(t *testing.T) {
 		}
 		r.Digest = artifactBM.GetDescriptor().Digest.String()
 		err = o.ManifestPut(ctx, r, artifactBM, scheme.WithManifestChild())
+		if err != nil {
+			t.Errorf("Failed running ManifestPut on Artifact: %v", err)
+			return
+		}
+		r.Digest = artifactCM.GetDescriptor().Digest.String()
+		err = o.ManifestPut(ctx, r, artifactCM, scheme.WithManifestChild())
 		if err != nil {
 			t.Errorf("Failed running ManifestPut on Artifact: %v", err)
 			return
@@ -233,6 +269,32 @@ func TestReferrer(t *testing.T) {
 		}
 		if len(rl.Descriptors) > 0 {
 			t.Errorf("unexpected descriptors")
+			return
+		}
+		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerAnnotations(map[string]string{extraAnnot: ""}))
+		if err != nil {
+			t.Errorf("Failed running ReferrerList: %v", err)
+			return
+		}
+		if len(rl.Descriptors) != 2 {
+			t.Errorf("descriptor list length, expected 2, received %d", len(rl.Descriptors))
+			return
+		}
+	})
+	// list platform=linux/amd64
+	t.Run("List Annotation for Platform", func(t *testing.T) {
+		r, err := ref.New(repo + ":" + tagName)
+		if err != nil {
+			t.Errorf("Failed creating getRef: %v", err)
+			return
+		}
+		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerPlatform(pAMDStr))
+		if err != nil {
+			t.Errorf("Failed running ReferrerList: %v", err)
+			return
+		}
+		if len(rl.Descriptors) != 1 {
+			t.Errorf("descriptor list length, expected 1, received %d", len(rl.Descriptors))
 			return
 		}
 	})
