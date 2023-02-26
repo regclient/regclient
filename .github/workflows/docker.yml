@@ -19,7 +19,8 @@ jobs:
       # id-token is used by cosign's OIDC based signing
       # https://blog.chainguard.dev/zero-friction-keyless-signing-with-github-actions/
       id-token: 'write'
-      contents: 'read'
+      contents: 'write'
+      packages: write
 
     strategy:
       matrix:
