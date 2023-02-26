@@ -1,4 +1,8 @@
-# Release v0.4.6
+# Release v0.4.7
+
+This is a repeat of v0.4.6 with fixes to GitHub Actions performing the release.
+
+## Release v0.4.6
 
 Breaking Changes:
 
