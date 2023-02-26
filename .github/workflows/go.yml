@@ -26,7 +26,7 @@ jobs:
       # https://blog.chainguard.dev/zero-friction-keyless-signing-with-github-actions/
       id-token: 'write'
       contents: 'write'
-      packages: write
+      packages: 'write'
 
     steps:
     - name: "Set up Go ${{ matrix.gover }}"
@@ -128,6 +128,8 @@ jobs:
       if: steps.release_details.outputs.valid == 'true' && matrix.gover == env.RELEASE_GO_VER
       id: release_create
       uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: ${{ steps.release_details.outputs.version }}
         body: ${{ steps.release_details.outputs.release_notes }}
