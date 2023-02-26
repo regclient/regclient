@@ -20,7 +20,7 @@ jobs:
       # https://blog.chainguard.dev/zero-friction-keyless-signing-with-github-actions/
       id-token: 'write'
       contents: 'write'
-      packages: write
+      packages: 'write'
 
     strategy:
       matrix:
@@ -93,8 +93,8 @@ jobs:
       uses: docker/login-action@v2
       with:
         registry: ghcr.io
-        username: ${{ secrets.GHCR_USERNAME }}
-        password: ${{ secrets.GHCR_TOKEN }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Build
       uses: docker/build-push-action@v4
