@@ -204,9 +204,6 @@ jobs:
 
     - name: Sign the container image
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
-      env:
-        # experimental support needed for GitHub OIDC signing
-        COSIGN_EXPERIMENTAL: "true"
       run: |
-        cosign sign -y ${{ steps.prep.outputs.image_hub }}@${{ steps.mutate.outputs.digest }}
-        cosign sign -y ${{ steps.prep.outputs.image_ghcr }}@${{ steps.mutate.outputs.digest }}
+        cosign sign -y -r ${{ steps.prep.outputs.image_hub }}@${{ steps.mutate.outputs.digest }}
+        cosign sign -y -r ${{ steps.prep.outputs.image_ghcr }}@${{ steps.mutate.outputs.digest }}
