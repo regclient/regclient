@@ -169,11 +169,12 @@ func init() {
 
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.forceRecursive, "force-recursive", "", false, "Force recursive copy of image, repairs missing nested blobs and manifests")
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.includeExternal, "include-external", "", false, "Include external layers")
+	imageCopyCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageCopyCmd.Flags().StringArrayVarP(&imageOpts.platforms, "platforms", "", []string{}, "Copy only specific platforms, registry validation must be disabled")
-	imageCopyCmd.Flags().BoolVarP(&imageOpts.digestTags, "digest-tags", "", false, "Include digest tags (\"sha256-<digest>.*\") when copying manifests")
-	imageCopyCmd.Flags().BoolVarP(&imageOpts.referrers, "referrers", "", false, "Include referrers")
 	// platforms should be treated as experimental since it will break many registries
 	imageCopyCmd.Flags().MarkHidden("platforms")
+	imageCopyCmd.Flags().BoolVarP(&imageOpts.digestTags, "digest-tags", "", false, "Include digest tags (\"sha256-<digest>.*\") when copying manifests")
+	imageCopyCmd.Flags().BoolVarP(&imageOpts.referrers, "referrers", "", false, "Include referrers")
 
 	imageDeleteCmd.Flags().BoolVarP(&manifestOpts.forceTagDeref, "force-tag-dereference", "", false, "Dereference the a tag to a digest, this is unsafe")
 
@@ -185,6 +186,8 @@ func init() {
 
 	imageGetFileCmd.Flags().StringVarP(&imageOpts.formatFile, "format", "", "", "Format output with go template syntax")
 	imageGetFileCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
+
+	imageExportCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 
 	imageInspectCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageInspectCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
@@ -571,7 +574,23 @@ func runImageCopy(cmd *cobra.Command, args []string) error {
 	rc := newRegClient()
 	defer rc.Close(ctx, rSrc)
 	defer rc.Close(ctx, rTgt)
-
+	if imageOpts.platform != "" {
+		p, err := platform.Parse(imageOpts.platform)
+		if err != nil {
+			return err
+		}
+		m, err := rc.ManifestGet(ctx, rSrc)
+		if err != nil {
+			return err
+		}
+		if m.IsList() {
+			d, err := manifest.GetPlatformDesc(m, &p)
+			if err != nil {
+				return err
+			}
+			rSrc.Digest = d.Digest.String()
+		}
+	}
 	log.WithFields(logrus.Fields{
 		"source":      rSrc.CommonName(),
 		"target":      rTgt.CommonName(),
@@ -614,6 +633,23 @@ func runImageExport(cmd *cobra.Command, args []string) error {
 	}
 	rc := newRegClient()
 	defer rc.Close(ctx, r)
+	if imageOpts.platform != "" {
+		p, err := platform.Parse(imageOpts.platform)
+		if err != nil {
+			return err
+		}
+		m, err := rc.ManifestGet(ctx, r)
+		if err != nil {
+			return err
+		}
+		if m.IsList() {
+			d, err := manifest.GetPlatformDesc(m, &p)
+			if err != nil {
+				return err
+			}
+			r.Digest = d.Digest.String()
+		}
+	}
 	log.WithFields(logrus.Fields{
 		"ref": r.CommonName(),
 	}).Debug("Image export")
@@ -636,7 +672,6 @@ func runImageGetFile(cmd *cobra.Command, args []string) error {
 		"filename": filename,
 	}).Debug("Get file")
 
-	// TODO: a manifest get for a specific platform would be useful
 	// make it recursive for index of index scenarios
 	m, err := rc.ManifestGet(ctx, r)
 	if err != nil {
