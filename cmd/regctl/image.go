@@ -145,6 +145,7 @@ var imageOpts struct {
 	checkBaseDigest string
 	checkSkipConfig bool
 	create          string
+	exportRef       string
 	forceRecursive  bool
 	format          string
 	formatFile      string
@@ -187,6 +188,7 @@ func init() {
 	imageGetFileCmd.Flags().StringVarP(&imageOpts.formatFile, "format", "", "", "Format output with go template syntax")
 	imageGetFileCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 
+	imageExportCmd.Flags().StringVar(&imageOpts.exportRef, "name", "", "Name of image to embed for docker load")
 	imageExportCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 
 	imageInspectCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
@@ -633,6 +635,7 @@ func runImageExport(cmd *cobra.Command, args []string) error {
 	}
 	rc := newRegClient()
 	defer rc.Close(ctx, r)
+	opts := []regclient.ImageOpts{}
 	if imageOpts.platform != "" {
 		p, err := platform.Parse(imageOpts.platform)
 		if err != nil {
@@ -650,10 +653,17 @@ func runImageExport(cmd *cobra.Command, args []string) error {
 			r.Digest = d.Digest.String()
 		}
 	}
+	if imageOpts.exportRef != "" {
+		eRef, err := ref.New(imageOpts.exportRef)
+		if err != nil {
+			return fmt.Errorf("cannot parse %s: %w", imageOpts.exportRef, err)
+		}
+		opts = append(opts, regclient.ImageWithExportRef(eRef))
+	}
 	log.WithFields(logrus.Fields{
 		"ref": r.CommonName(),
 	}).Debug("Image export")
-	return rc.ImageExport(ctx, r, w)
+	return rc.ImageExport(ctx, r, w, opts...)
 }
 
 func runImageGetFile(cmd *cobra.Command, args []string) error {
