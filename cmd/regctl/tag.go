@@ -1,8 +1,6 @@
 package main
 
 import (
-	"os"
-
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types/ref"
@@ -105,5 +103,5 @@ func runTagLs(cmd *cobra.Command, args []string) error {
 	case "rawHeaders", "raw-headers", "headers":
 		tagOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
-	return template.Writer(os.Stdout, tagOpts.format, tl)
+	return template.Writer(cmd.OutOrStdout(), tagOpts.format, tl)
 }

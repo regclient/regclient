@@ -187,10 +187,10 @@ func runBlobDiffConfig(cmd *cobra.Command, args []string) error {
 
 	cDiff := diff.Diff(strings.Split(string(c1Json), "\n"), strings.Split(string(c2Json), "\n"), diffOpts...)
 
-	_, err = fmt.Fprintln(os.Stdout, strings.Join(cDiff, "\n"))
+	_, err = fmt.Fprintln(cmd.OutOrStdout(), strings.Join(cDiff, "\n"))
 	return err
 	// TODO: support templating
-	// return template.Writer(os.Stdout, blobOpts.format, cDiff)
+	// return template.Writer(cmd.OutOrStdout(), blobOpts.format, cDiff)
 }
 
 func runBlobDiffLayer(cmd *cobra.Command, args []string) error {
@@ -267,7 +267,7 @@ func runBlobDiffLayer(cmd *cobra.Command, args []string) error {
 
 	// run diff and output result
 	lDiff := diff.Diff(rep1, rep2, diffOpts...)
-	_, err = fmt.Fprintln(os.Stdout, strings.Join(lDiff, "\n"))
+	_, err = fmt.Fprintln(cmd.OutOrStdout(), strings.Join(lDiff, "\n"))
 	return err
 }
 
@@ -303,16 +303,16 @@ func runBlobGet(cmd *cobra.Command, args []string) error {
 	case "raw":
 		blobOpts.formatGet = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .RawBody}}"
 	case "rawBody", "raw-body", "body":
-		_, err = io.Copy(os.Stdout, blob)
+		_, err = io.Copy(cmd.OutOrStdout(), blob)
 		return err
 	case "rawHeaders", "raw-headers", "headers":
 		blobOpts.formatGet = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	case "{{printPretty .}}":
-		_, err = io.Copy(os.Stdout, blob)
+		_, err = io.Copy(cmd.OutOrStdout(), blob)
 		return err
 	}
 
-	return template.Writer(os.Stdout, blobOpts.formatGet, blob)
+	return template.Writer(cmd.OutOrStdout(), blobOpts.formatGet, blob)
 }
 
 func runBlobGetFile(cmd *cobra.Command, args []string) error {
@@ -357,11 +357,11 @@ func runBlobGetFile(cmd *cobra.Command, args []string) error {
 			Header: th,
 			Reader: rdr,
 		}
-		return template.Writer(os.Stdout, blobOpts.formatFile, data)
+		return template.Writer(cmd.OutOrStdout(), blobOpts.formatFile, data)
 	}
 	var w io.Writer
 	if len(args) < 4 {
-		w = os.Stdout
+		w = cmd.OutOrStdout()
 	} else {
 		w, err = os.Create(args[3])
 		if err != nil {
@@ -403,7 +403,7 @@ func runBlobHead(cmd *cobra.Command, args []string) error {
 		blobOpts.formatHead = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
 
-	return template.Writer(os.Stdout, blobOpts.formatHead, blob)
+	return template.Writer(cmd.OutOrStdout(), blobOpts.formatHead, blob)
 }
 
 func runBlobPut(cmd *cobra.Command, args []string) error {
@@ -438,7 +438,7 @@ func runBlobPut(cmd *cobra.Command, args []string) error {
 		Size:   dOut.Size,
 	}
 
-	return template.Writer(os.Stdout, blobOpts.formatPut, result)
+	return template.Writer(cmd.OutOrStdout(), blobOpts.formatPut, result)
 }
 
 func blobReportLayer(tr *tar.Reader) ([]string, error) {

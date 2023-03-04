@@ -1,7 +1,6 @@
 package main
 
 import (
-	"os"
 	"strings"
 
 	"github.com/regclient/regclient/pkg/template"
@@ -79,5 +78,5 @@ func runRepoLs(cmd *cobra.Command, args []string) error {
 	case "rawHeaders", "raw-headers", "headers":
 		repoOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
-	return template.Writer(os.Stdout, repoOpts.format, rl)
+	return template.Writer(cmd.OutOrStdout(), repoOpts.format, rl)
 }
