@@ -85,7 +85,7 @@ func rootPreRun(cmd *cobra.Command, args []string) error {
 
 func runVersion(cmd *cobra.Command, args []string) error {
 	info := version.GetInfo()
-	return template.Writer(os.Stdout, rootOpts.format, info)
+	return template.Writer(cmd.OutOrStdout(), rootOpts.format, info)
 }
 
 func newRegClient() *regclient.RegClient {

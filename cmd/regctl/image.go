@@ -631,7 +631,7 @@ func runImageExport(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	} else {
-		w = os.Stdout
+		w = cmd.OutOrStdout()
 	}
 	rc := newRegClient()
 	defer rc.Close(ctx, r)
@@ -751,11 +751,11 @@ func runImageGetFile(cmd *cobra.Command, args []string) error {
 				Header: th,
 				Reader: rdr,
 			}
-			return template.Writer(os.Stdout, imageOpts.formatFile, data)
+			return template.Writer(cmd.OutOrStdout(), imageOpts.formatFile, data)
 		}
 		var w io.Writer
 		if len(args) < 3 {
-			w = os.Stdout
+			w = cmd.OutOrStdout()
 		} else {
 			w, err = os.Create(args[2])
 			if err != nil {
@@ -839,7 +839,7 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 	case "rawHeaders", "raw-headers", "headers":
 		imageOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
-	return template.Writer(os.Stdout, imageOpts.format, blobConfig)
+	return template.Writer(cmd.OutOrStdout(), imageOpts.format, blobConfig)
 }
 
 func runImageMod(cmd *cobra.Command, args []string) error {
@@ -911,7 +911,7 @@ func runImageRateLimit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	return template.Writer(os.Stdout, imageOpts.format, manifest.GetRateLimit(m))
+	return template.Writer(cmd.OutOrStdout(), imageOpts.format, manifest.GetRateLimit(m))
 }
 
 type modFlagFunc struct {

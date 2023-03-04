@@ -92,6 +92,18 @@ echo eggs | regctl artifact put \
 echo signed | regctl artifact put \
   --artifact-type application/example.signature -m application/example.signature.text \
   --subject ocidir://testrepo:v2 ocidir://testrepo:a2
+echo no arms | regctl artifact put \
+  --artifact-type application/example.arms -m application/example.arms \
+  --subject ocidir://testrepo:v2 --platform linux/amd64
+echo no arms | regctl artifact put \
+  --artifact-type application/example.arms -m application/example.arms \
+  --subject ocidir://testrepo:v2 --platform linux/amd64
+echo 7 arms | regctl artifact put \
+  --artifact-type application/example.arms -m application/example.arms \
+  --subject ocidir://testrepo:v2 --platform linux/arm/v7
+echo 64 arms | regctl artifact put \
+  --artifact-type application/example.arms -m application/example.arms \
+  --subject ocidir://testrepo:v2 --platform linux/arm64
 
 # create a digest tag from v3 pointing to v1
 v1_dig="$(regctl image digest ocidir://testrepo:v1)"
