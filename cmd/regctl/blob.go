@@ -83,6 +83,17 @@ is the digest of the blob.`,
 	ValidArgs: []string{}, // do not auto complete repository
 	RunE:      runBlobPut,
 }
+var blobCopyCmd = &cobra.Command{
+	Use:     "copy <src_image_ref> <dst_image_ref> <digest>",
+	Aliases: []string{"cp"},
+	Short:   "copy blob",
+	Long: `Copy a blob between repositories. This works in the same registry only. It
+attempts to mount the layers between repositories. And within the same repository
+it only sends the manifest with the new tag.`,
+	Args:      cobra.ExactArgs(3),
+	ValidArgs: []string{}, // do not auto complete repository or digest
+	RunE:      runBlobCopy,
+}
 
 var blobOpts struct {
 	diffCtx        int
@@ -136,6 +147,7 @@ func init() {
 	blobCmd.AddCommand(blobGetFileCmd)
 	blobCmd.AddCommand(blobHeadCmd)
 	blobCmd.AddCommand(blobPutCmd)
+	blobCmd.AddCommand(blobCopyCmd)
 	rootCmd.AddCommand(blobCmd)
 }
 
@@ -439,6 +451,35 @@ func runBlobPut(cmd *cobra.Command, args []string) error {
 	}
 
 	return template.Writer(cmd.OutOrStdout(), blobOpts.formatPut, result)
+}
+
+func runBlobCopy(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	rSrc, err := ref.New(args[0])
+	if err != nil {
+		return err
+	}
+	rTgt, err := ref.New(args[1])
+	if err != nil {
+		return err
+	}
+	d, err := digest.Parse(args[2])
+	if err != nil {
+		return err
+	}
+	rc := newRegClient()
+	defer rc.Close(ctx, rSrc)
+
+	log.WithFields(logrus.Fields{
+		"source": rSrc.CommonName(),
+		"target": rTgt.CommonName(),
+		"digest": args[2],
+	}).Debug("Blob copy")
+	err = rc.BlobCopy(ctx, rSrc, rTgt, types.Descriptor{Digest: d})
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func blobReportLayer(tr *tar.Reader) ([]string, error) {
