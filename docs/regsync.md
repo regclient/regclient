@@ -199,6 +199,12 @@ sync:
     Array of media types to include.
     These must also be supported by regclient.
     Defaults to: `["application/vnd.docker.distribution.manifest.v2+json", "application/vnd.docker.distribution.manifest.list.v2+json", "application/vnd.oci.image.manifest.v1+json", "application/vnd.oci.image.index.v1+json"]`
+  - `cacheCount`:
+    Number of items to cache for various registry API requests, per item type.
+    `cacheTime` must also be set for this to apply.
+  - `cacheTime`:
+    Duration for items to remain in the cache for various registry API requests.
+    `cacheCount` must also be set for this to apply.
   - `skipDockerConfig`:
     Do not read the user credentials in `${HOME}/.docker/config.json`.
   - `userAgent`:

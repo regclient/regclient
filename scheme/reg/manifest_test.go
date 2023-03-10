@@ -70,9 +70,40 @@ func TestManifest(t *testing.T) {
 		},
 		{
 			ReqEntry: reqresp.ReqEntry{
+				Name:   "Get",
+				Method: "GET",
+				Path:   "/v2" + repoPath + "/manifests/" + mDigest.String(),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", mLen)},
+					"Content-Type":          []string{types.MediaTypeDocker2Manifest},
+					"Docker-Content-Digest": []string{mDigest.String()},
+				},
+				Body: mBody,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
 				Name:   "Head",
 				Method: "HEAD",
 				Path:   "/v2" + repoPath + "/manifests/" + headTag,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", mLen)},
+					"Content-Type":          []string{types.MediaTypeDocker2Manifest},
+					"Docker-Content-Digest": []string{mDigest.String()},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "Head",
+				Method: "HEAD",
+				Path:   "/v2" + repoPath + "/manifests/" + mDigest.String(),
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusOK,
@@ -150,6 +181,12 @@ func TestManifest(t *testing.T) {
 		WithLog(log),
 		WithDelay(delayInit, delayMax),
 	)
+	regCache := New(
+		WithConfigHosts(rcHosts),
+		WithLog(log),
+		WithDelay(delayInit, delayMax),
+		WithCache(time.Minute*5, 500),
+	)
 
 	t.Run("Get", func(t *testing.T) {
 		getRef, err := ref.New(tsURL.Host + repoPath + ":" + getTag)
@@ -222,6 +259,67 @@ func TestManifest(t *testing.T) {
 		mMissing, err := reg.ManifestGet(ctx, missingRef)
 		if err == nil {
 			t.Errorf("Success running ManifestGet on missing ref: %v", mMissing)
+			return
+		}
+	})
+	t.Run("Get Digest", func(t *testing.T) {
+		getRef, err := ref.New(tsURL.Host + repoPath + "@" + mDigest.String())
+		if err != nil {
+			t.Errorf("Failed creating getRef: %v", err)
+		}
+		mGet, err := regCache.ManifestGet(ctx, getRef)
+		if err != nil {
+			t.Errorf("Failed running ManifestGet: %v", err)
+			return
+		}
+		if manifest.GetMediaType(mGet) != types.MediaTypeDocker2Manifest {
+			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mGet))
+		}
+		if mGet.GetDescriptor().Digest != mDigest {
+			t.Errorf("Unexpected digest: %s", mGet.GetDescriptor().Digest.String())
+		}
+	})
+	t.Run("Head Digest", func(t *testing.T) {
+		headRef, err := ref.New(tsURL.Host + repoPath + "@" + mDigest.String())
+		if err != nil {
+			t.Errorf("Failed creating getRef: %v", err)
+		}
+		mHead, err := regCache.ManifestHead(ctx, headRef)
+		if err != nil {
+			t.Errorf("Failed running ManifestHead: %v", err)
+			return
+		}
+		if manifest.GetMediaType(mHead) != types.MediaTypeDocker2Manifest {
+			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mHead))
+		}
+		if mHead.GetDescriptor().Digest != mDigest {
+			t.Errorf("Unexpected digest: %s", mHead.GetDescriptor().Digest.String())
+		}
+	})
+	t.Run("Cache Get", func(t *testing.T) {
+		getRef, err := ref.New(tsURL.Host + repoPath + "@" + mDigest.String())
+		if err != nil {
+			t.Errorf("Failed creating getRef: %v", err)
+		}
+		mGet, err := regCache.ManifestGet(ctx, getRef)
+		if err != nil {
+			t.Errorf("Failed running ManifestGet: %v", err)
+			return
+		}
+		if manifest.GetMediaType(mGet) != types.MediaTypeDocker2Manifest {
+			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mGet))
+		}
+		if mGet.GetDescriptor().Digest != mDigest {
+			t.Errorf("Unexpected digest: %s", mGet.GetDescriptor().Digest.String())
+		}
+		_, err = reg.ManifestGet(ctx, getRef)
+		if err != nil {
+			t.Errorf("Failed re-running ManifestGet (cache): %v", err)
+			return
+		}
+		_, err = reg.ManifestHead(ctx, getRef)
+		if err != nil {
+			t.Errorf("Failed running ManifestHead (cache): %v", err)
 			return
 		}
 	})

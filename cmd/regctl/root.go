@@ -101,6 +101,7 @@ func newRegClient() *regclient.RegClient {
 
 	rcOpts := []regclient.Opt{
 		regclient.WithLog(log),
+		regclient.WithRegOpts(reg.WithCache(time.Minute*5, 500)),
 	}
 	if rootOpts.userAgent != "" {
 		rcOpts = append(rcOpts, regclient.WithUserAgent(rootOpts.userAgent))
