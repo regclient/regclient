@@ -212,12 +212,16 @@ Usage:
   regctl blob [command]
 
 Available Commands:
+  copy        copy blob
   diff-config diff two image configs
   diff-layer  diff two tar layers
   get         download a blob/layer
   head        http head request for a blob
   put         upload a blob/layer
 ```
+
+The `copy` command copies a blob between registries and repositories.
+Note that many registries will clean unreferenced blobs, so this should be used in combination with a `manifest put`.
 
 The `diff-config` command compares two config blobs, showing the differences between the configs.
 
