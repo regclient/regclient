@@ -7,6 +7,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/docker/schema2"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
@@ -189,6 +190,75 @@ func WithLabelToAnnotation() Opts {
 			if err != nil {
 				return err
 			}
+			dm.newDesc = dm.m.GetDescriptor()
+			dm.mod = replaced
+			return nil
+		})
+		return nil
+	}
+}
+
+// WithManifestToDocker converts the manifest to Docker schema2 media types
+func WithManifestToDocker() Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, r ref.Ref, dm *dagManifest) error {
+			if dm.mod == deleted {
+				return nil
+			}
+			changed := false
+			om := dm.m.GetOrig()
+			if dm.m.IsList() {
+				if dm.m.GetDescriptor().MediaType != types.MediaTypeDocker2ManifestList {
+					ociM, err := manifest.OCIIndexFromAny(om)
+					if err != nil {
+						return err
+					}
+					dml := schema2.ManifestList{}
+					err = manifest.OCIIndexToAny(ociM, &dml)
+					if err != nil {
+						return err
+					}
+					changed = true
+					om = dml
+				}
+			} else {
+				ociM, err := manifest.OCIManifestFromAny(om)
+				if err != nil {
+					return err
+				}
+				if dm.m.GetDescriptor().MediaType != types.MediaTypeDocker2Manifest {
+					changed = true
+				}
+				if ociM.Config.MediaType != types.MediaTypeDocker2ImageConfig {
+					ociM.Config.MediaType = types.MediaTypeDocker2ImageConfig
+					changed = true
+				}
+				for i, l := range ociM.Layers {
+					if l.MediaType == types.MediaTypeOCI1LayerGzip {
+						ociM.Layers[i].MediaType = types.MediaTypeDocker2LayerGzip
+						changed = true
+					} else if l.MediaType == types.MediaTypeOCI1ForeignLayerGzip {
+						ociM.Layers[i].MediaType = types.MediaTypeDocker2ForeignLayer
+						changed = true
+					}
+				}
+				if changed {
+					dm := schema2.Manifest{}
+					err = manifest.OCIManifestToAny(ociM, &dm)
+					if err != nil {
+						return err
+					}
+					om = dm
+				}
+			}
+			if !changed {
+				return nil
+			}
+			newM, err := manifest.New(manifest.WithOrig(om))
+			if err != nil {
+				return err
+			}
+			dm.m = newM
 			dm.newDesc = dm.m.GetDescriptor()
 			dm.mod = replaced
 			return nil
