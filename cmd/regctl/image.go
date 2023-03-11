@@ -465,6 +465,20 @@ func init() {
 			return nil
 		},
 	}, "time-max", "", `max timestamp for both the config and layers`)
+	flagDocker := imageModCmd.Flags().VarPF(&modFlagFunc{
+		t: "bool",
+		f: func(val string) error {
+			b, err := strconv.ParseBool(val)
+			if err != nil {
+				return fmt.Errorf("unable to parse value %s: %w", val, err)
+			}
+			if b {
+				imageOpts.modOpts = append(imageOpts.modOpts, mod.WithManifestToDocker())
+			}
+			return nil
+		},
+	}, "to-docker", "", `convert to Docker schema2 media types`)
+	flagDocker.NoOptDefVal = "true"
 	flagOCI := imageModCmd.Flags().VarPF(&modFlagFunc{
 		t: "bool",
 		f: func(val string) error {
