@@ -437,7 +437,7 @@ func runBlobPut(cmd *cobra.Command, args []string) error {
 		"repository": r.Repository,
 		"digest":     blobOpts.digest,
 	}).Debug("Pushing blob")
-	dOut, err := rc.BlobPut(ctx, r, types.Descriptor{Digest: digest.Digest(blobOpts.digest)}, os.Stdin)
+	dOut, err := rc.BlobPut(ctx, r, types.Descriptor{Digest: digest.Digest(blobOpts.digest)}, cmd.InOrStdin())
 	if err != nil {
 		return err
 	}
