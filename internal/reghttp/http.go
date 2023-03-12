@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -440,10 +441,17 @@ func (resp *clientResp) Next() error {
 						err = fmt.Errorf("authentication handler unavailable")
 					}
 					if err != nil {
-						c.log.WithFields(logrus.Fields{
-							"URL": u.String(),
-							"Err": err,
-						}).Warn("Failed to handle auth request")
+						if errors.Is(err, types.ErrEmptyChallenge) || errors.Is(err, types.ErrNoNewChallenge) || errors.Is(err, types.ErrHTTPUnauthorized) {
+							c.log.WithFields(logrus.Fields{
+								"URL": u.String(),
+								"Err": err,
+							}).Debug("Failed to handle auth request")
+						} else {
+							c.log.WithFields(logrus.Fields{
+								"URL": u.String(),
+								"Err": err,
+							}).Warn("Failed to handle auth request")
+						}
 						backoff = true
 						dropHost = true
 					} else {
