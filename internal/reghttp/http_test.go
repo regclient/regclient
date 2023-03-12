@@ -350,6 +350,31 @@ func TestRegHttp(t *testing.T) {
 		},
 		{
 			ReqEntry: reqresp.ReqEntry{
+				Name:   "unauthorized project-missing-auth",
+				Method: "GET",
+				Path:   "/v2/project-missing-auth/manifests/tag-repoauth",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusUnauthorized,
+				Body:   []byte("Unauthorized"),
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "unauthorized project-bad-auth",
+				Method: "GET",
+				Path:   "/v2/project-bad-auth/manifests/tag-repoauth",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusUnauthorized,
+				Body:   []byte("Unauthorized"),
+				Headers: http.Header{
+					"WWW-Authenticate": []string{`Bearer realm="http://` + tsTokenHost + `/token`},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
 				Name:   "post manifest",
 				Method: "POST",
 				Path:   "/v2/project/manifests/tag-post",
@@ -1014,6 +1039,52 @@ func TestRegHttp(t *testing.T) {
 			return
 		} else if !errors.Is(err, auth.ErrUnauthorized) {
 			t.Errorf("expected error %v, received error %v", auth.ErrUnauthorized, err)
+		}
+	})
+	t.Run("Bad auth", func(t *testing.T) {
+		apiAuth := map[string]ReqAPI{
+			"": {
+				Method:     "GET",
+				Repository: "project-bad-auth",
+				Path:       "manifests/tag-repoauth",
+				Headers:    headers,
+				Digest:     getDigest,
+			},
+		}
+		authReq := &Req{
+			Host: "repoauth." + tsHost,
+			APIs: apiAuth,
+		}
+		resp, err := hc.Do(ctx, authReq)
+		if err == nil {
+			t.Errorf("unexpected success with bad auth header")
+			resp.Close()
+			return
+		} else if !errors.Is(err, types.ErrParsingFailed) {
+			t.Errorf("expected error %v, received error %v", types.ErrParsingFailed, err)
+		}
+	})
+	t.Run("Missing auth", func(t *testing.T) {
+		apiAuth := map[string]ReqAPI{
+			"": {
+				Method:     "GET",
+				Repository: "project-missing-auth",
+				Path:       "manifests/tag-repoauth",
+				Headers:    headers,
+				Digest:     getDigest,
+			},
+		}
+		authReq := &Req{
+			Host: "repoauth." + tsHost,
+			APIs: apiAuth,
+		}
+		resp, err := hc.Do(ctx, authReq)
+		if err == nil {
+			t.Errorf("unexpected success with missing auth header")
+			resp.Close()
+			return
+		} else if !errors.Is(err, types.ErrEmptyChallenge) {
+			t.Errorf("expected error %v, received error %v", types.ErrEmptyChallenge, err)
 		}
 	})
 	// test repoauth
