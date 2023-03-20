@@ -38,7 +38,7 @@ For `regctl` (include a `-t` for any commands that require a tty, e.g. `registry
 ```shell
 docker container run -i --rm --net host \
   -v regctl-conf:/home/appuser/.regctl/ \
-  regclient/regctl:latest --help
+  ghcr.io/regclient/regctl:latest --help
 ```
 
 For `regsync`:
@@ -46,7 +46,7 @@ For `regsync`:
 ```shell
 docker container run -i --rm --net host \
   -v "$(pwd)/regsync.yml:/home/appuser/regsync.yml" \
-  regclient/regsync:latest -c /home/appuser/regsync.yml check
+  ghcr.io/regclient/regsync:latest -c /home/appuser/regsync.yml check
 ```
 
 For `regbot`:
@@ -54,7 +54,7 @@ For `regbot`:
 ```shell
 docker container run -i --rm --net host \
   -v "$(pwd)/regbot.yml:/home/appuser/regbot.yml" \
-  regclient/regbot:latest -c /home/appuser/regbot.yml once --dry-run
+  ghcr.io/regclient/regbot:latest -c /home/appuser/regbot.yml once --dry-run
 ```
 
 Or on Linux and Mac environments, you can run `regctl` as your own user and save
@@ -64,7 +64,7 @@ configuration settings, use docker credentials, and use any docker certs:
 docker container run -i --rm --net host \
   -u "$(id -u):$(id -g)" -e HOME -v $HOME:$HOME \
   -v /etc/docker/certs.d:/etc/docker/certs.d:ro \
-  regclient/regctl:latest --help
+  ghcr.io/regclient/regctl:latest --help
 ```
 
 And `regctl` can be packaged as a shell script with:
@@ -79,7 +79,7 @@ esac
 docker container run \$opts -i --rm --net host \\
   -u "\$(id -u):\$(id -g)" -e HOME -v \$HOME:\$HOME \\
   -v /etc/docker/certs.d:/etc/docker/certs.d:ro \\
-  regclient/regctl:latest "\$@"
+  ghcr.io/regclient/regctl:latest "\$@"
 EOF
 chmod 755 regctl
 ./regctl --help
@@ -98,7 +98,7 @@ For images:
 cosign verify \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --certificate-identity-regexp https://github.com/regclient/regclient/.github/workflows/ \
-  regclient/regctl:latest
+  ghcr.io/regclient/regctl:latest
 ```
 
 For binaries:
@@ -132,19 +132,19 @@ make oci-image
 
 # compare regctl digests to edge/main
 regctl image digest ocidir://output/regctl:scratch
-regctl image digest regclient/regctl:edge
+regctl image digest ghcr.io/regclient/regctl:edge
 regctl image digest ocidir://output/regctl:alpine
-regctl image digest regclient/regctl:edge-alpine
+regctl image digest ghcr.io/regclient/regctl:edge-alpine
 
 # compare regsync digests to edge/main
 regctl image digest ocidir://output/regsync:scratch
-regctl image digest regclient/regsync:edge
+regctl image digest ghcr.io/regclient/regsync:edge
 regctl image digest ocidir://output/regsync:alpine
-regctl image digest regclient/regsync:edge-alpine
+regctl image digest ghcr.io/regclient/regsync:edge-alpine
 
 # compare regbot digests to edge/main
 regctl image digest ocidir://output/regbot:scratch
-regctl image digest regclient/regbot:edge
+regctl image digest ghcr.io/regclient/regbot:edge
 regctl image digest ocidir://output/regbot:alpine
-regctl image digest regclient/regbot:edge-alpine
+regctl image digest ghcr.io/regclient/regbot:edge-alpine
 ```

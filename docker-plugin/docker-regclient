@@ -27,7 +27,7 @@ case "$1" in
       docker container run $opts -i --rm --net host \
         -u "$(id -u):$(id -g)" -e HOME -v $HOME:$HOME \
         -v /etc/docker/certs.d:/etc/docker/certs.d:ro \
-        regclient/regctl:latest "$@"
+        ghcr.io/regclient/regctl:latest "$@"
     fi
     ;;
 esac

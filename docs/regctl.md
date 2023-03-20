@@ -72,7 +72,7 @@ With docker installed and logged into the registry, these commands are typically
 The `regctl` will import credentials from the docker logins stored in `$HOME/.docker/config.json` and trust certificates loaded in `/etc/docker/certs.d/$registry/*.crt`.
 These commands are useful for running in an environment without docker to configure the `$HOME/.regctl/config.json` file.
 One use case for that is to run `regctl` within an unpriviliged container in a CI pipeline.
-With the `regclient/regctl` image, the docker configuration is pulled from `/home/appuser/.docker/config.json` by default.
+With the `ghcr.io/regclient/regctl` image, the docker configuration is pulled from `/home/appuser/.docker/config.json` by default.
 
 Note that it is possible to configure multiple registry servers under a single name as a mirror with automatic failover.
 This is useful for pulling content, but pushes will still be sent to the upstream registry server.
