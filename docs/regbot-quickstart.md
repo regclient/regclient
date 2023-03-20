@@ -221,7 +221,7 @@ esac
 docker container run \$opts -i --rm --net host \\
   -u "\$(id -u):\$(id -g)" -e HOME -v \$HOME:\$HOME \\
   -v /etc/docker/certs.d:/etc/docker/certs.d:ro \\
-  regclient/regctl:latest "\$@"
+  ghcr.io/regclient/regctl:latest "\$@"
 EOF
 chmod 755 regctl
 ./regctl registry set --tls disabled localhost:5000
@@ -230,12 +230,12 @@ chmod 755 regctl
 ## Load example images
 
 Copy some images to the local registry that have the specified label to see the
-"delete old builds" action work. The `regclient/regctl` image includes these
+"delete old builds" action work. The `ghcr.io/regclient/regctl` image includes these
 labels, and we can also use `regctl` itself to copy these images.
 
 ```shell
 ./regctl image copy -v info \
-    regclient/regctl:v0.0.1 localhost:5000/regclient/example:latest \
+    ghcr.io/regclient/regctl:v0.0.1 localhost:5000/regclient/example:latest \
 && \
 ./regctl image copy -v info \
     localhost:5000/regclient/example:latest localhost:5000/regclient/example:ci-001 \
@@ -276,7 +276,7 @@ docker container run -i --rm --net registry \
   -e "HUB_USER" \
   -v "${HOME}/.docker/hub_token:/var/run/secrets/hub_token:ro" \
   -v "$(pwd)/regbot.yml:/home/appuser/regbot.yml" \
-  regclient/regbot:latest -c /home/appuser/regbot.yml once --dry-run
+  ghcr.io/regclient/regbot:latest -c /home/appuser/regbot.yml once --dry-run
 ```
 
 ## Run the Scripts Now
@@ -291,7 +291,7 @@ docker container run -i --rm --net registry \
   -e "HUB_USER" \
   -v "${HOME}/.docker/hub_token:/var/run/secrets/hub_token:ro" \
   -v "$(pwd)/regbot.yml:/home/appuser/regbot.yml" \
-  regclient/regbot:latest -c /home/appuser/regbot.yml once
+  ghcr.io/regclient/regbot:latest -c /home/appuser/regbot.yml once
 ```
 
 ## Run the Scripts on a Schedule
@@ -304,7 +304,7 @@ docker container run -d --restart=unless-stopped --name regbot --net registry \
   -e "HUB_USER" \
   -v "${HOME}/.docker/hub_token:/var/run/secrets/hub_token:ro" \
   -v "$(pwd)/regbot.yml:/home/appuser/regbot.yml" \
-  regclient/regbot:latest -c /home/appuser/regbot.yml server -v debug
+  ghcr.io/regclient/regbot:latest -c /home/appuser/regbot.yml server -v debug
 ```
 
 ## Inspect using regctl

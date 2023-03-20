@@ -37,6 +37,6 @@ sync:
       - "application/vnd.docker.distribution.manifest.list.v2+json"
       - "application/vnd.oci.image.manifest.v1+json"
       - "application/vnd.oci.image.index.v1+json"
-  - source: regclient/regctl:latest
+  - source: ghcr.io/regclient/regctl:latest
     target: registry:5000/regclient/regctl:latest
     type: image

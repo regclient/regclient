@@ -44,7 +44,7 @@ sync:
       - "latest"
       - "3"
       - "3.\\d+"
-  - source: regclient/regctl:latest
+  - source: ghcr.io/regclient/regctl:latest
     target: registry:5000/regclient/regctl:latest
     type: image
 ```
@@ -67,7 +67,7 @@ docker container run -i --rm --net registry \
   -v "$(pwd)/regsync.yml:/home/appuser/regsync.yml:ro" \
   -v "${HOME}/.docker/hub_token:/home/appuser/.docker/hub_token:ro" \
   -e "HUB_USER" \
-  regclient/regsync:latest -c /home/appuser/regsync.yml once
+  ghcr.io/regclient/regsync:latest -c /home/appuser/regsync.yml once
 ```
 
 ## Run regsync
@@ -79,7 +79,7 @@ docker container run -d --restart=unless-stopped --name regsync --net registry \
   -v "$(pwd)/regsync.yml:/home/appuser/regsync.yml:ro" \
   -v "$(pwd)/hub_token:/var/run/secrets/hub_token:ro" \
   -e "HUB_USER" \
-  regclient/regsync:latest -c /home/appuser/regsync.yml server
+  ghcr.io/regclient/regsync:latest -c /home/appuser/regsync.yml server
 ```
 
 You can verify it started by checking the logs with `docker container logs
@@ -130,7 +130,7 @@ esac
 docker container run \$opts -i --rm --net host \\
   -u "\$(id -u):\$(id -g)" -e HOME -v \$HOME:\$HOME \\
   -v /etc/docker/certs.d:/etc/docker/certs.d:ro \\
-  regclient/regctl:latest "\$@"
+  ghcr.io/regclient/regctl:latest "\$@"
 EOF
 chmod 755 regctl
 ./regctl registry set --tls disabled localhost:5000
