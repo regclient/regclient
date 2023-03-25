@@ -42,7 +42,6 @@ func TestTag(t *testing.T) {
 	delFallbackTag := "del-fallback"
 	delFallbackManifest := "digest for del-fallback"
 	delFallbackDigest := digest.FromString(delFallbackManifest)
-	fallbackConfigDigest := digest.FromString("digest for fallback config")
 	uuid1 := uuid.New()
 	ctx := context.Background()
 	rrs := []reqresp.ReqResp{
@@ -193,7 +192,7 @@ func TestTag(t *testing.T) {
 		},
 		{
 			ReqEntry: reqresp.ReqEntry{
-				Name:   "POST for fallback config",
+				Name:   "POST for fallback blob",
 				Method: "POST",
 				Path:   "/v2" + repoPath + "/blobs/uploads/",
 			},
@@ -207,8 +206,9 @@ func TestTag(t *testing.T) {
 			},
 		},
 		{
+			// accept any blob content since fallback content is unknown
 			ReqEntry: reqresp.ReqEntry{
-				Name:   "PUT for fallback config",
+				Name:   "PUT for fallback blob",
 				Method: "PUT",
 				Path:   "/v2" + repoPath + "/blobs/uploads/" + uuid1.String(),
 			},
@@ -216,7 +216,7 @@ func TestTag(t *testing.T) {
 				Status: http.StatusCreated,
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Location":       {"/v2" + repoPath + "/blobs/" + fallbackConfigDigest.String()},
+					"Location":       {"/v2" + repoPath + "/blobs/" + uuid1.String()},
 				},
 			},
 		},
