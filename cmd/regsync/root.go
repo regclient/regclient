@@ -343,6 +343,12 @@ func loadConf() error {
 	rcOpts := []regclient.Opt{
 		regclient.WithLog(log),
 	}
+	if conf.Defaults.BlobLimit != 0 {
+		rcOpts = append(rcOpts, regclient.WithBlobLimit(conf.Defaults.BlobLimit))
+	}
+	if !conf.Defaults.SkipDockerConf {
+		rcOpts = append(rcOpts, regclient.WithDockerCreds(), regclient.WithDockerCerts())
+	}
 	if conf.Defaults.UserAgent != "" {
 		rcOpts = append(rcOpts, regclient.WithUserAgent(conf.Defaults.UserAgent))
 	} else {
@@ -352,9 +358,6 @@ func loadConf() error {
 		} else {
 			rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+info.VCSRef+")"))
 		}
-	}
-	if !conf.Defaults.SkipDockerConf {
-		rcOpts = append(rcOpts, regclient.WithDockerCreds(), regclient.WithDockerCerts())
 	}
 	rcHosts := []config.Host{}
 	for _, host := range conf.Creds {

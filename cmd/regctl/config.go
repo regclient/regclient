@@ -10,6 +10,8 @@ import (
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/conffile"
+	"github.com/regclient/regclient/pkg/template"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -26,8 +28,90 @@ type Config struct {
 	Filename      string                  `json:"-"`                 // filename that was loaded
 	Version       int                     `json:"version,omitempty"` // version the file in case the config file syntax changes in the future
 	Hosts         map[string]*config.Host `json:"hosts"`
-	IncDockerCred *bool                   `json:"incDockerCred,omitempty"`
+	BlobLimit     int64                   `json:"blobLimit,omitempty"`
 	IncDockerCert *bool                   `json:"incDockerCert,omitempty"`
+	IncDockerCred *bool                   `json:"incDockerCred,omitempty"`
+}
+
+var configOpts struct {
+	blobLimit  int64
+	dockerCert bool
+	dockerCred bool
+	format     string
+}
+var configCmd = &cobra.Command{
+	Use:   "config <cmd>",
+	Short: "read/set configuration options",
+}
+var configGetCmd = &cobra.Command{
+	Use:   "get",
+	Short: "show the config",
+	Long:  `Displays the configuration. Passwords are not included in the output.`,
+	Args:  cobra.ExactArgs(0),
+	RunE:  runConfigGet,
+}
+var configSetCmd = &cobra.Command{
+	Use:   "set",
+	Short: "set a configuration option",
+	Long:  `Modifies an option used in future executions.`,
+	Args:  cobra.ExactArgs(0),
+	RunE:  runConfigSet,
+}
+
+func init() {
+	configGetCmd.Flags().StringVar(&configOpts.format, "format", "{{ printPretty . }}", "format the output with Go template syntax")
+
+	configSetCmd.Flags().Int64Var(&configOpts.blobLimit, "blob-limit", 0, "limit for blob chunks, this is stored in memory")
+	configSetCmd.Flags().BoolVar(&configOpts.dockerCert, "docker-cert", false, "load certificates from docker")
+	configSetCmd.Flags().BoolVar(&configOpts.dockerCred, "docker-cred", false, "load credentials from docker")
+
+	configCmd.AddCommand(configGetCmd)
+	configCmd.AddCommand(configSetCmd)
+	rootCmd.AddCommand(configCmd)
+}
+
+func runConfigGet(cmd *cobra.Command, args []string) error {
+	c, err := ConfigLoadDefault()
+	if err != nil {
+		return err
+	}
+	for i := range c.Hosts {
+		c.Hosts[i].Pass = ""
+		c.Hosts[i].Token = ""
+	}
+
+	return template.Writer(cmd.OutOrStdout(), configOpts.format, c)
+}
+
+func runConfigSet(cmd *cobra.Command, args []string) error {
+	c, err := ConfigLoadDefault()
+	if err != nil {
+		return err
+	}
+
+	if flagChanged(cmd, "blob-limit") {
+		c.BlobLimit = configOpts.blobLimit
+	}
+	if flagChanged(cmd, "docker-cert") {
+		if !configOpts.dockerCert {
+			c.IncDockerCert = &configOpts.dockerCert
+		} else {
+			c.IncDockerCert = nil
+		}
+	}
+	if flagChanged(cmd, "docker-cred") {
+		if !configOpts.dockerCred {
+			c.IncDockerCred = &configOpts.dockerCred
+		} else {
+			c.IncDockerCred = nil
+		}
+	}
+
+	err = c.ConfigSave()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // ConfigNew creates an empty configuration

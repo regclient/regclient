@@ -21,12 +21,14 @@ type Config struct {
 
 // ConfigDefaults is uses for general options and defaults for ConfigScript entries
 type ConfigDefaults struct {
-	Interval       time.Duration `yaml:"interval" json:"interval"`
-	Schedule       string        `yaml:"schedule" json:"schedule"`
-	Parallel       int           `yaml:"parallel" json:"parallel"`
-	SkipDockerConf bool          `yaml:"skipDockerConfig" json:"skipDockerConfig"`
-	Timeout        time.Duration `yaml:"timeout" json:"timeout"`
-	UserAgent      string        `yaml:"userAgent" json:"userAgent"`
+	Interval time.Duration `yaml:"interval" json:"interval"`
+	Schedule string        `yaml:"schedule" json:"schedule"`
+	Parallel int           `yaml:"parallel" json:"parallel"`
+	Timeout  time.Duration `yaml:"timeout" json:"timeout"`
+	// general options
+	BlobLimit      int64  `yaml:"blobLimit" json:"blobLimit"`
+	SkipDockerConf bool   `yaml:"skipDockerConfig" json:"skipDockerConfig"`
+	UserAgent      string `yaml:"userAgent" json:"userAgent"`
 }
 
 // ConfigScript defines a source/target repository to sync
@@ -105,13 +107,6 @@ func configExpandTemplates(c *Config) error {
 		}
 		c.Creds[i].RegCert = val
 	}
-	// for i := range c.Scripts {
-	// 	val, err := template.String(c.Scripts[i].Script, nil)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// 	c.Scripts[i].Script = val
-	// }
 	return nil
 }
 
