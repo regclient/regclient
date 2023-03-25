@@ -95,6 +95,13 @@ func New(opts ...Opt) *RegClient {
 	return &rc
 }
 
+// WithBlobLimit sets the max size for chunked blob uploads which get stored in memory
+func WithBlobLimit(limit int64) Opt {
+	return func(rc *RegClient) {
+		rc.regOpts = append(rc.regOpts, reg.WithBlobLimit(limit))
+	}
+}
+
 // WithCertDir adds a path of certificates to trust similar to Docker's /etc/docker/certs.d
 func WithCertDir(path ...string) Opt {
 	return func(rc *RegClient) {

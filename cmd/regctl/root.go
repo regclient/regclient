@@ -109,6 +109,9 @@ func newRegClient() *regclient.RegClient {
 			rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+info.VCSRef+")"))
 		}
 	}
+	if conf.BlobLimit != 0 {
+		rcOpts = append(rcOpts, regclient.WithBlobLimit(conf.BlobLimit))
+	}
 	if conf.IncDockerCred == nil || *conf.IncDockerCred {
 		rcOpts = append(rcOpts, regclient.WithDockerCreds())
 	}
