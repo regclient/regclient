@@ -24,6 +24,7 @@ import (
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
+	"github.com/regclient/regclient/types/warning"
 	"github.com/sirupsen/logrus"
 )
 
@@ -395,6 +396,10 @@ func (rc *RegClient) ImageCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.R
 	var opt imageOpt
 	for _, optFn := range opts {
 		optFn(&opt)
+	}
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
 	}
 	return rc.imageCopyOpt(ctx, refSrc, refTgt, types.Descriptor{}, opt.child, &opt)
 }
