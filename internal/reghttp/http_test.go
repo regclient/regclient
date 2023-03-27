@@ -19,6 +19,7 @@ import (
 	"github.com/regclient/regclient/internal/auth"
 	"github.com/regclient/regclient/internal/reqresp"
 	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/warning"
 )
 
 // TODO: test for race conditions
@@ -104,6 +105,8 @@ func TestRegHttp(t *testing.T) {
 		RefreshToken: "refresh2PValue",
 		Scope:        "repository:project2:pull,push",
 	})
+	warnMsg1 := "test warning 1"
+	warnMsg2 := "test warning 2"
 	rrsToken := []reqresp.ReqResp{
 		{
 			ReqEntry: reqresp.ReqEntry{
@@ -591,6 +594,28 @@ func TestRegHttp(t *testing.T) {
 					"Content-Type":          []string{"application/vnd.docker.distribution.manifest.v2+json"},
 					"Docker-Content-Digest": []string{retryDigest.String()},
 					"Accept-Ranges":         []string{"bytes"},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "get warnings",
+				Method: "GET",
+				Path:   "/v2/project/manifests/warning",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Body:   getBody,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", len(getBody))},
+					"Content-Type":          []string{"application/vnd.docker.distribution.manifest.v2+json"},
+					"Docker-Content-Digest": []string{getDigest.String()},
+					"Warning": []string{
+						`199 - "ignore warning"`,
+						`299 - "` + warnMsg1 + `"`,
+						`299 - "` + warnMsg2 + `"`,
+						`299 - "` + warnMsg1 + `"`,
+					},
 				},
 			},
 		},
@@ -1575,6 +1600,42 @@ func TestRegHttp(t *testing.T) {
 			t.Errorf("body read failure: %v", err)
 		} else if !bytes.Equal(body, retryBody) {
 			t.Errorf("body read mismatch, expected %s, received %s", retryBody, body)
+		}
+		err = resp.Close()
+		if err != nil {
+			t.Errorf("error closing request: %v", err)
+		}
+	})
+	t.Run("Warning", func(t *testing.T) {
+		apiGet := map[string]ReqAPI{
+			"": {
+				Method:     "GET",
+				Repository: "project",
+				Path:       "manifests/warning",
+				Headers:    headers,
+				Digest:     getDigest,
+			},
+		}
+		getReq := &Req{
+			Host: tsHost,
+			APIs: apiGet,
+		}
+		w := &warning.Warning{}
+		wCtx := warning.NewContext(ctx, w)
+		resp, err := hc.Do(wCtx, getReq)
+		if err != nil {
+			t.Errorf("failed to run get: %v", err)
+			return
+		}
+		if len(w.List) != 2 {
+			t.Errorf("warning count, expected 2, received %d", len(w.List))
+		} else {
+			if w.List[0] != warnMsg1 {
+				t.Errorf("warning 1, expected %s, received %s", warnMsg1, w.List[0])
+			}
+			if w.List[1] != warnMsg2 {
+				t.Errorf("warning 2, expected %s, received %s", warnMsg2, w.List[1])
+			}
 		}
 		err = resp.Close()
 		if err != nil {

@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -28,12 +29,14 @@ import (
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/auth"
 	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/warning"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/semaphore"
 )
 
 var defaultDelayInit, _ = time.ParseDuration("1s")
 var defaultDelayMax, _ = time.ParseDuration("30s")
+var warnRegexp = regexp.MustCompile(`^299\s+-\s+"([^"]+)"`)
 
 const (
 	DefaultRetryLimit = 3
@@ -429,6 +432,13 @@ func (resp *clientResp) Next() error {
 				}).Debug("Request failed")
 				backoff = true
 				return err
+			}
+			// extract any warnings
+			for _, wh := range resp.resp.Header.Values("Warning") {
+				if match := warnRegexp.FindStringSubmatch(wh); len(match) == 2 {
+					// TODO: pass other fields (registry hostname) with structured logging
+					warning.Handle(resp.ctx, resp.client.log, match[1])
+				}
 			}
 			statusCode := resp.resp.StatusCode
 			if statusCode < 200 || statusCode >= 300 {
