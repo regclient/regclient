@@ -229,6 +229,9 @@ func WithManifestToDocker() Opts {
 				if dm.m.GetDescriptor().MediaType != types.MediaTypeDocker2Manifest {
 					changed = true
 				}
+				if ociM.ArtifactType != "" {
+					return fmt.Errorf("unable to convert artifactType to docker manifest, ref %s%.0w", r.CommonName(), types.ErrUnsupportedMediaType)
+				}
 				if ociM.Config.MediaType == types.MediaTypeOCI1ImageConfig {
 					ociM.Config.MediaType = types.MediaTypeDocker2ImageConfig
 					changed = true

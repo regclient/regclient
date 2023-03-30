@@ -43,13 +43,18 @@ func (rl *ReferrerList) Add(m manifest.Manifest) error {
 		mDesc.ArtifactType = mOrig.ArtifactType
 	case v1.Manifest:
 		mDesc.Annotations = mOrig.Annotations
-		mDesc.ArtifactType = mOrig.Config.MediaType
+		if mOrig.ArtifactType != "" {
+			mDesc.ArtifactType = mOrig.ArtifactType
+		} else {
+			mDesc.ArtifactType = mOrig.Config.MediaType
+		}
 	default:
 		// other types are not supported
 		return fmt.Errorf("invalid manifest for referrer \"%t\": %w", m.GetOrig(), types.ErrUnsupportedMediaType)
 	}
 	// append descriptor to index
 	rlM.Manifests = append(rlM.Manifests, mDesc)
+	rl.Descriptors = rlM.Manifests
 	err := rl.Manifest.SetOrig(rlM)
 	if err != nil {
 		return err
@@ -79,6 +84,7 @@ func (rl *ReferrerList) Delete(m manifest.Manifest) error {
 	if !found {
 		return fmt.Errorf("subject not found in referrer list%.0w", types.ErrNotFound)
 	}
+	rl.Descriptors = rlM.Manifests
 	err := rl.Manifest.SetOrig(rlM)
 	if err != nil {
 		return err
