@@ -229,7 +229,7 @@ func WithManifestToDocker() Opts {
 				if dm.m.GetDescriptor().MediaType != types.MediaTypeDocker2Manifest {
 					changed = true
 				}
-				if ociM.Config.MediaType != types.MediaTypeDocker2ImageConfig {
+				if ociM.Config.MediaType == types.MediaTypeOCI1ImageConfig {
 					ociM.Config.MediaType = types.MediaTypeDocker2ImageConfig
 					changed = true
 				}
@@ -293,7 +293,7 @@ func WithManifestToOCI() Opts {
 				if dm.m.GetDescriptor().MediaType != types.MediaTypeOCI1Manifest {
 					changed = true
 				}
-				if ociM.Config.MediaType != types.MediaTypeOCI1ImageConfig {
+				if ociM.Config.MediaType == types.MediaTypeDocker2ImageConfig {
 					ociM.Config.MediaType = types.MediaTypeOCI1ImageConfig
 					changed = true
 				}
