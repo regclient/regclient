@@ -302,8 +302,10 @@ func (reg *Reg) blobMount(ctx context.Context, rTgt ref.Ref, d types.Descriptor,
 	// build/send request
 	query := url.Values{}
 	query.Set("mount", d.Digest.String())
+	ignoreErr := true // ignore errors from anonymous blob mount attempts
 	if rSrc.Registry == rTgt.Registry && rSrc.Repository != "" {
 		query.Set("from", rSrc.Repository)
+		ignoreErr = false
 	}
 
 	req := &reghttp.Req{
@@ -315,6 +317,7 @@ func (reg *Reg) blobMount(ctx context.Context, rTgt ref.Ref, d types.Descriptor,
 				Repository: rTgt.Repository,
 				Path:       "blobs/uploads/",
 				Query:      query,
+				IgnoreErr:  ignoreErr,
 			},
 		},
 	}
