@@ -71,6 +71,7 @@ type tarWriteData struct {
 }
 
 type imageOpt struct {
+	callback        func(kind, instance, state string, cur, total int64)
 	checkBaseDigest string
 	checkBaseRef    string
 	checkSkipConfig bool
@@ -87,6 +88,13 @@ type imageOpt struct {
 
 // ImageOpts define options for the Image* commands
 type ImageOpts func(*imageOpt)
+
+// ImageWithCallback provides progress data to a callback function
+func ImageWithCallback(callback func(kind, instance, state string, cur, total int64)) ImageOpts {
+	return func(opts *imageOpt) {
+		opts.callback = callback
+	}
+}
 
 // ImageWithCheckBaseDigest provides a base digest to compare
 func ImageWithCheckBaseDigest(d string) ImageOpts {
@@ -427,6 +435,9 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 			"target": refTgt.Reference,
 			"digest": mdh.GetDescriptor().Digest.String(),
 		}).Info("Copy not needed, target already up to date")
+		if opt.callback != nil {
+			opt.callback("manifest", d.Digest.String(), "skipped", mdh.GetDescriptor().Size, mdh.GetDescriptor().Size)
+		}
 		return nil
 	} else if errD == nil && refTgt.Digest == "" {
 		msh, errS := rc.ManifestHead(ctx, refSrc, WithManifestRequireDigest())
@@ -436,6 +447,9 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 				"target": refTgt.Reference,
 				"digest": mdh.GetDescriptor().Digest.String(),
 			}).Info("Copy not needed, target already up to date")
+			if opt.callback != nil {
+				opt.callback("manifest", d.Digest.String(), "skipped", mdh.GetDescriptor().Size, mdh.GetDescriptor().Size)
+			}
 			return nil
 		}
 	}
@@ -449,6 +463,9 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 		}).Warn("Failed to get source manifest")
 		return err
 	}
+	if opt.callback != nil {
+		opt.callback("manifest", d.Digest.String(), "started", 0, d.Size)
+	}
 
 	if tgtSI.ManifestPushFirst {
 		// push manifest to target
@@ -460,9 +477,16 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 			}).Warn("Failed to push manifest")
 			return err
 		}
+		if opt.callback != nil {
+			opt.callback("manifest", d.Digest.String(), "finished", d.Size, d.Size)
+		}
 	}
 
 	if !ref.EqualRepository(refSrc, refTgt) {
+		bOpt := []BlobOpts{}
+		if opt.callback != nil {
+			bOpt = append(bOpt, BlobWithCallback(opt.callback))
+		}
 		// copy components of the image if the repository is different
 		if mi, ok := m.(manifest.Indexer); ok {
 			// manifest lists need to recursively copy nested images by digest
@@ -504,13 +528,13 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					types.MediaTypeDocker2LayerGzip, types.MediaTypeOCI1Layer, types.MediaTypeOCI1LayerGzip,
 					types.MediaTypeBuildkitCacheConfig:
 					// known blob media type
-					err = rc.BlobCopy(ctx, entrySrc, entryTgt, entry)
+					err = rc.BlobCopy(ctx, entrySrc, entryTgt, entry, bOpt...)
 				default:
 					// unknown media type, first try an image copy
 					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, entry, true, opt)
 					if err != nil {
 						// fall back to trying to copy a blob
-						err = rc.BlobCopy(ctx, entrySrc, entryTgt, entry)
+						err = rc.BlobCopy(ctx, entrySrc, entryTgt, entry, bOpt...)
 					}
 				}
 				if err != nil {
@@ -537,7 +561,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					"target": refTgt.Reference,
 					"digest": cd.Digest.String(),
 				}).Info("Copy config")
-				if err := rc.BlobCopy(ctx, refSrc, refTgt, cd); err != nil {
+				if err := rc.BlobCopy(ctx, refSrc, refTgt, cd, bOpt...); err != nil {
 					rc.log.WithFields(logrus.Fields{
 						"source": refSrc.Reference,
 						"target": refTgt.Reference,
@@ -569,7 +593,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					"target": refTgt.Reference,
 					"layer":  layerSrc.Digest.String(),
 				}).Info("Copy layer")
-				if err := rc.BlobCopy(ctx, refSrc, refTgt, layerSrc); err != nil {
+				if err := rc.BlobCopy(ctx, refSrc, refTgt, layerSrc, bOpt...); err != nil {
 					rc.log.WithFields(logrus.Fields{
 						"source": refSrc.Reference,
 						"target": refTgt.Reference,
@@ -591,6 +615,9 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 				"err":    err,
 			}).Warn("Failed to push manifest")
 			return err
+		}
+		if opt.callback != nil {
+			opt.callback("manifest", d.Digest.String(), "finished", d.Size, d.Size)
 		}
 	}
 

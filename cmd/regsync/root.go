@@ -5,11 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/signal"
 	"regexp"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	// crypto libraries included for go-digest
@@ -170,16 +168,7 @@ func runOnce(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(cmd.Context())
-	// handle interrupt signal
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-sig
-		log.WithFields(logrus.Fields{}).Debug("Interrupt received, stopping")
-		// clean shutdown
-		cancel()
-	}()
+	ctx := cmd.Context()
 	var wg sync.WaitGroup
 	var mainErr error
 	for _, s := range conf.Sync {
@@ -215,7 +204,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(cmd.Context())
+	ctx := cmd.Context()
 	var wg sync.WaitGroup
 	var mainErr error
 	c := cron.New(cron.WithChain(
@@ -280,13 +269,13 @@ func runServer(cmd *cobra.Command, args []string) error {
 	wg.Wait()
 	c.Start()
 	// wait on interrupt signal
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-	<-sig
-	log.WithFields(logrus.Fields{}).Debug("Interrupt received, stopping")
+	done := ctx.Done()
+	if done != nil {
+		<-done
+	}
+	log.WithFields(logrus.Fields{}).Info("Stopping server")
 	// clean shutdown
 	c.Stop()
-	cancel()
 	log.WithFields(logrus.Fields{}).Debug("Waiting on running tasks")
 	wg.Wait()
 	return mainErr

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"time"
 
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
@@ -11,14 +12,37 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const blobCBFreq = time.Millisecond * 100
+
+type blobOpt struct {
+	callback func(kind, instance, state string, cur, total int64)
+}
+
+// BlobOpts define options for the Image* commands
+type BlobOpts func(*blobOpt)
+
+// BlobWithCallback provides progress data to a callback function
+func BlobWithCallback(callback func(kind, instance, state string, cur, total int64)) BlobOpts {
+	return func(opts *blobOpt) {
+		opts.callback = callback
+	}
+}
+
 // BlobCopy copies a blob between two locations
 // If the blob already exists in the target, the copy is skipped
 // A server side cross repository blob mount is attempted
-func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor) error {
+func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor, opts ...BlobOpts) error {
+	var opt blobOpt
+	for _, optFn := range opts {
+		optFn(&opt)
+	}
 	tDesc := d
 	tDesc.URLs = []string{} // ignore URLs when pushing to target
 	// for the same repository, there's nothing to copy
 	if ref.EqualRepository(refSrc, refTgt) {
+		if opt.callback != nil {
+			opt.callback("blob", d.Digest.String(), "skipped", 0, d.Size)
+		}
 		rc.log.WithFields(logrus.Fields{
 			"src":    refTgt.Reference,
 			"tgt":    refTgt.Reference,
@@ -28,6 +52,9 @@ func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Re
 	}
 	// check if layer already exists
 	if _, err := rc.BlobHead(ctx, refTgt, tDesc); err == nil {
+		if opt.callback != nil {
+			opt.callback("blob", d.Digest.String(), "skipped", 0, d.Size)
+		}
 		rc.log.WithFields(logrus.Fields{
 			"tgt":    refTgt.Reference,
 			"digest": d,
@@ -38,6 +65,9 @@ func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Re
 	if ref.EqualRegistry(refSrc, refTgt) {
 		err := rc.BlobMount(ctx, refSrc, refTgt, d)
 		if err == nil {
+			if opt.callback != nil {
+				opt.callback("blob", d.Digest.String(), "skipped", 0, d.Size)
+			}
 			rc.log.WithFields(logrus.Fields{
 				"src":    refTgt.Reference,
 				"tgt":    refTgt.Reference,
@@ -60,6 +90,31 @@ func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Re
 			"digest": d,
 		}).Warn("Failed to retrieve blob")
 		return err
+	}
+	if opt.callback != nil {
+		opt.callback("blob", d.Digest.String(), "started", 0, d.Size)
+		ticker := time.NewTicker(blobCBFreq)
+		done := make(chan bool)
+		defer func() {
+			close(done)
+			ticker.Stop()
+			if ctx.Err() == nil {
+				opt.callback("blob", d.Digest.String(), "finished", d.Size, d.Size)
+			}
+		}()
+		go func() {
+			for {
+				select {
+				case <-done:
+					return
+				case <-ticker.C:
+					offset, err := blobIO.Seek(0, io.SeekCurrent)
+					if err == nil && offset > 0 {
+						opt.callback("blob", d.Digest.String(), "active", offset, d.Size)
+					}
+				}
+			}
+		}()
 	}
 	defer blobIO.Close()
 	if _, err := rc.BlobPut(ctx, refTgt, blobIO.GetDescriptor(), blobIO); err != nil {
