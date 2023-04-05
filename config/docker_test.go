@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/regclient/regclient/internal/conffile"
@@ -9,7 +10,12 @@ import (
 
 func TestDocker(t *testing.T) {
 	curPath := os.Getenv("PATH")
-	os.Setenv("PATH", "testdata"+string(os.PathListSeparator)+curPath)
+	pwd, err := os.Getwd()
+	if err != nil {
+		t.Errorf("failed to get working dir: %v", err)
+		return
+	}
+	os.Setenv("PATH", filepath.Join(pwd, "testdata")+string(os.PathListSeparator)+curPath)
 	defer os.Setenv("PATH", curPath)
 	curDockerConf := os.Getenv(dockerEnv)
 	os.Setenv(dockerEnv, "testdata")
@@ -21,6 +27,7 @@ func TestDocker(t *testing.T) {
 	hosts, err := DockerLoad()
 	if err != nil {
 		t.Errorf("error loading docker credentials: %v", err)
+		return
 	}
 	hostMap := map[string]*Host{}
 	for _, h := range hosts {
@@ -67,6 +74,23 @@ func TestDocker(t *testing.T) {
 			expectHostname:   "http.example.com",
 			expectTLS:        TLSDisabled,
 			expectCredHost:   "http://http.example.com/",
+		},
+		{
+			name:             "storehost",
+			hostname:         "storehost.example.com",
+			expectUser:       "hello",
+			expectCredHelper: "docker-credential-teststore",
+			expectHostname:   "storehost.example.com",
+			expectTLS:        TLSEnabled,
+		},
+		{
+			name:             "storehttp.example.com",
+			hostname:         "storehttp.example.com",
+			expectUser:       "hello",
+			expectCredHelper: "docker-credential-teststore",
+			expectHostname:   "storehttp.example.com",
+			expectTLS:        TLSDisabled,
+			expectCredHost:   "http://storehttp.example.com/",
 		},
 	}
 	for _, tt := range tests {
