@@ -380,100 +380,111 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 	var retErr error
 	switch s.Type {
 	case "registry":
-		sRepos, err := rc.RepoList(ctx, s.Source)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"source": s.Source,
-				"error":  err,
-			}).Error("Failed to list source repositories")
-			return err
-		}
-		sRepoList, err := sRepos.GetRepos()
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"source": s.Source,
-				"error":  err,
-			}).Error("Failed to list source repositories")
-			return err
-		}
-		for _, repo := range sRepoList {
-			sRepoRef, err := ref.New(fmt.Sprintf("%s/%s", s.Source, repo))
+		last := ""
+		for {
+			repoOpts := []scheme.RepoOpts{}
+			if last != "" {
+				repoOpts = append(repoOpts, scheme.WithRepoLast(last))
+			}
+			sRepos, err := rc.RepoList(ctx, s.Source, repoOpts...)
 			if err != nil {
 				log.WithFields(logrus.Fields{
 					"source": s.Source,
-					"repo":   repo,
 					"error":  err,
-				}).Error("Failed to define source reference")
+				}).Error("Failed to list source repositories")
 				return err
 			}
-			sTags, err := rc.TagList(ctx, sRepoRef)
+			sRepoList, err := sRepos.GetRepos()
 			if err != nil {
 				log.WithFields(logrus.Fields{
-					"source": sRepoRef.CommonName(),
+					"source": s.Source,
 					"error":  err,
-				}).Error("Failed getting source tags")
-				retErr = err
-				continue
-			}
-			sTagsList, err := sTags.GetTags()
-			if err != nil {
-				log.WithFields(logrus.Fields{
-					"source": sRepoRef.CommonName(),
-					"error":  err,
-				}).Error("Failed getting source tags")
-				retErr = err
-				continue
-			}
-			sTagList, err := s.filterTags(sTagsList)
-			if err != nil {
-				log.WithFields(logrus.Fields{
-					"source": sRepoRef.CommonName(),
-					"allow":  s.Tags.Allow,
-					"deny":   s.Tags.Deny,
-					"error":  err,
-				}).Error("Failed processing tag filters")
-				retErr = err
-				continue
-			}
-			if len(sTagList) == 0 {
-				log.WithFields(logrus.Fields{
-					"source":    sRepoRef.CommonName(),
-					"allow":     s.Tags.Allow,
-					"deny":      s.Tags.Deny,
-					"available": sTagsList,
-				}).Info("No matching tags found")
-				retErr = err
-				continue
-			}
-			tRepoRef, err := ref.New(fmt.Sprintf("%s/%s", s.Target, repo))
-			if err != nil {
-				log.WithFields(logrus.Fields{
-					"target": s.Target,
-					"repo":   repo,
-					"error":  err,
-				}).Error("Failed parsing target")
+				}).Error("Failed to list source repositories")
 				return err
 			}
-			for _, tag := range sTagList {
-				sRef := sRepoRef
-				sRef.Tag = tag
-				tRef := tRepoRef
-				tRef.Tag = tag
-				err = s.processRef(ctx, sRef, tRef, action)
+			if len(sRepoList) == 0 || last == sRepoList[len(sRepoList)-1] {
+				break
+			}
+			last = sRepoList[len(sRepoList)-1]
+			for _, repo := range sRepoList {
+				sRepoRef, err := ref.New(fmt.Sprintf("%s/%s", s.Source, repo))
 				if err != nil {
 					log.WithFields(logrus.Fields{
-						"target": tRef.CommonName(),
-						"source": sRef.CommonName(),
+						"source": s.Source,
+						"repo":   repo,
 						"error":  err,
-					}).Error("Failed to sync")
-					retErr = err
+					}).Error("Failed to define source reference")
+					return err
 				}
-				err = rc.Close(ctx, tRef)
+				sTags, err := rc.TagList(ctx, sRepoRef)
 				if err != nil {
 					log.WithFields(logrus.Fields{
-						"ref":   tRef.CommonName(),
-						"error": err,
-					}).Error("Error closing ref")
+						"source": sRepoRef.CommonName(),
+						"error":  err,
+					}).Error("Failed getting source tags")
+					retErr = err
+					continue
+				}
+				sTagsList, err := sTags.GetTags()
+				if err != nil {
+					log.WithFields(logrus.Fields{
+						"source": sRepoRef.CommonName(),
+						"error":  err,
+					}).Error("Failed getting source tags")
+					retErr = err
+					continue
+				}
+				sTagList, err := s.filterTags(sTagsList)
+				if err != nil {
+					log.WithFields(logrus.Fields{
+						"source": sRepoRef.CommonName(),
+						"allow":  s.Tags.Allow,
+						"deny":   s.Tags.Deny,
+						"error":  err,
+					}).Error("Failed processing tag filters")
+					retErr = err
+					continue
+				}
+				if len(sTagList) == 0 {
+					log.WithFields(logrus.Fields{
+						"source":    sRepoRef.CommonName(),
+						"allow":     s.Tags.Allow,
+						"deny":      s.Tags.Deny,
+						"available": sTagsList,
+					}).Info("No matching tags found")
+					retErr = err
+					continue
+				}
+				tRepoRef, err := ref.New(fmt.Sprintf("%s/%s", s.Target, repo))
+				if err != nil {
+					log.WithFields(logrus.Fields{
+						"target": s.Target,
+						"repo":   repo,
+						"error":  err,
+					}).Error("Failed parsing target")
+					return err
+				}
+				for _, tag := range sTagList {
+					sRef := sRepoRef
+					sRef.Tag = tag
+					tRef := tRepoRef
+					tRef.Tag = tag
+					err = s.processRef(ctx, sRef, tRef, action)
+					if err != nil {
+						log.WithFields(logrus.Fields{
+							"target": tRef.CommonName(),
+							"source": sRef.CommonName(),
+							"error":  err,
+						}).Error("Failed to sync")
+						retErr = err
+					}
+					err = rc.Close(ctx, tRef)
+					if err != nil {
+						log.WithFields(logrus.Fields{
+							"ref":   tRef.CommonName(),
+							"error": err,
+						}).Error("Error closing ref")
+					}
 				}
 			}
 		}
