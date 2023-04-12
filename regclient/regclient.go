@@ -1,6 +1,8 @@
 //go:build !nolegacy
 // +build !nolegacy
 
+//lint:file-ignore SA1019 Ignore deprecations since this entire package is deprecated
+
 // Package regclient is a legacy package, this has been moved to the top level regclient package
 package regclient
 
