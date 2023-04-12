@@ -183,6 +183,16 @@ func WithUserAgent(ua string) Opt {
 	}
 }
 
+// WithRegOpts passes through reg.Opts to the reg client
+func WithRegOpts(opts ...reg.Opts) Opt {
+	return func(rc *RegClient) {
+		if rc.regOpts == nil {
+			rc.regOpts = []reg.Opts{}
+		}
+		rc.regOpts = append(rc.regOpts, opts...)
+	}
+}
+
 func (rc *RegClient) hostLoad(src string, hosts []config.Host) {
 	for _, configHost := range hosts {
 		if configHost.Name == "" {
