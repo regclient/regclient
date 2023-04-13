@@ -12,6 +12,7 @@ import (
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/pkg/template"
+	"github.com/regclient/regclient/scheme/reg"
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -248,7 +249,7 @@ func loadConf() error {
 		regclient.WithLog(log),
 	}
 	if conf.Defaults.BlobLimit != 0 {
-		rcOpts = append(rcOpts, regclient.WithBlobLimit(conf.Defaults.BlobLimit))
+		rcOpts = append(rcOpts, regclient.WithRegOpts(reg.WithBlobLimit(conf.Defaults.BlobLimit)))
 	}
 	if !conf.Defaults.SkipDockerConf {
 		rcOpts = append(rcOpts, regclient.WithDockerCreds(), regclient.WithDockerCerts())
@@ -273,7 +274,7 @@ func loadConf() error {
 		rcHosts = append(rcHosts, host)
 	}
 	if len(rcHosts) > 0 {
-		rcOpts = append(rcOpts, regclient.WithConfigHosts(rcHosts))
+		rcOpts = append(rcOpts, regclient.WithConfigHost(rcHosts...))
 	}
 	rc = regclient.New(rcOpts...)
 	return nil

@@ -22,6 +22,7 @@ import (
 	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/scheme"
+	"github.com/regclient/regclient/scheme/reg"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/platform"
@@ -344,7 +345,7 @@ func loadConf() error {
 		regclient.WithLog(log),
 	}
 	if conf.Defaults.BlobLimit != 0 {
-		rcOpts = append(rcOpts, regclient.WithBlobLimit(conf.Defaults.BlobLimit))
+		rcOpts = append(rcOpts, regclient.WithRegOpts(reg.WithBlobLimit(conf.Defaults.BlobLimit)))
 	}
 	if !conf.Defaults.SkipDockerConf {
 		rcOpts = append(rcOpts, regclient.WithDockerCreds(), regclient.WithDockerCerts())
@@ -369,7 +370,7 @@ func loadConf() error {
 		rcHosts = append(rcHosts, host)
 	}
 	if len(rcHosts) > 0 {
-		rcOpts = append(rcOpts, regclient.WithConfigHosts(rcHosts))
+		rcOpts = append(rcOpts, regclient.WithConfigHost(rcHosts...))
 	}
 	rc = regclient.New(rcOpts...)
 	return nil
