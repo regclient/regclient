@@ -173,7 +173,7 @@ func WithLog(log *logrus.Logger) Opt {
 // WithRegOpts passes through opts to the reg scheme
 func WithRegOpts(opts ...reg.Opts) Opt {
 	return func(rc *RegClient) {
-		if len(rc.regOpts) == 0 {
+		if len(opts) == 0 {
 			return
 		}
 		rc.regOpts = append(rc.regOpts, opts...)
