@@ -1,6 +1,8 @@
 //go:build !nolegacy
 // +build !nolegacy
 
+//lint:file-ignore SA1019 Ignore deprecations since this entire package is deprecated
+
 // Package regclient is a legacy package, this has been moved to the top level regclient package
 package regclient
 
@@ -9,14 +11,13 @@ import (
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/reghttp"
 	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/scheme/reg"
 	"github.com/regclient/regclient/types/repo"
 	"github.com/regclient/regclient/types/tag"
 )
 
 const (
-	DefaultBlobChunk   = reg.DefaultBlobChunk
-	DefaultBlobMax     = reg.DefaultBlobMax
+	DefaultBlobChunk   = 1024 * 1024
+	DefaultBlobMax     = -1
 	DefaultRetryLimit  = reghttp.DefaultRetryLimit
 	DefaultUserAgent   = rcTop.DefaultUserAgent
 	DockerCertDir      = rcTop.DockerCertDir

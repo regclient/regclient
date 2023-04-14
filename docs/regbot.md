@@ -79,7 +79,7 @@ scripts:
   Array of registry credentials and settings for connecting.
   To avoid saving credentials in the same file with the other settings, consider using the `${HOME}/.docker/config.json` or a template in the `user` and `pass`
   fields to expand a variable or file contents.
-  When using the `regclient/regbot` image, the docker config is read from `/home/appuser/.docker/config.json`.
+  When using the `ghcr.io/regclient/regbot` image, the docker config is read from `/home/appuser/.docker/config.json`.
   Each `creds` entry supports the following options:
   - `registry`:
     Hostname and port of the registry server used in image references.

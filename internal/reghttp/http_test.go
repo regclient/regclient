@@ -19,6 +19,7 @@ import (
 	"github.com/regclient/regclient/internal/auth"
 	"github.com/regclient/regclient/internal/reqresp"
 	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/warning"
 )
 
 // TODO: test for race conditions
@@ -104,6 +105,8 @@ func TestRegHttp(t *testing.T) {
 		RefreshToken: "refresh2PValue",
 		Scope:        "repository:project2:pull,push",
 	})
+	warnMsg1 := "test warning 1"
+	warnMsg2 := "test warning 2"
 	rrsToken := []reqresp.ReqResp{
 		{
 			ReqEntry: reqresp.ReqEntry{
@@ -350,6 +353,31 @@ func TestRegHttp(t *testing.T) {
 		},
 		{
 			ReqEntry: reqresp.ReqEntry{
+				Name:   "unauthorized project-missing-auth",
+				Method: "GET",
+				Path:   "/v2/project-missing-auth/manifests/tag-repoauth",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusUnauthorized,
+				Body:   []byte("Unauthorized"),
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "unauthorized project-bad-auth",
+				Method: "GET",
+				Path:   "/v2/project-bad-auth/manifests/tag-repoauth",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusUnauthorized,
+				Body:   []byte("Unauthorized"),
+				Headers: http.Header{
+					"WWW-Authenticate": []string{`Bearer realm="http://` + tsTokenHost + `/token`},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
 				Name:   "post manifest",
 				Method: "POST",
 				Path:   "/v2/project/manifests/tag-post",
@@ -566,6 +594,28 @@ func TestRegHttp(t *testing.T) {
 					"Content-Type":          []string{"application/vnd.docker.distribution.manifest.v2+json"},
 					"Docker-Content-Digest": []string{retryDigest.String()},
 					"Accept-Ranges":         []string{"bytes"},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "get warnings",
+				Method: "GET",
+				Path:   "/v2/project/manifests/warning",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Body:   getBody,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", len(getBody))},
+					"Content-Type":          []string{"application/vnd.docker.distribution.manifest.v2+json"},
+					"Docker-Content-Digest": []string{getDigest.String()},
+					"Warning": []string{
+						`199 - "ignore warning"`,
+						`299 - "` + warnMsg1 + `"`,
+						`299 - "` + warnMsg2 + `"`,
+						`299 - "` + warnMsg1 + `"`,
+					},
 				},
 			},
 		},
@@ -1014,6 +1064,52 @@ func TestRegHttp(t *testing.T) {
 			return
 		} else if !errors.Is(err, auth.ErrUnauthorized) {
 			t.Errorf("expected error %v, received error %v", auth.ErrUnauthorized, err)
+		}
+	})
+	t.Run("Bad auth", func(t *testing.T) {
+		apiAuth := map[string]ReqAPI{
+			"": {
+				Method:     "GET",
+				Repository: "project-bad-auth",
+				Path:       "manifests/tag-repoauth",
+				Headers:    headers,
+				Digest:     getDigest,
+			},
+		}
+		authReq := &Req{
+			Host: "repoauth." + tsHost,
+			APIs: apiAuth,
+		}
+		resp, err := hc.Do(ctx, authReq)
+		if err == nil {
+			t.Errorf("unexpected success with bad auth header")
+			resp.Close()
+			return
+		} else if !errors.Is(err, types.ErrParsingFailed) {
+			t.Errorf("expected error %v, received error %v", types.ErrParsingFailed, err)
+		}
+	})
+	t.Run("Missing auth", func(t *testing.T) {
+		apiAuth := map[string]ReqAPI{
+			"": {
+				Method:     "GET",
+				Repository: "project-missing-auth",
+				Path:       "manifests/tag-repoauth",
+				Headers:    headers,
+				Digest:     getDigest,
+			},
+		}
+		authReq := &Req{
+			Host: "repoauth." + tsHost,
+			APIs: apiAuth,
+		}
+		resp, err := hc.Do(ctx, authReq)
+		if err == nil {
+			t.Errorf("unexpected success with missing auth header")
+			resp.Close()
+			return
+		} else if !errors.Is(err, types.ErrEmptyChallenge) {
+			t.Errorf("expected error %v, received error %v", types.ErrEmptyChallenge, err)
 		}
 	})
 	// test repoauth
@@ -1504,6 +1600,42 @@ func TestRegHttp(t *testing.T) {
 			t.Errorf("body read failure: %v", err)
 		} else if !bytes.Equal(body, retryBody) {
 			t.Errorf("body read mismatch, expected %s, received %s", retryBody, body)
+		}
+		err = resp.Close()
+		if err != nil {
+			t.Errorf("error closing request: %v", err)
+		}
+	})
+	t.Run("Warning", func(t *testing.T) {
+		apiGet := map[string]ReqAPI{
+			"": {
+				Method:     "GET",
+				Repository: "project",
+				Path:       "manifests/warning",
+				Headers:    headers,
+				Digest:     getDigest,
+			},
+		}
+		getReq := &Req{
+			Host: tsHost,
+			APIs: apiGet,
+		}
+		w := &warning.Warning{}
+		wCtx := warning.NewContext(ctx, w)
+		resp, err := hc.Do(wCtx, getReq)
+		if err != nil {
+			t.Errorf("failed to run get: %v", err)
+			return
+		}
+		if len(w.List) != 2 {
+			t.Errorf("warning count, expected 2, received %d", len(w.List))
+		} else {
+			if w.List[0] != warnMsg1 {
+				t.Errorf("warning 1, expected %s, received %s", warnMsg1, w.List[0])
+			}
+			if w.List[1] != warnMsg2 {
+				t.Errorf("warning 2, expected %s, received %s", warnMsg2, w.List[1])
+			}
 		}
 		err = resp.Close()
 		if err != nil {

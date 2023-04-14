@@ -145,6 +145,7 @@ var imageOpts struct {
 	checkBaseDigest string
 	checkSkipConfig bool
 	create          string
+	exportRef       string
 	forceRecursive  bool
 	format          string
 	formatFile      string
@@ -169,11 +170,12 @@ func init() {
 
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.forceRecursive, "force-recursive", "", false, "Force recursive copy of image, repairs missing nested blobs and manifests")
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.includeExternal, "include-external", "", false, "Include external layers")
+	imageCopyCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageCopyCmd.Flags().StringArrayVarP(&imageOpts.platforms, "platforms", "", []string{}, "Copy only specific platforms, registry validation must be disabled")
-	imageCopyCmd.Flags().BoolVarP(&imageOpts.digestTags, "digest-tags", "", false, "Include digest tags (\"sha256-<digest>.*\") when copying manifests")
-	imageCopyCmd.Flags().BoolVarP(&imageOpts.referrers, "referrers", "", false, "Include referrers")
 	// platforms should be treated as experimental since it will break many registries
 	imageCopyCmd.Flags().MarkHidden("platforms")
+	imageCopyCmd.Flags().BoolVarP(&imageOpts.digestTags, "digest-tags", "", false, "Include digest tags (\"sha256-<digest>.*\") when copying manifests")
+	imageCopyCmd.Flags().BoolVarP(&imageOpts.referrers, "referrers", "", false, "Include referrers")
 
 	imageDeleteCmd.Flags().BoolVarP(&manifestOpts.forceTagDeref, "force-tag-dereference", "", false, "Dereference the a tag to a digest, this is unsafe")
 
@@ -185,6 +187,9 @@ func init() {
 
 	imageGetFileCmd.Flags().StringVarP(&imageOpts.formatFile, "format", "", "", "Format output with go template syntax")
 	imageGetFileCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
+
+	imageExportCmd.Flags().StringVar(&imageOpts.exportRef, "name", "", "Name of image to embed for docker load")
+	imageExportCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 
 	imageInspectCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageInspectCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
@@ -460,6 +465,20 @@ func init() {
 			return nil
 		},
 	}, "time-max", "", `max timestamp for both the config and layers`)
+	flagDocker := imageModCmd.Flags().VarPF(&modFlagFunc{
+		t: "bool",
+		f: func(val string) error {
+			b, err := strconv.ParseBool(val)
+			if err != nil {
+				return fmt.Errorf("unable to parse value %s: %w", val, err)
+			}
+			if b {
+				imageOpts.modOpts = append(imageOpts.modOpts, mod.WithManifestToDocker())
+			}
+			return nil
+		},
+	}, "to-docker", "", `convert to Docker schema2 media types`)
+	flagDocker.NoOptDefVal = "true"
 	flagOCI := imageModCmd.Flags().VarPF(&modFlagFunc{
 		t: "bool",
 		f: func(val string) error {
@@ -571,7 +590,23 @@ func runImageCopy(cmd *cobra.Command, args []string) error {
 	rc := newRegClient()
 	defer rc.Close(ctx, rSrc)
 	defer rc.Close(ctx, rTgt)
-
+	if imageOpts.platform != "" {
+		p, err := platform.Parse(imageOpts.platform)
+		if err != nil {
+			return err
+		}
+		m, err := rc.ManifestGet(ctx, rSrc)
+		if err != nil {
+			return err
+		}
+		if m.IsList() {
+			d, err := manifest.GetPlatformDesc(m, &p)
+			if err != nil {
+				return err
+			}
+			rSrc.Digest = d.Digest.String()
+		}
+	}
 	log.WithFields(logrus.Fields{
 		"source":      rSrc.CommonName(),
 		"target":      rTgt.CommonName(),
@@ -610,14 +645,39 @@ func runImageExport(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	} else {
-		w = os.Stdout
+		w = cmd.OutOrStdout()
 	}
 	rc := newRegClient()
 	defer rc.Close(ctx, r)
+	opts := []regclient.ImageOpts{}
+	if imageOpts.platform != "" {
+		p, err := platform.Parse(imageOpts.platform)
+		if err != nil {
+			return err
+		}
+		m, err := rc.ManifestGet(ctx, r)
+		if err != nil {
+			return err
+		}
+		if m.IsList() {
+			d, err := manifest.GetPlatformDesc(m, &p)
+			if err != nil {
+				return err
+			}
+			r.Digest = d.Digest.String()
+		}
+	}
+	if imageOpts.exportRef != "" {
+		eRef, err := ref.New(imageOpts.exportRef)
+		if err != nil {
+			return fmt.Errorf("cannot parse %s: %w", imageOpts.exportRef, err)
+		}
+		opts = append(opts, regclient.ImageWithExportRef(eRef))
+	}
 	log.WithFields(logrus.Fields{
 		"ref": r.CommonName(),
 	}).Debug("Image export")
-	return rc.ImageExport(ctx, r, w)
+	return rc.ImageExport(ctx, r, w, opts...)
 }
 
 func runImageGetFile(cmd *cobra.Command, args []string) error {
@@ -636,7 +696,6 @@ func runImageGetFile(cmd *cobra.Command, args []string) error {
 		"filename": filename,
 	}).Debug("Get file")
 
-	// TODO: a manifest get for a specific platform would be useful
 	// make it recursive for index of index scenarios
 	m, err := rc.ManifestGet(ctx, r)
 	if err != nil {
@@ -706,11 +765,11 @@ func runImageGetFile(cmd *cobra.Command, args []string) error {
 				Header: th,
 				Reader: rdr,
 			}
-			return template.Writer(os.Stdout, imageOpts.formatFile, data)
+			return template.Writer(cmd.OutOrStdout(), imageOpts.formatFile, data)
 		}
 		var w io.Writer
 		if len(args) < 3 {
-			w = os.Stdout
+			w = cmd.OutOrStdout()
 		} else {
 			w, err = os.Create(args[2])
 			if err != nil {
@@ -794,7 +853,7 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 	case "rawHeaders", "raw-headers", "headers":
 		imageOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
-	return template.Writer(os.Stdout, imageOpts.format, blobConfig)
+	return template.Writer(cmd.OutOrStdout(), imageOpts.format, blobConfig)
 }
 
 func runImageMod(cmd *cobra.Command, args []string) error {
@@ -866,7 +925,7 @@ func runImageRateLimit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	return template.Writer(os.Stdout, imageOpts.format, manifest.GetRateLimit(m))
+	return template.Writer(cmd.OutOrStdout(), imageOpts.format, manifest.GetRateLimit(m))
 }
 
 type modFlagFunc struct {

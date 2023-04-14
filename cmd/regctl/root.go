@@ -7,6 +7,7 @@ import (
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/pkg/template"
+	"github.com/regclient/regclient/scheme/reg"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -85,7 +86,7 @@ func rootPreRun(cmd *cobra.Command, args []string) error {
 
 func runVersion(cmd *cobra.Command, args []string) error {
 	info := version.GetInfo()
-	return template.Writer(os.Stdout, rootOpts.format, info)
+	return template.Writer(cmd.OutOrStdout(), rootOpts.format, info)
 }
 
 func newRegClient() *regclient.RegClient {
@@ -109,6 +110,9 @@ func newRegClient() *regclient.RegClient {
 			rcOpts = append(rcOpts, regclient.WithUserAgent(UserAgent+" ("+info.VCSRef+")"))
 		}
 	}
+	if conf.BlobLimit != 0 {
+		rcOpts = append(rcOpts, regclient.WithRegOpts(reg.WithBlobLimit(conf.BlobLimit)))
+	}
 	if conf.IncDockerCred == nil || *conf.IncDockerCred {
 		rcOpts = append(rcOpts, regclient.WithDockerCreds())
 	}
@@ -122,7 +126,7 @@ func newRegClient() *regclient.RegClient {
 		rcHosts = append(rcHosts, *host)
 	}
 	if len(rcHosts) > 0 {
-		rcOpts = append(rcOpts, regclient.WithConfigHosts(rcHosts))
+		rcOpts = append(rcOpts, regclient.WithConfigHost(rcHosts...))
 	}
 
 	return regclient.New(rcOpts...)

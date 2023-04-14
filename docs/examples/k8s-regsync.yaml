@@ -64,7 +64,7 @@ spec:
     spec:
       containers:
       - name: regsync
-        image: regclient/regsync:latest
+        image: ghcr.io/regclient/regsync:latest
         imagePullPolicy: IfNotPresent
         args: ["server", "-c", "/etc/regsync/regsync.yml"]
         volumeMounts:

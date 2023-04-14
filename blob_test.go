@@ -172,7 +172,7 @@ func TestBlobGet(t *testing.T) {
 	delayInit, _ := time.ParseDuration("0.05s")
 	delayMax, _ := time.ParseDuration("0.10s")
 	rc := New(
-		WithConfigHosts(rcHosts),
+		WithConfigHost(rcHosts...),
 		WithLog(log),
 		WithRetryDelay(delayInit, delayMax),
 	)
@@ -666,7 +666,7 @@ func TestBlobPut(t *testing.T) {
 	delayInit, _ := time.ParseDuration("0.05s")
 	delayMax, _ := time.ParseDuration("0.10s")
 	rc := New(
-		WithConfigHosts(rcHosts),
+		WithConfigHost(rcHosts...),
 		WithLog(log),
 		WithRetryDelay(delayInit, delayMax),
 	)
@@ -1123,7 +1123,7 @@ func TestBlobCopy(t *testing.T) {
 	delayInit, _ := time.ParseDuration("0.05s")
 	delayMax, _ := time.ParseDuration("0.10s")
 	rc := New(
-		WithConfigHosts(rcHosts),
+		WithConfigHost(rcHosts...),
 		WithLog(log),
 		WithRetryDelay(delayInit, delayMax),
 	)

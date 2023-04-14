@@ -97,6 +97,14 @@ func TestMod(t *testing.T) {
 			wantSame: true,
 		},
 		{
+			name: "To Docker",
+			opts: []Opts{
+				WithManifestToDocker(),
+			},
+			ref:      "ocidir://testrepo:v1",
+			wantSame: false,
+		},
+		{
 			name: "To OCI Referrers",
 			opts: []Opts{
 				WithManifestToOCIReferrers(),

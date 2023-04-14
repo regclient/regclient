@@ -46,9 +46,11 @@ type ConfigDefaults struct {
 	ForceRecursive  *bool                  `yaml:"forceRecursive" json:"forceRecursive"`
 	IncludeExternal *bool                  `yaml:"includeExternal" json:"includeExternal"`
 	MediaTypes      []string               `yaml:"mediaTypes" json:"mediaTypes"`
-	SkipDockerConf  bool                   `yaml:"skipDockerConfig" json:"skipDockerConfig"`
 	Hooks           ConfigHooks            `yaml:"hooks" json:"hooks"`
-	UserAgent       string                 `yaml:"userAgent" json:"userAgent"`
+	// general options
+	BlobLimit      int64  `yaml:"blobLimit" json:"blobLimit"`
+	SkipDockerConf bool   `yaml:"skipDockerConfig" json:"skipDockerConfig"`
+	UserAgent      string `yaml:"userAgent" json:"userAgent"`
 }
 
 // ConfigRateLimit is for rate limit settings

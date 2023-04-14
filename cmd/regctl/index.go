@@ -64,6 +64,8 @@ var indexOpts struct {
 	descPlatform    string
 	digests         []string
 	format          string
+	incDigestTags   bool
+	incReferrers    bool
 	mediaType       string
 	platforms       []string
 	refs            []string
@@ -73,7 +75,10 @@ func init() {
 	indexAddCmd.Flags().StringArrayVarP(&indexOpts.descAnnotations, "desc-annotation", "", []string{}, "Annotation to add to descriptors of new entries")
 	indexAddCmd.Flags().StringVarP(&indexOpts.descPlatform, "desc-platform", "", "", "Platform to set in descriptors of new entries")
 	indexAddCmd.Flags().StringArrayVarP(&indexOpts.digests, "digest", "", []string{}, "Digest to add")
+	indexAddCmd.Flags().BoolVar(&indexOpts.incDigestTags, "digest-tags", false, "Include digest tags")
+	indexAddCmd.Flags().BoolVar(&indexOpts.incReferrers, "referrers", false, "Include referrers")
 	indexAddCmd.Flags().StringArrayVarP(&indexOpts.refs, "ref", "", []string{}, "References to add")
+	indexAddCmd.Flags().StringArrayVarP(&indexOpts.platforms, "platform", "", []string{}, "Platforms to include from ref")
 
 	indexCreateCmd.Flags().StringArrayVarP(&indexOpts.annotations, "annotation", "", []string{}, "Annotation to set on manifest")
 	indexCreateCmd.Flags().BoolVarP(&indexOpts.byDigest, "by-digest", "", false, "Push manifest by digest instead of tag")
@@ -81,8 +86,11 @@ func init() {
 	indexCreateCmd.Flags().StringVarP(&indexOpts.descPlatform, "desc-platform", "", "", "Platform to set in descriptors of new entries")
 	indexCreateCmd.Flags().StringArrayVarP(&indexOpts.digests, "digest", "", []string{}, "Digest to include in new index")
 	indexCreateCmd.Flags().StringVarP(&indexOpts.format, "format", "", "", "Format output with go template syntax")
+	indexCreateCmd.Flags().BoolVar(&indexOpts.incDigestTags, "digest-tags", false, "Include digest tags")
+	indexCreateCmd.Flags().BoolVar(&indexOpts.incReferrers, "referrers", false, "Include referrers")
 	indexCreateCmd.Flags().StringVarP(&indexOpts.mediaType, "media-type", "m", types.MediaTypeOCI1ManifestList, "Media-type for manifest list or OCI Index")
 	indexCreateCmd.Flags().StringArrayVarP(&indexOpts.refs, "ref", "", []string{}, "References to include in new index")
+	indexCreateCmd.Flags().StringArrayVarP(&indexOpts.platforms, "platform", "", []string{}, "Platforms to include from ref")
 	indexCreateCmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return indexKnownTypes, cobra.ShellCompDirectiveNoFileComp
 	})
@@ -331,6 +339,16 @@ func runIndexDelete(cmd *cobra.Command, args []string) error {
 }
 
 func indexBuildDescList(ctx context.Context, rc *regclient.RegClient, r ref.Ref) ([]types.Descriptor, error) {
+	imgCopyOpts := []regclient.ImageOpts{
+		regclient.ImageWithChild(),
+	}
+	if indexOpts.incDigestTags {
+		imgCopyOpts = append(imgCopyOpts, regclient.ImageWithDigestTags())
+	}
+	if indexOpts.incReferrers {
+		imgCopyOpts = append(imgCopyOpts, regclient.ImageWithReferrers())
+	}
+
 	descAnnotations := map[string]string{}
 	for _, a := range indexOpts.descAnnotations {
 		aSplit := strings.SplitN(a, "=", 2)
@@ -339,6 +357,14 @@ func indexBuildDescList(ctx context.Context, rc *regclient.RegClient, r ref.Ref)
 		} else {
 			descAnnotations[aSplit[0]] = aSplit[1]
 		}
+	}
+	platforms := []platform.Platform{}
+	for _, pStr := range indexOpts.platforms {
+		p, err := platform.Parse(pStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse platform %s: %w", pStr, err)
+		}
+		platforms = append(platforms, p)
 	}
 
 	// copy each ref by digest to the destination repository
@@ -354,15 +380,47 @@ func indexBuildDescList(ctx context.Context, rc *regclient.RegClient, r ref.Ref)
 		if err != nil {
 			return nil, err
 		}
-		desc := mCopy.GetDescriptor()
-		tgtRef := r
-		tgtRef.Tag = ""
-		tgtRef.Digest = desc.Digest.String()
-		err = rc.ImageCopy(ctx, srcRef, tgtRef, regclient.ImageWithChild())
-		if err != nil {
-			return nil, err
+		if !mCopy.IsList() || len(platforms) == 0 {
+			// single manifest
+			desc := mCopy.GetDescriptor()
+			tgtRef := r
+			tgtRef.Tag = ""
+			tgtRef.Digest = desc.Digest.String()
+			err = rc.ImageCopy(ctx, srcRef, tgtRef, imgCopyOpts...)
+			if err != nil {
+				return nil, err
+			}
+			indexOpts.digests = append(indexOpts.digests, desc.Digest.String())
+		} else {
+			// platform specific descriptors are being extracted from a manifest list
+			mCopy, err = rc.ManifestGet(ctx, srcRef)
+			if err != nil {
+				return nil, err
+			}
+			mi, ok := mCopy.(manifest.Indexer)
+			if !ok {
+				return nil, fmt.Errorf("manifest list is not an Indexer")
+			}
+			dl, err := mi.GetManifestList()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get descriptor list: %w", err)
+			}
+			for _, d := range dl {
+				if d.Platform != nil && indexPlatformInList(*d.Platform, platforms) {
+					dRef := srcRef
+					dRef.Tag = ""
+					dRef.Digest = d.Digest.String()
+					tgtRef := r
+					tgtRef.Tag = ""
+					tgtRef.Digest = d.Digest.String()
+					err = rc.ImageCopy(ctx, dRef, tgtRef, imgCopyOpts...)
+					if err != nil {
+						return nil, err
+					}
+					indexOpts.digests = append(indexOpts.digests, d.Digest.String())
+				}
+			}
 		}
-		indexOpts.digests = append(indexOpts.digests, desc.Digest.String())
 	}
 
 	// parse each digest, pull manifest, get config, append to list of descriptors
@@ -441,4 +499,13 @@ func indexDescListRmDup(dl []types.Descriptor) []types.Descriptor {
 		i++
 	}
 	return dl
+}
+
+func indexPlatformInList(p platform.Platform, pl []platform.Platform) bool {
+	for _, cur := range pl {
+		if platform.Match(p, cur) {
+			return true
+		}
+	}
+	return false
 }

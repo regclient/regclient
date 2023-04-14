@@ -83,6 +83,17 @@ is the digest of the blob.`,
 	ValidArgs: []string{}, // do not auto complete repository
 	RunE:      runBlobPut,
 }
+var blobCopyCmd = &cobra.Command{
+	Use:     "copy <src_image_ref> <dst_image_ref> <digest>",
+	Aliases: []string{"cp"},
+	Short:   "copy blob",
+	Long: `Copy a blob between repositories. This works in the same registry only. It
+attempts to mount the layers between repositories. And within the same repository
+it only sends the manifest with the new tag.`,
+	Args:      cobra.ExactArgs(3),
+	ValidArgs: []string{}, // do not auto complete repository or digest
+	RunE:      runBlobCopy,
+}
 
 var blobOpts struct {
 	diffCtx        int
@@ -136,6 +147,7 @@ func init() {
 	blobCmd.AddCommand(blobGetFileCmd)
 	blobCmd.AddCommand(blobHeadCmd)
 	blobCmd.AddCommand(blobPutCmd)
+	blobCmd.AddCommand(blobCopyCmd)
 	rootCmd.AddCommand(blobCmd)
 }
 
@@ -187,10 +199,10 @@ func runBlobDiffConfig(cmd *cobra.Command, args []string) error {
 
 	cDiff := diff.Diff(strings.Split(string(c1Json), "\n"), strings.Split(string(c2Json), "\n"), diffOpts...)
 
-	_, err = fmt.Fprintln(os.Stdout, strings.Join(cDiff, "\n"))
+	_, err = fmt.Fprintln(cmd.OutOrStdout(), strings.Join(cDiff, "\n"))
 	return err
 	// TODO: support templating
-	// return template.Writer(os.Stdout, blobOpts.format, cDiff)
+	// return template.Writer(cmd.OutOrStdout(), blobOpts.format, cDiff)
 }
 
 func runBlobDiffLayer(cmd *cobra.Command, args []string) error {
@@ -267,7 +279,7 @@ func runBlobDiffLayer(cmd *cobra.Command, args []string) error {
 
 	// run diff and output result
 	lDiff := diff.Diff(rep1, rep2, diffOpts...)
-	_, err = fmt.Fprintln(os.Stdout, strings.Join(lDiff, "\n"))
+	_, err = fmt.Fprintln(cmd.OutOrStdout(), strings.Join(lDiff, "\n"))
 	return err
 }
 
@@ -303,16 +315,16 @@ func runBlobGet(cmd *cobra.Command, args []string) error {
 	case "raw":
 		blobOpts.formatGet = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .RawBody}}"
 	case "rawBody", "raw-body", "body":
-		_, err = io.Copy(os.Stdout, blob)
+		_, err = io.Copy(cmd.OutOrStdout(), blob)
 		return err
 	case "rawHeaders", "raw-headers", "headers":
 		blobOpts.formatGet = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	case "{{printPretty .}}":
-		_, err = io.Copy(os.Stdout, blob)
+		_, err = io.Copy(cmd.OutOrStdout(), blob)
 		return err
 	}
 
-	return template.Writer(os.Stdout, blobOpts.formatGet, blob)
+	return template.Writer(cmd.OutOrStdout(), blobOpts.formatGet, blob)
 }
 
 func runBlobGetFile(cmd *cobra.Command, args []string) error {
@@ -357,11 +369,11 @@ func runBlobGetFile(cmd *cobra.Command, args []string) error {
 			Header: th,
 			Reader: rdr,
 		}
-		return template.Writer(os.Stdout, blobOpts.formatFile, data)
+		return template.Writer(cmd.OutOrStdout(), blobOpts.formatFile, data)
 	}
 	var w io.Writer
 	if len(args) < 4 {
-		w = os.Stdout
+		w = cmd.OutOrStdout()
 	} else {
 		w, err = os.Create(args[3])
 		if err != nil {
@@ -403,7 +415,7 @@ func runBlobHead(cmd *cobra.Command, args []string) error {
 		blobOpts.formatHead = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
 
-	return template.Writer(os.Stdout, blobOpts.formatHead, blob)
+	return template.Writer(cmd.OutOrStdout(), blobOpts.formatHead, blob)
 }
 
 func runBlobPut(cmd *cobra.Command, args []string) error {
@@ -425,7 +437,7 @@ func runBlobPut(cmd *cobra.Command, args []string) error {
 		"repository": r.Repository,
 		"digest":     blobOpts.digest,
 	}).Debug("Pushing blob")
-	dOut, err := rc.BlobPut(ctx, r, types.Descriptor{Digest: digest.Digest(blobOpts.digest)}, os.Stdin)
+	dOut, err := rc.BlobPut(ctx, r, types.Descriptor{Digest: digest.Digest(blobOpts.digest)}, cmd.InOrStdin())
 	if err != nil {
 		return err
 	}
@@ -438,7 +450,36 @@ func runBlobPut(cmd *cobra.Command, args []string) error {
 		Size:   dOut.Size,
 	}
 
-	return template.Writer(os.Stdout, blobOpts.formatPut, result)
+	return template.Writer(cmd.OutOrStdout(), blobOpts.formatPut, result)
+}
+
+func runBlobCopy(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	rSrc, err := ref.New(args[0])
+	if err != nil {
+		return err
+	}
+	rTgt, err := ref.New(args[1])
+	if err != nil {
+		return err
+	}
+	d, err := digest.Parse(args[2])
+	if err != nil {
+		return err
+	}
+	rc := newRegClient()
+	defer rc.Close(ctx, rSrc)
+
+	log.WithFields(logrus.Fields{
+		"source": rSrc.CommonName(),
+		"target": rTgt.CommonName(),
+		"digest": args[2],
+	}).Debug("Blob copy")
+	err = rc.BlobCopy(ctx, rSrc, rTgt, types.Descriptor{Digest: d})
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func blobReportLayer(tr *tar.Reader) ([]string, error) {
