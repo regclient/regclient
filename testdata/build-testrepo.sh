@@ -69,7 +69,7 @@ done
 # create a docker artifact on v1
 echo scripted build | regctl artifact put \
   --media-type application/vnd.oci.image.manifest.v1+json \
-  --artifact-type application/vnd.oci.image.config.v1+json \
+  --config-type application/vnd.oci.image.config.v1+json \
   --file-media-type application/vnd.example.build-type+json \
   ocidir://testrepo:a-docker
 regctl index add \

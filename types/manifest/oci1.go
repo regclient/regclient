@@ -215,6 +215,9 @@ func (m *oci1Manifest) MarshalPretty() ([]byte, error) {
 		fmt.Fprintf(tw, "Name:\t%s\n", m.r.Reference)
 	}
 	fmt.Fprintf(tw, "MediaType:\t%s\n", m.desc.MediaType)
+	if m.ArtifactType != "" {
+		fmt.Fprintf(tw, "ArtifactType:\t%s\n", m.ArtifactType)
+	}
 	fmt.Fprintf(tw, "Digest:\t%s\n", m.desc.Digest.String())
 	if m.Annotations != nil && len(m.Annotations) > 0 {
 		fmt.Fprintf(tw, "Annotations:\t\n")
@@ -309,6 +312,7 @@ func (m *oci1Artifact) MarshalPretty() ([]byte, error) {
 		fmt.Fprintf(tw, "Name:\t%s\n", m.r.Reference)
 	}
 	fmt.Fprintf(tw, "MediaType:\t%s\n", m.desc.MediaType)
+	fmt.Fprintf(tw, "ArtifactType:\t%s\n", m.ArtifactType)
 	fmt.Fprintf(tw, "Digest:\t%s\n", m.desc.Digest.String())
 	if m.Annotations != nil && len(m.Annotations) > 0 {
 		fmt.Fprintf(tw, "Annotations:\t\n")
