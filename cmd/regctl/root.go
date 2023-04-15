@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"time"
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
@@ -13,7 +14,8 @@ import (
 )
 
 const (
-	usageDesc = `Utility for accessing docker registries
+	progressFreq = time.Millisecond * 250
+	usageDesc    = `Utility for accessing docker registries
 More details at https://github.com/regclient/regclient`
 	// UserAgent sets the header on http requests
 	UserAgent = "regclient/regctl"

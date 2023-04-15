@@ -15,7 +15,7 @@ import (
 // Reader is an unprocessed Blob with an available ReadCloser for reading the Blob
 type Reader interface {
 	Blob
-	io.ReadCloser
+	io.ReadSeekCloser
 	ToOCIConfig() (OCIConfig, error)
 	ToTarReader() (TarReader, error)
 }

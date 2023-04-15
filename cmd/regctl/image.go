@@ -7,12 +7,16 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient"
+	"github.com/regclient/regclient/internal/asci"
+	"github.com/regclient/regclient/internal/units"
 	"github.com/regclient/regclient/mod"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/types"
@@ -169,6 +173,7 @@ func init() {
 	imageCheckBaseCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.forceRecursive, "force-recursive", "", false, "Force recursive copy of image, repairs missing nested blobs and manifests")
+	imageCopyCmd.Flags().StringVarP(&imageOpts.format, "format", "", "", "Format output with go template syntax")
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.includeExternal, "include-external", "", false, "Include external layers")
 	imageCopyCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageCopyCmd.Flags().StringArrayVarP(&imageOpts.platforms, "platforms", "", []string{}, "Copy only specific platforms, registry validation must be disabled")
@@ -629,7 +634,165 @@ func runImageCopy(cmd *cobra.Command, args []string) error {
 	if len(imageOpts.platforms) > 0 {
 		opts = append(opts, regclient.ImageWithPlatforms(imageOpts.platforms))
 	}
-	return rc.ImageCopy(ctx, rSrc, rTgt, opts...)
+	// check for a tty and attach progress reporter
+	done := make(chan bool)
+	var progress *imageProgress
+	if !flagChanged(cmd, "verbosity") && asci.IsWriterTerminal(cmd.ErrOrStderr()) {
+		progress = &imageProgress{
+			start:   time.Now(),
+			entries: map[string]*imageProgressEntry{},
+			asciOut: asci.NewLines(cmd.ErrOrStderr()),
+			bar:     asci.NewProgressBar(cmd.ErrOrStderr()),
+		}
+		ticker := time.NewTicker(progressFreq)
+		defer ticker.Stop()
+		go func() {
+			for {
+				select {
+				case <-done:
+					ticker.Stop()
+					return
+				case <-ticker.C:
+					progress.display(cmd.ErrOrStderr(), false)
+				}
+			}
+		}()
+		opts = append(opts, regclient.ImageWithCallback(progress.callback))
+	}
+	err = rc.ImageCopy(ctx, rSrc, rTgt, opts...)
+	if progress != nil {
+		close(done)
+		progress.display(cmd.ErrOrStderr(), true)
+	}
+	if err != nil {
+		return err
+	}
+	if !flagChanged(cmd, "format") {
+		imageOpts.format = "{{ .CommonName }}\n"
+	}
+	return template.Writer(cmd.OutOrStdout(), imageOpts.format, rTgt)
+}
+
+type imageProgress struct {
+	mu      sync.Mutex
+	start   time.Time
+	entries map[string]*imageProgressEntry
+	asciOut *asci.Lines
+	bar     *asci.ProgressBar
+	changed bool
+}
+
+type imageProgressEntry struct {
+	kind, instance string
+	state          string
+	start, last    time.Time
+	cur, total     int64
+	bps            []float64
+}
+
+func (ip *imageProgress) callback(kind, instance, state string, cur, total int64) {
+	// track kind/instance
+	ip.mu.Lock()
+	defer ip.mu.Unlock()
+	ip.changed = true
+	now := time.Now()
+	if e, ok := ip.entries[kind+":"+instance]; ok {
+		e.state = state
+		diff := now.Sub(e.last)
+		bps := float64(cur-e.cur) / diff.Seconds()
+		e.state = state
+		e.last = now
+		e.cur = cur
+		e.total = total
+		if len(e.bps) >= 10 {
+			e.bps = append(e.bps[1:], bps)
+		} else {
+			e.bps = append(e.bps, bps)
+		}
+	} else {
+		ip.entries[kind+":"+instance] = &imageProgressEntry{
+			kind:     kind,
+			instance: instance,
+			state:    state,
+			start:    now,
+			last:     now,
+			cur:      cur,
+			total:    total,
+			bps:      []float64{},
+		}
+	}
+}
+
+func (ip *imageProgress) display(w io.Writer, final bool) {
+	ip.mu.Lock()
+	defer ip.mu.Unlock()
+	if !ip.changed && !final {
+		return // skip since no changes since last display and not the final display
+	}
+	now := time.Now()
+	var manifests, sum, skipped, queued int64
+	// sort entry keys by start time
+	keys := make([]string, 0, len(ip.entries))
+	for k := range ip.entries {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(a, b int) bool {
+		return ip.entries[keys[a]].start.Before(ip.entries[keys[b]].start)
+	})
+	startCount, startLimit := 0, 2
+	finishedCount, finishedLimit := 0, 2
+	// hide old finished entries
+	for i := len(keys) - 1; i >= 0; i-- {
+		e := ip.entries[keys[i]]
+		if e.kind != "manifest" && e.state == "finished" {
+			finishedCount++
+			if finishedCount > finishedLimit {
+				e.state = "archived"
+			}
+		}
+	}
+	for _, k := range keys {
+		e := ip.entries[k]
+		switch e.kind {
+		case "manifest":
+			manifests++
+		default:
+			// show progress bars
+			if e.state == "active" || (e.state == "started" && startCount < startLimit) || e.state == "finished" {
+				if e.state == "started" {
+					startCount++
+				}
+				pre := e.instance + " "
+				if len(pre) > 15 {
+					pre = pre[:14] + " "
+				}
+				pct := float64(e.cur) / float64(e.total)
+				post := fmt.Sprintf(" %4.2f%% %s/%s", pct*100, units.HumanSize(float64(e.cur)), units.HumanSize(float64(e.total)))
+				ip.asciOut.Add(ip.bar.Generate(pct, pre, post))
+			}
+			// track stats
+			if e.cur > 0 {
+				sum += e.cur
+				queued += e.total - e.cur
+			} else if e.state == "skipped" {
+				skipped += e.total
+			}
+		}
+	}
+	// show stats summary
+	ip.asciOut.Add([]byte(fmt.Sprintf("%d manifests, %s/s, %s copied, %s skipped", manifests,
+		units.HumanSize(float64(sum)/now.Sub(ip.start).Seconds()),
+		units.HumanSize(float64(sum)),
+		units.HumanSize(float64(skipped)))))
+	if queued > 0 {
+		ip.asciOut.Add([]byte(fmt.Sprintf(", %s queued",
+			units.HumanSize(float64(queued)))))
+	}
+	ip.asciOut.Add([]byte("\n"))
+	ip.asciOut.Flush()
+	if !final {
+		ip.asciOut.Return()
+	}
 }
 
 func runImageExport(cmd *cobra.Command, args []string) error {
