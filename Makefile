@@ -61,6 +61,9 @@ lint-md: .FORCE ## Run linting for markdown
 	docker run --rm -v "$(PWD):/workdir:ro" ghcr.io/igorshubovych/markdownlint-cli:latest \
 	  --ignore vendor .
 
+vulncheck-go: $(GOPATH)/bin/govulncheck .FORCE ## Run vulnerability scan for Go
+	$(GOPATH)/bin/govulncheck ./...
+
 vendor: ## Vendor Go modules
 	go mod vendor
 
@@ -128,6 +131,10 @@ $(GOPATH)/bin/staticcheck: .FORCE
 	@[ -f $(GOPATH)/bin/staticcheck ] \
 	&& [ "$$($(GOPATH)/bin/staticcheck -version | cut -f 3 -d ' ' | tr -d '()')" = "$(STATICCHECK_VER)" ] \
 	|| go install "honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VER)"
+
+$(GOPATH)/bin/govulncheck: .FORCE
+	# for now, keep installing the latest until they start releasing versions
+	go install "golang.org/x/vuln/cmd/govulncheck@latest"
 
 help: # Display help
 	@awk -F ':|##' '/^[^\t].+?:.*?##/ { printf "\033[36m%-30s\033[0m %s\n", $$1, $$NF }' $(MAKEFILE_LIST)
