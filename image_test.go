@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/types"
@@ -21,7 +22,9 @@ func TestImageCheckBase(t *testing.T) {
 		t.Errorf("failed to setup memfs copy: %v", err)
 		return
 	}
-	rc := New(WithFS(fsMem))
+	delayInit, _ := time.ParseDuration("0.05s")
+	delayMax, _ := time.ParseDuration("0.10s")
+	rc := New(WithFS(fsMem), WithRetryDelay(delayInit, delayMax))
 	rb1, err := ref.New("ocidir://testrepo:b1")
 	if err != nil {
 		t.Errorf("failed to setup ref: %v", err)
@@ -138,7 +141,9 @@ func TestExportImport(t *testing.T) {
 		return
 	}
 	// create regclient
-	rc := New(WithFS(fsMem))
+	delayInit, _ := time.ParseDuration("0.05s")
+	delayMax, _ := time.ParseDuration("0.10s")
+	rc := New(WithFS(fsMem), WithRetryDelay(delayInit, delayMax))
 	rIn, err := ref.New("ocidir://testrepo:v1")
 	if err != nil {
 		t.Errorf("failed to parse ref: %v", err)

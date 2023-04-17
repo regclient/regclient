@@ -224,7 +224,7 @@ func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest,
 	if err != nil {
 		return fmt.Errorf("failed to put manifest %s: %w", r.CommonName(), err)
 	}
-	defer resp.Close()
+	resp.Close()
 	if resp.HTTPResponse().StatusCode != 201 {
 		return fmt.Errorf("failed to put manifest %s: %w", r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 	}

@@ -32,7 +32,6 @@ func TestClose(t *testing.T) {
 	}
 	rCp := r
 	rCp.Tag = ""
-
 	// delete some manifests
 	for _, d := range []string{
 		"sha256:e57d957b974fb4d852aee59b9b2e9dcd7cb0f04622e9356324864a270afd18a0", // armv6

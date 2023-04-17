@@ -627,27 +627,27 @@ func TestRegHttp(t *testing.T) {
 	tsHost := tsURL.Host
 
 	// create config for various hosts, different host pointing to same dns hostname
-	configHosts := []*config.Host{
-		{
+	configHosts := map[string]*config.Host{
+		tsHost: {
 			Name:     tsHost,
 			Hostname: tsHost,
 			TLS:      config.TLSDisabled,
 		},
-		{
+		"auth." + tsHost: {
 			Name:     "auth." + tsHost,
 			Hostname: tsHost,
 			TLS:      config.TLSDisabled,
 			User:     user,
 			Pass:     pass,
 		},
-		{
+		"unauth." + tsHost: {
 			Name:     "unauth." + tsHost,
 			Hostname: tsHost,
 			TLS:      config.TLSDisabled,
 			User:     user,
 			Pass:     "bad" + pass,
 		},
-		{
+		"repoauth." + tsHost: {
 			Name:     "repoauth." + tsHost,
 			Hostname: tsHost,
 			TLS:      config.TLSDisabled,
@@ -655,7 +655,7 @@ func TestRegHttp(t *testing.T) {
 			Pass:     pass,
 			RepoAuth: true,
 		},
-		{
+		"nohead." + tsHost: {
 			Name:     "nohead." + tsHost,
 			Hostname: tsHost,
 			TLS:      config.TLSDisabled,
@@ -663,49 +663,49 @@ func TestRegHttp(t *testing.T) {
 				"disableHead": "true",
 			},
 		},
-		{
+		"missing." + tsHost: {
 			Name:       "missing." + tsHost,
 			Hostname:   tsHost,
 			TLS:        config.TLSDisabled,
 			PathPrefix: "mirror-missing",
 			Priority:   5,
 		},
-		{
+		"forbidden." + tsHost: {
 			Name:       "forbidden." + tsHost,
 			Hostname:   tsHost,
 			TLS:        config.TLSDisabled,
 			PathPrefix: "mirror-forbidden",
 			Priority:   6,
 		},
-		{
+		"bad-gw." + tsHost: {
 			Name:       "bad-gw." + tsHost,
 			Hostname:   tsHost,
 			TLS:        config.TLSDisabled,
 			PathPrefix: "mirror-bad-gw",
 			Priority:   7,
 		},
-		{
+		"gw-timeout." + tsHost: {
 			Name:       "gw-timeout." + tsHost,
 			Hostname:   tsHost,
 			TLS:        config.TLSDisabled,
 			PathPrefix: "mirror-gw-timeout",
 			Priority:   8,
 		},
-		{
+		"server-error." + tsHost: {
 			Name:       "server-error." + tsHost,
 			Hostname:   tsHost,
 			TLS:        config.TLSDisabled,
 			PathPrefix: "mirror-server-error",
 			Priority:   4,
 		},
-		{
+		"rate-limit." + tsHost: {
 			Name:       "rate-limit." + tsHost,
 			Hostname:   tsHost,
 			TLS:        config.TLSDisabled,
 			PathPrefix: "mirror-rate-limit",
 			Priority:   1,
 		},
-		{
+		"mirrors." + tsHost: {
 			Name:       "mirrors." + tsHost,
 			Hostname:   tsHost,
 			TLS:        config.TLSDisabled,
@@ -733,7 +733,12 @@ func TestRegHttp(t *testing.T) {
 	delayInit, _ := time.ParseDuration("0.05s")
 	delayMax, _ := time.ParseDuration("0.10s")
 	hc := NewClient(
-		WithConfigHosts(configHosts),
+		WithConfigHost(func(name string) *config.Host {
+			if configHosts[name] == nil {
+				configHosts[name] = config.HostNewName(name)
+			}
+			return configHosts[name]
+		}),
 		WithDelay(delayInit, delayMax),
 		WithUserAgent(useragent),
 	)

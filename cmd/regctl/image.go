@@ -683,20 +683,21 @@ type imageProgress struct {
 }
 
 type imageProgressEntry struct {
-	kind, instance string
-	state          string
-	start, last    time.Time
-	cur, total     int64
-	bps            []float64
+	kind        types.CallbackKind
+	instance    string
+	state       types.CallbackState
+	start, last time.Time
+	cur, total  int64
+	bps         []float64
 }
 
-func (ip *imageProgress) callback(kind, instance, state string, cur, total int64) {
+func (ip *imageProgress) callback(kind types.CallbackKind, instance string, state types.CallbackState, cur, total int64) {
 	// track kind/instance
 	ip.mu.Lock()
 	defer ip.mu.Unlock()
 	ip.changed = true
 	now := time.Now()
-	if e, ok := ip.entries[kind+":"+instance]; ok {
+	if e, ok := ip.entries[kind.String()+":"+instance]; ok {
 		e.state = state
 		diff := now.Sub(e.last)
 		bps := float64(cur-e.cur) / diff.Seconds()
@@ -710,7 +711,7 @@ func (ip *imageProgress) callback(kind, instance, state string, cur, total int64
 			e.bps = append(e.bps, bps)
 		}
 	} else {
-		ip.entries[kind+":"+instance] = &imageProgressEntry{
+		ip.entries[kind.String()+":"+instance] = &imageProgressEntry{
 			kind:     kind,
 			instance: instance,
 			state:    state,
@@ -730,36 +731,45 @@ func (ip *imageProgress) display(w io.Writer, final bool) {
 		return // skip since no changes since last display and not the final display
 	}
 	now := time.Now()
-	var manifests, sum, skipped, queued int64
+	var manifestTotal, manifestFinished, sum, skipped, queued int64
 	// sort entry keys by start time
 	keys := make([]string, 0, len(ip.entries))
 	for k := range ip.entries {
 		keys = append(keys, k)
 	}
 	sort.Slice(keys, func(a, b int) bool {
-		return ip.entries[keys[a]].start.Before(ip.entries[keys[b]].start)
+		if ip.entries[keys[a]].state != ip.entries[keys[b]].state {
+			return ip.entries[keys[a]].state > ip.entries[keys[b]].state
+		} else if ip.entries[keys[a]].state != types.CallbackActive {
+			return ip.entries[keys[a]].last.Before(ip.entries[keys[b]].last)
+		} else {
+			return ip.entries[keys[a]].cur > ip.entries[keys[b]].cur
+		}
 	})
 	startCount, startLimit := 0, 2
 	finishedCount, finishedLimit := 0, 2
 	// hide old finished entries
 	for i := len(keys) - 1; i >= 0; i-- {
 		e := ip.entries[keys[i]]
-		if e.kind != "manifest" && e.state == "finished" {
+		if e.kind != types.CallbackManifest && e.state == types.CallbackFinished {
 			finishedCount++
 			if finishedCount > finishedLimit {
-				e.state = "archived"
+				e.state = types.CallbackArchived
 			}
 		}
 	}
 	for _, k := range keys {
 		e := ip.entries[k]
 		switch e.kind {
-		case "manifest":
-			manifests++
+		case types.CallbackManifest:
+			manifestTotal++
+			if e.state == types.CallbackFinished || e.state == types.CallbackSkipped {
+				manifestFinished++
+			}
 		default:
 			// show progress bars
-			if e.state == "active" || (e.state == "started" && startCount < startLimit) || e.state == "finished" {
-				if e.state == "started" {
+			if !final && (e.state == types.CallbackActive || (e.state == types.CallbackStarted && startCount < startLimit) || e.state == types.CallbackFinished) {
+				if e.state == types.CallbackStarted {
 					startCount++
 				}
 				pre := e.instance + " "
@@ -771,16 +781,17 @@ func (ip *imageProgress) display(w io.Writer, final bool) {
 				ip.asciOut.Add(ip.bar.Generate(pct, pre, post))
 			}
 			// track stats
-			if e.cur > 0 {
+			if e.state == types.CallbackSkipped {
+				skipped += e.total
+			} else if e.total > 0 {
 				sum += e.cur
 				queued += e.total - e.cur
-			} else if e.state == "skipped" {
-				skipped += e.total
 			}
 		}
 	}
 	// show stats summary
-	ip.asciOut.Add([]byte(fmt.Sprintf("%d manifests, %s/s, %s copied, %s skipped", manifests,
+	ip.asciOut.Add([]byte(fmt.Sprintf("%d/%d manifests, %s/s, %s copied, %s skipped",
+		manifestFinished, manifestTotal,
 		units.HumanSize(float64(sum)/now.Sub(ip.start).Seconds()),
 		units.HumanSize(float64(sum)),
 		units.HumanSize(float64(skipped)))))
@@ -915,6 +926,12 @@ func runImageGetFile(cmd *cobra.Command, args []string) error {
 		th, rdr, err := btr.ReadFile(filename)
 		if err != nil {
 			if errors.Is(err, types.ErrFileNotFound) {
+				if err := btr.Close(); err != nil {
+					return err
+				}
+				if err := blob.Close(); err != nil {
+					return err
+				}
 				continue
 			}
 			return fmt.Errorf("failed pulling from layer %d: %w", i, err)
@@ -941,6 +958,12 @@ func runImageGetFile(cmd *cobra.Command, args []string) error {
 		}
 		_, err = io.Copy(w, rdr)
 		if err != nil {
+			return err
+		}
+		if err := btr.Close(); err != nil {
+			return err
+		}
+		if err := blob.Close(); err != nil {
 			return err
 		}
 		return nil

@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 
+	"github.com/regclient/regclient/internal/throttle"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
 	"github.com/regclient/regclient/types/manifest"
@@ -15,9 +16,6 @@ import (
 
 // API is used to interface between different methods to store images
 type API interface {
-	// Info is experimental, do not use
-	Info() Info
-
 	// BlobDelete removes a blob from the repository
 	BlobDelete(ctx context.Context, r ref.Ref, d types.Descriptor) error
 	// BlobGet retrieves a blob, returning a reader
@@ -52,9 +50,18 @@ type Closer interface {
 	Close(ctx context.Context, r ref.Ref) error
 }
 
-// Info provides details on the scheme, this is experimental, do not use
-type Info struct {
-	ManifestPushFirst bool
+// GCLocker is used to indicate locking is available for GC management
+type GCLocker interface {
+	// GCLock a reference to prevent GC from triggering during a put, locks are not exclusive.
+	GCLock(r ref.Ref)
+	// GCUnlock a reference to allow GC (once all locks are released).
+	// The reference should be closed after this step and unlock should only be called once per each Lock call.
+	GCUnlock(r ref.Ref)
+}
+
+// Throttler is used to indicate the scheme implements Throttle
+type Throttler interface {
+	Throttle(r ref.Ref, put bool) []*throttle.Throttle
 }
 
 // ManifestConfig is used by schemes to import ManifestOpts
