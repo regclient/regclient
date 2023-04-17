@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io/fs"
 	"testing"
 
@@ -296,7 +295,7 @@ func TestRegsyncOnce(t *testing.T) {
 				Type:   "image",
 			},
 			desired: []string{},
-			expErr:  fmt.Errorf(`invalid reference "InvalidTestmissing:v1:garbage"`),
+			expErr:  types.ErrInvalidReference,
 		},
 		{
 			name: "InvalidTargetImage",
@@ -306,7 +305,7 @@ func TestRegsyncOnce(t *testing.T) {
 				Type:   "image",
 			},
 			desired: []string{},
-			expErr:  fmt.Errorf(`invalid reference "InvalidTestmissing:v1:garbage"`),
+			expErr:  types.ErrInvalidReference,
 		},
 		{
 			name: "InvalidSourceRepository",
@@ -316,7 +315,7 @@ func TestRegsyncOnce(t *testing.T) {
 				Type:   "repository",
 			},
 			desired: []string{},
-			expErr:  fmt.Errorf(`invalid reference "InvalidTestmissing:v1:garbage"`),
+			expErr:  types.ErrInvalidReference,
 		},
 		{
 			name: "InvalidTargetRepository",
@@ -326,7 +325,7 @@ func TestRegsyncOnce(t *testing.T) {
 				Type:   "repository",
 			},
 			desired: []string{},
-			expErr:  fmt.Errorf(`invalid reference "InvalidTestmissing:v1:garbage"`),
+			expErr:  types.ErrInvalidReference,
 		},
 		{
 			name: "InvalidType",

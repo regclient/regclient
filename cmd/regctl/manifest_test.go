@@ -25,7 +25,7 @@ func TestManifestHead(t *testing.T) {
 		{
 			name:      "Invalid ref",
 			args:      []string{"manifest", "head", "invalid*ref"},
-			expectErr: fmt.Errorf("invalid reference \"%s\"", "invalid*ref"),
+			expectErr: types.ErrInvalidReference,
 		},
 		{
 			name:      "Missing manifest",

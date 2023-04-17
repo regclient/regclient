@@ -1,8 +1,10 @@
 package ref
 
 import (
-	"fmt"
+	"errors"
 	"testing"
+
+	"github.com/regclient/regclient/types"
 )
 
 func TestRef(t *testing.T) {
@@ -161,6 +163,17 @@ func TestRef(t *testing.T) {
 			wantE:      nil,
 		},
 		{
+			name:       "separators in repo",
+			ref:        "e.xample.co/g-r.o__u_p/image:a",
+			scheme:     "reg",
+			registry:   "e.xample.co",
+			repository: "g-r.o__u_p/image",
+			tag:        "a",
+			digest:     "",
+			path:       "",
+			wantE:      nil,
+		},
+		{
 			name:       "Localhost registry",
 			ref:        "localhost/group/image:v42",
 			scheme:     "reg",
@@ -240,7 +253,7 @@ func TestRef(t *testing.T) {
 		{
 			name:  "OCI file with invalid digest",
 			ref:   "ocifile://path/to/file.tgz@sha256:ZZ15f840677a5e245d9ea199eb9b026b1539208a5183621dced7b469f6aa678115ZZ",
-			wantE: fmt.Errorf("invalid path for scheme \"ocifile\": path/to/file.tgz@sha256:ZZ15f840677a5e245d9ea199eb9b026b1539208a5183621dced7b469f6aa678115ZZ"),
+			wantE: types.ErrInvalidReference,
 		},
 		{
 			name:       "OCI dir",
@@ -278,85 +291,92 @@ func TestRef(t *testing.T) {
 		{
 			name:  "invalid scheme",
 			ref:   "unknown://repo:tag",
-			wantE: fmt.Errorf(`unhandled reference scheme "unknown" in "unknown://repo:tag"`),
+			wantE: types.ErrInvalidReference,
 		},
 		{
 			name:  "invalid host leading dash",
 			ref:   "-docker.io/project/image:tag",
-			wantE: fmt.Errorf(`invalid reference "-docker.io/project/image:tag"`),
+			wantE: types.ErrInvalidReference,
 		},
 		{
 			name:  "invalid host trailing dash",
 			ref:   "docker-.io/project/image:tag",
-			wantE: fmt.Errorf(`invalid reference "docker-.io/project/image:tag"`),
+			wantE: types.ErrInvalidReference,
 		},
 		{
 			name:  "invalid repo case",
 			ref:   "docker.io/Upper/Case/Repo:tag",
-			wantE: fmt.Errorf(`invalid reference "docker.io/Upper/Case/Repo:tag", repo must be lowercase`),
+			wantE: types.ErrInvalidReference,
 		},
 		{
 			name:  "invalid repo dash leading",
 			ref:   "project/-image:tag",
-			wantE: fmt.Errorf(`invalid reference "project/-image:tag"`),
+			wantE: types.ErrInvalidReference,
 		},
 		{
 			name:  "invalid repo dash trailing",
 			ref:   "project/image-:tag",
-			wantE: fmt.Errorf(`invalid reference "project/image-:tag"`),
+			wantE: types.ErrInvalidReference,
+		},
+		{
+			name:  "invalid repo multiple dash",
+			ref:   "project/image--x:tag",
+			wantE: types.ErrInvalidReference,
 		},
 		{
 			name:  "invalid repo chars",
 			ref:   "project/star*:tag",
-			wantE: fmt.Errorf(`invalid reference "project/star*:tag"`),
+			wantE: types.ErrInvalidReference,
 		},
 		{
 			name:  "invalid tag chars",
 			ref:   "project/image:tag^1",
-			wantE: fmt.Errorf(`invalid reference "project/image:tag^1"`),
+			wantE: types.ErrInvalidReference,
 		},
 		{
 			name:  "invalid short digest",
 			ref:   "project/image@sha256:12345",
-			wantE: fmt.Errorf(`invalid reference "project/image@sha256:12345"`),
+			wantE: types.ErrInvalidReference,
 		},
 		{
 			name:  "invalid digest characters",
 			ref:   "project/image@sha256:gggg40677a5e245d9ea199eb9b026b1539208a5183621dced7b469f6aa678115",
-			wantE: fmt.Errorf(`invalid reference "project/image@sha256:gggg40677a5e245d9ea199eb9b026b1539208a5183621dced7b469f6aa678115"`),
+			wantE: types.ErrInvalidReference,
 		},
 		{
 			name:  "invalid ocidir path",
 			ref:   "ocidir://invalid*filename:tag",
-			wantE: fmt.Errorf(`invalid path for scheme "ocidir": invalid*filename:tag`),
+			wantE: types.ErrInvalidReference,
 		},
 		{
 			name:  "invalid ocidir tag",
 			ref:   "ocidir://filename:tag=fail",
-			wantE: fmt.Errorf(`invalid path for scheme "ocidir": filename:tag=fail`),
+			wantE: types.ErrInvalidReference,
 		},
 		{
 			name:  "invalid ocidir digest",
 			ref:   "ocidir://filename@sha256:abcd",
-			wantE: fmt.Errorf(`invalid path for scheme "ocidir": filename@sha256:abcd`),
+			wantE: types.ErrInvalidReference,
 		},
 		{
 			name:  "localhost missing repo",
 			ref:   "localhost:5000",
-			wantE: fmt.Errorf(`invalid reference "localhost:5000"`),
+			wantE: types.ErrInvalidReference,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ref, err := New(tt.ref)
-			if tt.wantE == nil && err != nil {
+			if tt.wantE != nil {
+				if err == nil {
+					t.Errorf("error not received, expected %v", tt.wantE)
+				} else if !errors.Is(err, tt.wantE) && err.Error() != tt.wantE.Error() {
+					t.Errorf("expected error not received, expected %v, received %v", tt.wantE, err)
+				}
+				return
+			} else if err != nil {
 				t.Errorf("failed creating reference, err: %v", err)
-				return
-			} else if tt.wantE != nil && (err == nil || (tt.wantE != err && tt.wantE.Error() != err.Error())) {
-				t.Errorf("expected error not received, expected %v, received %v", tt.wantE, err)
-				return
-			} else if tt.wantE != nil {
 				return
 			}
 			if tt.ref != ref.Reference {
@@ -380,7 +400,6 @@ func TestRef(t *testing.T) {
 			if tt.path != ref.Path {
 				t.Errorf("path mismatch for %s, expected %s, received %s", tt.ref, tt.path, ref.Path)
 			}
-
 		})
 	}
 }
