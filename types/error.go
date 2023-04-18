@@ -27,6 +27,8 @@ var (
 	ErrHTTPStatus = errors.New("unexpected http status code")
 	// ErrInvalidChallenge indicates an issue with the received challenge in the WWW-Authenticate header
 	ErrInvalidChallenge = errors.New("invalid challenge header")
+	// ErrInvalidReference indicates the reference to an image is has an invalid synax
+	ErrInvalidReference = errors.New("invalid reference")
 	// ErrManifestNotSet indicates the manifest is not set, it must be pulled with a ManifestGet first
 	ErrManifestNotSet = errors.New("manifest not set")
 	// ErrMissingAnnotation returned when a needed annotation is not found

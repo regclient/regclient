@@ -38,7 +38,7 @@ func TestArtifactPut(t *testing.T) {
 		{
 			name:      "Invalid ref",
 			args:      []string{"artifact", "put", "invalid*ref"},
-			expectErr: fmt.Errorf("invalid reference \"%s\"", "invalid*ref"),
+			expectErr: types.ErrInvalidReference,
 		},
 		{
 			name: "Put artifact",
@@ -112,7 +112,7 @@ func TestArtifactTree(t *testing.T) {
 		{
 			name:      "Invalid ref",
 			args:      []string{"artifact", "tree", "invalid*ref"},
-			expectErr: fmt.Errorf("invalid reference \"%s\"", "invalid*ref"),
+			expectErr: types.ErrInvalidReference,
 		},
 		{
 			name:      "Missing manifest",
