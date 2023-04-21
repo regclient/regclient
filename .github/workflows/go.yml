@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - '**'
+      # TODO Delete before merging
+      - 'feature/*'
     tags:
       - 'v*.*.*'
   pull_request:
@@ -16,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        gover: ["1.18", "1.19", "1.20"]
+        gover: ["1.20"]
 
     env:
       RELEASE_GO_VER: "1.20"
@@ -62,49 +64,11 @@ jobs:
       with:
         syft-version: "v0.77.0"
 
-    - name: Build artifacts
-      if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main'
-      run: make artifacts
-
     - name: Install cosign
       if: ( startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main' ) && matrix.gover == env.RELEASE_GO_VER
       uses: sigstore/cosign-installer@v3.0.2
       with:
         cosign-release: "v2.0.1"
-
-    - name: Package artifacts
-      if: ( startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main' ) && matrix.gover == env.RELEASE_GO_VER
-      env:
-        # experimental support needed for GitHub OIDC signing
-        COSIGN_EXPERIMENTAL: "true"
-      run: |
-        cd artifacts
-        for artifact in \
-            regbot-darwin-amd64 \
-            regbot-darwin-arm64 \
-            regbot-linux-amd64 \
-            regbot-linux-arm64 \
-            regbot-linux-ppc64le \
-            regbot-linux-s390x \
-            regbot-windows-amd64.exe \
-            regctl-darwin-amd64 \
-            regctl-darwin-arm64 \
-            regctl-linux-amd64 \
-            regctl-linux-arm64 \
-            regctl-linux-ppc64le \
-            regctl-linux-s390x \
-            regctl-windows-amd64.exe \
-            regsync-darwin-amd64 \
-            regsync-darwin-arm64 \
-            regsync-linux-amd64 \
-            regsync-linux-arm64 \
-            regsync-linux-ppc64le \
-            regsync-linux-s390x \
-            regsync-windows-amd64.exe \
-          ; do
-          cosign sign-blob -y --output-signature "${artifact%.exe}.sig" --output-certificate "${artifact%.exe}.pem" "${artifact}"
-        done
-        tar -cvzf metadata.tgz *.sig *.pem *.json
 
     - name: Gather release details
       if: startsWith( github.ref, 'refs/tags/v' ) && github.repository_owner == 'regclient' && matrix.gover == env.RELEASE_GO_VER
@@ -124,40 +88,32 @@ jobs:
         echo ::set-output name=valid::${VALID_RELEASE}
         echo ::set-output name=release_notes::${RELEASE_NOTES}
 
-    - name: Create release
+    - name: Build and Package artifacts
+      # TODO Uncomment before merging
+      # if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main'
+      uses: goreleaser/goreleaser-action@v4
+      with:
+        version: v1.16.2
+        args: release --release-notes < ${{ steps.release_details.outputs.release_notes }} --skip-publish
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Package metadata
+      # TODO Uncomment before merging
+      # if: ( startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main' ) && matrix.gover == env.RELEASE_GO_VER
+      run: |
+        cd artifacts
+        tar -cvzf metadata.tgz *.sig *.pem *.json
+
+    - name: Push release
       if: steps.release_details.outputs.valid == 'true' && matrix.gover == env.RELEASE_GO_VER
       id: release_create
-      uses: softprops/action-gh-release@v1
+      uses: goreleaser/goreleaser-action@v4
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ steps.release_details.outputs.version }}
-        body: ${{ steps.release_details.outputs.release_notes }}
-        draft: false
-        prerelease: false
-        files: |
-          ./artifacts/regbot-darwin-amd64
-          ./artifacts/regbot-darwin-arm64
-          ./artifacts/regbot-linux-amd64
-          ./artifacts/regbot-linux-arm64
-          ./artifacts/regbot-linux-ppc64le
-          ./artifacts/regbot-linux-s390x
-          ./artifacts/regbot-windows-amd64.exe
-          ./artifacts/regctl-darwin-amd64
-          ./artifacts/regctl-darwin-arm64
-          ./artifacts/regctl-linux-amd64
-          ./artifacts/regctl-linux-arm64
-          ./artifacts/regctl-linux-ppc64le
-          ./artifacts/regctl-linux-s390x
-          ./artifacts/regctl-windows-amd64.exe
-          ./artifacts/regsync-darwin-amd64
-          ./artifacts/regsync-darwin-arm64
-          ./artifacts/regsync-linux-amd64
-          ./artifacts/regsync-linux-arm64
-          ./artifacts/regsync-linux-ppc64le
-          ./artifacts/regsync-linux-s390x
-          ./artifacts/regsync-windows-amd64.exe
-          ./artifacts/metadata.tgz
+        version: v1.16.2
+        args: release  --release-notes < ${{ steps.release_details.outputs.release_notes }}
 
     - name: Save artifacts
       if: github.ref == 'refs/heads/main' && matrix.gover == env.RELEASE_GO_VER

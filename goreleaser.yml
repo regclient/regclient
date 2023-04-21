@@ -1,0 +1,194 @@
+project_name: regclient
+
+before:
+  hooks:
+    - go get -v -t -d ./...
+
+builds:
+  -
+    id: regctl
+    main: ./cmd/regctl
+    binary: regctl-{{ .Os }}-{{ .Arch }}
+    no_unique_dist_dir: true
+    ldflags:
+      - -s -w
+      - "-extldflags '-static'"
+      - "-X 'github.com/regclient/regclient/internal/version.vcsTag={{ .Tag }}'"
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+      - s390x
+      - ppc64le
+    ignore:
+      - goos: darwin
+        goarch: s390x
+      - goos: darwin
+        goarch: ppc64le
+      - goos: windows
+        goarch: arm64
+      - goos: windows
+        goarch: s390x
+      - goos: windows
+        goarch: ppc64le
+  -
+    id: regsync
+    main: ./cmd/regsync
+    binary: regsync-{{ .Os }}-{{ .Arch }}
+    no_unique_dist_dir: true
+    ldflags:
+      - -s -w
+      - "-extldflags '-static'"
+      - "-X 'github.com/regclient/regclient/internal/version.vcsTag={{ .Tag }}'"
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+      - s390x
+      - ppc64le
+    ignore:
+      - goos: darwin
+        goarch: s390x
+      - goos: darwin
+        goarch: ppc64le
+      - goos: windows
+        goarch: arm64
+      - goos: windows
+        goarch: s390x
+      - goos: windows
+        goarch: ppc64le
+  -
+    id: regbot
+    main: ./cmd/regbot
+    binary: regbot-{{ .Os }}-{{ .Arch }}
+    no_unique_dist_dir: true
+    ldflags:
+      - -s -w
+      - "-extldflags '-static'"
+      - "-X 'github.com/regclient/regclient/internal/version.vcsTag={{ .Tag }}'"
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+      - s390x
+      - ppc64le
+    ignore:
+      - goos: darwin
+        goarch: s390x
+      - goos: darwin
+        goarch: ppc64le
+      - goos: windows
+        goarch: arm64
+      - goos: windows
+        goarch: s390x
+      - goos: windows
+        goarch: ppc64le
+
+gomod:
+   proxy: true
+
+checksum:
+  name_template: 'checksums.txt'
+  
+source:
+  enabled: true
+
+archives:
+  # TODO not sure if it would work/needed
+  # publish only binaries to Github Release
+  -
+    id: binaries
+    format: binary
+  # Publish archives for Brew Tap
+  -
+    id: compressed
+    format: tar.gz
+    name_template: '{{.ProjectName}}-{{.Os}}-{{.Arch}}'
+    files:
+      - README.md
+      - LICENSE
+    format_overrides:
+      - goos: windows
+        format: zip
+  # TODO 
+  # tar -cvzf metadata.tgz *.sig *.pem *.json 
+  # Should be performed after cataloguing (SBOM) and signing is done
+  # Goreleaser does not support this yet
+  # -
+  #   id: metadata
+  #   format: tar.gz
+  #   name_template: metadata
+  #   meta: true
+  #   files:
+  #     - "*json"
+  #     - "*sig"
+  #     - "*pem"
+
+brews:
+  -
+    tap:
+      # TODO change before merging
+      owner: Akaame
+      name: homebrew-regclient
+    homepage: "https://github.com/regclient/regclient"
+    description: "Docker and OCI Registry Client in Go and tooling using those libraries"
+    # TODO not sure if it would work/needed
+    # Only push "compressed" archives to brew tap
+    ids:
+      - compressed
+    test: |
+      system "#{bin}/regctl", "--version"
+
+sboms:
+  - id: cyclonedx
+    documents:
+      - "${artifact}.cyclonedx.json"
+    artifacts: binary
+  - id: spdx
+    documents:
+      - "${artifact}.spdx.json"
+    artifacts: binary
+
+# use --skip-sign for your local workflows
+signs:
+  - 
+    cmd: cosign
+    env:
+    - COSIGN_EXPERIMENTAL=1
+    signature: "${artifact}.sig"
+    certificate: "${artifact}.pem"
+    args:
+      - "sign-blob"
+      - "--oidc-issuer=https://token.actions.githubusercontent.com"
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+    artifacts: binary
+    output: true
+
+release:
+  github:
+    owner: Akaame
+    name: regclient
+  # TODO not sure if it would work/needed
+  # Only push "binaries" to GitHub release
+  # Not sure if this would include source in the release
+  ids:
+    - binaries
+
+dist: artifacts
