@@ -1,5 +1,7 @@
 package types
 
+import "strings"
+
 const (
 	// MediaTypeDocker1Manifest deprecated media type for docker schema1 manifests
 	MediaTypeDocker1Manifest = "application/vnd.docker.distribution.manifest.v1+json"
@@ -40,3 +42,9 @@ const (
 	// MediaTypeBuildkitCacheConfig is used by buildkit cache images
 	MediaTypeBuildkitCacheConfig = "application/vnd.buildkit.cacheconfig.v0"
 )
+
+// MediaTypeBase cleans the Content-Type header to return only the lower case base media type
+func MediaTypeBase(orig string) string {
+	base, _, _ := strings.Cut(orig, ";")
+	return strings.TrimSpace(strings.ToLower(base))
+}

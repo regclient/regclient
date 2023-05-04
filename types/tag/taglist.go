@@ -78,7 +78,7 @@ func New(opts ...Opts) (*List, error) {
 		tl.Tags = conf.tags
 	}
 	if len(conf.raw) > 0 {
-		mt := strings.Split(conf.mt, ";")[0] // "application/json; charset=utf-8" -> "application/json"
+		mt := types.MediaTypeBase(conf.mt)
 		switch mt {
 		case "application/json", "text/plain":
 			err := json.Unmarshal(conf.raw, &tl)

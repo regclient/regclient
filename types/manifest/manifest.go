@@ -106,7 +106,7 @@ func New(opts ...Opts) (Manifest, error) {
 	// extract fields from header where available
 	if mc.header != nil {
 		if c.desc.MediaType == "" {
-			c.desc.MediaType = mc.header.Get("Content-Type")
+			c.desc.MediaType = types.MediaTypeBase(mc.header.Get("Content-Type"))
 		}
 		if c.desc.Size == 0 {
 			cl, _ := strconv.Atoi(mc.header.Get("Content-Length"))

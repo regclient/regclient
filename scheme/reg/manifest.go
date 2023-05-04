@@ -92,6 +92,7 @@ func (reg *Reg) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest, 
 			types.MediaTypeDocker2ManifestList,
 			types.MediaTypeOCI1Manifest,
 			types.MediaTypeOCI1ManifestList,
+			types.MediaTypeOCI1Artifact,
 		},
 	}
 	req := &reghttp.Req{
@@ -148,6 +149,7 @@ func (reg *Reg) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest,
 			types.MediaTypeDocker2ManifestList,
 			types.MediaTypeOCI1Manifest,
 			types.MediaTypeOCI1ManifestList,
+			types.MediaTypeOCI1Artifact,
 		},
 	}
 	req := &reghttp.Req{

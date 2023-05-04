@@ -10,6 +10,7 @@ import (
 	_ "crypto/sha512"
 
 	"github.com/opencontainers/go-digest"
+	"github.com/regclient/regclient/types"
 )
 
 // Reader is an unprocessed Blob with an available ReadCloser for reading the Blob
@@ -47,7 +48,7 @@ func NewReader(opts ...Opts) Reader {
 	if bc.header != nil {
 		// extract fields from header if descriptor not passed
 		if bc.desc.MediaType == "" {
-			bc.desc.MediaType = bc.header.Get("Content-Type")
+			bc.desc.MediaType = types.MediaTypeBase(bc.header.Get("Content-Type"))
 		}
 		if bc.desc.Size == 0 {
 			cl, _ := strconv.Atoi(bc.header.Get("Content-Length"))

@@ -16,6 +16,7 @@ import (
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/regclient/regclient/types/referrer"
+	"github.com/sirupsen/logrus"
 )
 
 // ReferrerList returns a list of referrers to a given reference
@@ -85,6 +86,10 @@ func (reg *Reg) referrerListAPI(ctx context.Context, r ref.Ref, config scheme.Re
 	for {
 		rlAdd, respNext, err := reg.referrerListAPIReq(ctx, r, config, link)
 		if err != nil {
+			reg.log.WithFields(logrus.Fields{
+				"err": err,
+				"ref": r.CommonName(),
+			}).Debug("referrers API failed")
 			return rl, err
 		}
 		if rl.Manifest == nil {
