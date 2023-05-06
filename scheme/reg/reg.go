@@ -8,7 +8,8 @@ import (
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/reghttp"
-	"github.com/regclient/regclient/scheme"
+	"github.com/regclient/regclient/internal/throttle"
+	"github.com/regclient/regclient/types/ref"
 	"github.com/sirupsen/logrus"
 )
 
@@ -47,6 +48,7 @@ func New(opts ...Opts) *Reg {
 		blobMaxPut:     defaultBlobMax,
 		hosts:          map[string]*config.Host{},
 	}
+	r.reghttpOpts = append(r.reghttpOpts, reghttp.WithConfigHost(r.hostGet))
 	for _, opt := range opts {
 		opt(&r)
 	}
@@ -54,9 +56,23 @@ func New(opts ...Opts) *Reg {
 	return &r
 }
 
-// Info is experimental and may be removed in the future
-func (reg *Reg) Info() scheme.Info {
-	return scheme.Info{}
+// Throttle is used to limit concurrency
+func (reg *Reg) Throttle(r ref.Ref, put bool) []*throttle.Throttle {
+	tList := []*throttle.Throttle{}
+	host := reg.hostGet(r.Registry)
+	t := host.Throttle()
+	if t != nil {
+		tList = append(tList, t)
+	}
+	if !put {
+		for _, mirror := range host.Mirrors {
+			t := reg.hostGet(mirror).Throttle()
+			if t != nil {
+				tList = append(tList, t)
+			}
+		}
+	}
+	return tList
 }
 
 func (reg *Reg) hostGet(hostname string) *config.Host {
@@ -122,7 +138,6 @@ func WithConfigHosts(configHosts []*config.Host) Opts {
 			}
 			r.hosts[host.Name] = host
 		}
-		r.reghttpOpts = append(r.reghttpOpts, reghttp.WithConfigHosts(configHosts))
 	}
 }
 

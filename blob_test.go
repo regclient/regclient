@@ -158,9 +158,10 @@ func TestBlobGet(t *testing.T) {
 	tsHost := tsURL.Host
 	rcHosts := []config.Host{
 		{
-			Name:     tsHost,
-			Hostname: tsHost,
-			TLS:      config.TLSDisabled,
+			Name:      tsHost,
+			Hostname:  tsHost,
+			TLS:       config.TLSDisabled,
+			ReqPerSec: 100,
 		},
 	}
 	log := &logrus.Logger{
@@ -654,6 +655,7 @@ func TestBlobPut(t *testing.T) {
 			TLS:       config.TLSDisabled,
 			BlobChunk: int64(blobChunk),
 			BlobMax:   int64(-1),
+			ReqPerSec: 100,
 		},
 	}
 	log := &logrus.Logger{
@@ -1111,6 +1113,7 @@ func TestBlobCopy(t *testing.T) {
 			TLS:       config.TLSDisabled,
 			BlobChunk: int64(blobChunk),
 			BlobMax:   int64(-1),
+			ReqPerSec: 100,
 		},
 	}
 	log := &logrus.Logger{

@@ -28,10 +28,10 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/auth"
+	"github.com/regclient/regclient/internal/throttle"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/warning"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/semaphore"
 )
 
 var defaultDelayInit, _ = time.ParseDuration("1s")
@@ -45,16 +45,17 @@ const (
 // Client is an HTTP client wrapper
 // It handles features like authentication, retries, backoff delays, TLS settings
 type Client struct {
-	host       map[string]*clientHost
-	httpClient *http.Client
-	rootCAPool [][]byte
-	rootCADirs []string
-	retryLimit int
-	delayInit  time.Duration
-	delayMax   time.Duration
-	log        *logrus.Logger
-	userAgent  string
-	mu         sync.Mutex
+	getConfigHost func(string) *config.Host
+	host          map[string]*clientHost
+	httpClient    *http.Client
+	rootCAPool    [][]byte
+	rootCADirs    []string
+	retryLimit    int
+	delayInit     time.Duration
+	delayMax      time.Duration
+	log           *logrus.Logger
+	userAgent     string
+	mu            sync.Mutex
 }
 
 type clientHost struct {
@@ -66,8 +67,7 @@ type clientHost struct {
 	auth         map[string]auth.Auth
 	newAuth      func() auth.Auth
 	mu           sync.Mutex
-	parallel     *semaphore.Weighted
-	throttle     *time.Ticker
+	ratelimit    *time.Ticker
 }
 
 // Req is a request to send to a registry
@@ -110,7 +110,7 @@ type clientResp struct {
 	digester         digest.Digester
 	reader           io.Reader
 	readCur, readMax int64
-	parallel         *semaphore.Weighted
+	throttle         *throttle.Throttle
 }
 
 // Opts is used to configure client options
@@ -165,18 +165,10 @@ func WithCertFiles(files []string) Opts {
 	}
 }
 
-// WithConfigHosts adds a list of config.Host entries to use for connection settings
-func WithConfigHosts(ch []*config.Host) Opts {
+// WithConfigHost adds the callback to request a config.Host struct
+func WithConfigHost(gch func(string) *config.Host) Opts {
 	return func(c *Client) {
-		for _, cur := range ch {
-			if cur.Name == "" {
-				continue
-			}
-			if _, ok := c.host[cur.Name]; !ok {
-				c.host[cur.Name] = &clientHost{}
-			}
-			c.host[cur.Name].config = cur
-		}
+		c.getConfigHost = gch
 	}
 }
 
@@ -280,21 +272,23 @@ func (resp *clientResp) Next() error {
 		h := hosts[curHost]
 		resp.mirror = h.config.Name
 
-		// check that context isn't canceled/done
-		ctxErr := resp.ctx.Err()
-		if ctxErr != nil {
-			return ctxErr
-		}
-
 		api, okAPI := req.APIs[h.config.API]
 		if !okAPI {
 			api, okAPI = req.APIs[""]
 		}
 
-		// try each host in a closure to handle all the backoff/dropHost from one place
-		if h.parallel != nil {
-			h.parallel.Acquire(resp.ctx, 1)
+		// check that context isn't canceled/done
+		ctxErr := resp.ctx.Err()
+		if ctxErr != nil {
+			return ctxErr
 		}
+		// wait for other concurrent requests to this host
+		throttleErr := h.config.Throttle().Acquire(resp.ctx)
+		if throttleErr != nil {
+			return throttleErr
+		}
+
+		// try each host in a closure to handle all the backoff/dropHost from one place
 		err = func() error {
 			var err error
 			if !okAPI {
@@ -410,8 +404,9 @@ func (resp *clientResp) Next() error {
 				}
 			}
 
-			if h.throttle != nil {
-				<-h.throttle.C
+			// delay for the rate limit
+			if h.ratelimit != nil {
+				<-h.ratelimit.C
 			}
 
 			// update http client for insecure requests and root certs
@@ -475,7 +470,7 @@ func (resp *clientResp) Next() error {
 				case http.StatusRequestedRangeNotSatisfiable:
 					// if range request error (blob push), drop mirror for this req, but other requests don't need backoff
 					dropHost = true
-				case http.StatusTooManyRequests, http.StatusRequestTimeout, http.StatusGatewayTimeout:
+				case http.StatusTooManyRequests, http.StatusRequestTimeout, http.StatusGatewayTimeout, http.StatusInternalServerError:
 					// server is likely overloaded, backoff but still retry
 					backoff = true
 				default:
@@ -513,13 +508,14 @@ func (resp *clientResp) Next() error {
 		}()
 		// return on success
 		if err == nil {
-			resp.parallel = h.parallel
+			resp.throttle = h.config.Throttle()
 			resp.backoffClear()
 			return nil
 		}
 		// backoff, dropHost, and/or go to next host in the list
-		if h.parallel != nil {
-			h.parallel.Release(1)
+		throttleErr = h.config.Throttle().Release(resp.ctx)
+		if throttleErr != nil {
+			return throttleErr
 		}
 		if backoff {
 			if api.IgnoreErr {
@@ -597,9 +593,9 @@ func (resp *clientResp) Read(b []byte) (int, error) {
 }
 
 func (resp *clientResp) Close() error {
-	if resp.parallel != nil {
-		resp.parallel.Release(1)
-		resp.parallel = nil
+	if resp.throttle != nil {
+		_ = resp.throttle.Release(resp.ctx)
+		resp.throttle = nil
 	}
 	if resp.resp == nil {
 		return types.ErrNotFound
@@ -699,16 +695,17 @@ func (c *Client) getHost(host string) *clientHost {
 		h = &clientHost{}
 	}
 	if h.config == nil {
-		h.config = config.HostNewName(host)
+		if c.getConfigHost != nil {
+			h.config = c.getConfigHost(host)
+		} else {
+			h.config = config.HostNewName(host)
+		}
 	}
 	if h.auth == nil {
 		h.auth = map[string]auth.Auth{}
 	}
-	if h.throttle == nil && h.config.ReqPerSec > 0 {
-		h.throttle = time.NewTicker(time.Duration(float64(time.Second) / h.config.ReqPerSec))
-	}
-	if h.parallel == nil && h.config.ReqConcurrent > 0 {
-		h.parallel = semaphore.NewWeighted(h.config.ReqConcurrent)
+	if h.ratelimit == nil && h.config.ReqPerSec > 0 {
+		h.ratelimit = time.NewTicker(time.Duration(float64(time.Second) / h.config.ReqPerSec))
 	}
 
 	if h.httpClient == nil {

@@ -178,14 +178,16 @@ func TestManifest(t *testing.T) {
 	tsHost := tsURL.Host
 	rcHosts := []config.Host{
 		{
-			Name:     tsHost,
-			Hostname: tsHost,
-			TLS:      config.TLSDisabled,
+			Name:      tsHost,
+			Hostname:  tsHost,
+			TLS:       config.TLSDisabled,
+			ReqPerSec: 100,
 		},
 		{
-			Name:     "missing." + tsHost,
-			Hostname: tsHost,
-			TLS:      config.TLSDisabled,
+			Name:      "missing." + tsHost,
+			Hostname:  tsHost,
+			TLS:       config.TLSDisabled,
+			ReqPerSec: 100,
 		},
 		{
 			Name:     "nohead." + tsHost,
@@ -194,6 +196,7 @@ func TestManifest(t *testing.T) {
 			APIOpts: map[string]string{
 				"disableHead": "true",
 			},
+			ReqPerSec: 100,
 		},
 	}
 	log := &logrus.Logger{

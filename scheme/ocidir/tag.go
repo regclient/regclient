@@ -15,11 +15,17 @@ import (
 
 // TagDelete removes a tag from the repository
 func (o *OCIDir) TagDelete(ctx context.Context, r ref.Ref) error {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return o.tagDelete(ctx, r)
+}
+
+func (o *OCIDir) tagDelete(ctx context.Context, r ref.Ref) error {
 	if r.Tag == "" {
 		return types.ErrMissingTag
 	}
 	// get index
-	index, err := o.readIndex(r)
+	index, err := o.readIndex(r, true)
 	if err != nil {
 		return fmt.Errorf("failed to read index: %w", err)
 	}
@@ -35,7 +41,7 @@ func (o *OCIDir) TagDelete(ctx context.Context, r ref.Ref) error {
 		return fmt.Errorf("failed deleting %s: %w", r.CommonName(), types.ErrNotFound)
 	}
 	// push manifest back out
-	err = o.writeIndex(r, index)
+	err = o.writeIndex(r, index, true)
 	if err != nil {
 		return fmt.Errorf("failed to write index: %w", err)
 	}
@@ -46,7 +52,7 @@ func (o *OCIDir) TagDelete(ctx context.Context, r ref.Ref) error {
 // TagList returns a list of tags from the repository
 func (o *OCIDir) TagList(ctx context.Context, r ref.Ref, opts ...scheme.TagOpts) (*tag.List, error) {
 	// get index
-	index, err := o.readIndex(r)
+	index, err := o.readIndex(r, false)
 	if err != nil {
 		return nil, err
 	}

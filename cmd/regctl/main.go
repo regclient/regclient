@@ -8,6 +8,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/regclient/regclient/internal/godbg"
 	"github.com/sirupsen/logrus"
 )
 
@@ -21,6 +22,7 @@ func main() {
 		// clean shutdown
 		cancel()
 	}()
+	godbg.SignalTrace()
 
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)

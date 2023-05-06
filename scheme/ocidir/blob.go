@@ -82,6 +82,15 @@ func (o *OCIDir) BlobMount(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, 
 
 // BlobPut sends a blob to the repository, returns the digest and size when successful
 func (o *OCIDir) BlobPut(ctx context.Context, r ref.Ref, d types.Descriptor, rdr io.Reader) (types.Descriptor, error) {
+	err := o.throttleGet(r).Acquire(ctx)
+	if err != nil {
+		return d, err
+	}
+	defer o.throttleGet(r).Release(ctx)
+	err = o.initIndex(r, false)
+	if err != nil {
+		return d, err
+	}
 	digester := digest.Canonical.Digester()
 	rdr = io.TeeReader(rdr, digester.Hash())
 	// if digest unavailable, read into a []byte+digest, and replace rdr
@@ -105,17 +114,22 @@ func (o *OCIDir) BlobPut(ctx context.Context, r ref.Ref, d types.Descriptor, rdr
 	}
 	// write the blob to the CAS file
 	dir := path.Join(r.Path, "blobs", d.Digest.Algorithm().String())
-	err := rwfs.MkdirAll(o.fs, dir, 0777)
+	err = rwfs.MkdirAll(o.fs, dir, 0777)
 	if err != nil && !errors.Is(err, fs.ErrExist) {
 		return d, fmt.Errorf("failed creating %s: %w", dir, err)
 	}
-	file := path.Join(r.Path, "blobs", d.Digest.Algorithm().String(), d.Digest.Encoded())
-	fd, err := o.fs.Create(file)
+	// write to a tmp file, rename after validating
+	tmpFile, err := rwfs.CreateTemp(o.fs, path.Join(r.Path, "blobs", d.Digest.Algorithm().String()), d.Digest.Encoded()+".*.tmp")
 	if err != nil {
-		return d, fmt.Errorf("failed creating %s: %w", file, err)
+		return d, fmt.Errorf("failed creating blob tmp file: %w", err)
 	}
-	defer fd.Close()
-	i, err := io.Copy(fd, rdr)
+	fi, err := tmpFile.Stat()
+	if err != nil {
+		return d, fmt.Errorf("failed to stat blob tmpfile: %w", err)
+	}
+	tmpName := fi.Name()
+	i, err := io.Copy(tmpFile, rdr)
+	tmpFile.Close()
 	if err != nil {
 		return d, err
 	}
@@ -126,11 +140,19 @@ func (o *OCIDir) BlobPut(ctx context.Context, r ref.Ref, d types.Descriptor, rdr
 	if d.Size > 0 && i != d.Size {
 		return d, fmt.Errorf("unexpected blob length, expected %d, received %d", d.Size, i)
 	}
+	file := path.Join(r.Path, "blobs", d.Digest.Algorithm().String(), d.Digest.Encoded())
+	err = o.fs.Rename(path.Join(r.Path, "blobs", d.Digest.Algorithm().String(), tmpName), file)
+	if err != nil {
+		return d, fmt.Errorf("failed to write blob (rename tmp file): %w", err)
+	}
 	d.Size = i
 	o.log.WithFields(logrus.Fields{
 		"ref":  r.CommonName(),
 		"file": file,
 	}).Debug("pushed blob")
+
+	o.mu.Lock()
 	o.refMod(r)
+	o.mu.Unlock()
 	return d, nil
 }
