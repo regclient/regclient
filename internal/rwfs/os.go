@@ -139,6 +139,16 @@ func (o *OSFS) Rename(oldName, newName string) error {
 	return os.Rename(oldFile, newFile)
 }
 
+// Stat returns a FileInfo describing the named file.
+func (o *OSFS) Stat(name string) (fs.FileInfo, error) {
+	full, err := o.join("stat", name)
+	if err != nil {
+		return nil, err
+	}
+	return os.Stat(full)
+}
+
+// Sub returns an FS corresponding to the subtree rooted at dir.
 func (o *OSFS) Sub(name string) (*OSFS, error) {
 	if name == "." {
 		return o, nil

@@ -595,6 +595,27 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		}
 	})
 
+	t.Run("StatFile", func(t *testing.T) {
+		fi, err := Stat(rwfs, exNestedFile)
+		if err != nil {
+			t.Errorf("failed to stat file: %v", err)
+			return
+		}
+		if fi.IsDir() {
+			t.Errorf("file stat indicates it is a directory")
+		}
+	})
+	t.Run("StatDir", func(t *testing.T) {
+		fi, err := Stat(rwfs, exNestedDir)
+		if err != nil {
+			t.Errorf("failed to stat directory: %v", err)
+			return
+		}
+		if !fi.IsDir() {
+			t.Errorf("directory stat indicates it is not a directory")
+		}
+	})
+
 	t.Run("remove", func(t *testing.T) {
 		err := rwfs.Remove(".")
 		if err == nil {
