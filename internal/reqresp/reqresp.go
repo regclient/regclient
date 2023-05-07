@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net/http"
 	"regexp"
+	"sync"
 	"testing"
 
 	// crypto libraries included for go-digest
@@ -53,6 +54,7 @@ type rrHandler struct {
 	t     *testing.T
 	rrs   []ReqResp
 	state string
+	mu    sync.Mutex
 }
 
 // return false if any item in a is not found in b
@@ -98,6 +100,8 @@ func (r *rrHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		rw.Write([]byte("Error reading request body"))
 		return
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	for i, rr := range r.rrs {
 		reqMatch := rr.ReqEntry
 		if !stateMatch(r.state, reqMatch.IfState) ||
