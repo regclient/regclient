@@ -150,44 +150,40 @@ func CreateTemp(rwfs RWFS, dir, pattern string) (RWFile, error) {
 
 // MkdirAll creates a directory, including all parent directories
 func MkdirAll(rwfs RWFS, name string, perm fs.FileMode) error {
-	parts := strings.Split(name, "/")
-	prefix := ""
-	if strings.HasPrefix(name, "/") {
-		prefix = "/"
+	fi, err := Stat(rwfs, name)
+	if err == nil {
+		if fi.IsDir() {
+			return nil
+		}
+		return &fs.PathError{
+			Op:   "mkdir",
+			Path: name,
+			Err:  fs.ErrExist,
+		}
 	}
-	for i := range parts {
-		// assemble directory up to this point
-		cur := prefix + path.Join(parts[:i+1]...)
-		if cur == "" || cur == "." || cur == "/" {
-			continue
+	// create parent
+	i := len(name)
+	for i > 0 && name[i-1] == '/' { // remove trailing slash
+		i--
+	}
+	for i > 0 && name[i-1] != '/' { // remove up to next slash
+		i--
+	}
+	if i > 1 {
+		err = MkdirAll(rwfs, name[:i-1], perm)
+		if err != nil {
+			return err
 		}
-		fi, err := Stat(rwfs, cur)
-		if errors.Is(err, fs.ErrNotExist) {
-			// missing, create
-			err := rwfs.Mkdir(cur, perm)
-			if err != nil {
-				return &fs.PathError{
-					Op:   "mkdir",
-					Path: cur,
-					Err:  err,
-				}
+	}
+	// create directory
+	if name != "" && name != "." && name != "/" {
+		err = rwfs.Mkdir(name, perm)
+		if err != nil {
+			if fi, err := Stat(rwfs, name); err == nil && fi.IsDir() {
+				return nil
 			}
-		} else if err != nil {
-			// unknown errors
-			return &fs.PathError{
-				Op:   "mkdir",
-				Path: cur,
-				Err:  err,
-			}
-		} else if !fi.IsDir() {
-			// can't mkdir on existing file
-			return &fs.PathError{
-				Op:   "mkdir",
-				Path: cur,
-				Err:  fs.ErrExist,
-			}
+			return err
 		}
-		// exists and is a directory, next
 	}
 	return nil
 }
