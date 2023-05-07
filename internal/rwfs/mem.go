@@ -320,6 +320,44 @@ func (o *MemFS) Rename(oldName, newName string) error {
 	return nil
 }
 
+func (o *MemFS) Stat(name string) (fs.FileInfo, error) {
+	dir, entry := path.Split(name)
+	memDir, err := o.getDir(dir)
+	if err != nil {
+		return nil, &fs.PathError{
+			Op:   "stat",
+			Path: name,
+			Err:  err,
+		}
+	}
+	memDir.mu.Lock()
+	defer memDir.mu.Unlock()
+	memEntry, ok := memDir.child[entry]
+	if !ok {
+		return nil, &fs.PathError{
+			Op:   "stat",
+			Path: name,
+			Err:  fs.ErrNotExist,
+		}
+	}
+	switch vEntry := memEntry.(type) {
+	case *MemFile:
+		vEntry.mu.Lock()
+		defer vEntry.mu.Unlock()
+		return NewFI(entry, int64(len(vEntry.b)), time.Time{}, 0), nil
+	case *MemDir:
+		vEntry.mu.Lock()
+		defer vEntry.mu.Unlock()
+		return NewFI(entry, 4096, vEntry.mod, fs.ModeDir), nil
+	default:
+		return nil, &fs.PathError{
+			Op:   "stat",
+			Path: name,
+			Err:  fs.ErrInvalid,
+		}
+	}
+}
+
 func (o *MemFS) Sub(name string) (*MemFS, error) {
 	if name == "." {
 		return o, nil

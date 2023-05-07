@@ -192,6 +192,12 @@ func MkdirAll(rwfs RWFS, name string, perm fs.FileMode) error {
 
 // Stat returns the FileInfo for a specified file
 func Stat(rfs fs.FS, name string) (fs.FileInfo, error) {
+	sInt, ok := rfs.(interface {
+		Stat(name string) (fs.FileInfo, error)
+	})
+	if ok {
+		return sInt.Stat(name)
+	}
 	fh, err := rfs.Open(name)
 	if err != nil {
 		return nil, err
