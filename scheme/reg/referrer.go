@@ -296,6 +296,9 @@ func (reg *Reg) referrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest)
 		return nil
 	}
 
+	// lock to avoid internal race conditions between pulling and pushing tag
+	reg.muRefTag.Lock()
+	defer reg.muRefTag.Unlock()
 	// fallback to using tag schema for refers
 	rl, err := reg.referrerListTag(ctx, rSubject)
 	if err != nil {
@@ -304,6 +307,16 @@ func (reg *Reg) referrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest)
 	err = rl.Add(m)
 	if err != nil {
 		return err
+	}
+	// ensure the referrer list does not have a subject itself (avoiding circular locks)
+	if ms, ok := rl.Manifest.(manifest.Subjecter); ok {
+		mDesc, err := ms.GetSubject()
+		if err != nil {
+			return err
+		}
+		if mDesc != nil && mDesc.MediaType != "" && mDesc.Size > 0 {
+			return fmt.Errorf("fallback referrers manifest should not have a subject: %s", rSubject.CommonName())
+		}
 	}
 	// push updated referrer list by tag
 	rlTag, err := referrer.FallbackTag(rSubject)

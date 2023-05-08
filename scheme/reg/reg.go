@@ -33,7 +33,8 @@ type Reg struct {
 	blobChunkSize  int64
 	blobChunkLimit int64
 	blobMaxPut     int64
-	mu             sync.Mutex
+	muHost         sync.Mutex
+	muRefTag       sync.Mutex
 }
 
 // Opts provides options to access registries
@@ -76,8 +77,8 @@ func (reg *Reg) Throttle(r ref.Ref, put bool) []*throttle.Throttle {
 }
 
 func (reg *Reg) hostGet(hostname string) *config.Host {
-	reg.mu.Lock()
-	defer reg.mu.Unlock()
+	reg.muHost.Lock()
+	defer reg.muHost.Unlock()
 	if _, ok := reg.hosts[hostname]; !ok {
 		reg.hosts[hostname] = config.HostNewName(hostname)
 	}
