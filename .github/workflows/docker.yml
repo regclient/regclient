@@ -193,7 +193,7 @@ jobs:
         # loop over the tags
         image_hub="${{ steps.prep.outputs.image_hub }}"
         for tag in $(echo ${{ steps.prep.outputs.tags }} | tr , ' '); do
-          if [ "$(regctl image digest "ocidir://output/${{matrix.image}}:${{matrix.type}}")" = "$(regctl image digest "${tag}" 2>/dev/null || true)"]; then
+          if [ "$(regctl image digest "ocidir://output/${{matrix.image}}:${{matrix.type}}")" = "$(regctl image digest "${tag}" 2>/dev/null || true)" ]; then
             # image already pushed, don't add referrers to reproducible builds
             echo "Skipping ${tag}"
           else
