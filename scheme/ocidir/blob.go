@@ -1,7 +1,6 @@
 package ocidir
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -93,33 +92,20 @@ func (o *OCIDir) BlobPut(ctx context.Context, r ref.Ref, d types.Descriptor, rdr
 	}
 	digester := digest.Canonical.Digester()
 	rdr = io.TeeReader(rdr, digester.Hash())
-	// if digest unavailable, read into a []byte+digest, and replace rdr
-	if d.Digest == "" || d.Size <= 0 {
-		b, err := io.ReadAll(rdr)
-		if err != nil {
-			return d, err
-		}
-		if d.Digest == "" {
-			d.Digest = digester.Digest()
-		} else if d.Digest != digester.Digest() {
-			return d, fmt.Errorf("unexpected digest, expected %s, computed %s", d.Digest, digester.Digest())
-		}
-		if d.Size <= 0 {
-			d.Size = int64(len(b))
-		} else if d.Size != int64(len(b)) {
-			return d, fmt.Errorf("unexpected blob length, expected %d, received %d", d.Size, int64(len(b)))
-		}
-		rdr = bytes.NewReader(b)
-		digester = nil // no need to recompute or validate digest
+	// write the blob to a tmp file
+	var dir, tmpPattern string
+	if d.Digest != "" && d.Size > 0 {
+		dir = path.Join(r.Path, "blobs", d.Digest.Algorithm().String())
+		tmpPattern = d.Digest.Encoded() + ".*.tmp"
+	} else {
+		dir = path.Join(r.Path, "blobs", digest.Canonical.String())
+		tmpPattern = "*.tmp"
 	}
-	// write the blob to the CAS file
-	dir := path.Join(r.Path, "blobs", d.Digest.Algorithm().String())
 	err = rwfs.MkdirAll(o.fs, dir, 0777)
 	if err != nil && !errors.Is(err, fs.ErrExist) {
 		return d, fmt.Errorf("failed creating %s: %w", dir, err)
 	}
-	// write to a tmp file, rename after validating
-	tmpFile, err := rwfs.CreateTemp(o.fs, path.Join(r.Path, "blobs", d.Digest.Algorithm().String()), d.Digest.Encoded()+".*.tmp")
+	tmpFile, err := rwfs.CreateTemp(o.fs, dir, tmpPattern)
 	if err != nil {
 		return d, fmt.Errorf("failed creating blob tmp file: %w", err)
 	}
@@ -133,19 +119,22 @@ func (o *OCIDir) BlobPut(ctx context.Context, r ref.Ref, d types.Descriptor, rdr
 	if err != nil {
 		return d, err
 	}
-	// validate result
-	if digester != nil && d.Digest != digester.Digest() {
+	// validate result matches descriptor, or update descriptor if it wasn't defined
+	if d.Digest == "" || d.Size <= 0 {
+		d.Digest = digester.Digest()
+	} else if d.Digest != digester.Digest() {
 		return d, fmt.Errorf("unexpected digest, expected %s, computed %s", d.Digest, digester.Digest())
 	}
-	if d.Size > 0 && i != d.Size {
+	if d.Size <= 0 {
+		d.Size = i
+	} else if i != d.Size {
 		return d, fmt.Errorf("unexpected blob length, expected %d, received %d", d.Size, i)
 	}
 	file := path.Join(r.Path, "blobs", d.Digest.Algorithm().String(), d.Digest.Encoded())
-	err = o.fs.Rename(path.Join(r.Path, "blobs", d.Digest.Algorithm().String(), tmpName), file)
+	err = o.fs.Rename(path.Join(dir, tmpName), file)
 	if err != nil {
-		return d, fmt.Errorf("failed to write blob (rename tmp file): %w", err)
+		return d, fmt.Errorf("failed to write blob (rename tmp file %s to %s): %w", path.Join(dir, tmpName), file, err)
 	}
-	d.Size = i
 	o.log.WithFields(logrus.Fields{
 		"ref":  r.CommonName(),
 		"file": file,
