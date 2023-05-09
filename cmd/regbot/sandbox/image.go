@@ -76,9 +76,9 @@ func (s *Sandbox) configGet(ls *lua.LState) int {
 		ls.RaiseError("Context error: %v", err)
 	}
 	m := s.checkManifest(ls, 1, false, false)
-	if s.sem != nil {
-		s.sem.Acquire(s.ctx, 1)
-		defer s.sem.Release(1)
+	if s.throttleC != nil {
+		s.throttleC.Acquire(s.ctx)
+		defer s.throttleC.Release(s.ctx)
 	}
 	s.log.WithFields(logrus.Fields{
 		"script": s.name,
@@ -198,9 +198,9 @@ func (s *Sandbox) imageCopy(ls *lua.LState) int {
 			opts = append(opts, regclient.ImageWithPlatforms(lOpts.Platforms))
 		}
 	}
-	if s.sem != nil {
-		s.sem.Acquire(s.ctx, 1)
-		defer s.sem.Release(1)
+	if s.throttleC != nil {
+		s.throttleC.Acquire(s.ctx)
+		defer s.throttleC.Release(s.ctx)
 	}
 	s.log.WithFields(logrus.Fields{
 		"script":          s.name,
@@ -232,9 +232,9 @@ func (s *Sandbox) imageExportTar(ls *lua.LState) int {
 	}
 	src := s.checkReference(ls, 1)
 	file := ls.CheckString(2)
-	if s.sem != nil {
-		s.sem.Acquire(s.ctx, 1)
-		defer s.sem.Release(1)
+	if s.throttleC != nil {
+		s.throttleC.Acquire(s.ctx)
+		defer s.throttleC.Release(s.ctx)
 	}
 	fh, err := os.Create(file)
 	if err != nil {
@@ -254,9 +254,9 @@ func (s *Sandbox) imageImportTar(ls *lua.LState) int {
 	}
 	tgt := s.checkReference(ls, 1)
 	file := ls.CheckString(2)
-	if s.sem != nil {
-		s.sem.Acquire(s.ctx, 1)
-		defer s.sem.Release(1)
+	if s.throttleC != nil {
+		s.throttleC.Acquire(s.ctx)
+		defer s.throttleC.Release(s.ctx)
 	}
 	rs, err := os.Open(file)
 	if err != nil {
