@@ -18,6 +18,7 @@ files:
       - gha-cosign-version
   "Makefile":
     scans:
+      - makefile-markdown-lint
       - makefile-staticcheck
       - makefile-syft-version
       - makefile-syft-version2
@@ -101,6 +102,12 @@ scans:
     args:
       regexp: '^\s*cosign-release: "(?P<Version>v[0-9\.]+)"\s*$'
       repo: "github.com/sigstore/cosign"
+  makefile-markdown-lint:
+    type: "regexp"
+    source: "registry-tag-arg-semver"
+    args:
+      regexp: '^MARKDOWN_LINT_VER\?=(?P<Version>v[0-9\.]+)\s*$'
+      repo: "ghcr.io/igorshubovych/markdownlint-cli"
   makefile-staticcheck:
     type: "regexp"
     source: "git-tag-semver"

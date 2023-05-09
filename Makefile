@@ -25,6 +25,7 @@ ifeq "$(strip $(VER_BUMP))" ''
 		-u "$(shell id -u):$(shell id -g)" \
 		$(VER_BUMP_CONTAINER)
 endif
+MARKDOWN_LINT_VER?=v0.34.0
 SYFT?=$(shell command -v syft 2>/dev/null)
 SYFT_CMD_VER:=$(shell [ -x "$(SYFT)" ] && echo "v$$($(SYFT) version | awk '/^Version: / {print $$2}')" || echo "0")
 SYFT_VERSION?=v0.77.0
@@ -58,7 +59,7 @@ lint-go: $(GOPATH)/bin/staticcheck .FORCE ## Run linting for Go
 	$(GOPATH)/bin/staticcheck -checks all ./...
 
 lint-md: .FORCE ## Run linting for markdown
-	docker run --rm -v "$(PWD):/workdir:ro" ghcr.io/igorshubovych/markdownlint-cli:latest \
+	docker run --rm -v "$(PWD):/workdir:ro" ghcr.io/igorshubovych/markdownlint-cli:$(MARKDOWN_LINT_VER) \
 	  --ignore vendor .
 
 vulncheck-go: $(GOPATH)/bin/govulncheck .FORCE ## Run vulnerability scan for Go
