@@ -8,13 +8,13 @@ import (
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/cmd/regbot/sandbox"
 	"github.com/regclient/regclient/config"
+	"github.com/regclient/regclient/internal/throttle"
 	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/scheme/reg"
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/sync/semaphore"
 )
 
 const (
@@ -33,10 +33,10 @@ var rootOpts struct {
 }
 
 var (
-	conf *Config
-	log  *logrus.Logger
-	rc   *regclient.RegClient
-	sem  *semaphore.Weighted
+	conf      *Config
+	log       *logrus.Logger
+	rc        *regclient.RegClient
+	throttleC *throttle.Throttle
 )
 
 var rootCmd = &cobra.Command{
@@ -232,7 +232,7 @@ func loadConf() error {
 	log.WithFields(logrus.Fields{
 		"concurrent": concurrent,
 	}).Debug("Configuring parallel settings")
-	sem = semaphore.NewWeighted(concurrent)
+	throttleC = throttle.New(int(concurrent))
 	// set the regclient, loading docker creds unless disabled, and inject logins from config file
 	rcOpts := []regclient.Opt{
 		regclient.WithLog(log),
@@ -284,7 +284,7 @@ func (s ConfigScript) process(ctx context.Context) error {
 		sandbox.WithContext(ctx),
 		sandbox.WithRegClient(rc),
 		sandbox.WithLog(log),
-		sandbox.WithSemaphore(sem),
+		sandbox.WithThrottle(throttleC),
 	}
 	if rootOpts.dryRun {
 		sbOpts = append(sbOpts, sandbox.WithDryRun())

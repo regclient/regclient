@@ -6,9 +6,9 @@ import (
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/cmd/regbot/internal/go2lua"
+	"github.com/regclient/regclient/internal/throttle"
 	"github.com/sirupsen/logrus"
 	lua "github.com/yuin/gopher-lua"
-	"golang.org/x/sync/semaphore"
 )
 
 const (
@@ -23,13 +23,13 @@ const (
 
 // Sandbox defines a lua sandbox
 type Sandbox struct {
-	name   string
-	ctx    context.Context
-	log    *logrus.Logger
-	ls     *lua.LState
-	rc     *regclient.RegClient
-	sem    *semaphore.Weighted
-	dryRun bool
+	name      string
+	ctx       context.Context
+	log       *logrus.Logger
+	ls        *lua.LState
+	rc        *regclient.RegClient
+	throttleC *throttle.Throttle
+	dryRun    bool
 }
 
 // LuaMod defines a mod to add to Lua's sandbox
@@ -111,10 +111,10 @@ func WithRegClient(rc *regclient.RegClient) Opt {
 	}
 }
 
-// WithSemaphore defines a semaphore to limit various actions
-func WithSemaphore(sem *semaphore.Weighted) Opt {
+// WithThrottle defines a semaphore to limit various actions
+func WithThrottle(t *throttle.Throttle) Opt {
 	return func(s *Sandbox) {
-		s.sem = sem
+		s.throttleC = t
 	}
 }
 
