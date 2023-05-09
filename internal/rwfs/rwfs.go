@@ -131,7 +131,7 @@ func CreateTemp(rwfs RWFS, dir, pattern string) (RWFile, error) {
 	if i >= 0 {
 		prefix, suffix = pattern[:i], pattern[i+1:]
 	}
-	prefix = filepath.Join(dir, prefix)
+	prefix = filepath.Clean(dir) + string(filepath.Separator) + prefix
 	try := 0
 	for {
 		rnd := strconv.FormatUint(rand.Uint64(), 10)
