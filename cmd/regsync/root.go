@@ -17,6 +17,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
+	"github.com/regclient/regclient/internal/throttle"
 	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/scheme"
@@ -28,7 +29,6 @@ import (
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/sync/semaphore"
 )
 
 const (
@@ -46,10 +46,10 @@ var rootOpts struct {
 }
 
 var (
-	conf *Config
-	log  *logrus.Logger
-	rc   *regclient.RegClient
-	sem  *semaphore.Weighted
+	conf      *Config
+	log       *logrus.Logger
+	rc        *regclient.RegClient
+	throttleC *throttle.Throttle
 )
 
 var rootCmd = &cobra.Command{
@@ -320,15 +320,15 @@ func loadConf() error {
 	} else {
 		return ErrMissingInput
 	}
-	// use a semaphore to control parallelism
-	concurrent := int64(conf.Defaults.Parallel)
+	// use a throttle to control parallelism
+	concurrent := conf.Defaults.Parallel
 	if concurrent <= 0 {
 		concurrent = 1
 	}
 	log.WithFields(logrus.Fields{
 		"concurrent": concurrent,
 	}).Debug("Configuring parallel settings")
-	sem = semaphore.NewWeighted(concurrent)
+	throttleC = throttle.New(concurrent)
 	// set the regclient, loading docker creds unless disabled, and inject logins from config file
 	rcOpts := []regclient.Opt{
 		regclient.WithLog(log),
@@ -684,22 +684,23 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 	}
 
 	// wait for parallel tasks
-	sem.Acquire(ctx, 1)
+	throttleC.Acquire(ctx)
 	// delay for rate limit on source
 	if s.RateLimit.Min > 0 && manifest.GetRateLimit(mSrc).Set {
-		// refresh current rate limit after acquiring semaphore
+		// refresh current rate limit after acquiring throttle
 		mSrc, err = rc.ManifestHead(ctx, src)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"source": src.CommonName(),
 				"error":  err,
 			}).Error("rate limit check failed")
+			throttleC.Release(ctx)
 			return err
 		}
 		// delay if rate limit exceeded
 		rlSrc := manifest.GetRateLimit(mSrc)
 		for rlSrc.Remain < s.RateLimit.Min {
-			sem.Release(1)
+			throttleC.Release(ctx)
 			log.WithFields(logrus.Fields{
 				"source":        src.CommonName(),
 				"source-remain": rlSrc.Remain,
@@ -712,14 +713,15 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 				return ErrCanceled
 			case <-time.After(s.RateLimit.Retry):
 			}
-			sem.Acquire(ctx, 1)
+			throttleC.Acquire(ctx)
 			mSrc, err = rc.ManifestHead(ctx, src)
 			if err != nil {
-				sem.Release(1)
+				throttleC.Release(ctx)
 				log.WithFields(logrus.Fields{
 					"source": src.CommonName(),
 					"error":  err,
 				}).Error("rate limit check failed")
+				throttleC.Release(ctx)
 				return err
 			}
 			rlSrc = manifest.GetRateLimit(mSrc)
@@ -730,9 +732,9 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 			"step-min":      s.RateLimit.Min,
 		}).Debug("Rate limit passed")
 	}
-	defer sem.Release(1)
+	defer throttleC.Release(ctx)
 
-	// verify context has not been canceled while waiting for semaphore
+	// verify context has not been canceled while waiting for throttle
 	select {
 	case <-ctx.Done():
 		return ErrCanceled

@@ -111,7 +111,7 @@ func WithRegClient(rc *regclient.RegClient) Opt {
 	}
 }
 
-// WithThrottle defines a semaphore to limit various actions
+// WithThrottle is used to limit various actions
 func WithThrottle(t *throttle.Throttle) Opt {
 	return func(s *Sandbox) {
 		s.throttleC = t
