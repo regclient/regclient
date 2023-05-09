@@ -9,9 +9,9 @@ import (
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/internal/rwfs"
+	"github.com/regclient/regclient/internal/throttle"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/ref"
-	"golang.org/x/sync/semaphore"
 )
 
 func TestRegsyncOnce(t *testing.T) {
@@ -27,7 +27,7 @@ func TestRegsyncOnce(t *testing.T) {
 	}
 	// setup various globals normally done by loadConf
 	rc = regclient.New(regclient.WithFS(fsMem))
-	sem = semaphore.NewWeighted(1)
+	throttleC = throttle.New(1)
 	var confBytes = `
   version: 1
   defaults:

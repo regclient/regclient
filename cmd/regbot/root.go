@@ -224,15 +224,15 @@ func loadConf() error {
 	} else {
 		return ErrMissingInput
 	}
-	// use a semaphore to control parallelism
-	concurrent := int64(conf.Defaults.Parallel)
+	// use a throttle to control parallelism
+	concurrent := conf.Defaults.Parallel
 	if concurrent <= 0 {
 		concurrent = 1
 	}
 	log.WithFields(logrus.Fields{
 		"concurrent": concurrent,
 	}).Debug("Configuring parallel settings")
-	throttleC = throttle.New(int(concurrent))
+	throttleC = throttle.New(concurrent)
 	// set the regclient, loading docker creds unless disabled, and inject logins from config file
 	rcOpts := []regclient.Opt{
 		regclient.WithLog(log),
