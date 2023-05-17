@@ -153,6 +153,7 @@ func (b *reader) ToOCIConfig() (OCIConfig, error) {
 		return nil, fmt.Errorf("unable to convert after read has been performed")
 	}
 	blobBody, err := io.ReadAll(b)
+	b.Close()
 	if err != nil {
 		return nil, fmt.Errorf("error reading image config for %s: %w", b.r.CommonName(), err)
 	}
