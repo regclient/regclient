@@ -254,6 +254,55 @@ var (
 			}
 		}
 	`)
+	rawOCIImageDuck = []byte(`
+		{
+			"schemaVersion": 2,
+			"config": {
+				"mediaType": "application/vnd.oci.image.config.v1+json",
+				"size": 733,
+				"digest": "sha256:35481f6488745b7eb5748f759b939deb063f458e9c3f9f998abc423e6652ece5"
+			},
+			"layers": [
+				{
+					"mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+					"size": 657696,
+					"digest": "sha256:b49b96595fd4bd6de7cb7253fe5e89d242d0eb4f993b2b8280c0581c3a62ddc2"
+				},
+				{
+					"mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+					"size": 127,
+					"digest": "sha256:250c06f7c38e52dc77e5c7586c3e40280dc7ff9bb9007c396e06d96736cf8542"
+				},
+				{
+					"mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
+					"size": 1136676,
+					"digest": "sha256:c6690738d95e2b3d3c9ddfd34aa88ddce6e8d6e31c826989b869c25f8888f158"
+				}
+			],
+			"annotations": {
+				"org.example.test": "hello world"
+			}
+		}
+	`)
+	rawOCIIndexDuck = []byte(`
+		{
+			"schemaVersion": 2,
+			"manifests": [
+				{
+					"mediaType": "application/vnd.oci.image.manifest.v1+json",
+					"size": 659,
+					"digest": "sha256:bdde23183a221cc31fb66df0d93b834b11f2a0c2e8a03e6304c5e17d3cd5038f",
+					"platform": {
+						"architecture": "amd64",
+						"os": "linux"
+					}
+				}
+			],
+			"annotations": {
+				"org.example.test": "hello world"
+			}
+		}
+	`)
 	rawOCI1Artifact = []byte(`
 		{
 			"schemaVersion": 2,
@@ -325,6 +374,8 @@ var (
 	digestDockerSchema1Signed, _ = digest.Parse("sha256:f3ef067962554c3352dc0c659ca563f73cc396fe0dea2a2c23a7964c6290f782")
 	digestOCIImage               = digest.FromBytes(rawOCIImage)
 	digestOCIIndex               = digest.FromBytes(rawOCIIndex)
+	digestOCIImageDuck           = digest.FromBytes(rawOCIImageDuck)
+	digestOCIIndexDuck           = digest.FromBytes(rawOCIIndexDuck)
 	digestOCIArtifact            = digest.FromBytes(rawOCI1Artifact)
 )
 
@@ -745,6 +796,32 @@ func TestNew(t *testing.T) {
 				WithOrig(manifestInvalid),
 			},
 			wantE: fmt.Errorf("manifest contains an unexpected media type: expected %s, received %s", types.MediaTypeDocker2Manifest, types.MediaTypeOCI1Manifest),
+		},
+		{
+			name: "OCI Image without mediaType",
+			opts: []Opts{
+				WithRaw(rawOCIImageDuck),
+			},
+			wantE: nil,
+			isSet: true,
+			wantDesc: types.Descriptor{
+				MediaType: types.MediaTypeOCI1Manifest,
+				Size:      int64(len(rawOCIImageDuck)),
+				Digest:    digestOCIImageDuck,
+			},
+		},
+		{
+			name: "OCI Index without mediaType",
+			opts: []Opts{
+				WithRaw(rawOCIIndexDuck),
+			},
+			wantE: nil,
+			isSet: true,
+			wantDesc: types.Descriptor{
+				MediaType: types.MediaTypeOCI1ManifestList,
+				Size:      int64(len(rawOCIIndexDuck)),
+				Digest:    digestOCIIndexDuck,
+			},
 		},
 
 		// TODO: add more tests to improve coverage
