@@ -39,6 +39,10 @@ func TestMod(t *testing.T) {
 	// create regclient
 	rc := regclient.New(regclient.WithFS(fsMem))
 
+	rTgt1, err := ref.New("ocidir://tgtrepo:v1")
+	if err != nil {
+		t.Errorf("failed to parse ref: %v", err)
+	}
 	rb1, err := ref.New("ocidir://testrepo:b1")
 	if err != nil {
 		t.Errorf("failed to parse ref: %v", err)
@@ -97,11 +101,29 @@ func TestMod(t *testing.T) {
 			wantSame: true,
 		},
 		{
-			name: "To Docker",
+			name: "To OCI Copy",
 			opts: []Opts{
-				WithManifestToDocker(),
+				WithManifestToOCI(),
+				WithRefTgt(rTgt1),
 			},
 			ref:      "ocidir://testrepo:v1",
+			wantSame: true,
+		},
+		{
+			name: "To Docker Copy",
+			opts: []Opts{
+				WithManifestToDocker(),
+				WithRefTgt(rTgt1),
+			},
+			ref:      "ocidir://testrepo:v1",
+			wantSame: false,
+		},
+		{
+			name: "Docker To OCI",
+			opts: []Opts{
+				WithManifestToOCI(),
+			},
+			ref:      rTgt1.CommonName(),
 			wantSame: false,
 		},
 		{
@@ -420,12 +442,23 @@ func TestMod(t *testing.T) {
 				return
 			}
 
+			mSrc, err := rc.ManifestHead(ctx, r, regclient.WithManifestRequireDigest())
+			if err != nil {
+				t.Errorf("failed to get manifest from src: %v", err)
+				return
+			}
+			mTgt, err := rc.ManifestHead(ctx, rMod, regclient.WithManifestRequireDigest())
+			if err != nil {
+				t.Errorf("failed to get manifest from mod \"%s\": %v", rMod.CommonName(), err)
+				return
+			}
+
 			if tt.wantSame {
-				if r.Digest != rMod.Digest {
+				if !mSrc.GetDescriptor().Equal(mTgt.GetDescriptor()) {
 					t.Errorf("digest changed")
 				}
 			} else {
-				if r.Digest == rMod.Digest {
+				if mSrc.GetDescriptor().Equal(mTgt.GetDescriptor()) {
 					t.Errorf("digest did not change")
 				}
 			}

@@ -19,7 +19,7 @@ import (
 // in the config history for that layer
 func WithLayerRmCreatedBy(re regexp.Regexp) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
-		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, r ref.Ref, dm *dagManifest) error {
+		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
 			if dm.m.IsList() || dm.config.oc == nil {
 				return nil
 			}
@@ -69,7 +69,7 @@ func WithLayerRmCreatedBy(re regexp.Regexp) Opts {
 // WithLayerRmIndex deletes a layer by index. The index starts at 0.
 func WithLayerRmIndex(index int) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
-		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, r ref.Ref, dm *dagManifest) error {
+		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
 			if !dm.top || dm.m.IsList() || dm.config.oc == nil {
 				return fmt.Errorf("remove layer by index requires v2 image manifest")
 			}
@@ -104,7 +104,7 @@ func WithLayerStripFile(file string) Opts {
 	file = strings.Trim(file, "/")
 	fileRE := regexp.MustCompile("^/?" + regexp.QuoteMeta(file) + "(/.*)?$")
 	return func(dc *dagConfig, dm *dagManifest) error {
-		dc.stepsLayerFile = append(dc.stepsLayerFile, func(c context.Context, rc *regclient.RegClient, r ref.Ref, dl *dagLayer, th *tar.Header, tr io.Reader) (*tar.Header, io.Reader, changes, error) {
+		dc.stepsLayerFile = append(dc.stepsLayerFile, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dl *dagLayer, th *tar.Header, tr io.Reader) (*tar.Header, io.Reader, changes, error) {
 			if fileRE.Match([]byte(th.Name)) {
 				return th, tr, deleted, nil
 			}
@@ -118,7 +118,7 @@ func WithLayerStripFile(file string) Opts {
 func WithLayerTimestampFromLabel(label string) Opts {
 	t := time.Time{}
 	return func(dc *dagConfig, dm *dagManifest) error {
-		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(c context.Context, rc *regclient.RegClient, r ref.Ref, doc *dagOCIConfig) error {
+		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
 			oc := doc.oc.GetConfig()
 			tl, ok := oc.Config.Labels[label]
 			if !ok {
@@ -136,7 +136,7 @@ func WithLayerTimestampFromLabel(label string) Opts {
 			return nil
 		})
 		dc.stepsLayerFile = append(dc.stepsLayerFile,
-			func(c context.Context, rc *regclient.RegClient, r ref.Ref, dl *dagLayer, th *tar.Header, tr io.Reader) (*tar.Header, io.Reader, changes, error) {
+			func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dl *dagLayer, th *tar.Header, tr io.Reader) (*tar.Header, io.Reader, changes, error) {
 				if t.IsZero() {
 					return nil, nil, unchanged, fmt.Errorf("timestamp not available")
 				}
@@ -170,7 +170,7 @@ func WithLayerTimestampFromLabel(label string) Opts {
 func WithLayerTimestampMax(t time.Time) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsLayerFile = append(dc.stepsLayerFile,
-			func(c context.Context, rc *regclient.RegClient, r ref.Ref, dl *dagLayer, th *tar.Header, tr io.Reader) (*tar.Header, io.Reader, changes, error) {
+			func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dl *dagLayer, th *tar.Header, tr io.Reader) (*tar.Header, io.Reader, changes, error) {
 				changed := false
 				if th == nil || tr == nil {
 					return nil, nil, unchanged, fmt.Errorf("missing header or reader")
@@ -201,7 +201,7 @@ func WithLayerTimestampMax(t time.Time) Opts {
 func WithFileTarTimeMax(name string, t time.Time) Opts {
 	name = strings.TrimPrefix(name, "/")
 	return func(dc *dagConfig, dm *dagManifest) error {
-		dc.stepsLayerFile = append(dc.stepsLayerFile, func(ctx context.Context, rc *regclient.RegClient, r ref.Ref, dl *dagLayer, th *tar.Header, tr io.Reader) (*tar.Header, io.Reader, changes, error) {
+		dc.stepsLayerFile = append(dc.stepsLayerFile, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dl *dagLayer, th *tar.Header, tr io.Reader) (*tar.Header, io.Reader, changes, error) {
 			// check the header for a matching filename
 			if th.Name != name {
 				return th, tr, unchanged, nil

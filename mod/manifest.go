@@ -17,7 +17,7 @@ import (
 func WithAnnotation(name, value string) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		// TODO: use Get/Set Annotations methods on manifests
-		dc.stepsManifest = append(dc.stepsManifest, func(ctx context.Context, rc *regclient.RegClient, r ref.Ref, dm *dagManifest) error {
+		dc.stepsManifest = append(dc.stepsManifest, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
 			var err error
 			changed := false
 			// only annotate top manifest
@@ -83,7 +83,7 @@ func WithAnnotation(name, value string) Opts {
 // WithAnnotationOCIBase adds annotations for the base image
 func WithAnnotationOCIBase(rBase ref.Ref, dBase digest.Digest) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
-		dc.stepsManifest = append(dc.stepsManifest, func(ctx context.Context, rc *regclient.RegClient, r ref.Ref, dm *dagManifest) error {
+		dc.stepsManifest = append(dc.stepsManifest, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
 			if dm.mod == deleted || !dm.top {
 				return nil
 			}
@@ -149,7 +149,7 @@ func WithAnnotationOCIBase(rBase ref.Ref, dBase digest.Digest) Opts {
 // WithLabelToAnnotation copies image config labels to manifest annotations
 func WithLabelToAnnotation() Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
-		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, r ref.Ref, dm *dagManifest) error {
+		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
 			if dm.mod == deleted {
 				return nil
 			}
@@ -201,7 +201,7 @@ func WithLabelToAnnotation() Opts {
 // WithManifestToDocker converts the manifest to Docker schema2 media types
 func WithManifestToDocker() Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
-		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, r ref.Ref, dm *dagManifest) error {
+		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
 			if dm.mod == deleted {
 				return nil
 			}
@@ -230,7 +230,7 @@ func WithManifestToDocker() Opts {
 					changed = true
 				}
 				if ociM.ArtifactType != "" {
-					return fmt.Errorf("unable to convert artifactType to docker manifest, ref %s%.0w", r.CommonName(), types.ErrUnsupportedMediaType)
+					return fmt.Errorf("unable to convert artifactType to docker manifest, ref %s%.0w", rSrc.CommonName(), types.ErrUnsupportedMediaType)
 				}
 				if ociM.Config.MediaType == types.MediaTypeOCI1ImageConfig {
 					ociM.Config.MediaType = types.MediaTypeDocker2ImageConfig
@@ -273,7 +273,7 @@ func WithManifestToDocker() Opts {
 // WithManifestToOCI converts the manifest to OCI media types
 func WithManifestToOCI() Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
-		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, r ref.Ref, dm *dagManifest) error {
+		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
 			if dm.mod == deleted {
 				return nil
 			}
@@ -332,7 +332,7 @@ func WithManifestToOCI() Opts {
 // WithManifestToOCIReferrers converts other referrer types to OCI subject/referrers
 func WithManifestToOCIReferrers() Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
-		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, r ref.Ref, dm *dagManifest) error {
+		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
 			if dm.mod == deleted {
 				return nil
 			}
@@ -420,7 +420,7 @@ func WithManifestToOCIReferrers() Opts {
 // WithExternalURLsRm strips external URLs from descriptors and adjusts media type to match
 func WithExternalURLsRm() Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
-		dc.stepsManifest = append(dc.stepsManifest, func(ctx context.Context, rc *regclient.RegClient, r ref.Ref, dm *dagManifest) error {
+		dc.stepsManifest = append(dc.stepsManifest, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
 			if dm.mod == deleted {
 				return nil
 			}
@@ -525,23 +525,23 @@ func WithRebaseRefs(rOld, rNew ref.Ref) Opts {
 	}
 }
 
-func rebaseAddStep(dc *dagConfig, rOld, rNew ref.Ref) error {
+func rebaseAddStep(dc *dagConfig, rBaseOld, rBaseNew ref.Ref) error {
 	var mbOldCache, mbNewCache manifest.Manifest
-	dc.stepsManifest = append(dc.stepsManifest, func(ctx context.Context, rc *regclient.RegClient, r ref.Ref, dm *dagManifest) error {
+	dc.stepsManifest = append(dc.stepsManifest, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
 		// skip if manifest list or deleted
-		if dm.m.IsList() || dm.mod == deleted {
+		if dm.m.IsList() || dm.mod == deleted || dm.config == nil {
 			return nil
 		}
 		// get and cache base manifests
 		var err error
 		if mbOldCache == nil {
-			mbOldCache, err = rc.ManifestGet(ctx, rOld)
+			mbOldCache, err = rc.ManifestGet(ctx, rBaseOld)
 			if err != nil {
 				return err
 			}
 		}
 		if mbNewCache == nil {
-			mbNewCache, err = rc.ManifestGet(ctx, rNew)
+			mbNewCache, err = rc.ManifestGet(ctx, rBaseNew)
 			if err != nil {
 				return err
 			}
@@ -566,7 +566,7 @@ func rebaseAddStep(dc *dagConfig, rOld, rNew ref.Ref) error {
 			if err != nil {
 				return err
 			}
-			rp := rOld
+			rp := rBaseOld
 			rp.Digest = d.Digest.String()
 			mbOld, err = rc.ManifestGet(ctx, rp)
 			if err != nil {
@@ -579,7 +579,7 @@ func rebaseAddStep(dc *dagConfig, rOld, rNew ref.Ref) error {
 			if err != nil {
 				return err
 			}
-			rp := rNew
+			rp := rBaseNew
 			rp.Digest = d.Digest.String()
 			mbNew, err = rc.ManifestGet(ctx, rp)
 			if err != nil {
@@ -599,7 +599,7 @@ func rebaseAddStep(dc *dagConfig, rOld, rNew ref.Ref) error {
 		if err != nil {
 			return err
 		}
-		confOld, err := rc.BlobGetOCIConfig(ctx, rOld, cdOld)
+		confOld, err := rc.BlobGetOCIConfig(ctx, rBaseOld, cdOld)
 		if err != nil {
 			return err
 		}
@@ -617,7 +617,7 @@ func rebaseAddStep(dc *dagConfig, rOld, rNew ref.Ref) error {
 		if err != nil {
 			return err
 		}
-		confNew, err := rc.BlobGetOCIConfig(ctx, rNew, cdNew)
+		confNew, err := rc.BlobGetOCIConfig(ctx, rBaseNew, cdNew)
 		if err != nil {
 			return err
 		}
@@ -682,7 +682,7 @@ func rebaseAddStep(dc *dagConfig, rOld, rNew ref.Ref) error {
 		}
 		// copy blobs from new base to repo
 		for _, d := range layersNew {
-			if err := rc.BlobCopy(ctx, rNew, r, d); err != nil {
+			if err := rc.BlobCopy(ctx, rBaseNew, rSrc, d); err != nil {
 				return fmt.Errorf("failed copying blobs for rebase: %w", err)
 			}
 		}
