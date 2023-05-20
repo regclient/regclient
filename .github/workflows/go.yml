@@ -29,14 +29,14 @@ jobs:
       packages: 'write'
 
     steps:
+    - name: Check out code
+      uses: actions/checkout@v3
+
     - name: "Set up Go ${{ matrix.gover }}"
       uses: actions/setup-go@v4
       with:
         go-version: "${{ matrix.gover }}.x"
       id: go
-
-    - name: Check out code
-      uses: actions/checkout@v3
 
     - name: Get dependencies
       run: |
