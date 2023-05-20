@@ -1044,50 +1044,42 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 
 func runImageMod(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
-	r, err := ref.New(args[0])
+	rSrc, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
-	var rNew ref.Ref
+	var rTgt ref.Ref
 	if imageOpts.create != "" {
 		if strings.ContainsAny(imageOpts.create, "/:") {
-			rNew, err = ref.New((imageOpts.create))
+			rTgt, err = ref.New((imageOpts.create))
 			if err != nil {
 				return fmt.Errorf("failed to parse new image name %s: %w", imageOpts.create, err)
 			}
 		} else {
-			rNew = r
-			rNew.Digest = ""
-			rNew.Tag = imageOpts.create
+			rTgt = rSrc
+			rTgt.Digest = ""
+			rTgt.Tag = imageOpts.create
 		}
 	} else if imageOpts.replace {
-		if r.Tag == "" {
-			return fmt.Errorf("cannot replace an image digest, must include a tag")
-		}
-		rNew = r
-		rNew.Digest = ""
+		rTgt = rSrc
+	} else {
+		rTgt = rSrc
+		rTgt.Tag = ""
 	}
+	imageOpts.modOpts = append(imageOpts.modOpts, mod.WithRefTgt(rTgt))
 	rc := newRegClient()
 
 	log.WithFields(logrus.Fields{
-		"ref": r.CommonName(),
+		"ref": rSrc.CommonName(),
 	}).Debug("Modifying image")
 
-	defer rc.Close(ctx, r)
-	rOut, err := mod.Apply(ctx, rc, r, imageOpts.modOpts...)
+	defer rc.Close(ctx, rSrc)
+	rOut, err := mod.Apply(ctx, rc, rSrc, imageOpts.modOpts...)
 	if err != nil {
 		return err
 	}
-	if rNew.Tag != "" {
-		defer rc.Close(ctx, rNew)
-		err = rc.ImageCopy(ctx, rOut, rNew)
-		if err != nil {
-			return fmt.Errorf("failed copying image to new name: %w", err)
-		}
-		fmt.Printf("%s\n", rNew.CommonName())
-	} else {
-		fmt.Printf("%s\n", rOut.CommonName())
-	}
+	fmt.Printf("%s\n", rOut.CommonName())
+	rc.Close(ctx, rOut)
 	return nil
 }
 

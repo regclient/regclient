@@ -27,11 +27,11 @@ const (
 )
 
 type dagConfig struct {
-	stepsManifest  []func(context.Context, *regclient.RegClient, ref.Ref, *dagManifest) error
-	stepsOCIConfig []func(context.Context, *regclient.RegClient, ref.Ref, *dagOCIConfig) error
-	stepsLayer     []func(context.Context, *regclient.RegClient, ref.Ref, *dagLayer) error
-	stepsLayerFile []func(context.Context, *regclient.RegClient, ref.Ref, *dagLayer, *tar.Header, io.Reader) (*tar.Header, io.Reader, changes, error)
+	stepsManifest  []func(context.Context, *regclient.RegClient, ref.Ref, ref.Ref, *dagManifest) error
+	stepsOCIConfig []func(context.Context, *regclient.RegClient, ref.Ref, ref.Ref, *dagOCIConfig) error
+	stepsLayerFile []func(context.Context, *regclient.RegClient, ref.Ref, ref.Ref, *dagLayer, *tar.Header, io.Reader) (*tar.Header, io.Reader, changes, error)
 	maxDataSize    int64
+	rTgt           ref.Ref
 }
 
 type dagManifest struct {
@@ -58,14 +58,14 @@ type dagLayer struct {
 	desc     types.Descriptor
 }
 
-func dagGet(ctx context.Context, rc *regclient.RegClient, r ref.Ref, d types.Descriptor) (*dagManifest, error) {
+func dagGet(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, d types.Descriptor) (*dagManifest, error) {
 	var err error
 	getOpts := []regclient.ManifestOpts{}
 	if d.Digest != "" {
 		getOpts = append(getOpts, regclient.WithManifestDesc(d))
 	}
 	dm := dagManifest{}
-	dm.m, err = rc.ManifestGet(ctx, r, getOpts...)
+	dm.m, err = rc.ManifestGet(ctx, rSrc, getOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func dagGet(ctx context.Context, rc *regclient.RegClient, r ref.Ref, d types.Des
 			return nil, err
 		}
 		for _, desc := range dl {
-			rGet := r
+			rGet := rSrc
 			rGet.Tag = ""
 			rGet.Digest = desc.Digest.String()
 			curMM, err := dagGet(ctx, rc, rGet, desc)
@@ -92,7 +92,7 @@ func dagGet(ctx context.Context, rc *regclient.RegClient, r ref.Ref, d types.Des
 		if err != nil && !errors.Is(err, types.ErrUnsupportedMediaType) {
 			return nil, err
 		} else if err == nil && inListStr(cd.MediaType, mtWLConfig) {
-			oc, err := rc.BlobGetOCIConfig(ctx, r, cd)
+			oc, err := rc.BlobGetOCIConfig(ctx, rSrc, cd)
 			if err != nil {
 				return nil, err
 			}
@@ -112,7 +112,7 @@ func dagGet(ctx context.Context, rc *regclient.RegClient, r ref.Ref, d types.Des
 		}
 	}
 	// get a list of referrers
-	rl, err := rc.ReferrerList(ctx, r)
+	rl, err := rc.ReferrerList(ctx, rSrc)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get referrers: %w", err)
 	}
@@ -122,19 +122,19 @@ func dagGet(ctx context.Context, rc *regclient.RegClient, r ref.Ref, d types.Des
 		if len(desc.Annotations) > 0 {
 			desc.Annotations = nil
 		}
-		rGet := r
+		rGet := rSrc
 		rGet.Tag = ""
 		rGet.Digest = desc.Digest.String()
 		curMM, err := dagGet(ctx, rc, rGet, desc)
 		if err != nil {
 			return nil, err
 		}
-		dm.referrers = append(dm.manifests, curMM)
+		dm.referrers = append(dm.referrers, curMM)
 	}
 	return &dm, nil
 }
 
-func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Ref, dm *dagManifest) error {
+func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rTgt ref.Ref, dm *dagManifest) error {
 	var err error
 	// recursively push children to get new digests to include in the modified manifest
 	om := dm.m.GetOrig()
@@ -153,7 +153,7 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 				continue
 			}
 			// recursively make changes
-			err = dagPut(ctx, rc, mc, r, child)
+			err = dagPut(ctx, rc, mc, rSrc, rTgt, child)
 			if err != nil {
 				return err
 			}
@@ -246,7 +246,7 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 			if d.Size <= mc.maxDataSize || (mc.maxDataSize < 0 && len(d.Data) > 0) {
 				// if data field should be set
 				// retrieve the body
-				br, err := rc.BlobGet(ctx, r, d)
+				br, err := rc.BlobGet(ctx, rTgt, d)
 				if err != nil {
 					return err
 				}
@@ -333,7 +333,7 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 			}
 			if dm.config.modified {
 				cRdr := bytes.NewReader(cBytes)
-				_, err = rc.BlobPut(ctx, r, dm.config.newDesc, cRdr)
+				_, err = rc.BlobPut(ctx, rTgt, dm.config.newDesc, cRdr)
 				if err != nil {
 					return err
 				}
@@ -341,6 +341,11 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 				ociM.Config.Digest = dm.config.newDesc.Digest
 				ociM.Config.Size = dm.config.newDesc.Size
 				changed = true
+			} else if !ref.EqualRepository(rSrc, rTgt) {
+				err = rc.BlobCopy(ctx, rSrc, rTgt, dm.config.oc.GetDescriptor())
+				if err != nil {
+					return err
+				}
 			}
 			// handle config data field
 			if ociM.Config.Size <= mc.maxDataSize || (mc.maxDataSize < 0 && len(ociM.Config.Data) > 0) {
@@ -352,6 +357,12 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 				// strip data fields if above max size
 				ociM.Config.Data = []byte{}
 				changed = true
+			}
+		}
+		if dm.config == nil && ociM.Config.Digest != "" && !ref.EqualRepository(rSrc, rTgt) {
+			err = rc.BlobCopy(ctx, rSrc, rTgt, ociM.Config)
+			if err != nil {
+				return err
 			}
 		}
 
@@ -369,10 +380,9 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 			return err
 		}
 	}
-	// push new/modified manifest
+	// update descriptor and update subject descriptor on all referrers
 	if dm.mod == replaced || dm.mod == added {
 		dm.newDesc = dm.m.GetDescriptor()
-		// update subject on all referrers
 		for i := range dm.referrers {
 			if dm.referrers[i].mod == deleted {
 				continue
@@ -389,37 +399,32 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 				dm.referrers[i].mod = replaced
 			}
 		}
-		mpOpts := []regclient.ManifestOpts{}
-		if !dm.top {
-			mpOpts = append(mpOpts, regclient.WithManifestChild())
-		}
-		rPut := r
-		rPut.Tag = ""
-		rPut.Digest = dm.newDesc.Digest.String()
-		err = rc.ManifestPut(ctx, rPut, dm.m, mpOpts...)
+	}
+	// recursively push referrers
+	for _, child := range dm.referrers {
+		err = dagPut(ctx, rc, mc, rSrc, rTgt, child)
 		if err != nil {
 			return err
 		}
 	}
-	// push/delete referrers
-	for _, child := range dm.referrers {
-		if child.mod == unchanged {
-			continue
+	// push manifest
+	if dm.mod == replaced || dm.mod == added || (dm.mod == unchanged && !ref.EqualRepository(rSrc, rTgt)) {
+		mpOpts := []regclient.ManifestOpts{}
+		rPut := rTgt
+		if !dm.top {
+			mpOpts = append(mpOpts, regclient.WithManifestChild())
+			rPut.Tag = ""
 		}
-		child.newDesc = child.m.GetDescriptor()
-		rChild := r
-		rChild.Digest = child.newDesc.Digest.String()
-		rChild.Tag = ""
-		if child.mod == deleted {
-			err = rc.ManifestDelete(ctx, rChild, regclient.WithManifestCheckReferrers())
-			if err != nil {
-				return fmt.Errorf("failed to delete referrer: %w", err)
-			}
+		if rPut.Tag == "" {
+			// push by digest
+			rPut.Digest = dm.newDesc.Digest.String()
 		} else {
-			err = rc.ManifestPut(ctx, rChild, child.m, regclient.WithManifestChild())
-			if err != nil {
-				return fmt.Errorf("failed to put referrer: %w", err)
-			}
+			// push by tag
+			rPut.Digest = ""
+		}
+		err = rc.ManifestPut(ctx, rPut, dm.m, mpOpts...)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -428,6 +433,14 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, r ref.Re
 func dagWalkManifests(dm *dagManifest, fn func(*dagManifest) (*dagManifest, error)) error {
 	if dm.manifests != nil {
 		for _, child := range dm.manifests {
+			err := dagWalkManifests(child, fn)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if dm.referrers != nil {
+		for _, child := range dm.referrers {
 			err := dagWalkManifests(child, fn)
 			if err != nil {
 				return err
@@ -451,6 +464,14 @@ func dagWalkOCIConfig(dm *dagManifest, fn func(*dagOCIConfig) (*dagOCIConfig, er
 			}
 		}
 	}
+	if dm.referrers != nil {
+		for _, child := range dm.referrers {
+			err := dagWalkOCIConfig(child, fn)
+			if err != nil {
+				return err
+			}
+		}
+	}
 	if dm.config != nil {
 		docNew, err := fn(dm.config)
 		if err != nil {
@@ -465,6 +486,14 @@ func dagWalkLayers(dm *dagManifest, fn func(*dagLayer) (*dagLayer, error)) error
 	var err error
 	if dm.manifests != nil {
 		for _, child := range dm.manifests {
+			err = dagWalkLayers(child, fn)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if dm.referrers != nil {
+		for _, child := range dm.referrers {
 			err = dagWalkLayers(child, fn)
 			if err != nil {
 				return err
