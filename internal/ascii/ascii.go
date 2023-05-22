@@ -1,5 +1,5 @@
-// Package asci is used to output asci content to a terminal
-package asci
+// Package ascii is used to output asci content to a terminal
+package ascii
 
 import (
 	"io"

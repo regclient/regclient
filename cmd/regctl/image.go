@@ -15,7 +15,7 @@ import (
 
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/internal/asci"
+	"github.com/regclient/regclient/internal/ascii"
 	"github.com/regclient/regclient/internal/units"
 	"github.com/regclient/regclient/mod"
 	"github.com/regclient/regclient/pkg/template"
@@ -637,12 +637,12 @@ func runImageCopy(cmd *cobra.Command, args []string) error {
 	// check for a tty and attach progress reporter
 	done := make(chan bool)
 	var progress *imageProgress
-	if !flagChanged(cmd, "verbosity") && asci.IsWriterTerminal(cmd.ErrOrStderr()) {
+	if !flagChanged(cmd, "verbosity") && ascii.IsWriterTerminal(cmd.ErrOrStderr()) {
 		progress = &imageProgress{
 			start:   time.Now(),
 			entries: map[string]*imageProgressEntry{},
-			asciOut: asci.NewLines(cmd.ErrOrStderr()),
-			bar:     asci.NewProgressBar(cmd.ErrOrStderr()),
+			asciOut: ascii.NewLines(cmd.ErrOrStderr()),
+			bar:     ascii.NewProgressBar(cmd.ErrOrStderr()),
 		}
 		ticker := time.NewTicker(progressFreq)
 		defer ticker.Stop()
@@ -677,8 +677,8 @@ type imageProgress struct {
 	mu      sync.Mutex
 	start   time.Time
 	entries map[string]*imageProgressEntry
-	asciOut *asci.Lines
-	bar     *asci.ProgressBar
+	asciOut *ascii.Lines
+	bar     *ascii.ProgressBar
 	changed bool
 }
 
