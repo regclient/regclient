@@ -1,9 +1,11 @@
-package asci
+package ascii
 
 import (
 	"bytes"
 	"fmt"
 	"io"
+
+	"golang.org/x/term"
 )
 
 type Lines struct {
@@ -11,12 +13,22 @@ type Lines struct {
 	buf     []byte
 	lines   int
 	out     io.Writer
+	width   int
 }
 
 func NewLines(w io.Writer) *Lines {
+	width := 0
+	if wFd, ok := w.(interface{ Fd() uintptr }); ok && term.IsTerminal(int(wFd.Fd())) {
+		w, _, err := term.GetSize(int(wFd.Fd()))
+		if err == nil {
+			width = w
+		}
+	}
+
 	return &Lines{
-		buf: []byte{},
-		out: w,
+		buf:   []byte{},
+		out:   w,
+		width: width,
 	}
 }
 
@@ -32,6 +44,13 @@ func (b *Lines) Flush() {
 	b.Clear()
 	b.out.Write(b.buf)
 	b.lines = bytes.Count(b.buf, []byte("\n"))
+	if b.width > 0 {
+		for _, line := range bytes.Split(b.buf, []byte("\n")) {
+			if len(line) > b.width {
+				b.lines += (len(line) - 1) / b.width
+			}
+		}
+	}
 	b.buf = b.buf[:0]
 	b.atStart = false
 }
