@@ -149,6 +149,42 @@ func TestCopy(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to copy: %v", err)
 	}
+	rSrc, err = ref.New("ocidir://./testdata/testrepo:v2")
+	if err != nil {
+		t.Errorf("failed to parse src ref: %v", err)
+	}
+	rTgt, err = ref.New("ocidir://" + tempDir + ":v2")
+	if err != nil {
+		t.Errorf("failed to parse tgt ref: %v", err)
+	}
+	err = rc.ImageCopy(ctx, rSrc, rTgt, ImageWithReferrers(), ImageWithDigestTags())
+	if err != nil {
+		t.Errorf("failed to copy: %v", err)
+	}
+	rSrc, err = ref.New("ocidir://./testdata/testrepo:v3")
+	if err != nil {
+		t.Errorf("failed to parse src ref: %v", err)
+	}
+	rTgt, err = ref.New("ocidir://" + tempDir + ":v3")
+	if err != nil {
+		t.Errorf("failed to parse tgt ref: %v", err)
+	}
+	err = rc.ImageCopy(ctx, rSrc, rTgt)
+	if err != nil {
+		t.Errorf("failed to copy: %v", err)
+	}
+	rSrc, err = ref.New("ocidir://./testdata/testrepo:v3")
+	if err != nil {
+		t.Errorf("failed to parse src ref: %v", err)
+	}
+	rTgt, err = ref.New("ocidir://" + tempDir + ":v3")
+	if err != nil {
+		t.Errorf("failed to parse tgt ref: %v", err)
+	}
+	err = rc.ImageCopy(ctx, rSrc, rTgt, ImageWithReferrers(), ImageWithDigestTags(), ImageWithFastCheck())
+	if err != nil {
+		t.Errorf("failed to copy: %v", err)
+	}
 }
 
 func TestExportImport(t *testing.T) {

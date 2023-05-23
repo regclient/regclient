@@ -150,6 +150,7 @@ var imageOpts struct {
 	checkSkipConfig bool
 	create          string
 	exportRef       string
+	fastCheck       bool
 	forceRecursive  bool
 	format          string
 	formatFile      string
@@ -172,6 +173,7 @@ func init() {
 	imageCheckBaseCmd.Flags().BoolVarP(&imageOpts.checkSkipConfig, "no-config", "", false, "Skip check of config history")
 	imageCheckBaseCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 
+	imageCopyCmd.Flags().BoolVarP(&imageOpts.fastCheck, "fast", "", false, "Fast check, skip referrers and digest tag checks when image exists, overrides force-recursive")
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.forceRecursive, "force-recursive", "", false, "Force recursive copy of image, repairs missing nested blobs and manifests")
 	imageCopyCmd.Flags().StringVarP(&imageOpts.format, "format", "", "", "Format output with go template syntax")
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.includeExternal, "include-external", "", false, "Include external layers")
@@ -619,6 +621,9 @@ func runImageCopy(cmd *cobra.Command, args []string) error {
 		"digest-tags": imageOpts.digestTags,
 	}).Debug("Image copy")
 	opts := []regclient.ImageOpts{}
+	if imageOpts.fastCheck {
+		opts = append(opts, regclient.ImageWithFastCheck())
+	}
 	if imageOpts.forceRecursive {
 		opts = append(opts, regclient.ImageWithForceRecursive())
 	}

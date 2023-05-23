@@ -109,6 +109,32 @@ func TestRegsyncOnce(t *testing.T) {
 			expErr: nil,
 		},
 		{
+			name: "Fast Check",
+			sync: ConfigSync{
+				Source:     "ocidir://testrepo:v2",
+				Target:     "ocidir://test1:latest",
+				Type:       "image",
+				FastCheck:  &boolTrue,
+				Referrers:  &boolTrue,
+				DigestTags: &boolTrue,
+			},
+			exists: []string{"ocidir://test1:latest"},
+			desired: []string{
+				"test1/index.json",
+				"test1/oci-layout",
+				"test2/blobs/sha256/adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8", // v2
+			},
+			undesired: []string{
+				"test1/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40", // v1
+				"test1/blobs/sha256/5283ed7b662424a7f9edc47f8e0e266d47f8ce997da51949d454b30eaafb5251", // amd64
+				"test1/blobs/sha256/3f4eb4d2ca4fe85d3da97aab1a56422cb4a05334274a2e275cf848db90a41b18",
+				"test1/blobs/sha256/a7f0466d930515f984dc334bf786a569973119a3afaa2d4290f2268c62a19b12", // arm64
+				"test1/blobs/sha256/798aa97e1710cb04671cad647d0b87159eed85cb6db4596806421ef190108c68", // v2 referrer sbom
+				"test1/blobs/sha256/557451ef26a12318261a561dd4df05dad756dc3dec7ee9d574f4f3f16ed1060f", // v2 referrer sig
+			},
+			expErr: nil,
+		},
+		{
 			name: "RepoTagFilterAllow",
 			sync: ConfigSync{
 				Source: "ocidir://testrepo",
@@ -178,6 +204,7 @@ func TestRegsyncOnce(t *testing.T) {
 				Source:          "ocidir://testrepo:v2",
 				Target:          "ocidir://test-referrer:v2",
 				Type:            "image",
+				FastCheck:       &boolTrue,
 				Referrers:       &boolTrue,
 				ReferrerFilters: []ConfigReferrerFilter{},
 			},

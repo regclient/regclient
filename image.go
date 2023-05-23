@@ -78,6 +78,7 @@ type imageOpt struct {
 	checkSkipConfig bool
 	child           bool
 	exportRef       ref.Ref
+	fastCheck       bool
 	forceRecursive  bool
 	includeExternal bool
 	digestTags      bool
@@ -137,6 +138,13 @@ func ImageWithChild() ImageOpts {
 func ImageWithExportRef(r ref.Ref) ImageOpts {
 	return func(opts *imageOpt) {
 		opts.exportRef = r
+	}
+}
+
+// ImageWithFastCheck skips check for referrers when manifest has already been copied.
+func ImageWithFastCheck() ImageOpts {
+	return func(opts *imageOpt) {
+		opts.fastCheck = true
 	}
 }
 
@@ -429,26 +437,6 @@ func (rc *RegClient) ImageCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.R
 		tgtGCLocker.GCLock(refTgt)
 		defer tgtGCLocker.GCUnlock(refTgt)
 	}
-	// preload tag listing for digest tag copy
-	if opt.digestTags {
-		tl, err := rc.TagList(ctx, refSrc)
-		if err != nil {
-			rc.log.WithFields(logrus.Fields{
-				"source": refSrc.Reference,
-				"err":    err,
-			}).Warn("Failed to list tags for digest-tag copy")
-			return err
-		}
-		tags, err := tl.GetTags()
-		if err != nil {
-			rc.log.WithFields(logrus.Fields{
-				"source": refSrc.Reference,
-				"err":    err,
-			}).Warn("Failed to list tags for digest-tag copy")
-			return err
-		}
-		opt.tagList = tags
-	}
 	opt.manifWG.Add(1)
 	return rc.imageCopyOpt(ctx, refSrc, refTgt, types.Descriptor{}, opt.child, &opt)
 }
@@ -481,7 +469,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 	}
 	// check if copy may be skipped
 	mTgt, err = rc.ManifestHead(ctx, refTgt, WithManifestRequireDigest())
-	if err == nil && !opt.forceRecursive && opt.referrerConfs == nil && !opt.digestTags {
+	if err == nil && (opt.fastCheck || (!opt.forceRecursive && opt.referrerConfs == nil && !opt.digestTags)) {
 		if sDig == "" {
 			mSrc, err = rc.ManifestHead(ctx, refSrc, WithManifestRequireDigest())
 			if err != nil {
@@ -658,6 +646,33 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 
 	// lookup digest tags to include artifacts with image
 	if opt.digestTags {
+		// load tag listing for digest tag copy
+		opt.mu.Lock()
+		if opt.tagList == nil {
+			tl, err := rc.TagList(ctx, refSrc)
+			if err != nil {
+				opt.mu.Unlock()
+				rc.log.WithFields(logrus.Fields{
+					"source": refSrc.Reference,
+					"err":    err,
+				}).Warn("Failed to list tags for digest-tag copy")
+				return err
+			}
+			tags, err := tl.GetTags()
+			if err != nil {
+				opt.mu.Unlock()
+				rc.log.WithFields(logrus.Fields{
+					"source": refSrc.Reference,
+					"err":    err,
+				}).Warn("Failed to list tags for digest-tag copy")
+				return err
+			}
+			if tags == nil {
+				tags = []string{}
+			}
+			opt.tagList = tags
+		}
+		opt.mu.Unlock()
 		prefix := fmt.Sprintf("%s-%s", sDig.Algorithm(), sDig.Encoded())
 		for _, tag := range opt.tagList {
 			if strings.HasPrefix(tag, prefix) {

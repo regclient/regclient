@@ -616,7 +616,8 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 	if err == nil && manifest.GetDigest(mSrc).String() == manifest.GetDigest(mTgt).String() {
 		tgtMatches = true
 	}
-	if tgtMatches && (s.ForceRecursive == nil || !*s.ForceRecursive) {
+	if tgtMatches && ((s.FastCheck != nil && *s.FastCheck) ||
+		((s.ForceRecursive == nil || !*s.ForceRecursive) && s.Referrers != nil && *s.Referrers && s.DigestTags != nil && *s.DigestTags)) {
 		log.WithFields(logrus.Fields{
 			"source": src.CommonName(),
 			"target": tgt.CommonName(),
@@ -813,6 +814,9 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 				opts = append(opts, regclient.ImageWithReferrers(rOpts...))
 			}
 		}
+	}
+	if s.FastCheck != nil && *s.FastCheck {
+		opts = append(opts, regclient.ImageWithFastCheck())
 	}
 	if s.ForceRecursive != nil && *s.ForceRecursive {
 		opts = append(opts, regclient.ImageWithForceRecursive())
