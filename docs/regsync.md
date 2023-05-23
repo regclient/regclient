@@ -183,6 +183,7 @@ sync:
   - `referrerFilters`: (array) list of filters for referrers to include, by default all referrers are included.
     - `artifactType`: (string) artifact types to include.
     - `annotations`: (map) mapping of annotations for referrers.
+  - `fastCopy`: (bool) skip referrers and digest tag checks when image exists, overrides `forceRecursive`.
   - `forceRecursive`: (bool) forces a copy of all manifests and blobs even when the target parent manifest already exists.
   - `mediaTypes`:
     Array of media types to include.
@@ -214,7 +215,7 @@ sync:
     By default all platforms are copied along with the original upstream manifest list.
     Note that looking up the platform from a multi-platform image counts against the Docker Hub rate limit, and that rate limits are not checked prior to resolving the platform.
     When run with "server", the platform is only resolved once for each multi-platform digest seen.
-  - `backup`, `interval`, `schedule`, `ratelimit`, `digestTags`, `referrers`, `referrerFilters`, `forceRecursive`, and `mediaTypes`:
+  - `backup`, `interval`, `schedule`, `ratelimit`, `digestTags`, `referrers`, `referrerFilters`, `fastCopy`, `forceRecursive`, and `mediaTypes`:
     See description under `defaults`.
 
 - `x-*`:
