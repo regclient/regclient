@@ -23,6 +23,9 @@ files:
       - makefile-syft-version
       - makefile-syft-version2
       - makefile-syft-digest
+  "go.mod":
+    scans:
+      - go-mod-golang-release
 
 scans:
   docker-arg-alpine:
@@ -102,6 +105,11 @@ scans:
     args:
       regexp: '^\s*cosign-release: "(?P<Version>v[0-9\.]+)"\s*$'
       repo: "github.com/sigstore/cosign"
+  go-mod-golang-release:
+    type: "regexp"
+    source: "registry-golang-latest"
+    args:
+      regexp: '^go (?P<Version>[0-9\.]+)\s*$'
   makefile-markdown-lint:
     type: "regexp"
     source: "registry-tag-arg-semver"
