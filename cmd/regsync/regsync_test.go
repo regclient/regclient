@@ -103,8 +103,8 @@ func TestRegsyncOnce(t *testing.T) {
 				"test1/blobs/sha256/5283ed7b662424a7f9edc47f8e0e266d47f8ce997da51949d454b30eaafb5251", // amd64
 				"test1/blobs/sha256/3f4eb4d2ca4fe85d3da97aab1a56422cb4a05334274a2e275cf848db90a41b18",
 				"test1/blobs/sha256/a7f0466d930515f984dc334bf786a569973119a3afaa2d4290f2268c62a19b12", // arm64
-				"test1/blobs/sha256/798aa97e1710cb04671cad647d0b87159eed85cb6db4596806421ef190108c68", // v2 referrer sbom
-				"test1/blobs/sha256/557451ef26a12318261a561dd4df05dad756dc3dec7ee9d574f4f3f16ed1060f", // v2 referrer sig
+				"test1/blobs/sha256/5bccaa0925b7668cdbdc2b81919ff20e0afc11929f893cc26eae0f944c149230", // v2 referrer sbom
+				"test1/blobs/sha256/c2fb158b630bddcf2acacbf328145acd36a21b85ea40957424867fa33e5d62a9", // v2 referrer sig
 			},
 			expErr: nil,
 		},
@@ -129,8 +129,8 @@ func TestRegsyncOnce(t *testing.T) {
 				"test1/blobs/sha256/5283ed7b662424a7f9edc47f8e0e266d47f8ce997da51949d454b30eaafb5251", // amd64
 				"test1/blobs/sha256/3f4eb4d2ca4fe85d3da97aab1a56422cb4a05334274a2e275cf848db90a41b18",
 				"test1/blobs/sha256/a7f0466d930515f984dc334bf786a569973119a3afaa2d4290f2268c62a19b12", // arm64
-				"test1/blobs/sha256/798aa97e1710cb04671cad647d0b87159eed85cb6db4596806421ef190108c68", // v2 referrer sbom
-				"test1/blobs/sha256/557451ef26a12318261a561dd4df05dad756dc3dec7ee9d574f4f3f16ed1060f", // v2 referrer sig
+				"test1/blobs/sha256/5bccaa0925b7668cdbdc2b81919ff20e0afc11929f893cc26eae0f944c149230", // v2 referrer sbom
+				"test1/blobs/sha256/c2fb158b630bddcf2acacbf328145acd36a21b85ea40957424867fa33e5d62a9", // v2 referrer sig
 			},
 			expErr: nil,
 		},
@@ -214,8 +214,8 @@ func TestRegsyncOnce(t *testing.T) {
 				"test-referrer/oci-layout",
 				"test-referrer/blobs/sha256/adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8", // v2
 				"test-referrer/blobs/sha256/ef05efc8cfd478ac3140fce1297bd6b72dc5f5f1df31bfce690aa903a2c20310", // v2 amd64
-				"test-referrer/blobs/sha256/798aa97e1710cb04671cad647d0b87159eed85cb6db4596806421ef190108c68", // v2 sbom
-				"test-referrer/blobs/sha256/557451ef26a12318261a561dd4df05dad756dc3dec7ee9d574f4f3f16ed1060f", // v2 sig
+				"test-referrer/blobs/sha256/5bccaa0925b7668cdbdc2b81919ff20e0afc11929f893cc26eae0f944c149230", // v2 sbom
+				"test-referrer/blobs/sha256/c2fb158b630bddcf2acacbf328145acd36a21b85ea40957424867fa33e5d62a9", // v2 sig
 			},
 			undesired: []string{
 				"test-referrer/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40", // v1
@@ -242,11 +242,11 @@ func TestRegsyncOnce(t *testing.T) {
 				"test-referrer2/oci-layout",
 				"test-referrer2/blobs/sha256/adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8", // v2
 				"test-referrer2/blobs/sha256/ef05efc8cfd478ac3140fce1297bd6b72dc5f5f1df31bfce690aa903a2c20310", // v2 amd64
-				"test-referrer2/blobs/sha256/798aa97e1710cb04671cad647d0b87159eed85cb6db4596806421ef190108c68", // v2 sbom
+				"test-referrer2/blobs/sha256/5bccaa0925b7668cdbdc2b81919ff20e0afc11929f893cc26eae0f944c149230", // v2 sbom
 			},
 			undesired: []string{
 				"test-referrer2/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40", // v1
-				"test-referrer2/blobs/sha256/557451ef26a12318261a561dd4df05dad756dc3dec7ee9d574f4f3f16ed1060f", // v2 sig
+				"test-referrer2/blobs/sha256/c2fb158b630bddcf2acacbf328145acd36a21b85ea40957424867fa33e5d62a9", // v2 sig
 				"test-referrer2/blobs/sha256/2e024d7fe67394cef7f0df9c303f288c7420d1fb27f7657398e897b7eb2ee1d8", // v3 + meta digest tag
 			},
 			expErr: nil,

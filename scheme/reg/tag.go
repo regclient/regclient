@@ -92,13 +92,13 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 			{
 				Created:   &now,
 				CreatedBy: "# regclient",
-				Comment:   "scratch blob",
+				Comment:   "filler blob",
 			},
 		},
 		RootFS: v1.RootFS{
 			Type: "layers",
 			DiffIDs: []digest.Digest{
-				types.ScratchDigest,
+				types.FillerDigest,
 			},
 		},
 	}
@@ -128,8 +128,8 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 			Layers: []types.Descriptor{
 				{
 					MediaType: types.MediaTypeOCI1Layer,
-					Size:      int64(len(types.ScratchData)),
-					Digest:    types.ScratchDigest,
+					Size:      int64(len(types.FillerData)),
+					Digest:    types.FillerDigest,
 				},
 			},
 		}))
@@ -147,8 +147,8 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 			Layers: []types.Descriptor{
 				{
 					MediaType: types.MediaTypeDocker2LayerGzip,
-					Size:      int64(len(types.ScratchData)),
-					Digest:    types.ScratchDigest,
+					Size:      int64(len(types.FillerData)),
+					Digest:    types.FillerDigest,
 				},
 			},
 		}))
@@ -160,8 +160,8 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 		"ref": r.Reference,
 	}).Debug("Sending dummy manifest to replace tag")
 
-	// push scratch layer
-	_, err = reg.BlobPut(ctx, r, types.Descriptor{Digest: types.ScratchDigest, Size: int64(len(types.ScratchData))}, bytes.NewReader(types.ScratchData))
+	// push filler layer
+	_, err = reg.BlobPut(ctx, r, types.Descriptor{Digest: types.FillerDigest, Size: int64(len(types.FillerData))}, bytes.NewReader(types.FillerData))
 	if err != nil {
 		return err
 	}

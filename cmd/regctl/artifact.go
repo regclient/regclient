@@ -496,7 +496,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	// validate/set artifactType and config.mediaType
 	if hasConfig && artifactOpts.artifactConfigMT == "" {
 		if artifactOpts.artifactConfig == "" {
-			artifactOpts.artifactConfigMT = types.MediaTypeOCI1Scratch
+			artifactOpts.artifactConfigMT = types.MediaTypeOCI1Filler
 			if artifactOpts.artifactType == "" {
 				log.Warnf("using default value for artifact-type is not recommended")
 				artifactOpts.artifactType = defaultMTArtifact
@@ -578,8 +578,8 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 		var configBytes []byte
 		var configDigest digest.Digest
 		if artifactOpts.artifactConfig == "" {
-			configBytes = types.ScratchData
-			configDigest = types.ScratchDigest
+			configBytes = types.FillerData
+			configDigest = types.FillerDigest
 		} else {
 			var err error
 			configBytes, err = os.ReadFile(artifactOpts.artifactConfig)
