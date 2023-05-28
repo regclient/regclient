@@ -369,7 +369,7 @@ func TestRegsyncOnce(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// run each test
 			syncSetDefaults(&tt.sync, conf.Defaults)
-			err = tt.sync.process(ctx, "once")
+			err = tt.sync.process(ctx, actionCopy)
 			// validate err
 			if tt.expErr != nil {
 				if err == nil {
@@ -434,7 +434,7 @@ func TestProcess(t *testing.T) {
 		name         string
 		src          string
 		tgt          string
-		action       string
+		action       actionType
 		expErr       error
 		checkTgtEq   bool
 		checkTgtDiff bool
@@ -447,21 +447,21 @@ func TestProcess(t *testing.T) {
 			name:         "check v1",
 			src:          "v1",
 			tgt:          "tgt",
-			action:       "check",
+			action:       actionCheck,
 			checkTgtDiff: true,
 		},
 		{
 			name:       "copy v1",
 			src:        "v1",
 			tgt:        "tgt",
-			action:     "copy",
+			action:     actionCopy,
 			checkTgtEq: true,
 		},
 		{
 			name:         "missing only on v2",
 			src:          "v2",
 			tgt:          "tgt",
-			action:       "missing",
+			action:       actionMissing,
 			checkTgtDiff: true,
 		},
 	}

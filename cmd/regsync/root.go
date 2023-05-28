@@ -38,6 +38,14 @@ More details at https://github.com/regclient/regclient`
 	UserAgent = "regclient/regsync"
 )
 
+type actionType int
+
+const (
+	actionCheck actionType = iota
+	actionCopy
+	actionMissing
+)
+
 var rootOpts struct {
 	confFile  string
 	verbosity string
@@ -177,7 +185,7 @@ func runOnce(cmd *cobra.Command, args []string) error {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				err := s.process(ctx, "copy")
+				err := s.process(ctx, actionCopy)
 				if err != nil {
 					if mainErr == nil {
 						mainErr = err
@@ -186,7 +194,7 @@ func runOnce(cmd *cobra.Command, args []string) error {
 				}
 			}()
 		} else {
-			err := s.process(ctx, "copy")
+			err := s.process(ctx, actionCopy)
 			if err != nil {
 				if mainErr == nil {
 					mainErr = err
@@ -231,7 +239,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 				}).Debug("Running task")
 				wg.Add(1)
 				defer wg.Done()
-				err := s.process(ctx, "copy")
+				err := s.process(ctx, actionCopy)
 				if mainErr == nil {
 					mainErr = err
 				}
@@ -241,7 +249,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					err := s.process(ctx, "missing")
+					err := s.process(ctx, actionMissing)
 					if err != nil {
 						if mainErr == nil {
 							mainErr = err
@@ -250,7 +258,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 					}
 				}()
 			} else {
-				err := s.process(ctx, "missing")
+				err := s.process(ctx, actionMissing)
 				if err != nil {
 					if mainErr == nil {
 						mainErr = err
@@ -290,7 +298,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	var mainErr error
 	ctx := cmd.Context()
 	for _, s := range conf.Sync {
-		err := s.process(ctx, "check")
+		err := s.process(ctx, actionCheck)
 		if err != nil {
 			if mainErr == nil {
 				mainErr = err
@@ -366,7 +374,7 @@ func loadConf() error {
 }
 
 // process a sync step
-func (s ConfigSync) process(ctx context.Context, action string) error {
+func (s ConfigSync) process(ctx context.Context, action actionType) error {
 	var retErr error
 	switch s.Type {
 	case "registry":
@@ -598,7 +606,7 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 }
 
 // process a sync step
-func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action string) error {
+func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action actionType) error {
 	mSrc, err := rc.ManifestHead(ctx, src, regclient.WithManifestRequireDigest())
 	if err != nil && errors.Is(err, types.ErrUnsupportedAPI) {
 		mSrc, err = rc.ManifestGet(ctx, src)
@@ -624,7 +632,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 		}).Debug("Image matches")
 		return nil
 	}
-	if tgtExists && action == "missing" {
+	if tgtExists && action == actionMissing {
 		log.WithFields(logrus.Fields{
 			"source": src.CommonName(),
 			"target": tgt.CommonName(),
@@ -680,7 +688,7 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 			"target": tgt.CommonName(),
 		}).Info("Image sync needed")
 	}
-	if action == "check" {
+	if action == actionCheck {
 		return nil
 	}
 
