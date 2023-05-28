@@ -4,13 +4,17 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"testing"
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/internal/throttle"
+	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -39,6 +43,61 @@ func TestProcess(t *testing.T) {
 		t.Errorf("failed parsing config: %v", err)
 		return
 	}
+	pAMD, err := platform.Parse("linux/amd64")
+	if err != nil {
+		t.Errorf("failed to parse amd platform: %v", err)
+	}
+	pARM, err := platform.Parse("linux/arm64")
+	if err != nil {
+		t.Errorf("failed to parse arm platform: %v", err)
+	}
+	r1, err := ref.New("ocidir://testrepo:v1")
+	if err != nil {
+		t.Errorf("failed to parse v1 reference: %v", err)
+	}
+	r2, err := ref.New("ocidir://testrepo:v2")
+	if err != nil {
+		t.Errorf("failed to parse v2 reference: %v", err)
+	}
+	r3, err := ref.New("ocidir://testrepo:v3")
+	if err != nil {
+		t.Errorf("failed to parse v3 reference: %v", err)
+	}
+	m1, err := rc.ManifestGet(ctx, r1)
+	if err != nil {
+		t.Errorf("failed to get manifest v1: %v", err)
+	}
+	d1 := m1.GetDescriptor().Digest
+	desc1AMD, err := manifest.GetPlatformDesc(m1, &pAMD)
+	if err != nil {
+		t.Errorf("failed to get platform ")
+	}
+	d1AMD := desc1AMD.Digest
+	desc1ARM, err := manifest.GetPlatformDesc(m1, &pARM)
+	if err != nil {
+		t.Errorf("failed to get platform ")
+	}
+	d1ARM := desc1ARM.Digest
+	m2, err := rc.ManifestGet(ctx, r2)
+	if err != nil {
+		t.Errorf("failed to get manifest v2: %v", err)
+	}
+	d2 := m2.GetDescriptor().Digest
+	desc2SBOM, err := rc.ReferrerList(ctx, r2, scheme.WithReferrerAT("application/example.sbom"))
+	if err != nil || len(desc2SBOM.Descriptors) == 0 {
+		t.Errorf("failed to get SBOM for v2: %v", err)
+	}
+	d2SBOM := desc2SBOM.Descriptors[0].Digest
+	desc2Sig, err := rc.ReferrerList(ctx, r2, scheme.WithReferrerAT("application/example.signature"))
+	if err != nil || len(desc2Sig.Descriptors) == 0 {
+		t.Errorf("failed to get signature for v2: %v", err)
+	}
+	d2Sig := desc2Sig.Descriptors[0].Digest
+	m3, err := rc.ManifestGet(ctx, r3)
+	if err != nil {
+		t.Errorf("failed to get manifest v3: %v", err)
+	}
+	d3 := m3.GetDescriptor().Digest
 
 	// run process on each entry
 	tt := []struct {
@@ -62,11 +121,9 @@ func TestProcess(t *testing.T) {
 			desired: []string{
 				"test1/index.json",
 				"test1/oci-layout",
-				"test1/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40", // v1
-				"test1/blobs/sha256/5283ed7b662424a7f9edc47f8e0e266d47f8ce997da51949d454b30eaafb5251", // amd64
-				"test1/blobs/sha256/3f4eb4d2ca4fe85d3da97aab1a56422cb4a05334274a2e275cf848db90a41b18",
-				"test1/blobs/sha256/d4ebbdee222ac2d37f728e9fb4f265ff4b31b9ef5de7a701d093d970f8141f0f",
-				"test1/blobs/sha256/a7f0466d930515f984dc334bf786a569973119a3afaa2d4290f2268c62a19b12", // arm64
+				"test1/blobs/sha256/" + d1.Hex(),    // v1
+				"test1/blobs/sha256/" + d1AMD.Hex(), // amd64
+				"test1/blobs/sha256/" + d1ARM.Hex(), // arm64
 			},
 			expErr: nil,
 		},
@@ -82,9 +139,9 @@ func TestProcess(t *testing.T) {
 			desired: []string{
 				"test2/index.json",
 				"test2/oci-layout",
-				"test2/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40", // v1
-				"test2/blobs/sha256/adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8", // v2
-				"test2/blobs/sha256/2e024d7fe67394cef7f0df9c303f288c7420d1fb27f7657398e897b7eb2ee1d8", // v3
+				"test2/blobs/sha256/" + d1.Hex(), // v1
+				"test2/blobs/sha256/" + d2.Hex(), // v2
+				"test2/blobs/sha256/" + d3.Hex(), // v3
 			},
 			expErr: nil,
 		},
@@ -100,15 +157,14 @@ func TestProcess(t *testing.T) {
 			desired: []string{
 				"test1/index.json",
 				"test1/oci-layout",
-				"test2/blobs/sha256/adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8", // v2
+				"test2/blobs/sha256/" + d2.Hex(), // v2
 			},
 			undesired: []string{
-				"test1/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40", // v1
-				"test1/blobs/sha256/5283ed7b662424a7f9edc47f8e0e266d47f8ce997da51949d454b30eaafb5251", // amd64
-				"test1/blobs/sha256/3f4eb4d2ca4fe85d3da97aab1a56422cb4a05334274a2e275cf848db90a41b18",
-				"test1/blobs/sha256/a7f0466d930515f984dc334bf786a569973119a3afaa2d4290f2268c62a19b12", // arm64
-				"test1/blobs/sha256/798aa97e1710cb04671cad647d0b87159eed85cb6db4596806421ef190108c68", // v2 referrer sbom
-				"test1/blobs/sha256/557451ef26a12318261a561dd4df05dad756dc3dec7ee9d574f4f3f16ed1060f", // v2 referrer sig
+				"test1/blobs/sha256/" + d1.Hex(),     // v1
+				"test1/blobs/sha256/" + d1AMD.Hex(),  // amd64
+				"test1/blobs/sha256/" + d1ARM.Hex(),  // arm64
+				"test1/blobs/sha256/" + d2SBOM.Hex(), // v2 referrer sbom
+				"test1/blobs/sha256/" + d2Sig.Hex(),  // v2 referrer sig
 			},
 			expErr: nil,
 		},
@@ -179,15 +235,14 @@ func TestProcess(t *testing.T) {
 			desired: []string{
 				"test1/index.json",
 				"test1/oci-layout",
-				"test2/blobs/sha256/adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8", // v2
+				"test2/blobs/sha256/" + d2.Hex(), // v2
 			},
 			undesired: []string{
-				"test1/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40", // v1
-				"test1/blobs/sha256/5283ed7b662424a7f9edc47f8e0e266d47f8ce997da51949d454b30eaafb5251", // amd64
-				"test1/blobs/sha256/3f4eb4d2ca4fe85d3da97aab1a56422cb4a05334274a2e275cf848db90a41b18",
-				"test1/blobs/sha256/a7f0466d930515f984dc334bf786a569973119a3afaa2d4290f2268c62a19b12", // arm64
-				"test1/blobs/sha256/798aa97e1710cb04671cad647d0b87159eed85cb6db4596806421ef190108c68", // v2 referrer sbom
-				"test1/blobs/sha256/557451ef26a12318261a561dd4df05dad756dc3dec7ee9d574f4f3f16ed1060f", // v2 referrer sig
+				"test1/blobs/sha256/" + d1.Hex(),     // v1
+				"test1/blobs/sha256/" + d1AMD.Hex(),  // amd64
+				"test1/blobs/sha256/" + d1ARM.Hex(),  // arm64
+				"test1/blobs/sha256/" + d2SBOM.Hex(), // v2 referrer sbom
+				"test1/blobs/sha256/" + d2Sig.Hex(),  // v2 referrer sig
 			},
 			expErr: nil,
 		},
@@ -206,11 +261,11 @@ func TestProcess(t *testing.T) {
 			desired: []string{
 				"test3/index.json",
 				"test3/oci-layout",
-				"test3/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40", // v1
-				"test3/blobs/sha256/2e024d7fe67394cef7f0df9c303f288c7420d1fb27f7657398e897b7eb2ee1d8", // v3
+				"test3/blobs/sha256/" + d1.Hex(), // v1
+				"test3/blobs/sha256/" + d3.Hex(), // v3
 			},
 			undesired: []string{
-				"test3/blobs/sha256/adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8", // v2
+				"test3/blobs/sha256/" + d2.Hex(), // v2
 			},
 			expErr: nil,
 		},
@@ -229,11 +284,11 @@ func TestProcess(t *testing.T) {
 			desired: []string{
 				"test4/index.json",
 				"test4/oci-layout",
-				"test4/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40", // v1
-				"test4/blobs/sha256/2e024d7fe67394cef7f0df9c303f288c7420d1fb27f7657398e897b7eb2ee1d8", // v3
+				"test4/blobs/sha256/" + d1.Hex(), // v1
+				"test4/blobs/sha256/" + d3.Hex(), // v3
 			},
 			undesired: []string{
-				"test4/blobs/sha256/adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8", // v2
+				"test4/blobs/sha256/" + d2.Hex(), // v2
 			},
 			expErr: nil,
 		},
@@ -320,15 +375,15 @@ func TestProcess(t *testing.T) {
 				DigestTags: &boolTrue,
 			},
 			action: actionCopy,
-			exists: []string{"ocidir://test5:v1", "ocidir://test5:sha256-4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40.2e024d7fe67394ce.meta"},
+			exists: []string{"ocidir://test5:v1", fmt.Sprintf("ocidir://test5:sha256-%s.%.16s.meta", d1.Hex(), d3.Hex())},
 			desired: []string{
 				"test5/index.json",
 				"test5/oci-layout",
-				"test5/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40", // v1
-				"test5/blobs/sha256/2e024d7fe67394cef7f0df9c303f288c7420d1fb27f7657398e897b7eb2ee1d8", // v3 + meta digest tag
+				"test5/blobs/sha256/" + d1.Hex(), // v1
+				"test5/blobs/sha256/" + d3.Hex(), // v3 + meta digest tag
 			},
 			undesired: []string{
-				"test5/blobs/sha256/adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8", // v2
+				"test5/blobs/sha256/" + d2.Hex(), // v2
 			},
 			expErr: nil,
 		},
@@ -343,18 +398,18 @@ func TestProcess(t *testing.T) {
 				ReferrerFilters: []ConfigReferrerFilter{},
 			},
 			action: actionCopy,
-			exists: []string{"ocidir://test-referrer:v2", "ocidir://test-referrer:sha256-adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8"},
+			exists: []string{"ocidir://test-referrer:v2", "ocidir://test-referrer:sha256-" + d2.Hex()},
 			desired: []string{
 				"test-referrer/index.json",
 				"test-referrer/oci-layout",
-				"test-referrer/blobs/sha256/adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8", // v2
+				"test-referrer/blobs/sha256/" + d2.Hex(), // v2
 				"test-referrer/blobs/sha256/ef05efc8cfd478ac3140fce1297bd6b72dc5f5f1df31bfce690aa903a2c20310", // v2 amd64
-				"test-referrer/blobs/sha256/798aa97e1710cb04671cad647d0b87159eed85cb6db4596806421ef190108c68", // v2 sbom
-				"test-referrer/blobs/sha256/557451ef26a12318261a561dd4df05dad756dc3dec7ee9d574f4f3f16ed1060f", // v2 sig
+				"test-referrer/blobs/sha256/" + d2SBOM.Hex(),                                                  // v2 sbom
+				"test-referrer/blobs/sha256/" + d2Sig.Hex(),                                                   // v2 sig
 			},
 			undesired: []string{
-				"test-referrer/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40", // v1
-				"test-referrer/blobs/sha256/2e024d7fe67394cef7f0df9c303f288c7420d1fb27f7657398e897b7eb2ee1d8", // v3 + meta digest tag
+				"test-referrer/blobs/sha256/" + d1.Hex(), // v1
+				"test-referrer/blobs/sha256/" + d3.Hex(), // v3 + meta digest tag
 			},
 			expErr: nil,
 		},
@@ -372,18 +427,18 @@ func TestProcess(t *testing.T) {
 				},
 			},
 			action: actionCopy,
-			exists: []string{"ocidir://test-referrer2:v2", "ocidir://test-referrer2:sha256-adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8"},
+			exists: []string{"ocidir://test-referrer2:v2", "ocidir://test-referrer2:sha256-" + d2.Hex()},
 			desired: []string{
 				"test-referrer2/index.json",
 				"test-referrer2/oci-layout",
-				"test-referrer2/blobs/sha256/adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8", // v2
+				"test-referrer2/blobs/sha256/" + d2.Hex(), // v2
 				"test-referrer2/blobs/sha256/ef05efc8cfd478ac3140fce1297bd6b72dc5f5f1df31bfce690aa903a2c20310", // v2 amd64
-				"test-referrer2/blobs/sha256/798aa97e1710cb04671cad647d0b87159eed85cb6db4596806421ef190108c68", // v2 sbom
+				"test-referrer2/blobs/sha256/" + d2SBOM.Hex(),                                                  // v2 sbom
 			},
 			undesired: []string{
-				"test-referrer2/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40", // v1
-				"test-referrer2/blobs/sha256/557451ef26a12318261a561dd4df05dad756dc3dec7ee9d574f4f3f16ed1060f", // v2 sig
-				"test-referrer2/blobs/sha256/2e024d7fe67394cef7f0df9c303f288c7420d1fb27f7657398e897b7eb2ee1d8", // v3 + meta digest tag
+				"test-referrer2/blobs/sha256/" + d1.Hex(),    // v1
+				"test-referrer2/blobs/sha256/" + d2Sig.Hex(), // v2 sig
+				"test-referrer2/blobs/sha256/" + d3.Hex(),    // v3 + meta digest tag
 			},
 			expErr: nil,
 		},
@@ -400,14 +455,13 @@ func TestProcess(t *testing.T) {
 			desired: []string{
 				"test1/index.json",
 				"test1/oci-layout",
-				"test2/blobs/sha256/adab55c36c56f4054a64972a431e38e407d0060ce90888a2470d67598042f7c8", // v2
-				"test2/blobs/sha256/2e024d7fe67394cef7f0df9c303f288c7420d1fb27f7657398e897b7eb2ee1d8", // v3
+				"test2/blobs/sha256/" + d2.Hex(), // v2
+				"test2/blobs/sha256/" + d3.Hex(), // v3
 			},
 			undesired: []string{
-				"test1/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40", // v1
-				"test1/blobs/sha256/5283ed7b662424a7f9edc47f8e0e266d47f8ce997da51949d454b30eaafb5251", // amd64
-				"test1/blobs/sha256/3f4eb4d2ca4fe85d3da97aab1a56422cb4a05334274a2e275cf848db90a41b18",
-				"test1/blobs/sha256/a7f0466d930515f984dc334bf786a569973119a3afaa2d4290f2268c62a19b12", // arm64
+				"test1/blobs/sha256/" + d1.Hex(),    // v1
+				"test1/blobs/sha256/" + d1AMD.Hex(), // amd64
+				"test1/blobs/sha256/" + d1ARM.Hex(), // arm64
 			},
 			expErr: nil,
 		},
@@ -424,11 +478,11 @@ func TestProcess(t *testing.T) {
 			desired: []string{
 				"test1/index.json",
 				"test1/oci-layout",
-				"test1/blobs/sha256/4a88e72dd0e4245e6ecfbc6faae751eeeff82861f9ef39634bea07d77dbb1f40",   // v1
-				"backups/blobs/sha256/2e024d7fe67394cef7f0df9c303f288c7420d1fb27f7657398e897b7eb2ee1d8", // v3
+				"test1/blobs/sha256/" + d1.Hex(),   // v1
+				"backups/blobs/sha256/" + d3.Hex(), // v3
 			},
 			undesired: []string{
-				"test1/blobs/sha256/2e024d7fe67394cef7f0df9c303f288c7420d1fb27f7657398e897b7eb2ee1d8", // v3
+				"test1/blobs/sha256/" + d3.Hex(), // v3
 			},
 			expErr: nil,
 		},
