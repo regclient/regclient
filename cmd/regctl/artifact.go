@@ -799,6 +799,9 @@ func treeAddResult(ctx context.Context, rc *regclient.RegClient, r ref.Ref, seen
 		return nil, err
 	}
 	tr.Manifest = m
+	if r.Digest == "" {
+		r.Digest = m.GetDescriptor().Digest.String()
+	}
 
 	// track already seen manifests
 	dig := m.GetDescriptor().Digest.String()

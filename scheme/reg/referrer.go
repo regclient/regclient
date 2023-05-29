@@ -16,7 +16,6 @@ import (
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/regclient/regclient/types/referrer"
-	"github.com/sirupsen/logrus"
 )
 
 const OCISubjectHeader = "OCI-Subject"
@@ -96,10 +95,6 @@ func (reg *Reg) referrerListByAPI(ctx context.Context, r ref.Ref, config scheme.
 	for {
 		rlAdd, respNext, err := reg.referrerListByAPIPage(ctx, r, config, link)
 		if err != nil {
-			reg.log.WithFields(logrus.Fields{
-				"err": err,
-				"ref": r.CommonName(),
-			}).Debug("referrers API failed")
 			return rl, err
 		}
 		if rl.Manifest == nil {
