@@ -19,6 +19,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const OCISubjectHeader = "OCI-Subject"
+
 // ReferrerList returns a list of referrers to a given reference
 func (reg *Reg) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.ReferrerOpts) (referrer.ReferrerList, error) {
 	config := scheme.ReferrerConfig{}
@@ -62,10 +64,18 @@ func (reg *Reg) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Refe
 		r.Digest = m.GetDescriptor().Digest.String()
 	}
 
-	// attempt to call the referrer API
-	rl, err := reg.referrerListAPI(ctx, r, config)
-	if err != nil {
-		rl, err = reg.referrerListTag(ctx, r)
+	referrerEnabled, ok := reg.featureGet("referrer", r.Registry, r.Repository)
+	var err error
+	if !ok || referrerEnabled {
+		// attempt to call the referrer API
+		rl, err = reg.referrerListByAPI(ctx, r, config)
+		if !ok {
+			// save the referrer API state
+			reg.featureSet("referrer", r.Registry, r.Repository, err == nil)
+		}
+	}
+	if (ok && !referrerEnabled) || err != nil {
+		rl, err = reg.referrerListByTag(ctx, r)
 	}
 	if err != nil {
 		return rl, err
@@ -75,7 +85,7 @@ func (reg *Reg) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Refe
 	return rl, nil
 }
 
-func (reg *Reg) referrerListAPI(ctx context.Context, r ref.Ref, config scheme.ReferrerConfig) (referrer.ReferrerList, error) {
+func (reg *Reg) referrerListByAPI(ctx context.Context, r ref.Ref, config scheme.ReferrerConfig) (referrer.ReferrerList, error) {
 	rl := referrer.ReferrerList{
 		Subject: r,
 		Tags:    []string{},
@@ -84,7 +94,7 @@ func (reg *Reg) referrerListAPI(ctx context.Context, r ref.Ref, config scheme.Re
 	var resp reghttp.Resp
 	// loop for paging
 	for {
-		rlAdd, respNext, err := reg.referrerListAPIReq(ctx, r, config, link)
+		rlAdd, respNext, err := reg.referrerListByAPIPage(ctx, r, config, link)
 		if err != nil {
 			reg.log.WithFields(logrus.Fields{
 				"err": err,
@@ -123,7 +133,7 @@ func (reg *Reg) referrerListAPI(ctx context.Context, r ref.Ref, config scheme.Re
 	return rl, nil
 }
 
-func (reg *Reg) referrerListAPIReq(ctx context.Context, r ref.Ref, config scheme.ReferrerConfig, link *url.URL) (referrer.ReferrerList, reghttp.Resp, error) {
+func (reg *Reg) referrerListByAPIPage(ctx context.Context, r ref.Ref, config scheme.ReferrerConfig, link *url.URL) (referrer.ReferrerList, reghttp.Resp, error) {
 	rl := referrer.ReferrerList{
 		Subject: r,
 		Tags:    []string{},
@@ -186,7 +196,7 @@ func (reg *Reg) referrerListAPIReq(ctx context.Context, r ref.Ref, config scheme
 	return rl, resp, nil
 }
 
-func (reg *Reg) referrerListTag(ctx context.Context, r ref.Ref) (referrer.ReferrerList, error) {
+func (reg *Reg) referrerListByTag(ctx context.Context, r ref.Ref) (referrer.ReferrerList, error) {
 	rl := referrer.ReferrerList{
 		Subject: r,
 		Tags:    []string{},
@@ -248,7 +258,7 @@ func (reg *Reg) referrerDelete(ctx context.Context, r ref.Ref, m manifest.Manife
 	}
 
 	// fallback to using tag schema for refers
-	rl, err := reg.referrerListTag(ctx, rSubject)
+	rl, err := reg.referrerListByTag(ctx, rSubject)
 	if err != nil {
 		return err
 	}
@@ -291,16 +301,11 @@ func (reg *Reg) referrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest)
 	rSubject.Tag = ""
 	rSubject.Digest = subject.Digest.String()
 
-	// if referrer API is available, return
-	if reg.referrerPing(ctx, rSubject) {
-		return nil
-	}
-
 	// lock to avoid internal race conditions between pulling and pushing tag
 	reg.muRefTag.Lock()
 	defer reg.muRefTag.Unlock()
 	// fallback to using tag schema for refers
-	rl, err := reg.referrerListTag(ctx, rSubject)
+	rl, err := reg.referrerListByTag(ctx, rSubject)
 	if err != nil {
 		return err
 	}
@@ -328,6 +333,10 @@ func (reg *Reg) referrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest)
 
 // referrerPing verifies the registry supports the referrers API
 func (reg *Reg) referrerPing(ctx context.Context, r ref.Ref) bool {
+	referrerEnabled, ok := reg.featureGet("referrer", r.Registry, r.Repository)
+	if ok {
+		return referrerEnabled
+	}
 	req := &reghttp.Req{
 		Host: r.Registry,
 		APIs: map[string]reghttp.ReqAPI{
@@ -340,8 +349,11 @@ func (reg *Reg) referrerPing(ctx context.Context, r ref.Ref) bool {
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
+		reg.featureSet("referrer", r.Registry, r.Repository, false)
 		return false
 	}
 	resp.Close()
-	return resp.HTTPResponse().StatusCode == 200
+	result := resp.HTTPResponse().StatusCode == 200
+	reg.featureSet("referrer", r.Registry, r.Repository, result)
+	return result
 }
