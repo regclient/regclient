@@ -31,8 +31,10 @@ Flags:
 The `check` command is useful for reporting any stale images that need to be updated.
 
 The `once` command can be placed in a cron or CI job to perform the synchronization immediately rather than following the schedule.
+Use the `--missing` option to only copy tags that are missing from the target.
 
 The `server` command is useful to run a background process that continuously updates the target repositories as the source changes.
+This performs an initial pass to copy tags missing from the target before running on the schedule.
 
 `--logopt` currently accepts `json` to format all logs as json instead of text.
 This is useful for parsing in external tools like Elastic/Splunk.
