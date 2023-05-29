@@ -735,7 +735,6 @@ func (ip *imageProgress) display(w io.Writer, final bool) {
 	if !ip.changed && !final {
 		return // skip since no changes since last display and not the final display
 	}
-	now := time.Now()
 	var manifestTotal, manifestFinished, sum, skipped, queued int64
 	// sort entry keys by start time
 	keys := make([]string, 0, len(ip.entries))
@@ -795,16 +794,15 @@ func (ip *imageProgress) display(w io.Writer, final bool) {
 		}
 	}
 	// show stats summary
-	ip.asciOut.Add([]byte(fmt.Sprintf("%d/%d manifests, %s/s, %s copied, %s skipped",
+	ip.asciOut.Add([]byte(fmt.Sprintf("Manifests: %d/%d | Blobs: %s copied, %s skipped",
 		manifestFinished, manifestTotal,
-		units.HumanSize(float64(sum)/now.Sub(ip.start).Seconds()),
 		units.HumanSize(float64(sum)),
 		units.HumanSize(float64(skipped)))))
 	if queued > 0 {
 		ip.asciOut.Add([]byte(fmt.Sprintf(", %s queued",
 			units.HumanSize(float64(queued)))))
 	}
-	ip.asciOut.Add([]byte("\n"))
+	ip.asciOut.Add([]byte(fmt.Sprintf(" | Elapsed: %ds\n", int64(time.Since(ip.start).Seconds()))))
 	ip.asciOut.Flush()
 	if !final {
 		ip.asciOut.Return()
