@@ -301,31 +301,6 @@ func TestReferrer(t *testing.T) {
 		},
 		{
 			ReqEntry: reqresp.ReqEntry{
-				Name:     "Put A by digest",
-				Method:   "PUT",
-				Path:     "/v2" + repoPath + "/manifests/" + string(artifactDigest),
-				Body:     artifactBody,
-				SetState: "putA",
-			},
-			RespEntry: reqresp.RespEntry{
-				Status: http.StatusCreated,
-			},
-		},
-		{
-			ReqEntry: reqresp.ReqEntry{
-				Name:     "Put B by digest",
-				Method:   "PUT",
-				Path:     "/v2" + repoPath + "/manifests/" + string(artifact2Digest),
-				Body:     artifact2Body,
-				IfState:  []string{"putA", "putARef"},
-				SetState: "putBoth",
-			},
-			RespEntry: reqresp.RespEntry{
-				Status: http.StatusCreated,
-			},
-		},
-		{
-			ReqEntry: reqresp.ReqEntry{
 				Name:    "Get A",
 				Method:  "GET",
 				Path:    "/v2" + repoPath + "/manifests/" + string(artifactDigest),
@@ -380,6 +355,33 @@ func TestReferrer(t *testing.T) {
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusAccepted,
+			},
+		},
+	}
+	rrsNoAPIPut := []reqresp.ReqResp{
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:     "Put A by digest",
+				Method:   "PUT",
+				Path:     "/v2" + repoPath + "/manifests/" + string(artifactDigest),
+				Body:     artifactBody,
+				SetState: "putA",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusCreated,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:     "Put B by digest",
+				Method:   "PUT",
+				Path:     "/v2" + repoPath + "/manifests/" + string(artifact2Digest),
+				Body:     artifact2Body,
+				IfState:  []string{"putA", "putARef"},
+				SetState: "putBoth",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusCreated,
 			},
 		},
 	}
@@ -602,6 +604,37 @@ func TestReferrer(t *testing.T) {
 	rrsAPI := []reqresp.ReqResp{
 		{
 			ReqEntry: reqresp.ReqEntry{
+				Name:     "Put A by digest",
+				Method:   "PUT",
+				Path:     "/v2" + repoPath + "/manifests/" + string(artifactDigest),
+				Body:     artifactBody,
+				SetState: "putA",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusCreated,
+				Headers: http.Header{
+					OCISubjectHeader: []string{mDigest.String()},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:     "Put B by digest",
+				Method:   "PUT",
+				Path:     "/v2" + repoPath + "/manifests/" + string(artifact2Digest),
+				Body:     artifact2Body,
+				IfState:  []string{"putA", "putARef"},
+				SetState: "putBoth",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusCreated,
+				Headers: http.Header{
+					OCISubjectHeader: []string{mDigest.String()},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
 				Name:    "API empty",
 				Method:  "GET",
 				Path:    "/v2" + repoPath + "/referrers/" + mDigest.String(),
@@ -674,8 +707,10 @@ func TestReferrer(t *testing.T) {
 		},
 	}
 	rrsNoAPI = append(rrsNoAPI, rrs...)
+	rrsNoAPI = append(rrsNoAPI, rrsNoAPIPut...)
 	rrsNoAPI = append(rrsNoAPI, reqresp.BaseEntries...)
 	rrsNoAPIAuth = append(rrsNoAPIAuth, rrs...)
+	rrsNoAPIAuth = append(rrsNoAPIAuth, rrsNoAPIPut...)
 	rrsNoAPIAuth = append(rrsNoAPIAuth, reqresp.BaseEntries...)
 	rrsAPI = append(rrsAPI, rrs...)
 	rrsAPI = append(rrsAPI, reqresp.BaseEntries...)

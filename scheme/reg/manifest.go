@@ -235,7 +235,7 @@ func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest,
 		if err != nil {
 			return err
 		}
-		if mDesc != nil && mDesc.MediaType != "" && mDesc.Size > 0 {
+		if mDesc != nil && mDesc.MediaType != "" && mDesc.Size > 0 && mDesc.Digest.String() != resp.HTTPResponse().Header.Get(OCISubjectHeader) {
 			err = reg.referrerPut(ctx, r, m)
 			if err != nil {
 				return err

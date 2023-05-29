@@ -30,12 +30,25 @@ type Reg struct {
 	reghttpOpts    []reghttp.Opts
 	log            *logrus.Logger
 	hosts          map[string]*config.Host
+	features       map[featureKey]*featureVal
 	blobChunkSize  int64
 	blobChunkLimit int64
 	blobMaxPut     int64
 	muHost         sync.Mutex
 	muRefTag       sync.Mutex
 }
+
+type featureKey struct {
+	kind string
+	reg  string
+	repo string
+}
+type featureVal struct {
+	enabled bool
+	expire  time.Time
+}
+
+var featureExpire = time.Minute * time.Duration(5)
 
 // Opts provides options to access registries
 type Opts func(*Reg)
@@ -48,6 +61,7 @@ func New(opts ...Opts) *Reg {
 		blobChunkLimit: defaultBlobChunkLimit,
 		blobMaxPut:     defaultBlobMax,
 		hosts:          map[string]*config.Host{},
+		features:       map[featureKey]*featureVal{},
 	}
 	r.reghttpOpts = append(r.reghttpOpts, reghttp.WithConfigHost(r.hostGet))
 	for _, opt := range opts {
@@ -83,6 +97,24 @@ func (reg *Reg) hostGet(hostname string) *config.Host {
 		reg.hosts[hostname] = config.HostNewName(hostname)
 	}
 	return reg.hosts[hostname]
+}
+
+// featureGet returns enabled and ok
+func (reg *Reg) featureGet(kind, registry, repo string) (bool, bool) {
+	reg.muHost.Lock()
+	defer reg.muHost.Unlock()
+	if v, ok := reg.features[featureKey{kind: kind, reg: registry, repo: repo}]; ok {
+		if time.Now().Before(v.expire) {
+			return v.enabled, true
+		}
+	}
+	return false, false
+}
+
+func (reg *Reg) featureSet(kind, registry, repo string, enabled bool) {
+	reg.muHost.Lock()
+	reg.features[featureKey{kind: kind, reg: registry, repo: repo}] = &featureVal{enabled: enabled, expire: time.Now().Add(featureExpire)}
+	reg.muHost.Unlock()
 }
 
 // WithBlobSize overrides default blob sizes
