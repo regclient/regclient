@@ -32,28 +32,26 @@ func getSizeAndUnit(size float64, base float64, unitList []string) (float64, str
 	return size, unitList[i]
 }
 
-// CustomSize returns a human-readable approximation of a size
-// using custom format.
+// CustomSize returns a human-readable approximation of a size using custom format.
 func CustomSize(format string, size float64, base float64, unitList []string) string {
 	size, unit := getSizeAndUnit(size, base, unitList)
 	return fmt.Sprintf(format, size, unit)
 }
 
-// HumanSizeWithPrecision allows the size to be in any precision,
-// instead of 4 digit precision used in units.HumanSize.
-func HumanSizeWithPrecision(size float64, precision int) string {
+// HumanSizeWithPrecision allows the size to be in any precision.
+func HumanSizeWithPrecision(size float64, width, precision int) string {
 	size, unit := getSizeAndUnit(size, 1000.0, decimapAbbrs)
-	return fmt.Sprintf("%.*g%s", precision, size, unit)
+	return fmt.Sprintf("%*.*f%s", width, precision, size, unit)
 }
 
 // HumanSize returns a human-readable approximation of a size
-// capped at 4 valid numbers (eg. "2.746 MB", "796 KB").
+// with a width of 5 (eg. "2.746MB", "796.0KB").
 func HumanSize(size float64) string {
-	return HumanSizeWithPrecision(size, 4)
+	return HumanSizeWithPrecision(size, 5, 3)
 }
 
 // BytesSize returns a human-readable size in bytes, kibibytes,
-// mebibytes, gibibytes, or tebibytes (eg. "44kiB", "17MiB").
+// mebibytes, gibibytes, or tebibytes (eg. "44.2kiB", "17.6MiB").
 func BytesSize(size float64) string {
-	return CustomSize("%.4g%s", size, 1024.0, binaryAbbrs)
+	return CustomSize("%5.3f%s", size, 1024.0, binaryAbbrs)
 }

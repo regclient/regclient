@@ -11,7 +11,7 @@ func TestHuman(t *testing.T) {
 		{
 			name:   "zero",
 			size:   0,
-			result: "0B",
+			result: "0.000B",
 		},
 		{
 			name:   "1.024kB",
@@ -21,7 +21,7 @@ func TestHuman(t *testing.T) {
 		{
 			name:   "1MB",
 			size:   1000099,
-			result: "1MB",
+			result: "1.000MB",
 		},
 	}
 
