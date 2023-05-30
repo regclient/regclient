@@ -52,6 +52,7 @@ type tarReadData struct {
 	tr          *tar.Reader
 	handleAdded bool
 	handlers    map[string]tarFileHandler
+	links       map[string][]string
 	processed   map[string]bool
 	finish      []func() error
 	// data processed from various handlers
@@ -1111,6 +1112,7 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 func (rc *RegClient) ImageImport(ctx context.Context, ref ref.Ref, rs io.ReadSeeker) error {
 	trd := &tarReadData{
 		handlers:  map[string]tarFileHandler{},
+		links:     map[string][]string{},
 		processed: map[string]bool{},
 		finish:    []func() error{},
 		manifests: map[digest.Digest]manifest.Manifest{},
@@ -1504,17 +1506,57 @@ func (trd *tarReadData) tarReadAll(rs io.ReadSeeker) error {
 				return err
 			}
 			name := filepath.Clean(header.Name)
-			// if a handler exists, run it, remove handler, and check if we are done
-			if trd.handlers[name] != nil {
-				err = trd.handlers[name](header, trd)
+			// track symlinks
+			if header.Typeflag == tar.TypeSymlink || header.Typeflag == tar.TypeLink {
+				// normalize target relative to root of tar
+				target := header.Linkname
+				if !filepath.IsAbs(target) {
+					target, err = filepath.Rel(filepath.Dir(name), target)
+					if err != nil {
+						return err
+					}
+				}
+				target = filepath.Clean("/" + target)[1:]
+				// track and set handleAdded if an existing handler points to the target
+				if trd.linkAdd(name, target) && !trd.handleAdded {
+					list, err := trd.linkList(target)
+					if err != nil {
+						return err
+					}
+					for _, src := range append(list, name) {
+						if trd.handlers[src] != nil {
+							trd.handleAdded = true
+						}
+					}
+				}
+			} else {
+				// loop through filename and symlinks to file in search of handlers
+				list, err := trd.linkList(name)
 				if err != nil {
 					return err
 				}
-				delete(trd.handlers, name)
-				trd.processed[name] = true
-				// return if last handler processed
-				if len(trd.handlers) == 0 {
-					return nil
+				list = append(list, name)
+				trdUsed := false
+				for _, entry := range list {
+					if trd.handlers[entry] != nil {
+						// trd cannot be reused, force the loop to run again
+						if trdUsed {
+							trd.handleAdded = true
+							break
+						}
+						trdUsed = true
+						// run handler
+						err = trd.handlers[entry](header, trd)
+						if err != nil {
+							return err
+						}
+						delete(trd.handlers, entry)
+						trd.processed[entry] = true
+						// return if last handler processed
+						if len(trd.handlers) == 0 {
+							return nil
+						}
+					}
 				}
 			}
 		}
@@ -1523,6 +1565,27 @@ func (trd *tarReadData) tarReadAll(rs io.ReadSeeker) error {
 			return fmt.Errorf("unable to read all files from tar: %w", types.ErrNotFound)
 		}
 	}
+}
+
+func (trd *tarReadData) linkAdd(src, tgt string) bool {
+	for _, entry := range trd.links[tgt] {
+		if entry == src {
+			return false
+		}
+	}
+	trd.links[tgt] = append(trd.links[tgt], src)
+	return true
+}
+
+func (trd *tarReadData) linkList(tgt string) ([]string, error) {
+	list := trd.links[tgt]
+	for _, entry := range list {
+		if entry == tgt {
+			return nil, fmt.Errorf("symlink loop encountered for %s", tgt)
+		}
+		list = append(list, trd.links[entry]...)
+	}
+	return list, nil
 }
 
 // tarReadFileJSON reads the current tar entry and unmarshals json into provided interface
