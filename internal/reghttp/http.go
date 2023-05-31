@@ -711,7 +711,7 @@ func (c *Client) getHost(host string) *clientHost {
 	if h.httpClient == nil {
 		h.httpClient = c.httpClient
 		// update http client for insecure requests and root certs
-		if h.config.TLS == config.TLSInsecure || len(c.rootCAPool) > 0 || len(c.rootCADirs) > 0 || h.config.RegCert != "" {
+		if h.config.TLS == config.TLSInsecure || len(c.rootCAPool) > 0 || len(c.rootCADirs) > 0 || h.config.RegCert != "" || (h.config.ClientCert != "" && h.config.ClientKey != "") {
 			// create a new client and modify the transport
 			httpClient := *c.httpClient
 			if httpClient.Transport == nil {
@@ -735,6 +735,16 @@ func (c *Client) getHost(host string) *clientHost {
 						}).Warn("failed to setup CA pool")
 					} else {
 						tlsc.RootCAs = rootPool
+					}
+				}
+				if h.config.ClientCert != "" && h.config.ClientKey != "" {
+					cert, err := tls.X509KeyPair([]byte(h.config.ClientCert), []byte(h.config.ClientKey))
+					if err != nil {
+						c.log.WithFields(logrus.Fields{
+							"err": err,
+						}).Warn("failed to configure client certs")
+					} else {
+						tlsc.Certificates = []tls.Certificate{cert}
 					}
 				}
 				t.TLSClientConfig = tlsc

@@ -23,8 +23,8 @@ var registryCmd = &cobra.Command{
 var registryConfigCmd = &cobra.Command{
 	Use:   "config [registry]",
 	Short: "show registry config",
-	Long: `Displays the configuration used for a registry. Passwords are not included
-in the output.`,
+	Long: `Displays the configuration used for a registry. Secrets are not included
+in the output (e.g. passwords, tokens, and TLS keys).`,
 	Args:              cobra.RangeArgs(0, 1),
 	ValidArgsFunction: registryArgListReg,
 	RunE:              runRegistryConfig,
@@ -61,6 +61,8 @@ var registryOpts struct {
 	credHelper           string
 	hostname, pathPrefix string
 	cacert, tls          string // set opts
+	clientCert           string
+	clientKey            string
 	mirrors              []string
 	priority             uint
 	repoAuth             bool
@@ -81,6 +83,8 @@ func init() {
 
 	registrySetCmd.Flags().StringVarP(&registryOpts.credHelper, "cred-helper", "", "", "Credential helper (full binary name, including docker-credential- prefix)")
 	registrySetCmd.Flags().StringVarP(&registryOpts.cacert, "cacert", "", "", "CA Certificate (not a filename, use \"$(cat ca.pem)\" to use a file)")
+	registrySetCmd.Flags().StringVarP(&registryOpts.clientCert, "client-cert", "", "", "Client certificate for mTLS (not a filename, use \"$(cat client.pem)\" to use a file)")
+	registrySetCmd.Flags().StringVarP(&registryOpts.clientKey, "client-key", "", "", "Client key for mTLS (not a filename, use \"$(cat client.key)\" to use a file)")
 	registrySetCmd.Flags().StringVarP(&registryOpts.tls, "tls", "", "", "TLS (enabled, insecure, disabled)")
 	registrySetCmd.Flags().StringVarP(&registryOpts.hostname, "hostname", "", "", "Hostname or ip with port")
 	registrySetCmd.Flags().StringVarP(&registryOpts.pathPrefix, "path-prefix", "", "", "Prefix to all repositories")
@@ -143,6 +147,7 @@ func runRegistryConfig(cmd *cobra.Command, args []string) error {
 	for i := range c.Hosts {
 		c.Hosts[i].Pass = ""
 		c.Hosts[i].Token = ""
+		c.Hosts[i].ClientKey = ""
 	}
 	var hj []byte
 	if len(args) > 0 {
@@ -320,6 +325,12 @@ func runRegistrySet(cmd *cobra.Command, args []string) error {
 	}
 	if flagChanged(cmd, "cacert") {
 		h.RegCert = registryOpts.cacert
+	}
+	if flagChanged(cmd, "client-cert") {
+		h.ClientCert = registryOpts.clientCert
+	}
+	if flagChanged(cmd, "client-key") {
+		h.ClientKey = registryOpts.clientKey
 	}
 	if flagChanged(cmd, "hostname") {
 		h.Hostname = registryOpts.hostname

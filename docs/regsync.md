@@ -126,6 +126,14 @@ sync:
       -----END CERTIFICATE-----
     ```
 
+  - `clientCert`:
+    Client certificate used for mTLS authentication.
+    Both `clientCert` and `clientKey` need to be defined for mTLS.
+    See `regcert` for details of how to include this in yaml.
+  - `clientKey`:
+    Client key used for mTLS authentication.
+    Both `clientCert` and `clientKey` need to be defined for mTLS.
+    See `regcert` for details of how to include this in yaml.
   - `pathPrefix`:
     Path added before all images pulled from this registry.
     This is useful for some mirror configurations that place images under a specific path.
@@ -226,7 +234,7 @@ sync:
 
 ## Templates
 
-[Go templates](https://golang.org/pkg/text/template/) are used to expand values in `registry`, `user`, `pass`, `regcert`, `source`, `target`, and `backup`.
+[Go templates](https://golang.org/pkg/text/template/) are used to expand values in `registry`, `user`, `pass`, `regcert`, `clientCert`, `clientKey`, `source`, `target`, and `backup`.
 
 The `source` and `target` templates support the following objects:
 

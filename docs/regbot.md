@@ -114,6 +114,14 @@ scripts:
       -----END CERTIFICATE-----
     ```
 
+  - `clientCert`:
+    Client certificate used for mTLS authentication.
+    Both `clientCert` and `clientKey` need to be defined for mTLS.
+    See `regcert` for details of how to include this in yaml.
+  - `clientKey`:
+    Client key used for mTLS authentication.
+    Both `clientCert` and `clientKey` need to be defined for mTLS.
+    See `regcert` for details of how to include this in yaml.
   - `pathPrefix`:
     Path added before all images pulled from this registry.
     This is useful for some mirror configurations that place images under a specific path.
@@ -174,7 +182,7 @@ scripts:
   Any field beginning with `x-` is considered a user extension and will not be parsed in current for future versions of the project.
   These are useful for integrating your own tooling, or setting values for yaml anchors and aliases.
 
-[Go templates](https://golang.org/pkg/text/template/) are used to expand values in `user`, `pass`, and `regcert`.
+[Go templates](https://golang.org/pkg/text/template/) are used to expand values in `user`, `pass`, `regcert`, `clientCert`, and `clientKey`.
 See [Template Functions](README.md#template-functions) for more details on the custom functions available in templates.
 
 The Lua script interface is based on Lua 5.1.
