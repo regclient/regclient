@@ -106,6 +106,16 @@ func configExpandTemplates(c *Config) error {
 			return err
 		}
 		c.Creds[i].RegCert = val
+		val, err = template.String(c.Creds[i].ClientCert, nil)
+		if err != nil {
+			return err
+		}
+		c.Creds[i].ClientCert = val
+		val, err = template.String(c.Creds[i].ClientKey, nil)
+		if err != nil {
+			return err
+		}
+		c.Creds[i].ClientKey = val
 	}
 	return nil
 }

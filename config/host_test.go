@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,6 +27,76 @@ func TestConfig(t *testing.T) {
 	// generate new/hostname
 	emptyHostP := HostNewName("host.example.org")
 
+	caCert := string(`-----BEGIN CERTIFICATE-----
+	MIIC/zCCAeegAwIBAgIUPrFPsUzINvS75tp6kIdsycXrrSQwDQYJKoZIhvcNAQEL
+	BQAwDzENMAsGA1UEAwwERGVtbzAeFw0yMzA1MzEwMDI0NDJaFw0zMzA1MjgwMDI0
+	NDJaMA8xDTALBgNVBAMMBERlbW8wggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEK
+	AoIBAQDWdtttrOqNS9WhwhL+6G4annBVLP1Eis+pH5sXL1O71lXAWUSXYTqEgLlB
+	g5Id8vAvS4bz2ogPnOURTsEwHp/vfPpMs1mHd71apd0b4aDNThvVK4t0y9KrMZ9I
+	cVyX/tkoR/CIEkmVqiUxiG2hfZTUTuO7pKkjZHV7DOSCBp7QOVhl16grEXOCWp8X
+	DAKl90WowMmtXBLX11/n9KWlwE2PaVPTp/4B4z4E44sBFATWfezDTv5ieTaKvLAN
+	SGEa9cA4eqjSA/mJAxlsEOW5IZRfqNskTwpRCMzdQ0UtyvLUlWqXdPdN07RbnT08
+	FipckYLaT8YtipA/Pgg1CGJLwBxRAgMBAAGjUzBRMB0GA1UdDgQWBBR6w/+PiaNa
+	F9vTVx5Xob/kYfRFEDAfBgNVHSMEGDAWgBR6w/+PiaNaF9vTVx5Xob/kYfRFEDAP
+	BgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4IBAQCuoCA/3wZuMgT9fYCK
+	+inOPi0no+sB+l8GCx0lYAkjIPyJISqvixfHbgXg5zKubgHyDXziUpKFsvF8kloo
+	7KIjWsWi7R8mONWKIc+f1WsVbFzheS6hqg+YyPwN2Kws7YDhQ3cbeajByHLNzEYm
+	gVtTz6wFP+B3IMGH4yeghGMHi7PGPrtj93uhCLUHswlEEFBHE+Kzn3AcJzpmY+M5
+	9T4x+na+bdlNEKuBqRYNxrNexQ1Nb82JxeR89RnPXXwdWBDw9UhiztRPWNA8nlJr
+	s1j+J2mbMDUuG2N+ndivBimxP1y8bEYeHPtzskqECj08ul97hsi2ihGJUBpEjEca
+	ZFjP
+	-----END CERTIFICATE-----
+	`)
+	clientCert := string(`-----BEGIN CERTIFICATE-----
+	MIICpzCCAY8CFAx1ZpY9FPZJ1zmdMkpdDa3S7gq3MA0GCSqGSIb3DQEBCwUAMA8x
+	DTALBgNVBAMMBERlbW8wHhcNMjMwNTMxMDAzMzI0WhcNMjQwNTMwMDAzMzI0WjAR
+	MQ8wDQYDVQQDDAZjbGllbnQwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIB
+	AQDilia59g7DkNqZ4gUC3WLZEtVyt2JIzeeNFy/wyhCzEJQhMlaW+lEMnGa9fgpo
+	w9d4bIl1El6VtM1+/KXqTpGJqrvSMsNFVHifVAWuHYTuqC7oG+T4DIyjR/NlDYWA
+	y/WpUhKIY6YLmx/CrbqzGR0QUCkv2kbQufEGSZHRLGGc2kkUMD+P4PlHv0ao2NR3
+	sbpK0IA1bzSsNGQK1LIBDw4pWjJY2Mzrl9it1acYUSvAPPxoX5FAFjTuYyMumzvf
+	kkwk5UsjPMO+m+xgUz0FVBKSUZi7E03ucl6R/hrwN3ADfK14SrL3JkzkWtzlkRGa
+	d0CMcR8q2l8w+WDpyA7hg4gLAgMBAAEwDQYJKoZIhvcNAQELBQADggEBAEmmzAHb
+	HamtaCp20VHmGrIRC3TRtxMnCqDf/FK4ersUeBwmyPogbUll421dDHp1BpgBx2NN
+	wwuoxjDd+saHOSkj/ueLPEql87xos4H6/0JLMssp5SBeO/U1a5mV8Ufnv54Ya055
+	c/GBLlwx1+P22hzPOu8gzHJyVJ2ZMesSQYLi1upBrPPGKu3TU+0QV+OnpBJ4pH+j
+	x9GXt5iEVR0c0ela+7VKm+DRgKPlzoAoCKkMpSv/LqCITAkL3pcQG1XFv8N4nuJj
+	0d3wwBhuPfJxpy7flA0JJMXFjx7EcoQ+yYXd55TtcKKEnC+vZTeZSh3geHw2fdWE
+	V+eBX1Ya5MHFmDs=
+	-----END CERTIFICATE-----
+	`)
+	clientKey := string(`-----BEGIN RSA PRIVATE KEY-----
+	MIIEpgIBAAKCAQEA4pYmufYOw5DameIFAt1i2RLVcrdiSM3njRcv8MoQsxCUITJW
+	lvpRDJxmvX4KaMPXeGyJdRJelbTNfvyl6k6Riaq70jLDRVR4n1QFrh2E7qgu6Bvk
+	+AyMo0fzZQ2FgMv1qVISiGOmC5sfwq26sxkdEFApL9pG0LnxBkmR0SxhnNpJFDA/
+	j+D5R79GqNjUd7G6StCANW80rDRkCtSyAQ8OKVoyWNjM65fYrdWnGFErwDz8aF+R
+	QBY07mMjLps735JMJOVLIzzDvpvsYFM9BVQSklGYuxNN7nJekf4a8DdwA3yteEqy
+	9yZM5Frc5ZERmndAjHEfKtpfMPlg6cgO4YOICwIDAQABAoIBAQCACYreoE0dc3gj
+	ZpWgVctqkHru9PNj4n5KuuSLMxOWq/KYg6JsdAxijOp9f4CQTMIwOVy/O98Yx28r
+	p8Z1jWouGb1CfQ7c2WvD1K3VArdASOcgn8qV5DmAdsLxwl9DNX2e7VKtoWmNu12K
+	G7OZSsKimjl74eMMRVYOUHpGccbC44IMVAC11NA5/dLon+oQZAcCDDs7SHCX+TaV
+	zaQknJSJBiJvpCmai1eXaZPuqyjoAqcrhAj4H/Os406qo8VRxJ/UjaBq6mbgrxQj
+	tWe7j4LCDMKDWUI8R0Z+pGV714YhCRqSnpwukNGahGeSjuHLYQjN52Vdfjj568/N
+	OMUNWE+pAoGBAPbCdPgb/r8O/tkGBFikZj0daG3Mh9kVHhB7QVeHPZNR+RLJ5zGM
+	+Mfo5Rv6qeBeZgGZCsWL6himMkmfR+mLcS0Rmvzk5v3SahKNKOlYFkUWn45gF0b5
+	gOfthx7JDG/N8n9UJgS42aHktw/Ucg4qvf8Rrj5MikXiMN0tLf2mec2nAoGBAOsS
+	ToN6LXcm7F+SibJfLkQZJoe4+fe/FfMCowZmtNihH5uhSTz6XbYd/REjevWA/d6g
+	G9odpAcDNyoNZbIrlF3enKaLEyR9DwaQ0B6J4048e07sGTyG5UOV3aU5NdAENzWL
+	8aUophOLdQdbAGMybfCn8tLJs7AKEmu29QJ1D6b9AoGBALxXtDvj8k8WPQKdCxg1
+	cyvWlGyqHk5dRfNCgJ80RJV7jeb/YI17ki/T3Xu7mYn9w1IY5BXgMy/ZOqzi/FqP
+	6jSCKZA5ju3RetDqGX3xlB3rpKFhSqMLsY5UyDuBLRLxWNRDADm+da6SCf/1IZEa
+	oqZbcmlutmOcv7sxzta6CGIlAoGBALXqE+KBgX/NGm2XvIHSUL6YbA3qY1+LfBP0
+	fW7tupROlGRe+4t6AV13dal2uKgW6+AGLaes+owGvAEKHyIzwXynUrk7tVOuiBs/
+	pB+N+99GxPI9mgYSKogUCVPcoz1YldUVeKqke2lyqd1IWlNp6lSr1Cm1uB3KnZjI
+	HHGLX9KNAoGBANPV1Gi5bU9SgSnq+jv49VNIp9tAwIQh1Be4EVaVFdEieFdXrcYc
+	XWLKsAchSad8ruRsY+cCk6SYwMQtKE0vnEWZi8jaRq1RwGUfRBaoU7of+eR/WK77
+	8/Ke5Y97bV67PT3UdEec54fNmhl+vHEPH2knvnbQQQ9iY42f+VGIB0Kn
+	-----END RSA PRIVATE KEY-----
+	`)
+	caCert = strings.ReplaceAll(caCert, "\t", "")
+	clientCert = strings.ReplaceAll(clientCert, "\t", "")
+	clientKey = strings.ReplaceAll(clientKey, "\t", "")
+
 	// parse json
 	exJSON := `
 	{
@@ -47,6 +118,9 @@ func TestConfig(t *testing.T) {
 		"hostname": "host2.example.com",
 		"user": "user-ex3",
 		"pass": "secret3",
+		"regcert": "` + strings.ReplaceAll(caCert, "\n", "\\n") + `",
+		"clientCert": "` + strings.ReplaceAll(clientCert, "\n", "\\n") + `",
+		"clientKey": "` + strings.ReplaceAll(clientKey, "\n", "\\n") + `",
 		"pathPrefix": "hub3",
 		"mirrors": ["testhost.example.com"],
 		"priority": 42,
@@ -105,7 +179,7 @@ func TestConfig(t *testing.T) {
 	}
 
 	// verify fields in each
-	tests := []struct {
+	tt := []struct {
 		name       string
 		host       Host
 		hostExpect Host
@@ -158,6 +232,9 @@ func TestConfig(t *testing.T) {
 				Hostname:   "host2.example.com",
 				User:       "user-ex3",
 				Pass:       "secret3",
+				RegCert:    caCert,
+				ClientCert: clientCert,
+				ClientKey:  clientKey,
 				PathPrefix: "hub3",
 				Mirrors:    []string{"testhost.example.com"},
 				Priority:   42,
@@ -213,6 +290,9 @@ func TestConfig(t *testing.T) {
 				Hostname:   "host2.example.com",
 				User:       "user-ex3",
 				Pass:       "secret3",
+				RegCert:    caCert,
+				ClientCert: clientCert,
+				ClientKey:  clientKey,
 				PathPrefix: "hub3",
 				Mirrors:    []string{"testhost.example.com"},
 				Priority:   42,
@@ -282,74 +362,80 @@ func TestConfig(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
 			// check each field
-			if tt.host.TLS != tt.hostExpect.TLS {
-				expect, _ := tt.hostExpect.TLS.MarshalText()
-				found, _ := tt.host.TLS.MarshalText()
+			if tc.host.TLS != tc.hostExpect.TLS {
+				expect, _ := tc.hostExpect.TLS.MarshalText()
+				found, _ := tc.host.TLS.MarshalText()
 				t.Errorf("tls field mismatch, expected %s, found %s", expect, found)
 			}
-			if tt.host.RegCert != tt.hostExpect.RegCert {
-				t.Errorf("regCert field mismatch, expected %s, found %s", tt.hostExpect.RegCert, tt.host.RegCert)
+			if tc.host.RegCert != tc.hostExpect.RegCert {
+				t.Errorf("regCert field mismatch, expected %s, found %s", tc.hostExpect.RegCert, tc.host.RegCert)
 			}
-			if tt.host.Hostname != tt.hostExpect.Hostname {
-				t.Errorf("hostname field mismatch, expected %s, found %s", tt.hostExpect.Hostname, tt.host.Hostname)
+			if tc.host.ClientCert != tc.hostExpect.ClientCert {
+				t.Errorf("clientCert field mismatch, expected %s, found %s", tc.hostExpect.ClientCert, tc.host.ClientCert)
 			}
-			if tt.host.User != tt.hostExpect.User {
-				t.Errorf("user field mismatch, expected %s, found %s", tt.hostExpect.User, tt.host.User)
+			if tc.host.ClientKey != tc.hostExpect.ClientKey {
+				t.Errorf("clientKey field mismatch, expected %s, found %s", tc.hostExpect.ClientKey, tc.host.ClientKey)
 			}
-			if tt.host.Pass != tt.hostExpect.Pass {
-				t.Errorf("pass field mismatch, expected %s, found %s", tt.hostExpect.Pass, tt.host.Pass)
+			if tc.host.Hostname != tc.hostExpect.Hostname {
+				t.Errorf("hostname field mismatch, expected %s, found %s", tc.hostExpect.Hostname, tc.host.Hostname)
 			}
-			if tt.host.Token != tt.hostExpect.Token {
-				t.Errorf("token field mismatch, expected %s, found %s", tt.hostExpect.Token, tt.host.Token)
+			if tc.host.User != tc.hostExpect.User {
+				t.Errorf("user field mismatch, expected %s, found %s", tc.hostExpect.User, tc.host.User)
 			}
-			if tt.host.CredHelper != tt.hostExpect.CredHelper {
-				t.Errorf("credHelper field mismatch, expected %s, found %s", tt.hostExpect.CredHelper, tt.host.CredHelper)
+			if tc.host.Pass != tc.hostExpect.Pass {
+				t.Errorf("pass field mismatch, expected %s, found %s", tc.hostExpect.Pass, tc.host.Pass)
 			}
-			if tt.host.CredExpire != tt.hostExpect.CredExpire {
-				t.Errorf("credExCredExpire field mismatch, expected %s, found %s", time.Duration(tt.hostExpect.CredExpire).String(), time.Duration(tt.host.CredExpire).String())
+			if tc.host.Token != tc.hostExpect.Token {
+				t.Errorf("token field mismatch, expected %s, found %s", tc.hostExpect.Token, tc.host.Token)
 			}
-			if tt.host.PathPrefix != tt.hostExpect.PathPrefix {
-				t.Errorf("pathPrefix field mismatch, expected %s, found %s", tt.hostExpect.PathPrefix, tt.host.PathPrefix)
+			if tc.host.CredHelper != tc.hostExpect.CredHelper {
+				t.Errorf("credHelper field mismatch, expected %s, found %s", tc.hostExpect.CredHelper, tc.host.CredHelper)
 			}
-			if tt.host.Priority != tt.hostExpect.Priority {
-				t.Errorf("priority field mismatch, expected %d, found %d", tt.hostExpect.Priority, tt.host.Priority)
+			if tc.host.CredExpire != tc.hostExpect.CredExpire {
+				t.Errorf("credExCredExpire field mismatch, expected %s, found %s", time.Duration(tc.hostExpect.CredExpire).String(), time.Duration(tc.host.CredExpire).String())
 			}
-			if tt.host.BlobChunk != tt.hostExpect.BlobChunk {
-				t.Errorf("blobChunk field mismatch, expected %d, found %d", tt.hostExpect.BlobChunk, tt.host.BlobChunk)
+			if tc.host.PathPrefix != tc.hostExpect.PathPrefix {
+				t.Errorf("pathPrefix field mismatch, expected %s, found %s", tc.hostExpect.PathPrefix, tc.host.PathPrefix)
 			}
-			if tt.host.BlobMax != tt.hostExpect.BlobMax {
-				t.Errorf("blobMax field mismatch, expected %d, found %d", tt.hostExpect.BlobMax, tt.host.BlobMax)
+			if tc.host.Priority != tc.hostExpect.Priority {
+				t.Errorf("priority field mismatch, expected %d, found %d", tc.hostExpect.Priority, tc.host.Priority)
 			}
-			if len(tt.host.Mirrors) != len(tt.hostExpect.Mirrors) {
-				t.Errorf("mirrors length mismatch, expected %v, found %v", tt.hostExpect.Mirrors, tt.host.Mirrors)
+			if tc.host.BlobChunk != tc.hostExpect.BlobChunk {
+				t.Errorf("blobChunk field mismatch, expected %d, found %d", tc.hostExpect.BlobChunk, tc.host.BlobChunk)
+			}
+			if tc.host.BlobMax != tc.hostExpect.BlobMax {
+				t.Errorf("blobMax field mismatch, expected %d, found %d", tc.hostExpect.BlobMax, tc.host.BlobMax)
+			}
+			if len(tc.host.Mirrors) != len(tc.hostExpect.Mirrors) {
+				t.Errorf("mirrors length mismatch, expected %v, found %v", tc.hostExpect.Mirrors, tc.host.Mirrors)
 			} else {
-				for i := range tt.host.Mirrors {
-					if tt.host.Mirrors[i] != tt.hostExpect.Mirrors[i] {
-						t.Errorf("mirrors field %d mismatch, expected %s, found %s", i, tt.hostExpect.Mirrors[i], tt.host.Mirrors[i])
+				for i := range tc.host.Mirrors {
+					if tc.host.Mirrors[i] != tc.hostExpect.Mirrors[i] {
+						t.Errorf("mirrors field %d mismatch, expected %s, found %s", i, tc.hostExpect.Mirrors[i], tc.host.Mirrors[i])
 					}
 				}
 			}
-			if len(tt.host.APIOpts) != len(tt.hostExpect.APIOpts) {
-				t.Errorf("apiOpts length mismatch, expected %v, found %v", tt.hostExpect.APIOpts, tt.host.APIOpts)
+			if len(tc.host.APIOpts) != len(tc.hostExpect.APIOpts) {
+				t.Errorf("apiOpts length mismatch, expected %v, found %v", tc.hostExpect.APIOpts, tc.host.APIOpts)
 			} else {
-				for i := range tt.host.APIOpts {
-					if tt.host.APIOpts[i] != tt.hostExpect.APIOpts[i] {
-						t.Errorf("apiOpts field %s mismatch, expected %s, found %s", i, tt.hostExpect.APIOpts[i], tt.host.APIOpts[i])
+				for i := range tc.host.APIOpts {
+					if tc.host.APIOpts[i] != tc.hostExpect.APIOpts[i] {
+						t.Errorf("apiOpts field %s mismatch, expected %s, found %s", i, tc.hostExpect.APIOpts[i], tc.host.APIOpts[i])
 					}
 				}
 			}
-			cred := tt.host.GetCred()
-			if tt.credExpect.User != cred.User {
-				t.Errorf("cred user field mismatch, expected %s, found %s", tt.credExpect.User, cred.User)
+			cred := tc.host.GetCred()
+			if tc.credExpect.User != cred.User {
+				t.Errorf("cred user field mismatch, expected %s, found %s", tc.credExpect.User, cred.User)
 			}
-			if tt.credExpect.Password != cred.Password {
-				t.Errorf("cred password field mismatch, expected %s, found %s", tt.credExpect.Password, cred.Password)
+			if tc.credExpect.Password != cred.Password {
+				t.Errorf("cred password field mismatch, expected %s, found %s", tc.credExpect.Password, cred.Password)
 			}
-			if tt.credExpect.Token != cred.Token {
-				t.Errorf("cred token field mismatch, expected %s, found %s", tt.credExpect.Token, cred.Token)
+			if tc.credExpect.Token != cred.Token {
+				t.Errorf("cred token field mismatch, expected %s, found %s", tc.credExpect.Token, cred.Token)
 			}
 		})
 	}

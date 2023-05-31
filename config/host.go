@@ -104,8 +104,8 @@ type Host struct {
 	Scheme        string             `json:"scheme,omitempty" yaml:"scheme"`               // TODO: deprecate, delete
 	TLS           TLSConf            `json:"tls,omitempty" yaml:"tls"`                     // enabled, disabled, insecure
 	RegCert       string             `json:"regcert,omitempty" yaml:"regcert"`             // public pem cert of registry
-	ClientCert    string             `json:"clientcert,omitempty" yaml:"clientcert"`       // public pem cert for client (mTLS)
-	ClientKey     string             `json:"clientkey,omitempty" yaml:"clientkey"`         // private pem cert for client (mTLS)
+	ClientCert    string             `json:"clientCert,omitempty" yaml:"clientCert"`       // public pem cert for client (mTLS)
+	ClientKey     string             `json:"clientKey,omitempty" yaml:"clientKey"`         // private pem cert for client (mTLS)
 	DNS           []string           `json:"dns,omitempty" yaml:"dns"`                     // TODO: remove slice, single string, or remove entirely?
 	Hostname      string             `json:"hostname,omitempty" yaml:"hostname"`           // replaces DNS array with single string
 	User          string             `json:"user,omitempty" yaml:"user"`                   // username, not used with credHelper
