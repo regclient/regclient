@@ -5,7 +5,7 @@ files:
       - docker-arg-go-tag
       - docker-arg-go
       - git-commit-ecr
-      - git-commit-gcr
+      - git-tag-gcr
       - git-commit-lunajson
       - git-commit-semver
   ".github/workflows/*.yml":
@@ -52,12 +52,12 @@ scans:
       regexp: '^ARG ECR_HELPER_VER=(?P<Version>[0-9a-f]+)\s*$'
       repo: "https://github.com/awslabs/amazon-ecr-credential-helper.git"
       ref: main
-  git-commit-gcr:
+  git-tag-gcr:
     type: "regexp"
-    source: "git-commit"
+    source: "git-tag-semver"
     args:
-      regexp: '^ARG GCR_HELPER_VER=(?P<Version>[0-9a-f]+)\s*$'
-      repo: "https://github.com/GoogleCloudPlatform/docker-credential-gcr.git"
+      regexp: '^ARG GCR_HELPER_VER=(?P<Version>[^\s]+)\s*$'
+      repo: "github.com/GoogleCloudPlatform/docker-credential-gcr"
       ref: master
   git-commit-lunajson:
     type: "regexp"
