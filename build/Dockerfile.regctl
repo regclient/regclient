@@ -2,7 +2,7 @@ ARG REGISTRY=docker.io
 ARG ALPINE_VER=3@sha256:02bb6f428431fbc2809c5d1b41eab5a68350194fb508869a33cb1af4444c9b11
 ARG GO_VER=1.20-alpine@sha256:ee2f23f1a612da71b8a4cd78fec827f1e67b0a8546a98d257cca441a4ddbebcb
 ARG ECR_HELPER_VER=7f2db5bd753edc4c799d8b932941d8871a70d130
-ARG GCR_HELPER_VER=62afb2723512fd6572c6300024e0c94f734b0ae3
+ARG GCR_HELPER_VER=v2.1.8
 
 FROM ${REGISTRY}/library/golang:${GO_VER} as golang
 RUN apk add --no-cache \
@@ -36,9 +36,16 @@ FROM golang as docker-cred-gcr
 ARG TARGETOS
 ARG TARGETARCH
 ARG GCR_HELPER_VER
-RUN CGO_ENABLED=0 go install -trimpath -ldflags=-buildid= github.com/GoogleCloudPlatform/docker-credential-gcr@${GCR_HELPER_VER} \
- && ( cp "${GOPATH}/bin/docker-credential-gcr" /usr/local/bin/docker-credential-gcr \
-   || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-gcr" /usr/local/bin/docker-credential-gcr )
+# TODO: remove workaround, pending issue https://github.com/GoogleCloudPlatform/docker-credential-gcr/issues/128
+RUN git clone https://github.com/GoogleCloudPlatform/docker-credential-gcr.git -b ${GCR_HELPER_VER} --depth 1
+WORKDIR ./docker-credential-gcr
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 \
+    go build -trimpath -ldflags="-buildid= -s -w -X github.com/GoogleCloudPlatform/docker-credential-gcr/config.Version=${GCR_HELPER_VER#v}" . \
+ && cp docker-credential-gcr /usr/local/bin/docker-credential-gcr
+# RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 \
+#     go install -trimpath -ldflags=-buildid= github.com/GoogleCloudPlatform/docker-credential-gcr@${GCR_HELPER_VER} \
+#  && ( cp "${GOPATH}/bin/docker-credential-gcr" /usr/local/bin/docker-credential-gcr \
+#    || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-gcr" /usr/local/bin/docker-credential-gcr )
 
 FROM ${REGISTRY}/library/alpine:${ALPINE_VER} as release-alpine
 COPY --from=build /etc/passwd /etc/group /etc/
