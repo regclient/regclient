@@ -24,6 +24,7 @@ import (
 	"github.com/regclient/regclient/types/docker/schema2"
 	"github.com/regclient/regclient/types/manifest"
 	v1 "github.com/regclient/regclient/types/oci/v1"
+	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/regclient/regclient/types/tag"
 	"github.com/sirupsen/logrus"
@@ -86,8 +87,10 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 				"delete-date": now.String(),
 			},
 		},
-		OS:           "linux",
-		Architecture: "amd64",
+		Platform: platform.Platform{
+			OS:           "linux",
+			Architecture: "amd64",
+		},
 		History: []v1.History{
 			{
 				Created:   &now,
