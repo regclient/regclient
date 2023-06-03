@@ -37,6 +37,7 @@ type dagConfig struct {
 type dagManifest struct {
 	mod       changes
 	top       bool // indicates the top level manifest (needed for manifest lists)
+	origDesc  types.Descriptor
 	newDesc   types.Descriptor
 	m         manifest.Manifest
 	config    *dagOCIConfig
@@ -69,6 +70,7 @@ func dagGet(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, d types.
 	if err != nil {
 		return nil, err
 	}
+	dm.origDesc = dm.m.GetDescriptor()
 	if mi, ok := dm.m.(manifest.Indexer); ok {
 		dl, err := mi.GetManifestList()
 		if err != nil {

@@ -227,7 +227,7 @@ func init() {
 			}
 			return nil
 		},
-	}, "annotation", "", `set an annotation (name=value)`)
+	}, "annotation", "", `set an annotation (name=value, omit value to delete, prefix with platform list [p1,p2] or [*] for all images)`)
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {

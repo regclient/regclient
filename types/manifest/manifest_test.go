@@ -1407,6 +1407,15 @@ func TestSet(t *testing.T) {
 				if m.GetDescriptor().Digest == prevDig {
 					t.Errorf("digest did not change after setting annotation")
 				}
+				prevDig = m.GetDescriptor().Digest
+				err = ma.SetAnnotation("new annotation", "")
+				if err != nil {
+					t.Errorf("failed removing annotation: %v", err)
+					return
+				}
+				if m.GetDescriptor().Digest == prevDig {
+					t.Errorf("digest did not change after removing annotation")
+				}
 			} else if tt.expectAnnot {
 				t.Errorf("annotation methods not found")
 			}

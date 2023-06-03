@@ -3,6 +3,7 @@ package mod
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient"
@@ -13,67 +14,77 @@ import (
 	"github.com/regclient/regclient/types/ref"
 )
 
-// WithAnnotation adds an annotation, or deletes it if the value is set to an empty string
+// WithAnnotation adds an annotation, or deletes it if the value is set to an empty string.
+// If name is not prefixed with a platform selector, this only applies to the top level manifest.
+// Name may be prefixed with a list of platforms "[p1,p2,...]name", e.g. "[linux/amd64]com.example.field".
+// The platform selector may also be "[*]" to apply to all manifests, including the top level manifest list.
 func WithAnnotation(name, value string) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
-		// TODO: use Get/Set Annotations methods on manifests
+		// extract the list for platforms to update from the name
+		name = strings.TrimSpace(name)
+		platforms := []platform.Platform{}
+		allPlatforms := false
+		if name[0] == '[' && strings.Index(name, "]") > 0 {
+			end := strings.Index(name, "]")
+			list := strings.Split(name[1:end], ",")
+			for _, entry := range list {
+				entry = strings.TrimSpace(entry)
+				if entry == "*" {
+					allPlatforms = true
+					continue
+				}
+				p, err := platform.Parse(entry)
+				if err != nil {
+					return fmt.Errorf("failed to parse annotation platform %s: %w", entry, err)
+				}
+				platforms = append(platforms, p)
+			}
+			name = name[end+1:]
+		}
 		dc.stepsManifest = append(dc.stepsManifest, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
-			var err error
-			changed := false
-			// only annotate top manifest
-			if dm.mod == deleted || !dm.top {
+			// skip deleted manifest, those not in the platform list, or the non-top manifest if no platform list provided
+			if dm.mod == deleted {
 				return nil
 			}
-			om := dm.m.GetOrig()
-			if dm.m.IsList() {
-				ociI, err := manifest.OCIIndexFromAny(om)
-				if err != nil {
-					return err
+			if len(platforms) > 0 && !allPlatforms {
+				if dm.m.IsList() || dm.config == nil || dm.config.oc == nil {
+					return nil
 				}
-				if ociI.Annotations == nil {
-					ociI.Annotations = map[string]string{}
+				p := dm.config.oc.GetConfig().Platform
+				found := false
+				for _, pe := range platforms {
+					if platform.Match(p, pe) {
+						found = true
+						break
+					}
 				}
-				cur, ok := ociI.Annotations[name]
-				if value == "" && ok {
-					delete(ociI.Annotations, name)
-					changed = true
-				} else if value != "" && value != cur {
-					ociI.Annotations[name] = value
-					changed = true
-				}
-				err = manifest.OCIIndexToAny(ociI, &om)
-				if err != nil {
-					return err
-				}
-			} else {
-				ociM, err := manifest.OCIManifestFromAny(om)
-				if err != nil {
-					return err
-				}
-				if ociM.Annotations == nil {
-					ociM.Annotations = map[string]string{}
-				}
-				cur, ok := ociM.Annotations[name]
-				if value == "" && ok {
-					delete(ociM.Annotations, name)
-					changed = true
-				} else if value != "" && value != cur {
-					ociM.Annotations[name] = value
-					changed = true
-				}
-				err = manifest.OCIManifestToAny(ociM, &om)
-				if err != nil {
-					return err
+				if !found {
+					return nil
 				}
 			}
-			if changed {
-				dm.mod = replaced
-				err = dm.m.SetOrig(om)
-				if err != nil {
-					return err
-				}
-				dm.newDesc = dm.m.GetDescriptor()
+			if len(platforms) == 0 && !allPlatforms && !dm.top {
+				return nil
 			}
+			// check if annotation is already set to the correct value
+			ma := dm.m.(manifest.Annotator)
+			annotations, err := ma.GetAnnotations()
+			if err != nil {
+				return err
+			}
+			if annotations == nil {
+				annotations = map[string]string{}
+			}
+			cur, ok := annotations[name]
+			if (value == "" && !ok) || (value != "" && value == cur) {
+				return nil
+			}
+			// update annotation
+			err = ma.SetAnnotation(name, value)
+			if err != nil {
+				return err
+			}
+			dm.mod = replaced
+			dm.newDesc = dm.m.GetDescriptor()
 			return nil
 		})
 		return nil
@@ -84,7 +95,7 @@ func WithAnnotation(name, value string) Opts {
 func WithAnnotationOCIBase(rBase ref.Ref, dBase digest.Digest) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsManifest = append(dc.stepsManifest, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
-			if dm.mod == deleted || !dm.top {
+			if dm.mod == deleted {
 				return nil
 			}
 			annoBaseDig := "org.opencontainers.image.base.digest"
@@ -339,10 +350,10 @@ func WithManifestToOCIReferrers() Opts {
 			if dm.m.IsList() {
 				changed := false
 				dmLU := map[string]*dagManifest{
-					dm.m.GetDescriptor().Digest.String(): dm,
+					dm.origDesc.Digest.String(): dm,
 				}
 				for _, childDM := range dm.manifests {
-					dmLU[childDM.m.GetDescriptor().Digest.String()] = childDM
+					dmLU[childDM.origDesc.Digest.String()] = childDM
 				}
 				mi, ok := dm.m.(manifest.Indexer)
 				if !ok {
@@ -376,7 +387,7 @@ func WithManifestToOCIReferrers() Opts {
 					}
 					dmTgt, ok := dmLU[desc.Annotations["vnd.docker.reference.digest"]]
 					if !ok {
-						return fmt.Errorf("could not find digest, convert referrers before any other mod, digest=%s", desc.Annotations["vnd.docker.reference.digest"])
+						return fmt.Errorf("could not find digest, convert referrers before other mod actions, digest=%s", desc.Annotations["vnd.docker.reference.digest"])
 					}
 					dmMove.mod = added
 					sm, ok := dmMove.m.(manifest.Subjecter)
