@@ -115,24 +115,21 @@ func TestMod(t *testing.T) {
 				WithManifestToDocker(),
 				WithRefTgt(rTgt1),
 			},
-			ref:      "ocidir://testrepo:v1",
-			wantSame: false,
+			ref: "ocidir://testrepo:v1",
 		},
 		{
 			name: "Docker To OCI",
 			opts: []Opts{
 				WithManifestToOCI(),
 			},
-			ref:      rTgt1.CommonName(),
-			wantSame: false,
+			ref: rTgt1.CommonName(),
 		},
 		{
 			name: "To OCI Referrers",
 			opts: []Opts{
 				WithManifestToOCIReferrers(),
 			},
-			ref:      "ocidir://testrepo:v1",
-			wantSame: false,
+			ref: "ocidir://testrepo:v1",
 		},
 		{
 			name: "Add Annotation",
@@ -142,11 +139,49 @@ func TestMod(t *testing.T) {
 			ref: "ocidir://testrepo:v1",
 		},
 		{
+			name: "Add Annotation All",
+			opts: []Opts{
+				WithAnnotation("[*]test", "hello"),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Add Annotation AMD64/ARM64",
+			opts: []Opts{
+				WithAnnotation("[linux/amd64,linux/arm64]test", "hello"),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Add Annotation Missing",
+			opts: []Opts{
+				WithAnnotation("[linux/i386,linux/s390x]test", "hello"),
+			},
+			ref:      "ocidir://testrepo:v1",
+			wantSame: true,
+		},
+		{
+			name: "Add Annotation Platform Parse Error",
+			opts: []Opts{
+				WithAnnotation("[linux/invalid.arch!]test", "hello"),
+			},
+			ref:     "ocidir://testrepo:v1",
+			wantErr: fmt.Errorf("failed to parse annotation platform linux/invalid.arch!: invalid platform component invalid.arch! in linux/invalid.arch!"),
+		},
+		{
 			name: "Delete Annotation",
 			opts: []Opts{
 				WithAnnotation("org.example.version", ""),
 			},
 			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Delete Missing Annotation",
+			opts: []Opts{
+				WithAnnotation("[*]missing", ""),
+			},
+			ref:      "ocidir://testrepo:v1",
+			wantSame: true,
 		},
 		{
 			name: "Add Base Annotations",

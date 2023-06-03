@@ -86,23 +86,23 @@ regctl image mod \
   "ocidir://output/${image}:${release}" --replace \
   --to-oci-referrers \
   --time-max "${vcs_date}" \
-  --annotation "oci.opencontainers.image.created=${vcs_date}" \
-  --annotation "oci.opencontainers.image.source=${vcs_repo}" \
-  --annotation "oci.opencontainers.image.revision=${vcs_sha}" \
+  --annotation "[*]oci.opencontainers.image.created=${vcs_date}" \
+  --annotation "[*]oci.opencontainers.image.source=${vcs_repo}" \
+  --annotation "[*]oci.opencontainers.image.revision=${vcs_sha}" \
   >/dev/null
 
 if [ -n "$base_name" ] && [ -n "$base_digest" ]; then
   regctl image mod \
     "ocidir://output/${image}:${release}" --replace \
-    --annotation "oci.opencontainers.image.base.name=${base_name}" \
-    --annotation "oci.opencontainers.image.base.digest=${base_digest}" \
+    --annotation "[*]oci.opencontainers.image.base.name=${base_name}" \
+    --annotation "[*]oci.opencontainers.image.base.digest=${base_digest}" \
     >/dev/null
 fi
 
 # attach sboms to each platform
-echo "Attaching SBOMs"
 for digest in $(regctl manifest get ocidir://output/${image}:${release} --format '{{range .Manifests}}{{printf "%s\n" .Digest}}{{end}}'); do
-  regctl image copy ocidir://output/${image}@${digest} ocidir://output/${image}-sbom
+  echo "Attaching SBOMs for ${image}:${release}@${digest}"
+  regctl image copy ocidir://output/${image}@${digest} ocidir://output/${image}-sbom -v warn >/dev/null
   syft packages -q "oci-dir:output/${image}-sbom" --name "docker:docker.io/regclient/${image}@${digest}" -o cyclonedx-json \
     | regctl artifact put --subject "ocidir://output/${image}@${digest}" \
         --artifact-type application/vnd.cyclonedx+json \

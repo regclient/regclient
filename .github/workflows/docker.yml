@@ -150,13 +150,13 @@ jobs:
         regctl image mod "${local_tag}" --replace \
           --to-oci-referrers \
           --time-max "${vcs_date}" \
-          --annotation "oci.opencontainers.image.created=${vcs_date}" \
-          --annotation "oci.opencontainers.image.source=${{ steps.prep.outputs.repo_url }}" \
-          --annotation "oci.opencontainers.image.revision=${{ github.sha }}"
+          --annotation "[*]oci.opencontainers.image.created=${vcs_date}" \
+          --annotation "[*]oci.opencontainers.image.source=${{ steps.prep.outputs.repo_url }}" \
+          --annotation "[*]oci.opencontainers.image.revision=${{ github.sha }}"
         if [ -n "$base_name" ] && [ -n "$base_digest" ]; then
           regctl image mod "${local_tag}" --replace \
-            --annotation "oci.opencontainers.image.base.name=${base_name}" \
-            --annotation "oci.opencontainers.image.base.digest=${base_digest}"
+            --annotation "[*]oci.opencontainers.image.base.name=${base_name}" \
+            --annotation "[*]oci.opencontainers.image.base.digest=${base_digest}"
         fi
         echo "digest=$(regctl image digest ${local_tag})" >>$GITHUB_OUTPUT
 
@@ -168,7 +168,7 @@ jobs:
         for digest in $(regctl manifest get ocidir://output/${{matrix.image}}:${{matrix.type}} \
                         --format '{{range .Manifests}}{{printf "%s\n" .Digest}}{{end}}'); do
           echo "Attaching SBOMs for ${{matrix.image}}@${digest}"
-          regctl image copy ocidir://output/${{matrix.image}}@${digest} ocidir://output/${{matrix.image}}-sbom
+          regctl image copy ocidir://output/${{matrix.image}}@${digest} ocidir://output/${{matrix.image}}-sbom -v warn >/dev/null
           ${{steps.syft.outputs.cmd}} packages -q "oci-dir:output/${{matrix.image}}-sbom" \
               --name "docker:docker.io/regclient/${{matrix.image}}@${digest}" -o cyclonedx-json \
             | regctl artifact put --subject "ocidir://output/${{matrix.image}}@${digest}" \
