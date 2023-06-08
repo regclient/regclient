@@ -25,13 +25,14 @@
 {"name":"git-tag-semver","key":"github.com/sigstore/cosign","version":"v2.0.2"}
 {"name":"registry-digest-arg","key":"alpine:3","version":"sha256:02bb6f428431fbc2809c5d1b41eab5a68350194fb508869a33cb1af4444c9b11"}
 {"name":"registry-digest-arg","key":"golang:1.19-alpine","version":"sha256:2381c1e5f8350a901597d633b2e517775eeac7a6682be39225a93b22cfd0f8bb"}
-{"name":"registry-digest-arg","key":"golang:1.20-alpine","version":"sha256:ee2f23f1a612da71b8a4cd78fec827f1e67b0a8546a98d257cca441a4ddbebcb"}
+{"name":"registry-digest-arg","key":"golang:1.20-alpine","version":"sha256:b036c52b3bcc8e4e31be19a7a902bb9897b2bf18028f40fd306a9778bab5771c"}
 {"name":"registry-digest-match","key":"anchore/syft:v0.72.0","version":"sha256:f4735b4c31d4b9ad979eb650712cdcdb1156afe80c7d63653ac87439b379e468"}
 {"name":"registry-digest-match","key":"anchore/syft:v0.73.0","version":"sha256:6a13beb5cc8eedb2a42a5b91a69a36105880a2a1fdba75cc8c4dbcd61a0eed2b"}
 {"name":"registry-digest-match","key":"anchore/syft:v0.77.0","version":"sha256:0135d844712731b86fab20ea584e594ad25b9f5a7fd262b5feb490e865edef89"}
 {"name":"registry-digest-match","key":"anchore/syft:v0.82.0","version":"sha256:d20096d5c42a8f023499a9bba80a93994609f0d5af123dfe6ff15db1c8921652"}
+{"name":"registry-digest-match","key":"anchore/syft:v0.83.0","version":"sha256:69fcf21cdd4c577d6949dca4d28549d19724b244dfb539509544be166b53ead3"}
 {"name":"registry-golang-latest","key":"golang-latest","version":"1.20"}
 {"name":"registry-golang-matrix","key":"golang-matrix","version":"[\"1.18\", \"1.19\", \"1.20\"]"}
-{"name":"registry-tag-arg-semver","key":"anchore/syft","version":"v0.82.0"}
+{"name":"registry-tag-arg-semver","key":"anchore/syft","version":"v0.83.0"}
 {"name":"registry-tag-arg-semver","key":"ghcr.io/igorshubovych/markdownlint-cli","version":"v0.34.0"}
-{"name":"registry-tag-match-semver","key":"anchore/syft","version":"v0.82.0"}
+{"name":"registry-tag-match-semver","key":"anchore/syft","version":"v0.83.0"}
