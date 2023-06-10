@@ -37,8 +37,8 @@ const (
 	MediaTypeOCI1ForeignLayerGzip = "application/vnd.oci.image.layer.nondistributable.v1.tar+gzip"
 	// MediaTypeOCI1ForeignLayerZstd is the zstd compressed foreign layer for OCI v1
 	MediaTypeOCI1ForeignLayerZstd = "application/vnd.oci.image.layer.nondistributable.v1.tar+zstd"
-	// MediaTypeOCI1Scratch is used for blobs containing the scratch data `{}`
-	MediaTypeOCI1Scratch = "application/vnd.oci.scratch.v1+json"
+	// MediaTypeOCI1Empty is used for blobs containing the empty JSON data `{}`
+	MediaTypeOCI1Empty = "application/vnd.oci.empty.v1+json"
 	// MediaTypeBuildkitCacheConfig is used by buildkit cache images
 	MediaTypeBuildkitCacheConfig = "application/vnd.buildkit.cacheconfig.v0"
 )
