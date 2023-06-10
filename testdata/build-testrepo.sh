@@ -112,4 +112,42 @@ v3_dig="$(regctl image digest ocidir://testrepo:v3)"
 v3_shortdig="$(echo ${v3_dig#*:} | cut -b1-16)"
 regctl image copy ocidir://testrepo:v3 "ocidir://testrepo:sha256-${v1_dig}.${v3_shortdig}.meta"
 
+echo "child" | regctl artifact put --artifact-type application/example.child ocidir://testrepo:child
+dig_tag="$(regctl manifest head --format 'sha256-{{.GetDescriptor.Digest.Hex}}' ocidir://testrepo:child)"
+mt="$(regctl manifest head --format '{{.GetDescriptor.MediaType}}' ocidir://testrepo:child)"
+size="$(regctl manifest head --format '{{.GetDescriptor.Size}}' ocidir://testrepo:child)"
+digest="$(regctl manifest head --format '{{.GetDescriptor.Digest}}' ocidir://testrepo:child)"
+regctl manifest put ocidir://testrepo:loop <<EOF
+{
+  "schemaVersion": 2,
+  "mediaType": "application/vnd.oci.image.index.v1+json",
+  "manifests": [
+    {
+      "mediaType": "${mt}",
+      "size": ${size},
+      "digest": "${digest}"
+    }
+  ],
+  "subject": {
+    "mediaType": "${mt}",
+    "size": ${size},
+    "digest": "${digest}"
+  }
+}
+EOF
+regctl manifest put ocidir://testrepo:${dig_tag} <<EOF
+{
+  "schemaVersion": 2,
+  "mediaType": "application/vnd.oci.image.index.v1+json",
+  "manifests": [
+    {
+      "mediaType": "${mt}",
+      "size": ${size},
+      "digest": "${digest}",
+      "artifactType": "application/example.child"
+    }
+  ]
+}
+EOF
+
 rm b1.tar b2.tar b3.tar
