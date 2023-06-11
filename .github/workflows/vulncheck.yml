@@ -18,7 +18,8 @@ jobs:
     - name: "Set up Go"
       uses: actions/setup-go@v4
       with:
-        go-version: "${{ env.RELEASE_GO_VER }}.x"
+        go-version: "${{ env.RELEASE_GO_VER }}"
+        check-latest: true
 
     - name: "Install govulncheck"
       run: |

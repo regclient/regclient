@@ -35,7 +35,8 @@ jobs:
     - name: "Set up Go ${{ matrix.gover }}"
       uses: actions/setup-go@v4
       with:
-        go-version: "${{ matrix.gover }}.x"
+        go-version: "${{ matrix.gover }}"
+        check-latest: true
       id: go
 
     - name: Get dependencies
