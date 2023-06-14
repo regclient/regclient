@@ -3,6 +3,7 @@ name: Vulnerability Check
 on:
   schedule:
     - cron: '0 06 * * 0' # 6am UTC on Sundays
+  workflow_dispatch:
 
 jobs:
   govunlcheck:
