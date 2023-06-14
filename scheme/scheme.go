@@ -4,6 +4,8 @@ package scheme
 import (
 	"context"
 	"io"
+	"sort"
+	"strings"
 
 	"github.com/regclient/regclient/internal/throttle"
 	"github.com/regclient/regclient/types"
@@ -104,6 +106,8 @@ type ReferrerConfig struct {
 	FilterArtifactType string
 	FilterAnnotation   map[string]string
 	Platform           string
+	SortAnnotation     string
+	SortDesc           bool
 }
 
 // ReferrerOpts is used to set options on referrer APIs
@@ -157,6 +161,29 @@ func ReferrerFilter(config ReferrerConfig, rlIn referrer.ReferrerList) referrer.
 			}
 		}
 	}
+	// sort the results if requested
+	if config.SortAnnotation != "" {
+		sort.Slice(rlOut.Descriptors, func(i, j int) bool {
+			// if annotations are not defined, sort to the very end
+			if rlOut.Descriptors[i].Annotations == nil {
+				return false
+			}
+			if _, ok := rlOut.Descriptors[i].Annotations[config.SortAnnotation]; !ok {
+				return false
+			}
+			if rlOut.Descriptors[j].Annotations == nil {
+				return true
+			}
+			if _, ok := rlOut.Descriptors[j].Annotations[config.SortAnnotation]; !ok {
+				return true
+			}
+			// else sort by string
+			if strings.Compare(rlOut.Descriptors[i].Annotations[config.SortAnnotation], rlOut.Descriptors[j].Annotations[config.SortAnnotation]) < 0 {
+				return !config.SortDesc
+			}
+			return config.SortDesc
+		})
+	}
 	return rlOut
 }
 
@@ -164,6 +191,14 @@ func ReferrerFilter(config ReferrerConfig, rlIn referrer.ReferrerList) referrer.
 func WithReferrerPlatform(platform string) ReferrerOpts {
 	return func(config *ReferrerConfig) {
 		config.Platform = platform
+	}
+}
+
+// WithReferrerSort orders the resulting referrers listing according to a specified annotation.
+func WithReferrerSort(annotation string, desc bool) ReferrerOpts {
+	return func(config *ReferrerConfig) {
+		config.SortAnnotation = annotation
+		config.SortDesc = desc
 	}
 }
 
