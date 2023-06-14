@@ -107,6 +107,8 @@ var artifactOpts struct {
 	outputDir        string
 	platform         string
 	refers           string
+	sortAnnot        string
+	sortDesc         bool
 	stripDirs        bool
 	subject          string
 }
@@ -126,11 +128,15 @@ func init() {
 	artifactGetCmd.Flags().BoolVarP(&artifactOpts.stripDirs, "strip-dirs", "", false, "Strip directories from filenames in output dir")
 	artifactGetCmd.Flags().StringVarP(&artifactOpts.refers, "refers", "", "", "Deprecated: Get a referrer to the reference")
 	artifactGetCmd.Flags().MarkHidden("refers")
+	artifactGetCmd.Flags().StringVar(&artifactOpts.sortAnnot, "sort-annotation", "", "Annotation used for sorting results")
+	artifactGetCmd.Flags().BoolVar(&artifactOpts.sortDesc, "sort-desc", false, "Sort in descending order")
 
 	artifactListCmd.Flags().StringVarP(&artifactOpts.filterAT, "filter-artifact-type", "", "", "Filter descriptors by artifactType")
 	artifactListCmd.Flags().StringArrayVarP(&artifactOpts.filterAnnot, "filter-annotation", "", []string{}, "Filter descriptors by annotation (key=value)")
 	artifactListCmd.Flags().StringVarP(&artifactOpts.formatList, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	artifactListCmd.Flags().StringVarP(&artifactOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
+	artifactListCmd.Flags().StringVar(&artifactOpts.sortAnnot, "sort-annotation", "", "Annotation used for sorting results")
+	artifactListCmd.Flags().BoolVar(&artifactOpts.sortDesc, "sort-desc", false, "Sort in descending order")
 
 	artifactPutCmd.Flags().StringVarP(&artifactOpts.artifactMT, "media-type", "", types.MediaTypeOCI1Manifest, "EXPERIMENTAL: Manifest media-type")
 	artifactPutCmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -217,6 +223,9 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 		if artifactOpts.platform != "" {
 			referrerOpts = append(referrerOpts, scheme.WithReferrerPlatform(artifactOpts.platform))
 		}
+		if artifactOpts.sortAnnot != "" {
+			referrerOpts = append(referrerOpts, scheme.WithReferrerSort(artifactOpts.sortAnnot, artifactOpts.sortDesc))
+		}
 
 		rl, err := rc.ReferrerList(ctx, rSubject, referrerOpts...)
 		if err != nil {
@@ -224,8 +233,8 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 		}
 		if len(rl.Descriptors) == 0 {
 			return fmt.Errorf("no matching referrers to %s", artifactOpts.subject)
-		} else if len(rl.Descriptors) > 1 {
-			log.Warnf("found %d matching referrers to %s, using first match", len(rl.Descriptors), artifactOpts.subject)
+		} else if len(rl.Descriptors) > 1 && artifactOpts.sortAnnot == "" {
+			log.Warnf("found %d matching referrers to %s, using first match, use --sort-annotation", len(rl.Descriptors), artifactOpts.subject)
 		}
 		r = rSubject
 		r.Tag = ""
@@ -429,6 +438,9 @@ func runArtifactList(cmd *cobra.Command, args []string) error {
 	}
 	if artifactOpts.platform != "" {
 		referrerOpts = append(referrerOpts, scheme.WithReferrerPlatform(artifactOpts.platform))
+	}
+	if artifactOpts.sortAnnot != "" {
+		referrerOpts = append(referrerOpts, scheme.WithReferrerSort(artifactOpts.sortAnnot, artifactOpts.sortDesc))
 	}
 
 	rl, err := rc.ReferrerList(ctx, rSubject, referrerOpts...)

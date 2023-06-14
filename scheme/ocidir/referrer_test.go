@@ -42,6 +42,7 @@ func TestReferrer(t *testing.T) {
 	bType := "application/example.sig"
 	cType := "application/example.attestation"
 	extraAnnot := "org.opencontainers.artifact.sbom.format"
+	timeAnnot := "org.opencontainers.image.created"
 	extraValueA := "json"
 	extraValueB := "yaml"
 	digest1 := digest.FromString("example1")
@@ -60,6 +61,7 @@ func TestReferrer(t *testing.T) {
 	// artifact being attached
 	artifactAAnnot := map[string]string{
 		extraAnnot: extraValueA,
+		timeAnnot:  "2020-01-02T03:04:05Z",
 	}
 	mDesc := m.GetDescriptor()
 	pAMDStr := "linux/amd64"
@@ -101,6 +103,7 @@ func TestReferrer(t *testing.T) {
 	}
 	artifactBAnnot := map[string]string{
 		extraAnnot: extraValueB,
+		timeAnnot:  "2021-02-03T04:05:06Z",
 	}
 	artifactB := v1.ArtifactManifest{
 		MediaType:    types.MediaTypeOCI1Artifact,
@@ -193,7 +196,7 @@ func TestReferrer(t *testing.T) {
 			t.Errorf("Failed creating getRef: %v", err)
 			return
 		}
-		rl, err := o.ReferrerList(ctx, r)
+		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerSort(timeAnnot, false))
 		if err != nil {
 			t.Errorf("Failed running ReferrerList: %v", err)
 			return
@@ -220,6 +223,20 @@ func TestReferrer(t *testing.T) {
 		}
 		if len(rl.Tags) != 1 || rl.Tags[0] != tagRef {
 			t.Errorf("tag list missing entries, received: %v", rl.Tags)
+		}
+		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerSort(timeAnnot, true))
+		if err != nil {
+			t.Errorf("Failed running ReferrerList reverse: %v", err)
+			return
+		}
+		if len(rl.Descriptors) != 2 {
+			t.Errorf("descriptor list length, expected 2, received %d", len(rl.Descriptors))
+			return
+		}
+		// check order of responses
+		if rl.Descriptors[0].Digest != artifactBM.GetDescriptor().Digest ||
+			rl.Descriptors[1].Digest != artifactAM.GetDescriptor().Digest {
+			t.Errorf("referrers not reverse sorted: %v", rl.Descriptors[1])
 		}
 	})
 	t.Run("List with artifact filter", func(t *testing.T) {
