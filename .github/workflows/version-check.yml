@@ -3,6 +3,7 @@ name: Version Check
 on:
   schedule:
     - cron: '0 05 * * 0'
+  workflow_dispatch:
 
 jobs:
   test:
