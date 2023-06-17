@@ -793,11 +793,14 @@ func runArtifactTree(cmd *cobra.Command, args []string) error {
 
 	seen := []string{}
 	tr, err := treeAddResult(ctx, rc, r, seen, referrerOpts)
+	var twErr error
+	if tr != nil {
+		twErr = template.Writer(cmd.OutOrStdout(), artifactOpts.formatTree, tr)
+	}
 	if err != nil {
 		return err
 	}
-
-	return template.Writer(cmd.OutOrStdout(), artifactOpts.formatTree, tr)
+	return twErr
 }
 
 func treeAddResult(ctx context.Context, rc *regclient.RegClient, r ref.Ref, seen []string, rOpts []scheme.ReferrerOpts) (*treeResult, error) {
@@ -818,8 +821,7 @@ func treeAddResult(ctx context.Context, rc *regclient.RegClient, r ref.Ref, seen
 	// track already seen manifests
 	dig := m.GetDescriptor().Digest.String()
 	if sliceHasStr(seen, dig) {
-		// loop detected, consider making this an error
-		return &tr, fmt.Errorf("loop detected")
+		return &tr, fmt.Errorf("%w, already processed %s", ErrLoopEncountered, dig)
 	}
 	seen = append(seen, dig)
 
@@ -828,33 +830,35 @@ func treeAddResult(ctx context.Context, rc *regclient.RegClient, r ref.Ref, seen
 		tr.Child = []*treeResult{}
 		mi, ok := m.(manifest.Indexer)
 		if !ok {
-			return nil, fmt.Errorf("failed to convert a manifest list to indexer for %s", r.CommonName())
+			return &tr, fmt.Errorf("failed to convert a manifest list to indexer for %s", r.CommonName())
 		}
 		dl, err := mi.GetManifestList()
 		if err != nil {
-			return nil, fmt.Errorf("failed to get platforms for %s: %w", r.CommonName(), err)
+			return &tr, fmt.Errorf("failed to get platforms for %s: %w", r.CommonName(), err)
 		}
 		for _, d := range dl {
 			rChild := r
 			rChild.Tag = ""
 			rChild.Digest = d.Digest.String()
 			tChild, err := treeAddResult(ctx, rc, rChild, seen, rOpts)
+			if tChild != nil {
+				tChild.ArtifactType = d.ArtifactType
+				if d.Platform != nil {
+					pCopy := *d.Platform
+					tChild.Platform = &pCopy
+				}
+				tr.Child = append(tr.Child, tChild)
+			}
 			if err != nil {
-				return nil, err
+				return &tr, err
 			}
-			tChild.ArtifactType = d.ArtifactType
-			if d.Platform != nil {
-				pCopy := *d.Platform
-				tChild.Platform = &pCopy
-			}
-			tr.Child = append(tr.Child, tChild)
 		}
 	}
 
 	// get referrers
 	rl, err := rc.ReferrerList(ctx, r, rOpts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check referrers for %s: %w", r.CommonName(), err)
+		return &tr, fmt.Errorf("failed to check referrers for %s: %w", r.CommonName(), err)
 	}
 	if len(rl.Descriptors) > 0 {
 		tr.Referrer = []*treeResult{}
@@ -863,15 +867,17 @@ func treeAddResult(ctx context.Context, rc *regclient.RegClient, r ref.Ref, seen
 			rReferrer.Tag = ""
 			rReferrer.Digest = d.Digest.String()
 			tReferrer, err := treeAddResult(ctx, rc, rReferrer, seen, rOpts)
+			if tReferrer != nil {
+				tReferrer.ArtifactType = d.ArtifactType
+				if d.Platform != nil {
+					pCopy := *d.Platform
+					tReferrer.Platform = &pCopy
+				}
+				tr.Referrer = append(tr.Referrer, tReferrer)
+			}
 			if err != nil {
-				return nil, err
+				return &tr, err
 			}
-			tReferrer.ArtifactType = d.ArtifactType
-			if d.Platform != nil {
-				pCopy := *d.Platform
-				tReferrer.Platform = &pCopy
-			}
-			tr.Referrer = append(tr.Referrer, tReferrer)
 		}
 	}
 

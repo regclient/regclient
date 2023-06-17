@@ -126,6 +126,11 @@ func TestArtifactTree(t *testing.T) {
 			outContains: true,
 		},
 		{
+			name:      "Loop",
+			args:      []string{"artifact", "tree", "ocidir://../../testdata/testrepo:loop"},
+			expectErr: ErrLoopEncountered,
+		},
+		{
 			name:        "Referrers",
 			args:        []string{"artifact", "tree", "ocidir://../../testdata/testrepo:v2"},
 			expectOut:   "Referrers",
