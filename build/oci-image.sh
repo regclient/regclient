@@ -43,7 +43,8 @@ git_root="$(git rev-parse --show-toplevel)"
 cd "${git_root}"
 export PATH="$PATH:${git_root}/bin"
 now_date="$(date +%Y-%m-%dT%H:%M:%SZ --utc)"
-vcs_date="$(date -d "@$(git log -1 --format=%at)" +%Y-%m-%dT%H:%M:%SZ --utc)"
+vcs_sec="$(git log -1 --format=%ct)"
+vcs_date="$(date -d "@${vcs_sec}" +%Y-%m-%dT%H:%M:%SZ --utc)"
 vcs_repo="https://github.com/regclient/regclient.git"
 vcs_sha="$(git rev-list -1 HEAD)"
 vcs_describe="$(git describe --all)"
@@ -57,29 +58,31 @@ elif [ "${vcs_describe}" != "${vcs_describe#heads/}" ]; then
   fi
 fi
 vcs_version="$(echo "${vcs_version}" | sed -r 's#/+#-#g')"
-buildx_opts=""
+
+build_opts=""
 if [ -n "$base_name" ] && [ -z "$base_digest" ]; then
   base_digest="$(regctl image digest "${base_name}")"
   echo "Base image digest: ${base_digest}"
 elif [ -n "$base_name" ] && [ -n "$base_digest" ]; then
-  buildx_opts=--build-context "${base_name}=docker-image://${base_name}@${base_digest}"
+  build_opts=--build-context "${base_name}=docker-image://${base_name}@${base_digest}"
 fi
-
 [ -d "output" ] || mkdir -p output
-build_opts=""
 if [ "${opt_c}" = "0" ]; then
   build_opts="$build_opts --no-cache"
 fi
-docker buildx build --platform="$platforms" -f "build/Dockerfile.${image}.buildkit" \
+docker buildx build --platform="$platforms" \
+  -f "build/Dockerfile.${image}.buildkit" \
   -o "type=oci,dest=output/${image}-${release}.tar" \
-  --target "release-${release}" ${buildx_opts} \
+  --target "release-${release}" \
+  --build-arg "SOURCE_DATE_EPOCH=${vcs_sec}" \
   --label org.opencontainers.image.created=${vcs_date} \
   --label org.opencontainers.image.source=${vcs_repo} \
   --label org.opencontainers.image.version=${vcs_version} \
   --label org.opencontainers.image.revision=${vcs_sha} \
   ${build_opts} .
+
 echo "Importing tar"
-regctl manifest rm --referrers "ocidir://output/${image}:${release}" 2>/dev/null || true
+regctl manifest rm --referrers --force-tag-dereference "ocidir://output/${image}:${release}" 2>/dev/null || true
 regctl image import "ocidir://output/${image}:${release}" "output/${image}-${release}.tar"
 echo "Modding image"
 regctl image mod \

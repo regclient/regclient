@@ -69,12 +69,14 @@ jobs:
             TAGS="${TAGS},${GHCR_IMAGE}:${{ matrix.type }}"
           fi
         fi
-        VCS_DATE="$(date -d "@$(git log -1 --format=%at)" +%Y-%m-%dT%H:%M:%SZ --utc)"
+        VCS_SEC="$(git log -1 --format=%ct)"
+        VCS_DATE="$(date -d "@${VCS_SEC}" +%Y-%m-%dT%H:%M:%SZ --utc)"
         REPO_URL="${{github.server_url}}/${{github.repository}}.git"
         echo "version=${VERSION}" >>$GITHUB_OUTPUT
         echo "image_hub=${HUB_IMAGE}" >>$GITHUB_OUTPUT
         echo "image_ghcr=${GHCR_IMAGE}" >>$GITHUB_OUTPUT
         echo "tags=${TAGS}" >>$GITHUB_OUTPUT
+        echo "vcs_sec=${VCS_SEC}" >>$GITHUB_OUTPUT
         echo "created=${VCS_DATE}" >>$GITHUB_OUTPUT
         echo "repo_url=${REPO_URL}" >>$GITHUB_OUTPUT
 
@@ -105,6 +107,8 @@ jobs:
         platforms: linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x
         target: release-${{ matrix.type }}
         outputs: type=oci,dest=output/${{matrix.image}}-${{matrix.type}}.tar
+        build-args: |
+          SOURCE_DATE_EPOC=${{ steps.prep.outputs.vcs_sec }}
         labels: |
           org.opencontainers.image.created=${{ steps.prep.outputs.created }}
           org.opencontainers.image.source=${{ steps.prep.outputs.repo_url }}

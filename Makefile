@@ -9,7 +9,6 @@ VCS_REF?=$(shell git rev-list -1 HEAD)
 ifneq ($(shell git status --porcelain 2>/dev/null),)
   VCS_REF := $(VCS_REF)-dirty
 endif
-VCS_DATE?=$(shell date -d "@$(shell git log -1 --format=%at)" +%Y-%m-%dT%H:%M:%SZ --utc)
 VCS_TAG?=$(shell git describe --tags --abbrev=0 2>/dev/null || true)
 LD_FLAGS?=-s -w -extldflags -static -buildid= -X \"github.com/regclient/regclient/internal/version.vcsTag=$(VCS_TAG)\"
 GO_BUILD_FLAGS?=-trimpath -ldflags "$(LD_FLAGS)" -tags nolegacy
@@ -97,6 +96,7 @@ artifact-pre:
 	mkdir -p artifacts
 
 artifacts/%: artifact-pre .FORCE
+	set -e; \
 	@target="$*"; \
 	command="$${target%%-*}"; \
 	platform_ext="$${target#*-}"; \
