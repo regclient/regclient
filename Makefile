@@ -24,11 +24,11 @@ ifeq "$(strip $(VER_BUMP))" ''
 		-u "$(shell id -u):$(shell id -g)" \
 		$(VER_BUMP_CONTAINER)
 endif
-MARKDOWN_LINT_VER?=v0.34.0
+MARKDOWN_LINT_VER?=v0.35.0
 SYFT?=$(shell command -v syft 2>/dev/null)
 SYFT_CMD_VER:=$(shell [ -x "$(SYFT)" ] && echo "v$$($(SYFT) version | awk '/^Version: / {print $$2}')" || echo "0")
-SYFT_VERSION?=v0.83.0
-SYFT_CONTAINER?=anchore/syft:v0.83.0@sha256:69fcf21cdd4c577d6949dca4d28549d19724b244dfb539509544be166b53ead3
+SYFT_VERSION?=v0.83.1
+SYFT_CONTAINER?=anchore/syft:v0.83.1@sha256:0f98d58b87b3bf5c4676c0d6481f9430f240ec19d39d6127e3d8a081408fe376
 ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 	SYFT=docker run --rm \
 		-v "$(shell pwd)/:$(shell pwd)/" -w "$(shell pwd)" \
@@ -107,8 +107,8 @@ artifacts/%: artifact-pre .FORCE
 	echo export GOARCH=$${GOARCH}; \
 	echo go build ${GO_BUILD_FLAGS} -o "$@" ./cmd/$${command}/; \
 	CGO_ENABLED=0 go build ${GO_BUILD_FLAGS} -o "$@" ./cmd/$${command}/; \
-	$(SYFT) packages -q "file:$@" --name "$${command}" -o cyclonedx-json >"artifacts/$${command}-$${platform}.cyclonedx.json"; \
-	$(SYFT) packages -q "file:$@" --name "$${command}" -o spdx-json >"artifacts/$${command}-$${platform}.spdx.json"
+	$(SYFT) packages -q "file:$@" --source-name "$${command}" -o cyclonedx-json >"artifacts/$${command}-$${platform}.cyclonedx.json"; \
+	$(SYFT) packages -q "file:$@" --source-name "$${command}" -o spdx-json >"artifacts/$${command}-$${platform}.spdx.json"
 
 plugin-user:
 	mkdir -p ${HOME}/.docker/cli-plugins/
