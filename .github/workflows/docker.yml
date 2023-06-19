@@ -126,7 +126,7 @@ jobs:
       uses: anchore/sbom-action/download-syft@v0.14.2
       id: syft
       with:
-        syft-version: "v0.83.0"
+        syft-version: "v0.83.1"
     
     # Dogfooding, use regctl to modify regclient images to improve reproducibility
     - name: Install regctl
@@ -174,14 +174,14 @@ jobs:
           echo "Attaching SBOMs for ${{matrix.image}}@${digest}"
           regctl image copy ocidir://output/${{matrix.image}}@${digest} ocidir://output/${{matrix.image}}-sbom -v warn >/dev/null
           ${{steps.syft.outputs.cmd}} packages -q "oci-dir:output/${{matrix.image}}-sbom" \
-              --name "docker:docker.io/regclient/${{matrix.image}}@${digest}" -o cyclonedx-json \
+              --source-name "docker:docker.io/regclient/${{matrix.image}}@${digest}" -o cyclonedx-json \
             | regctl artifact put --subject "ocidir://output/${{matrix.image}}@${digest}" \
                 --artifact-type application/vnd.cyclonedx+json \
                 -m application/vnd.cyclonedx+json \
                 --annotation "org.opencontainers.artifact.created=${now_date}" \
                 --annotation "org.opencontainers.artifact.description=CycloneDX JSON SBOM"
           ${{steps.syft.outputs.cmd}} packages -q "oci-dir:output/${{matrix.image}}-sbom" \
-              --name "docker:docker.io/regclient/${{matrix.image}}@${digest}" -o spdx-json \
+              --source-name "docker:docker.io/regclient/${{matrix.image}}@${digest}" -o spdx-json \
             | regctl artifact put --subject "ocidir://output/${{matrix.image}}@${digest}" \
                 --artifact-type application/spdx+json \
                 -m application/spdx+json \
