@@ -2,7 +2,7 @@ ARG REGISTRY=docker.io
 ARG ALPINE_VER=3@sha256:02bb6f428431fbc2809c5d1b41eab5a68350194fb508869a33cb1af4444c9b11
 ARG GO_VER=1.20-alpine@sha256:b036c52b3bcc8e4e31be19a7a902bb9897b2bf18028f40fd306a9778bab5771c
 ARG ECR_HELPER_VER=7f2db5bd753edc4c799d8b932941d8871a70d130
-ARG GCR_HELPER_VER=v2.1.8
+ARG GCR_HELPER_VER=v2.1.10
 
 FROM ${REGISTRY}/library/golang:${GO_VER} as golang
 RUN apk add --no-cache \
@@ -14,14 +14,11 @@ RUN adduser -D appuser \
  && chown -R appuser /home/appuser
 WORKDIR /src
 
-FROM golang as dev
+FROM golang as build
+COPY Makefile go.mod go.sum /src/
+RUN make vendor
 COPY . /src/
-ENV PATH=${PATH}:/src/bin
-CMD make bin/regsync && bin/regsync
-
-FROM dev as build
-ARG LD_FLAGS
-RUN make vendor bin/regsync
+RUN make bin/regsync
 USER appuser
 CMD [ "bin/regsync" ]
 
@@ -37,16 +34,11 @@ FROM golang as docker-cred-gcr
 ARG TARGETOS
 ARG TARGETARCH
 ARG GCR_HELPER_VER
-# TODO: remove workaround, pending issue https://github.com/GoogleCloudPlatform/docker-credential-gcr/issues/128
-RUN git clone https://github.com/GoogleCloudPlatform/docker-credential-gcr.git -b ${GCR_HELPER_VER} --depth 1
-WORKDIR ./docker-credential-gcr
 RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 \
-    go build -trimpath -ldflags="-buildid= -s -w -X github.com/GoogleCloudPlatform/docker-credential-gcr/config.Version=${GCR_HELPER_VER#v}" . \
- && cp docker-credential-gcr /usr/local/bin/docker-credential-gcr
-# RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 \
-#     go install -trimpath -ldflags=-buildid= github.com/GoogleCloudPlatform/docker-credential-gcr@${GCR_HELPER_VER} \
-#  && ( cp "${GOPATH}/bin/docker-credential-gcr" /usr/local/bin/docker-credential-gcr \
-#    || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-gcr" /usr/local/bin/docker-credential-gcr )
+    go install -trimpath -ldflags="-buildid= -s -w" \
+      github.com/GoogleCloudPlatform/docker-credential-gcr/v2@${GCR_HELPER_VER} \
+ && ( cp "${GOPATH}/bin/docker-credential-gcr" /usr/local/bin/docker-credential-gcr \
+   || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-gcr" /usr/local/bin/docker-credential-gcr )
 
 FROM ${REGISTRY}/library/alpine:${ALPINE_VER} as release-alpine
 COPY --from=build /etc/passwd /etc/group /etc/
