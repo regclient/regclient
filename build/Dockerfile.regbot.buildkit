@@ -20,18 +20,18 @@ RUN addgroup -g 1000 appuser \
 WORKDIR /src
 
 FROM --platform=$BUILDPLATFORM golang as build
-COPY Makefile go.mod go.sum /src/
+COPY go.* /src/
 ARG TARGETOS
 ARG TARGETARCH
 RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
     --mount=type=cache,id=goroot,target=/root/.cache/go-build \
     GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    make vendor
+    go mod download
 COPY . /src/
 RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
     --mount=type=cache,id=goroot,target=/root/.cache/go-build \
     GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    make bin/regbot
+    make vendor bin/regbot
 USER appuser
 CMD [ "bin/regbot" ]
 

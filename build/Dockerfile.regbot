@@ -17,10 +17,10 @@ RUN adduser -D appuser \
 WORKDIR /src
 
 FROM golang as build
-COPY Makefile go.mod go.sum /src/
-RUN make vendor
+COPY go.* /src/
+RUN go mod download
 COPY . /src/
-RUN make bin/regbot
+RUN make vendor bin/regbot
 USER appuser
 CMD [ "/src/bin/regbot" ]
 
