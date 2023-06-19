@@ -679,10 +679,15 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 		for _, tag := range opt.tagList {
 			if strings.HasPrefix(tag, prefix) {
 				// skip referrers that were copied above
+				found := false
 				for _, referrerTag := range referrerTags {
 					if referrerTag == tag {
-						continue
+						found = true
+						break
 					}
+				}
+				if found {
+					continue
 				}
 				refTagSrc := refSrc
 				refTagSrc.Tag = tag
