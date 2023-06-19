@@ -96,8 +96,8 @@ artifact-pre:
 	mkdir -p artifacts
 
 artifacts/%: artifact-pre .FORCE
-	set -e; \
-	@target="$*"; \
+	@set -e; \
+	target="$*"; \
 	command="$${target%%-*}"; \
 	platform_ext="$${target#*-}"; \
 	platform="$${platform_ext%.*}"; \
