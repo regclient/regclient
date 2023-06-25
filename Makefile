@@ -27,8 +27,8 @@ endif
 MARKDOWN_LINT_VER?=v0.35.0
 SYFT?=$(shell command -v syft 2>/dev/null)
 SYFT_CMD_VER:=$(shell [ -x "$(SYFT)" ] && echo "v$$($(SYFT) version | awk '/^Version: / {print $$2}')" || echo "0")
-SYFT_VERSION?=v0.83.1
-SYFT_CONTAINER?=anchore/syft:v0.83.1@sha256:0f98d58b87b3bf5c4676c0d6481f9430f240ec19d39d6127e3d8a081408fe376
+SYFT_VERSION?=v0.84.0
+SYFT_CONTAINER?=anchore/syft:v0.84.0@sha256:bd5ef3acf08b5be457905430f8fcda530d907bb173bf086e4749acb41077acb1
 ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 	SYFT=docker run --rm \
 		-v "$(shell pwd)/:$(shell pwd)/" -w "$(shell pwd)" \
