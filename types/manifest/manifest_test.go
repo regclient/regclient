@@ -516,6 +516,44 @@ func TestNew(t *testing.T) {
 			hasSubject:  true,
 		},
 		{
+			name: "OCI 1 Manifest",
+			opts: []Opts{
+				WithRef(r),
+				WithRaw(rawOCIImage),
+			},
+			wantR: r,
+			wantDesc: types.Descriptor{
+				MediaType: types.MediaTypeOCI1Manifest,
+				Size:      int64(len(rawOCIImage)),
+				Digest:    digestOCIImage,
+			},
+			wantE:       nil,
+			isSet:       true,
+			testAnnot:   true,
+			testSubject: true,
+			hasAnnot:    true,
+			hasSubject:  true,
+		},
+		{
+			name: "OCI 1 Manifest List",
+			opts: []Opts{
+				WithRef(r),
+				WithRaw(rawOCIIndex),
+			},
+			wantR: r,
+			wantDesc: types.Descriptor{
+				MediaType: types.MediaTypeOCI1ManifestList,
+				Size:      int64(len(rawOCIIndex)),
+				Digest:    digestOCIIndex,
+			},
+			wantE:       nil,
+			isSet:       true,
+			testAnnot:   true,
+			testSubject: true,
+			hasAnnot:    true,
+			hasSubject:  true,
+		},
+		{
 			name: "Header Request Docker 2 Manifest",
 			opts: []Opts{
 				WithRef(r),

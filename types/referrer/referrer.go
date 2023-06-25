@@ -48,6 +48,9 @@ func (rl *ReferrerList) Add(m manifest.Manifest) error {
 		} else {
 			mDesc.ArtifactType = mOrig.Config.MediaType
 		}
+	case v1.Index:
+		mDesc.Annotations = mOrig.Annotations
+		mDesc.ArtifactType = mOrig.ArtifactType
 	default:
 		// other types are not supported
 		return fmt.Errorf("invalid manifest for referrer \"%t\": %w", m.GetOrig(), types.ErrUnsupportedMediaType)

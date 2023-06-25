@@ -171,6 +171,12 @@ func (m *oci1Manifest) GetSubject() (*types.Descriptor, error) {
 	}
 	return m.Manifest.Subject, nil
 }
+func (m *oci1Index) GetSubject() (*types.Descriptor, error) {
+	if !m.manifSet {
+		return nil, types.ErrManifestNotSet
+	}
+	return m.Index.Subject, nil
+}
 func (m *oci1Artifact) GetSubject() (*types.Descriptor, error) {
 	if !m.manifSet {
 		return nil, types.ErrManifestNotSet
@@ -272,6 +278,9 @@ func (m *oci1Index) MarshalPretty() ([]byte, error) {
 		fmt.Fprintf(tw, "Name:\t%s\n", m.r.Reference)
 	}
 	fmt.Fprintf(tw, "MediaType:\t%s\n", m.desc.MediaType)
+	if m.ArtifactType != "" {
+		fmt.Fprintf(tw, "ArtifactType:\t%s\n", m.ArtifactType)
+	}
 	fmt.Fprintf(tw, "Digest:\t%s\n", m.desc.Digest.String())
 	if m.Annotations != nil && len(m.Annotations) > 0 {
 		fmt.Fprintf(tw, "Annotations:\t\n")
@@ -295,6 +304,14 @@ func (m *oci1Index) MarshalPretty() ([]byte, error) {
 			fmt.Fprintf(tw, "  Name:\t%s\n", dRef.CommonName())
 		}
 		err := d.MarshalPrettyTW(tw, "  ")
+		if err != nil {
+			return []byte{}, err
+		}
+	}
+	if m.Subject != nil {
+		fmt.Fprintf(tw, "\t\n")
+		fmt.Fprintf(tw, "Subject:\t\n")
+		err := m.Subject.MarshalPrettyTW(tw, "  ")
 		if err != nil {
 			return []byte{}, err
 		}
@@ -473,6 +490,13 @@ func (m *oci1Manifest) SetSubject(d *types.Descriptor) error {
 		return types.ErrManifestNotSet
 	}
 	m.Manifest.Subject = d
+	return m.updateDesc()
+}
+func (m *oci1Index) SetSubject(d *types.Descriptor) error {
+	if !m.manifSet {
+		return types.ErrManifestNotSet
+	}
+	m.Index.Subject = d
 	return m.updateDesc()
 }
 

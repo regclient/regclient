@@ -67,6 +67,7 @@ const bOCIIndex = `
 {
   "schemaVersion": 2,
   "mediaType": "application/vnd.oci.image.index.v1+json",
+	"artifactType": "application/vnd.example.data",
   "manifests": [
     {
       "mediaType": "application/vnd.oci.image.manifest.v1+json",
@@ -86,7 +87,16 @@ const bOCIIndex = `
         "os": "linux"
       }
     }
-	]
+	],
+	"annotations": {
+		"com.example.instance": "test",
+		"com.example.version": "1.0"
+	},
+  "subject": {
+    "mediaType": "application/vnd.oci.image.manifest.v1+json",
+    "size": 1024,
+    "digest": "sha256:81b44ad77a83506e00079bfb7df04240df39d8da45891018b2e5e00d5d69aff3"
+  }
 }
 `
 
@@ -118,9 +128,19 @@ var dOCIImg = types.Descriptor{
 }
 var dOCIImgAT = types.Descriptor{
 	MediaType:    "application/vnd.oci.image.manifest.v1+json",
-	ArtifactType: "application/vnd.example.config.v1+json",
+	ArtifactType: "application/vnd.example.data",
 	Size:         int64(len(bOCIImgAT)),
 	Digest:       digest.FromString(bOCIImgAT),
+	Annotations: map[string]string{
+		"com.example.instance": "test",
+		"com.example.version":  "1.0",
+	},
+}
+var dOCIIndex = types.Descriptor{
+	MediaType:    "application/vnd.oci.image.index.v1+json",
+	ArtifactType: "application/vnd.example.data",
+	Size:         int64(len(bOCIIndex)),
+	Digest:       digest.FromString(bOCIIndex),
 	Annotations: map[string]string{
 		"com.example.instance": "test",
 		"com.example.version":  "1.0",
@@ -170,6 +190,7 @@ func TestEmpty(t *testing.T) {
 		Descriptors: []types.Descriptor{
 			dOCIImg,
 			dOCIImgAT,
+			dOCIIndex,
 		},
 		Annotations: map[string]string{},
 		Tags:        []string{},
@@ -180,6 +201,7 @@ func TestEmpty(t *testing.T) {
 		Manifests: []types.Descriptor{
 			dOCIImg,
 			dOCIImgAT,
+			dOCIIndex,
 		},
 	}))
 	if err != nil {
@@ -210,9 +232,8 @@ func TestAdd(t *testing.T) {
 			m:    mOCIImg,
 		},
 		{
-			name:        "OCI Index",
-			m:           mOCIIndex,
-			expectedErr: types.ErrUnsupportedMediaType,
+			name: "OCI Index",
+			m:    mOCIIndex,
 		},
 		{
 			name:        "Docker Image",
@@ -250,9 +271,9 @@ func TestAdd(t *testing.T) {
 			}
 		})
 	}
-	// 3 success - 1 dup
-	if len(rl.Descriptors) != 2 {
-		t.Errorf("number of descriptors, expected 2, received %d", len(rl.Descriptors))
+	// 4 success - 1 dup
+	if len(rl.Descriptors) != 3 {
+		t.Errorf("number of descriptors, expected 3, received %d", len(rl.Descriptors))
 	}
 	for _, d := range rl.Descriptors {
 		if d.ArtifactType == types.MediaTypeOCI1Empty || d.ArtifactType == "" {
@@ -276,6 +297,7 @@ func TestDelete(t *testing.T) {
 		Manifests: []types.Descriptor{
 			dOCIImg,
 			dOCIImgAT,
+			dOCIIndex,
 		},
 	}))
 	if err != nil {
@@ -302,9 +324,8 @@ func TestDelete(t *testing.T) {
 			expectedErr: types.ErrNotFound,
 		},
 		{
-			name:        "OCI Index",
-			m:           mOCIIndex,
-			expectedErr: types.ErrNotFound,
+			name: "OCI Index",
+			m:    mOCIIndex,
 		},
 		{
 			name:        "Docker Image",
