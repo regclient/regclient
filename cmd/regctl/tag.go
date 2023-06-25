@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"regexp"
+
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types/ref"
@@ -34,17 +37,22 @@ Note: most registries ignore the pagination options.`,
 }
 
 var tagOpts struct {
-	Limit  int
-	Last   string
-	format string
+	limit   int
+	last    string
+	include []string
+	exclude []string
+	format  string
 }
 
 func init() {
-	tagLsCmd.Flags().StringVarP(&tagOpts.Last, "last", "", "", "Specify the last tag from a previous request for pagination")
-	tagLsCmd.Flags().IntVarP(&tagOpts.Limit, "limit", "", 0, "Specify the number of tags to retrieve")
+	tagLsCmd.Flags().StringVarP(&tagOpts.last, "last", "", "", "Specify the last tag from a previous request for pagination (depends on registry support)")
+	tagLsCmd.Flags().IntVarP(&tagOpts.limit, "limit", "", 0, "Specify the number of tags to retrieve (depends on registry support)")
+	tagLsCmd.Flags().StringArrayVar(&tagOpts.include, "include", []string{}, "Regexp of tags to include (expression is bound to beginning and ending of tag)")
+	tagLsCmd.Flags().StringArrayVar(&tagOpts.exclude, "exclude", []string{}, "Regexp of tags to exclude (expression is bound to beginning and ending of tag)")
 	tagLsCmd.Flags().StringVarP(&tagOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	tagLsCmd.RegisterFlagCompletionFunc("last", completeArgNone)
 	tagLsCmd.RegisterFlagCompletionFunc("limit", completeArgNone)
+	tagLsCmd.RegisterFlagCompletionFunc("filter", completeArgNone)
 	tagLsCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
 	tagCmd.AddCommand(tagDeleteCmd)
@@ -78,6 +86,22 @@ func runTagLs(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	reInclude := []*regexp.Regexp{}
+	reExclude := []*regexp.Regexp{}
+	for _, expr := range tagOpts.include {
+		re, err := regexp.Compile("^" + expr + "$")
+		if err != nil {
+			return fmt.Errorf("failed to parse regexp \"%s\": %w", expr, err)
+		}
+		reInclude = append(reInclude, re)
+	}
+	for _, expr := range tagOpts.exclude {
+		re, err := regexp.Compile("^" + expr + "$")
+		if err != nil {
+			return fmt.Errorf("failed to parse regexp \"%s\": %w", expr, err)
+		}
+		reExclude = append(reExclude, re)
+	}
 	rc := newRegClient()
 	defer rc.Close(ctx, r)
 	log.WithFields(logrus.Fields{
@@ -85,15 +109,40 @@ func runTagLs(cmd *cobra.Command, args []string) error {
 		"repository": r.Repository,
 	}).Debug("Listing tags")
 	opts := []scheme.TagOpts{}
-	if tagOpts.Limit != 0 {
-		opts = append(opts, scheme.WithTagLimit(tagOpts.Limit))
+	if tagOpts.limit != 0 {
+		opts = append(opts, scheme.WithTagLimit(tagOpts.limit))
 	}
-	if tagOpts.Last != "" {
-		opts = append(opts, scheme.WithTagLast(tagOpts.Last))
+	if tagOpts.last != "" {
+		opts = append(opts, scheme.WithTagLast(tagOpts.last))
 	}
 	tl, err := rc.TagList(ctx, r, opts...)
 	if err != nil {
 		return err
+	}
+	if len(reInclude) > 0 || len(reExclude) > 0 {
+		filtered := []string{}
+		var included, excluded bool
+		for _, tag := range tl.Tags {
+			included = len(reInclude) == 0
+			excluded = false
+			for _, re := range reInclude {
+				if re.MatchString(tag) {
+					included = true
+					break
+				}
+			}
+			if included {
+				for _, re := range reExclude {
+					if re.MatchString(tag) {
+						excluded = true
+					}
+				}
+			}
+			if included && !excluded {
+				filtered = append(filtered, tag)
+			}
+		}
+		tl.Tags = filtered
 	}
 	switch tagOpts.format {
 	case "raw":
