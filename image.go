@@ -87,15 +87,14 @@ type imageOpt struct {
 	platforms       []string
 	referrerConfs   []scheme.ReferrerConfig
 	tagList         []string
-	manifWG         sync.WaitGroup
 	mu              sync.Mutex
 	seen            map[digest.Digest]*imageSeen
+	finalFn         []func(context.Context) error
 }
 
 type imageSeen struct {
-	done  chan struct{}
-	err   error
-	level int
+	done chan struct{}
+	err  error
 }
 
 // ImageOpts define options for the Image* commands
@@ -421,7 +420,8 @@ func (rc *RegClient) ImageCheckBase(ctx context.Context, r ref.Ref, opts ...Imag
 // Blobs are only pulled when they don't exist on the target and a blob mount fails
 func (rc *RegClient) ImageCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, opts ...ImageOpts) error {
 	opt := imageOpt{
-		seen: map[digest.Digest]*imageSeen{},
+		seen:    map[digest.Digest]*imageSeen{},
+		finalFn: []func(context.Context) error{},
 	}
 	for _, optFn := range opts {
 		optFn(&opt)
@@ -439,38 +439,45 @@ func (rc *RegClient) ImageCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.R
 		tgtGCLocker.GCLock(refTgt)
 		defer tgtGCLocker.GCUnlock(refTgt)
 	}
-	opt.manifWG.Add(1)
-	return rc.imageCopyOpt(ctx, refSrc, refTgt, types.Descriptor{}, opt.child, 0, &opt)
+	// run the copy of manifests and blobs recursively
+	err = rc.imageCopyOpt(ctx, refSrc, refTgt, types.Descriptor{}, opt.child, []digest.Digest{}, &opt)
+	if err != nil {
+		return err
+	}
+	// run any final functions, digest-tags and referrers that detected loops are retried here
+	for _, fn := range opt.finalFn {
+		err := fn(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // imageCopyOpt is a thread safe copy of a manifest and nested content
-func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor, child bool, level int, opt *imageOpt) (err error) {
+func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor, child bool, parents []digest.Digest, opt *imageOpt) (err error) {
 	var mSrc, mTgt manifest.Manifest
 	var sDig digest.Digest
-	afterManifWG := false
+	seenCB := func(error) {}
 	defer func() {
-		if !afterManifWG {
-			opt.manifWG.Done()
+		if seenCB != nil {
+			seenCB(err)
 		}
 	}()
-	// check the digest of the source (if available) and skip copy if it's already been seen
+	// if digest is provided and we are already copying it, wait
 	if d.Digest != "" {
 		sDig = d.Digest
 	} else if refSrc.Digest != "" {
 		sDig = digest.Digest(refSrc.Digest)
 	}
 	if sDig != "" {
-		seenCB, wait := imageSeenAndWait(opt, sDig, level)
-		if seenCB != nil {
-			defer seenCB(err)
-		} else {
-			afterManifWG = true
-			opt.manifWG.Done()
-			return wait(ctx) // with a digest, this is an index entry, wait
+		if seenCB, err = imageSeenOrWait(ctx, opt, sDig, parents); seenCB == nil {
+			return err
 		}
 	}
-	// check if copy may be skipped
+	// check target with head request
 	mTgt, err = rc.ManifestHead(ctx, refTgt, WithManifestRequireDigest())
+	// for non-recursive copies, compare to source digest
 	if err == nil && (opt.fastCheck || (!opt.forceRecursive && opt.referrerConfs == nil && !opt.digestTags)) {
 		if sDig == "" {
 			mSrc, err = rc.ManifestHead(ctx, refSrc, WithManifestRequireDigest())
@@ -478,11 +485,9 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 				return fmt.Errorf("copy failed, error getting source: %w", err)
 			}
 			sDig = mSrc.GetDescriptor().Digest
-			seenCB, _ := imageSeenAndWait(opt, sDig, level)
-			if seenCB == nil {
-				return nil // without a digest, digest tag, do not wait, loop protection
+			if seenCB, err = imageSeenOrWait(ctx, opt, sDig, parents); seenCB == nil {
+				return err
 			}
-			defer seenCB(err)
 		}
 		if sDig == mTgt.GetDescriptor().Digest {
 			if opt.callback != nil {
@@ -491,7 +496,31 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 			return nil
 		}
 	}
-	// some form of copy is needed, setup vars
+	// when copying/updating digest tags or referrers, only the source digest is needed for an image
+	if mTgt != nil && mSrc == nil && !opt.forceRecursive && sDig == "" {
+		mSrc, err = rc.ManifestHead(ctx, refSrc, WithManifestRequireDigest())
+		if err != nil {
+			return fmt.Errorf("copy failed, error getting source: %w", err)
+		}
+		sDig = mSrc.GetDescriptor().Digest
+		if seenCB, err = imageSeenOrWait(ctx, opt, sDig, parents); seenCB == nil {
+			return err
+		}
+	}
+	// get the source manifest when a copy is needed or recursion into the content is needed
+	if sDig == "" || mTgt == nil || sDig != mTgt.GetDescriptor().Digest || opt.forceRecursive || mTgt.IsList() {
+		mSrc, err = rc.ManifestGet(ctx, refSrc, WithManifestDesc(d))
+		if err != nil {
+			return fmt.Errorf("copy failed, error getting source: %w", err)
+		}
+		if sDig == "" {
+			sDig = mSrc.GetDescriptor().Digest
+			if seenCB, err = imageSeenOrWait(ctx, opt, sDig, parents); seenCB == nil {
+				return err
+			}
+		}
+	}
+	// setup vars for a copy
 	mOpts := []ManifestOpts{}
 	if child {
 		mOpts = append(mOpts, WithManifestChild())
@@ -504,34 +533,9 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 	waitCount := 0
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	// only need a manifestHead in some scenarios to skip copy of blobs
-	if mTgt != nil && mSrc == nil && !opt.forceRecursive && sDig == "" {
-		mSrc, err = rc.ManifestHead(ctx, refSrc, WithManifestRequireDigest())
-		if err != nil {
-			return fmt.Errorf("copy failed, error getting source: %w", err)
-		}
-		sDig = mSrc.GetDescriptor().Digest
-		seenCB, _ := imageSeenAndWait(opt, sDig, level)
-		if seenCB == nil {
-			return nil // without a digest, digest tag, do not wait, loop protection
-		}
-		defer seenCB(err)
-	}
-	// manifestGet when needed (mismatch, force, index)
-	if sDig == "" || mTgt == nil || sDig != mTgt.GetDescriptor().Digest || opt.forceRecursive || mTgt.IsList() {
-		mSrc, err = rc.ManifestGet(ctx, refSrc, WithManifestDesc(d))
-		if err != nil {
-			return fmt.Errorf("copy failed, error getting source: %w", err)
-		}
-		if sDig == "" {
-			sDig = mSrc.GetDescriptor().Digest
-			seenCB, _ := imageSeenAndWait(opt, sDig, level)
-			if seenCB == nil {
-				return nil // without a digest, digest tag, do not wait, loop protection
-			}
-			defer seenCB(err)
-		}
-	}
+	parentsNew := make([]digest.Digest, len(parents)+1)
+	copy(parentsNew, parents)
+	parentsNew[len(parentsNew)-1] = sDig
 	if opt.callback != nil {
 		opt.callback(types.CallbackManifest, d.Digest.String(), types.CallbackStarted, 0, d.Size)
 	}
@@ -557,7 +561,6 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 				}
 			}
 			dEntry := dEntry
-			opt.manifWG.Add(1)
 			waitCount++
 			go func() {
 				var err error
@@ -576,21 +579,17 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					types.MediaTypeDocker2Manifest, types.MediaTypeDocker2ManifestList,
 					types.MediaTypeOCI1Manifest, types.MediaTypeOCI1ManifestList:
 					// known manifest media type
-					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, dEntry, true, level+1, opt)
+					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, dEntry, true, parentsNew, opt)
 				case types.MediaTypeDocker2ImageConfig, types.MediaTypeOCI1ImageConfig,
 					types.MediaTypeDocker2LayerGzip, types.MediaTypeOCI1Layer, types.MediaTypeOCI1LayerGzip,
 					types.MediaTypeBuildkitCacheConfig:
 					// known blob media type
-					opt.manifWG.Done()
-					opt.manifWG.Wait()
 					err = rc.imageCopyBlob(ctx, entrySrc, entryTgt, dEntry, opt, bOpt...)
 				default:
 					// unknown media type, first try an image copy
-					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, dEntry, true, level+1, opt)
+					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, dEntry, true, parentsNew, opt)
 					if err != nil {
 						// fall back to trying to copy a blob
-						opt.manifWG.Done()
-						opt.manifWG.Wait()
 						err = rc.imageCopyBlob(ctx, entrySrc, entryTgt, dEntry, opt, bOpt...)
 					}
 				}
@@ -630,18 +629,27 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 			referrerTgt.Tag = ""
 			referrerTgt.Digest = rDesc.Digest.String()
 			rDesc := rDesc
-			opt.manifWG.Add(1)
 			waitCount++
 			go func() {
-				err := rc.imageCopyOpt(ctx, referrerSrc, referrerTgt, rDesc, true, level+1, opt)
-				if err != nil {
-					rc.log.WithFields(logrus.Fields{
-						"digest": rDesc.Digest.String(),
-						"src":    referrerSrc.CommonName(),
-						"tgt":    referrerTgt.CommonName(),
-					}).Warn("Failed to copy referrer")
+				err := rc.imageCopyOpt(ctx, referrerSrc, referrerTgt, rDesc, true, parentsNew, opt)
+				if errors.Is(err, types.ErrLoopDetected) {
+					// if a loop is detected, push the referrers copy to the end
+					opt.mu.Lock()
+					opt.finalFn = append(opt.finalFn, func(ctx context.Context) error {
+						return rc.imageCopyOpt(ctx, referrerSrc, referrerTgt, rDesc, true, []digest.Digest{}, opt)
+					})
+					opt.mu.Unlock()
+					waitCh <- nil
+				} else {
+					if err != nil {
+						rc.log.WithFields(logrus.Fields{
+							"digest": rDesc.Digest.String(),
+							"src":    referrerSrc.CommonName(),
+							"tgt":    referrerTgt.CommonName(),
+						}).Warn("Failed to copy referrer")
+					}
+					waitCh <- err
 				}
-				waitCh <- err
 			}()
 		}
 	}
@@ -696,27 +704,32 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 				refTagTgt.Tag = tag
 				refTagTgt.Digest = ""
 				tag := tag
-				opt.manifWG.Add(1)
 				waitCount++
 				go func() {
-					err := rc.imageCopyOpt(ctx, refTagSrc, refTagTgt, types.Descriptor{}, false, level+1, opt)
-					if err != nil {
-						rc.log.WithFields(logrus.Fields{
-							"tag": tag,
-							"src": refTagSrc.CommonName(),
-							"tgt": refTagTgt.CommonName(),
-						}).Warn("Failed to copy digest-tag")
+					err := rc.imageCopyOpt(ctx, refTagSrc, refTagTgt, types.Descriptor{}, false, parentsNew, opt)
+					if errors.Is(err, types.ErrLoopDetected) {
+						// if a loop is detected, push the digest tag copy back to the end
+						opt.mu.Lock()
+						opt.finalFn = append(opt.finalFn, func(ctx context.Context) error {
+							return rc.imageCopyOpt(ctx, refTagSrc, refTagTgt, types.Descriptor{}, false, []digest.Digest{}, opt)
+						})
+						opt.mu.Unlock()
+						waitCh <- nil
+					} else {
+						if err != nil {
+							rc.log.WithFields(logrus.Fields{
+								"tag": tag,
+								"src": refTagSrc.CommonName(),
+								"tgt": refTagTgt.CommonName(),
+							}).Warn("Failed to copy digest-tag")
+						}
+						waitCh <- err
 					}
-					waitCh <- err
 				}()
 			}
 		}
 	}
 
-	// wait for all tasks to finish manifest processing before continuing to blobs
-	opt.manifWG.Done()
-	opt.manifWG.Wait()
-	afterManifWG = true
 	// check for any errors and abort early if found
 	err = nil
 	done := false
@@ -738,6 +751,10 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 		}
 	}
 	if err != nil {
+		rc.log.WithFields(logrus.Fields{
+			"err":  err,
+			"sDig": sDig,
+		}).Debug("child manifest copy failed")
 		return err
 	}
 
@@ -848,49 +865,70 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 			opt.callback(types.CallbackManifest, d.Digest.String(), types.CallbackSkipped, d.Size, d.Size)
 		}
 	}
+	if seenCB != nil {
+		seenCB(nil)
+		seenCB = nil
+	}
 
 	return nil
 }
 
 func (rc *RegClient) imageCopyBlob(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor, opt *imageOpt, bOpt ...BlobOpts) error {
-	seenCB, wait := imageSeenAndWait(opt, d.Digest, 0)
-	if wait != nil {
-		return wait(ctx)
+	seenCB, err := imageSeenOrWait(ctx, opt, d.Digest, []digest.Digest{})
+	if seenCB == nil {
+		return err
 	}
-	err := rc.BlobCopy(ctx, refSrc, refTgt, d, bOpt...)
+	err = rc.BlobCopy(ctx, refSrc, refTgt, d, bOpt...)
 	seenCB(err)
 	return err
 }
 
-// imageSeenAndWait returns either a callback to report the error when the digest hasn't been seen before
-// or a function to wait for another task to finish processing the digest
-func imageSeenAndWait(opt *imageOpt, dig digest.Digest, level int) (func(error), func(context.Context) error) {
+// imageSeenOrWait returns either a callback to report the error when the digest hasn't been seen before
+// or it will wait for the previous copy to run and return the error from that copy
+func imageSeenOrWait(ctx context.Context, opt *imageOpt, dig digest.Digest, parents []digest.Digest) (func(error), error) {
+	var seenNew *imageSeen
 	opt.mu.Lock()
-	defer opt.mu.Unlock()
-	if seen := opt.seen[dig]; seen != nil {
-		return nil, func(ctx context.Context) error {
-			if seen.level < level {
-				// loop handling, child should not wait for parent to finish
-				return nil
-			}
-			done := ctx.Done()
-			select {
-			case <-seen.done:
-				return seen.err
-			case <-done:
-				return ctx.Err()
+	seen := opt.seen[dig]
+	if seen == nil {
+		seenNew = &imageSeen{
+			done: make(chan struct{}),
+		}
+		opt.seen[dig] = seenNew
+	}
+	opt.mu.Unlock()
+	if seen != nil {
+		// quick check for the previous copy already done
+		select {
+		case <-seen.done:
+			return nil, seen.err
+		default:
+		}
+		// look for loops in parents
+		for _, p := range parents {
+			if dig == p {
+				return nil, types.ErrLoopDetected
 			}
 		}
+		// wait for copy to finish or context to cancel
+		done := ctx.Done()
+		select {
+		case <-seen.done:
+			return nil, seen.err
+		case <-done:
+			return nil, ctx.Err()
+		}
+	} else {
+		return func(err error) {
+			seenNew.err = err
+			close(seenNew.done)
+			// on failures, delete the history to allow a retry
+			if err != nil {
+				opt.mu.Lock()
+				delete(opt.seen, dig)
+				opt.mu.Unlock()
+			}
+		}, nil
 	}
-	seen := imageSeen{
-		done:  make(chan struct{}),
-		level: level,
-	}
-	opt.seen[dig] = &seen
-	return func(err error) {
-		seen.err = err
-		close(seen.done)
-	}, nil
 }
 
 // ImageExport exports an image to an output stream.
