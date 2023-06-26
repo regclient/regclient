@@ -88,7 +88,7 @@ type imageOpt struct {
 	referrerConfs   []scheme.ReferrerConfig
 	tagList         []string
 	mu              sync.Mutex
-	seen            map[digest.Digest]*imageSeen
+	seen            map[string]*imageSeen
 	finalFn         []func(context.Context) error
 }
 
@@ -420,7 +420,7 @@ func (rc *RegClient) ImageCheckBase(ctx context.Context, r ref.Ref, opts ...Imag
 // Blobs are only pulled when they don't exist on the target and a blob mount fails
 func (rc *RegClient) ImageCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, opts ...ImageOpts) error {
 	opt := imageOpt{
-		seen:    map[digest.Digest]*imageSeen{},
+		seen:    map[string]*imageSeen{},
 		finalFn: []func(context.Context) error{},
 	}
 	for _, optFn := range opts {
@@ -471,7 +471,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 		sDig = digest.Digest(refSrc.Digest)
 	}
 	if sDig != "" {
-		if seenCB, err = imageSeenOrWait(ctx, opt, sDig, parents); seenCB == nil {
+		if seenCB, err = imageSeenOrWait(ctx, opt, refTgt.Tag, sDig, parents); seenCB == nil {
 			return err
 		}
 	}
@@ -485,7 +485,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 				return fmt.Errorf("copy failed, error getting source: %w", err)
 			}
 			sDig = mSrc.GetDescriptor().Digest
-			if seenCB, err = imageSeenOrWait(ctx, opt, sDig, parents); seenCB == nil {
+			if seenCB, err = imageSeenOrWait(ctx, opt, refTgt.Tag, sDig, parents); seenCB == nil {
 				return err
 			}
 		}
@@ -503,7 +503,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 			return fmt.Errorf("copy failed, error getting source: %w", err)
 		}
 		sDig = mSrc.GetDescriptor().Digest
-		if seenCB, err = imageSeenOrWait(ctx, opt, sDig, parents); seenCB == nil {
+		if seenCB, err = imageSeenOrWait(ctx, opt, refTgt.Tag, sDig, parents); seenCB == nil {
 			return err
 		}
 	}
@@ -515,7 +515,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 		}
 		if sDig == "" {
 			sDig = mSrc.GetDescriptor().Digest
-			if seenCB, err = imageSeenOrWait(ctx, opt, sDig, parents); seenCB == nil {
+			if seenCB, err = imageSeenOrWait(ctx, opt, refTgt.Tag, sDig, parents); seenCB == nil {
 				return err
 			}
 		}
@@ -617,7 +617,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 		}
 		for _, rDesc := range descList {
 			opt.mu.Lock()
-			seen := opt.seen[rDesc.Digest]
+			seen := opt.seen[":"+rDesc.Digest.String()]
 			opt.mu.Unlock()
 			if seen != nil {
 				continue // skip referrers that have been seen
@@ -874,7 +874,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 }
 
 func (rc *RegClient) imageCopyBlob(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor, opt *imageOpt, bOpt ...BlobOpts) error {
-	seenCB, err := imageSeenOrWait(ctx, opt, d.Digest, []digest.Digest{})
+	seenCB, err := imageSeenOrWait(ctx, opt, "", d.Digest, []digest.Digest{})
 	if seenCB == nil {
 		return err
 	}
@@ -885,15 +885,16 @@ func (rc *RegClient) imageCopyBlob(ctx context.Context, refSrc ref.Ref, refTgt r
 
 // imageSeenOrWait returns either a callback to report the error when the digest hasn't been seen before
 // or it will wait for the previous copy to run and return the error from that copy
-func imageSeenOrWait(ctx context.Context, opt *imageOpt, dig digest.Digest, parents []digest.Digest) (func(error), error) {
+func imageSeenOrWait(ctx context.Context, opt *imageOpt, tag string, dig digest.Digest, parents []digest.Digest) (func(error), error) {
 	var seenNew *imageSeen
+	key := tag + ":" + dig.String()
 	opt.mu.Lock()
-	seen := opt.seen[dig]
+	seen := opt.seen[key]
 	if seen == nil {
 		seenNew = &imageSeen{
 			done: make(chan struct{}),
 		}
-		opt.seen[dig] = seenNew
+		opt.seen[key] = seenNew
 	}
 	opt.mu.Unlock()
 	if seen != nil {
@@ -905,7 +906,7 @@ func imageSeenOrWait(ctx context.Context, opt *imageOpt, dig digest.Digest, pare
 		}
 		// look for loops in parents
 		for _, p := range parents {
-			if dig == p {
+			if key == tag+":"+p.String() {
 				return nil, types.ErrLoopDetected
 			}
 		}
@@ -924,7 +925,7 @@ func imageSeenOrWait(ctx context.Context, opt *imageOpt, dig digest.Digest, pare
 			// on failures, delete the history to allow a retry
 			if err != nil {
 				opt.mu.Lock()
-				delete(opt.seen, dig)
+				delete(opt.seen, key)
 				opt.mu.Unlock()
 			}
 		}, nil

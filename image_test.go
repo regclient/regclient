@@ -197,6 +197,18 @@ func TestCopy(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to copy: %v", err)
 	}
+	rSrc, err = ref.New("ocidir://./testdata/testrepo:mirror")
+	if err != nil {
+		t.Errorf("failed to parse src ref: %v", err)
+	}
+	rTgt, err = ref.New("ocidir://" + tempDir + ":mirror")
+	if err != nil {
+		t.Errorf("failed to parse tgt ref: %v", err)
+	}
+	err = rc.ImageCopy(ctx, rSrc, rTgt, ImageWithDigestTags())
+	if err != nil {
+		t.Errorf("failed to copy: %v", err)
+	}
 }
 
 func TestExportImport(t *testing.T) {
