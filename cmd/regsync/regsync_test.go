@@ -63,6 +63,18 @@ func TestProcess(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to parse v3 reference: %v", err)
 	}
+	rMirror, err := ref.New("ocidir://testrepo:mirror")
+	if err != nil {
+		t.Errorf("failed to parse mirror reference: %v", err)
+	}
+	rChild, err := ref.New("ocidir://testrepo:child")
+	if err != nil {
+		t.Errorf("failed to parse child reference: %v", err)
+	}
+	rLoop, err := ref.New("ocidir://testrepo:loop")
+	if err != nil {
+		t.Errorf("failed to parse loop reference: %v", err)
+	}
 	m1, err := rc.ManifestGet(ctx, r1)
 	if err != nil {
 		t.Errorf("failed to get manifest v1: %v", err)
@@ -103,6 +115,21 @@ func TestProcess(t *testing.T) {
 		t.Errorf("failed to get manifest v3: %v", err)
 	}
 	d3 := m3.GetDescriptor().Digest
+	mMirror, err := rc.ManifestGet(ctx, rMirror)
+	if err != nil {
+		t.Errorf("failed to get manifest vMirror: %v", err)
+	}
+	dMirror := mMirror.GetDescriptor().Digest
+	mChild, err := rc.ManifestGet(ctx, rChild)
+	if err != nil {
+		t.Errorf("failed to get manifest vChild: %v", err)
+	}
+	dChild := mChild.GetDescriptor().Digest
+	mLoop, err := rc.ManifestGet(ctx, rLoop)
+	if err != nil {
+		t.Errorf("failed to get manifest vLoop: %v", err)
+	}
+	dLoop := mLoop.GetDescriptor().Digest
 
 	// run process on each entry
 	tt := []struct {
@@ -486,6 +513,41 @@ func TestProcess(t *testing.T) {
 			},
 			undesired: []string{
 				"test1/blobs/sha256/" + d3.Hex(), // v3
+			},
+			expErr: nil,
+		},
+		{
+			name: "Image Self Digest Tag",
+			sync: ConfigSync{
+				Source:     "ocidir://testrepo:mirror",
+				Target:     "ocidir://test-mirror:mirror",
+				Type:       "image",
+				DigestTags: &boolTrue,
+			},
+			action: actionCopy,
+			exists: []string{"ocidir://test-mirror:mirror", "ocidir://test-mirror:sha256-" + dMirror.Hex()},
+			desired: []string{
+				"test-mirror/index.json",
+				"test-mirror/oci-layout",
+				"test-mirror/blobs/sha256/" + dMirror.Hex(), // mirror
+			},
+			expErr: nil,
+		},
+		{
+			name: "Image Loop",
+			sync: ConfigSync{
+				Source:    "ocidir://testrepo:loop",
+				Target:    "ocidir://test-loop:loop",
+				Type:      "image",
+				Referrers: &boolTrue,
+			},
+			action: actionCopy,
+			exists: []string{"ocidir://test-loop:loop", "ocidir://test-loop:sha256-" + dChild.Hex()},
+			desired: []string{
+				"test-loop/index.json",
+				"test-loop/oci-layout",
+				"test-loop/blobs/sha256/" + dChild.Hex(), // child
+				"test-loop/blobs/sha256/" + dLoop.Hex(),  // loop
 			},
 			expErr: nil,
 		},
