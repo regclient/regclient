@@ -37,61 +37,93 @@ ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 endif
 STATICCHECK_VER?=v0.4.3
 
-.PHONY: all fmt vet test lint lint-go lint-md vendor binaries docker artifacts artifact-pre plugin-user plugin-host .FORCE
-
+.PHONY: .FORCE
 .FORCE:
 
+.PHONY: all
 all: fmt vet test lint binaries ## Full build of Go binaries (including fmt, vet, test, and lint)
 
+.PHONY: fmt
 fmt: ## go fmt
 	go fmt ./...
 
+.PHONY: vet
 vet: ## go vet
 	go vet ./...
 
+.PHONY: test
 test: ## go test
 	go test -cover -race ./...
 
+.PHONY: lint
 lint: lint-go lint-md ## Run all linting
 
+.PHONY: lint-go
 lint-go: $(GOPATH)/bin/staticcheck .FORCE ## Run linting for Go
 	$(GOPATH)/bin/staticcheck -checks all ./...
 
+.PHONY: lint-md
 lint-md: .FORCE ## Run linting for markdown
 	docker run --rm -v "$(PWD):/workdir:ro" ghcr.io/igorshubovych/markdownlint-cli:$(MARKDOWN_LINT_VER) \
 	  --ignore vendor .
 
+.PHONY: vulncheck-go
 vulncheck-go: $(GOPATH)/bin/govulncheck .FORCE ## Run vulnerability scan for Go
 	$(GOPATH)/bin/govulncheck ./...
 
+.PHONY: vendor
 vendor: ## Vendor Go modules
 	go mod vendor
 
+.PHONY: binaries
 binaries: vendor $(BINARIES) ## Build Go binaries
 
 bin/%: .FORCE
 	CGO_ENABLED=0 go build ${GO_BUILD_FLAGS} -o bin/$* ./cmd/$*
 
+.PHONY: docker
 docker: $(IMAGES) ## Build Docker images
 
 docker-%: .FORCE
 	docker build -t regclient/$* -f build/Dockerfile.$*$(DOCKERFILE_EXT) $(DOCKER_ARGS) .
 	docker build -t regclient/$*:alpine -f build/Dockerfile.$*$(DOCKERFILE_EXT) --target release-alpine $(DOCKER_ARGS) .
 
+.PHONY: oci-image
 oci-image: $(addprefix oci-image-,$(COMMANDS)) ## Build reproducible images to an OCI Layout
 
 oci-image-%: bin/regctl .FORCE
 	build/oci-image.sh -r scratch -i "$*" -p "$(TEST_PLATFORMS)"
 	build/oci-image.sh -r alpine  -i "$*" -p "$(TEST_PLATFORMS)" -b "alpine:3"
 
+.PHONY: test-docker
 test-docker: $(addprefix test-docker-,$(COMMANDS)) ## Build multi-platform docker images (but do not tag)
 
 test-docker-%:
 	docker buildx build --platform="$(TEST_PLATFORMS)" -f build/Dockerfile.$*.buildkit .
 	docker buildx build --platform="$(TEST_PLATFORMS)" -f build/Dockerfile.$*.buildkit --target release-alpine .
 
+.PHONY: ci-distribution
+ci-distribution:
+	docker run --rm -d -p 5000 \
+		--label regclient-ci=true --name regclient-ci-distribution \
+		-e "REGISTRY_STORAGE_DELETE_ENABLED=true" \
+		docker.io/registry:2.8.2
+	./build/ci-test.sh -t localhost:$$(docker port regclient-ci-distribution 5000 | head -1 | cut -f2 -d:)/test-ci
+	docker stop regclient-ci-distribution
+
+.PHONY: ci-zot
+ci-zot:
+	docker run --rm -d -p 5000 \
+		--label regclient-ci=true --name regclient-ci-zot \
+		-v "$$(pwd)/build/zot-config.json:/etc/zot/config.json:ro" \
+		ghcr.io/project-zot/zot-linux-amd64:v2.0.0-rc5
+	./build/ci-test.sh -t localhost:$$(docker port regclient-ci-zot 5000 | head -1 | cut -f2 -d:)/test-ci
+	docker stop regclient-ci-zot
+
+.PHONY: artifacts
 artifacts: $(ARTIFACTS) ## Generate artifacts
 
+.PHONY: artifact-pre
 artifact-pre:
 	mkdir -p artifacts
 
@@ -110,22 +142,27 @@ artifacts/%: artifact-pre .FORCE
 	$(SYFT) packages -q "file:$@" --source-name "$${command}" -o cyclonedx-json >"artifacts/$${command}-$${platform}.cyclonedx.json"; \
 	$(SYFT) packages -q "file:$@" --source-name "$${command}" -o spdx-json >"artifacts/$${command}-$${platform}.spdx.json"
 
+.PHONY: plugin-user
 plugin-user:
 	mkdir -p ${HOME}/.docker/cli-plugins/
 	cp docker-plugin/docker-regclient ${HOME}/.docker/cli-plugins/docker-regctl
 
+.PHONY: plugin-host
 plugin-host:
 	sudo cp docker-plugin/docker-regclient /usr/libexec/docker/cli-plugins/docker-regctl
 
-util-golang-update:
+.PHONY: util-golang-update
+util-golang-update: ## update go module versions
 	go get -u
 	go mod tidy
 	go mod vendor
 	
-util-version-check:
+.PHONY: util-version-check
+util-version-check: ## check all dependencies for updates
 	$(VER_BUMP) check
 
-util-version-update:
+.PHONY: util-version-update
+util-version-update: ## update versions on all dependencies
 	$(VER_BUMP) update
 
 $(GOPATH)/bin/staticcheck: .FORCE
@@ -137,5 +174,6 @@ $(GOPATH)/bin/govulncheck: .FORCE
 	# for now, keep installing the latest until they start releasing versions
 	go install "golang.org/x/vuln/cmd/govulncheck@latest"
 
+.PHONY: help
 help: # Display help
 	@awk -F ':|##' '/^[^\t].+?:.*?##/ { printf "\033[36m%-30s\033[0m %s\n", $$1, $$NF }' $(MAKEFILE_LIST)
