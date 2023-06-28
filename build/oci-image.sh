@@ -89,16 +89,16 @@ regctl image mod \
   "ocidir://output/${image}:${release}" --replace \
   --to-oci-referrers \
   --time-max "${vcs_date}" \
-  --annotation "[*]oci.opencontainers.image.created=${vcs_date}" \
-  --annotation "[*]oci.opencontainers.image.source=${vcs_repo}" \
-  --annotation "[*]oci.opencontainers.image.revision=${vcs_sha}" \
+  --annotation "[*]org.opencontainers.image.created=${vcs_date}" \
+  --annotation "[*]org.opencontainers.image.source=${vcs_repo}" \
+  --annotation "[*]org.opencontainers.image.revision=${vcs_sha}" \
   >/dev/null
 
 if [ -n "$base_name" ] && [ -n "$base_digest" ]; then
   regctl image mod \
     "ocidir://output/${image}:${release}" --replace \
-    --annotation "[*]oci.opencontainers.image.base.name=${base_name}" \
-    --annotation "[*]oci.opencontainers.image.base.digest=${base_digest}" \
+    --annotation "[*]org.opencontainers.image.base.name=${base_name}" \
+    --annotation "[*]org.opencontainers.image.base.digest=${base_digest}" \
     >/dev/null
 fi
 
