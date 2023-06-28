@@ -50,6 +50,7 @@ type dockerTarManifest struct {
 type tarFileHandler func(header *tar.Header, trd *tarReadData) error
 type tarReadData struct {
 	tr          *tar.Reader
+	name        string
 	handleAdded bool
 	handlers    map[string]tarFileHandler
 	links       map[string][]string
@@ -81,6 +82,7 @@ type imageOpt struct {
 	exportRef       ref.Ref
 	fastCheck       bool
 	forceRecursive  bool
+	importName      string
 	includeExternal bool
 	digestTags      bool
 	platform        string
@@ -153,6 +155,13 @@ func ImageWithFastCheck() ImageOpts {
 func ImageWithForceRecursive() ImageOpts {
 	return func(opts *imageOpt) {
 		opts.forceRecursive = true
+	}
+}
+
+// ImageWithImportName selects the name of the image to import when multiple images are included
+func ImageWithImportName(name string) ImageOpts {
+	return func(opts *imageOpt) {
+		opts.importName = name
 	}
 }
 
@@ -1164,8 +1173,14 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 }
 
 // ImageImport pushes an image from a tar file to a registry
-func (rc *RegClient) ImageImport(ctx context.Context, ref ref.Ref, rs io.ReadSeeker) error {
+func (rc *RegClient) ImageImport(ctx context.Context, ref ref.Ref, rs io.ReadSeeker, opts ...ImageOpts) error {
+	var opt imageOpt
+	for _, optFn := range opts {
+		optFn(&opt)
+	}
+
 	trd := &tarReadData{
+		name:      opt.importName,
 		handlers:  map[string]tarFileHandler{},
 		links:     map[string][]string{},
 		processed: map[string]bool{},
@@ -1243,20 +1258,46 @@ func (rc *RegClient) imageImportDockerAddLayerHandlers(ctx context.Context, ref 
 	delete(trd.handlers, ociLayoutFilename)
 	delete(trd.handlers, ociIndexFilename)
 
+	index := 0
+	if trd.name != "" {
+		found := false
+		tags := []string{}
+		for i, entry := range trd.dockerManifestList {
+			tags = append(tags, entry.RepoTags...)
+			for _, tag := range entry.RepoTags {
+				if tag == trd.name {
+					index = i
+					found = true
+					break
+				}
+			}
+			if found {
+				break
+			}
+		}
+		if !found {
+			rc.log.WithFields(logrus.Fields{
+				"tags": tags,
+				"name": trd.name,
+			}).Warn("Could not find requested name")
+			return
+		}
+	}
+
 	// make a docker v2 manifest from first json array entry (can only tag one image)
 	trd.dockerManifest.SchemaVersion = 2
 	trd.dockerManifest.MediaType = types.MediaTypeDocker2Manifest
-	trd.dockerManifest.Layers = make([]types.Descriptor, len(trd.dockerManifestList[0].Layers))
+	trd.dockerManifest.Layers = make([]types.Descriptor, len(trd.dockerManifestList[index].Layers))
 
 	// add handler for config
-	trd.handlers[filepath.Clean(trd.dockerManifestList[0].Config)] = func(header *tar.Header, trd *tarReadData) error {
+	trd.handlers[filepath.Clean(trd.dockerManifestList[index].Config)] = func(header *tar.Header, trd *tarReadData) error {
 		// upload blob, digest is unknown
 		d, err := rc.BlobPut(ctx, ref, types.Descriptor{Size: header.Size}, trd.tr)
 		if err != nil {
 			return err
 		}
 		// save the resulting descriptor to the manifest
-		if od, ok := trd.dockerManifestList[0].LayerSources[d.Digest]; ok {
+		if od, ok := trd.dockerManifestList[index].LayerSources[d.Digest]; ok {
 			trd.dockerManifest.Config = od
 		} else {
 			d.MediaType = types.MediaTypeDocker2ImageConfig
@@ -1265,7 +1306,7 @@ func (rc *RegClient) imageImportDockerAddLayerHandlers(ctx context.Context, ref 
 		return nil
 	}
 	// add handlers for each layer
-	for i, layerFile := range trd.dockerManifestList[0].Layers {
+	for i, layerFile := range trd.dockerManifestList[index].Layers {
 		func(i int) {
 			trd.handlers[filepath.Clean(layerFile)] = func(header *tar.Header, trd *tarReadData) error {
 				// ensure blob is compressed with gzip to match media type
@@ -1279,7 +1320,7 @@ func (rc *RegClient) imageImportDockerAddLayerHandlers(ctx context.Context, ref 
 					return err
 				}
 				// save the resulting descriptor in the appropriate layer
-				if od, ok := trd.dockerManifestList[0].LayerSources[d.Digest]; ok {
+				if od, ok := trd.dockerManifestList[index].LayerSources[d.Digest]; ok {
 					trd.dockerManifest.Layers[i] = od
 				} else {
 					d.MediaType = types.MediaTypeDocker2LayerGzip
@@ -1409,6 +1450,16 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 			d = dl[0]
 		} else if ref.Digest != "" {
 			d.Digest = digest.Digest(ref.Digest)
+		} else if trd.name != "" {
+			for _, cur := range dl {
+				if cur.Annotations[annotationRefName] == trd.name {
+					d = cur
+					break
+				}
+			}
+			if d.Digest.String() == "" {
+				return fmt.Errorf("could not find requested tag in index.json, %s", trd.name)
+			}
 		} else {
 			if ref.Tag == "" {
 				ref.Tag = "latest"
@@ -1420,9 +1471,9 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 					break
 				}
 			}
-		}
-		if d.Digest.String() == "" {
-			return fmt.Errorf("could not find requested tag in index.json, %s", ref.Tag)
+			if d.Digest.String() == "" {
+				return fmt.Errorf("could not find requested tag in index.json, %s", ref.Tag)
+			}
 		}
 		handleManifest(d, false)
 		// add a finish step to tag the selected digest

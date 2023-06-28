@@ -154,6 +154,7 @@ var imageOpts struct {
 	forceRecursive  bool
 	format          string
 	formatFile      string
+	importName      string
 	includeExternal bool
 	digestTags      bool
 	list            bool
@@ -197,6 +198,8 @@ func init() {
 
 	imageExportCmd.Flags().StringVar(&imageOpts.exportRef, "name", "", "Name of image to embed for docker load")
 	imageExportCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
+
+	imageImportCmd.Flags().StringVar(&imageOpts.importName, "name", "", "Name of image or tag to import when multiple images are packaged in the tar")
 
 	imageInspectCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageInspectCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
@@ -981,6 +984,10 @@ func runImageImport(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	opts := []regclient.ImageOpts{}
+	if imageOpts.importName != "" {
+		opts = append(opts, regclient.ImageWithImportName(imageOpts.importName))
+	}
 	rs, err := os.Open(args[1])
 	if err != nil {
 		return err
@@ -993,7 +1000,7 @@ func runImageImport(cmd *cobra.Command, args []string) error {
 		"file": args[1],
 	}).Debug("Image import")
 
-	return rc.ImageImport(ctx, r, rs)
+	return rc.ImageImport(ctx, r, rs, opts...)
 }
 
 func runImageInspect(cmd *cobra.Command, args []string) error {
