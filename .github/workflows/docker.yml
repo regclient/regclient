@@ -154,13 +154,13 @@ jobs:
         regctl image mod "${local_tag}" --replace \
           --to-oci-referrers \
           --time-max "${vcs_date}" \
-          --annotation "[*]oci.opencontainers.image.created=${vcs_date}" \
-          --annotation "[*]oci.opencontainers.image.source=${{ steps.prep.outputs.repo_url }}" \
-          --annotation "[*]oci.opencontainers.image.revision=${{ github.sha }}"
+          --annotation "[*]org.opencontainers.image.created=${vcs_date}" \
+          --annotation "[*]org.opencontainers.image.source=${{ steps.prep.outputs.repo_url }}" \
+          --annotation "[*]org.opencontainers.image.revision=${{ github.sha }}"
         if [ -n "$base_name" ] && [ -n "$base_digest" ]; then
           regctl image mod "${local_tag}" --replace \
-            --annotation "[*]oci.opencontainers.image.base.name=${base_name}" \
-            --annotation "[*]oci.opencontainers.image.base.digest=${base_digest}"
+            --annotation "[*]org.opencontainers.image.base.name=${base_name}" \
+            --annotation "[*]org.opencontainers.image.base.digest=${base_digest}"
         fi
         echo "digest=$(regctl image digest ${local_tag})" >>$GITHUB_OUTPUT
 
