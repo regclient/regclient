@@ -1,51 +1,82 @@
-# Release v0.4.8
+# Release v0.5.0
 
-Breaking Changes:
+The two key features are:
 
-- Deprecated: `regclient.WithConfigHosts` is replaced by a variadic on `regclient.WithConfigHost` ([PR 409][pr-409])
-- Deprecated: `regclient.WithBlobLimit`, `regcleint.WithBlobSize`, `regclient.WithCertDir`, `regclient.WithRetryDelay`, and `regclient.WithRetryLimit` are replaced by `regclient.WithRegOpts` ([PR 409][pr-409])
+- Updating the image copy to copy layers concurrently and with an improved UI.
+- Update support for OCI with the Referrers changes coming in their 1.1 releases.
 
-New Features:
+Image Copy:
 
-- Add `--platform` option to `regctl image copy/export` ([PR 379][pr-379])
-- Add option to override name in `regctl image export` ([PR 380][pr-380])
-- Add platforms option to `regctl index add/create` ([PR 381][pr-381])
-- Add `--referrers` and `--digest-tags` options to `regctl index add/create` ([PR 382][pr-382])
-- Add `regctl blob copy` command ([PR 385][pr-385])
-- Adding `regctl image mod --to-docker` to convert manifests from OCI to Docker schema2 ([PR 388][pr-388])
-- Support `OCI-Chunk-Min-Length` header ([PR 394][pr-394])
-- Add support for registry warning headers ([PR 396][pr-396])
-- Add `regclient.WithRegOpts` ([PR 408][pr-408])
+- Add progress display to `regctl image copy` ([PR 413][pr-413])
+- Image copy is now run with concurrency. ([PR 419][pr-419])
+- Fix `regctl image copy` output on narrow terminals. ([PR 440][pr-440])
+- Add a fast check option for copying images with referrers and digest tags. ([PR 441][pr-441])
+- Update `regctl image copy` for tty displays. ([PR 447][pr-447])
 
-Bug Fixes:
+OCI Support:
 
-- Improve handling of the referrers API with Harbor ([PR 389][pr-389])
-- Fix an issue on `regctl tag rm` to support registries that require a layer ([PR 395][pr-395])
-- Image mod only converts `config.mediaType` between known values ([PR 399][pr-399])
-- Ignore anonymous blob mount failures ([PR 401][pr-401])
-- Fix handling of docker registry logins with `credStore` ([PR 405][pr-405])
-- Fix regsync handling of the paginated repo listing when syncing registries ([PR 406][pr-406])
+- Add support for `artifactType` in image manifest ([PR 400][pr-400])
+- Accept manifests with OCI artifact media type (experimental). ([PR 418][pr-418])
+- Handle the OCI-Subject header to detect referrer support. ([PR 446][pr-446])
+- Embed the `Platform` field directly in the `ImageConfig` ([PR 456][pr-456])
+- Switch from scratch to empty JSON media type ([PR 463][pr-463])
+- Support artifactType and subject fields on OCI Index ([PR 476][pr-476])
 
-Other Changes:
+Other Features:
 
-- Recursively sign manifest list and platform specific images with cosign ([PR 378][pr-378])
-- Include tag in the version output ([PR 392][pr-392])
+- Image mod pushes directly to the target ref without an extra copy step ([PR 438][pr-438])
+- Performance improvements for regsync ([PR 449][pr-449])
+- Support client certs and keys for mTLS registry auth. ([PR 454][pr-454])
+- Support updating annotations on platform specific manifests in a manifest list. ([PR 457][pr-457])
+- Add ability to sort referrers by annotation. ([PR 467][pr-467])
+- Use `SOURCE_DATE_EPOCH` build arg support in buildkit. ([PR 472][pr-472])
+- Add regctl tag list filtering ([PR 477][pr-477])
+- Add option to import a specific image or tag from an export of multiple images ([PR 482][pr-482])
 
-[pr-378]: https://github.com/regclient/regclient/pull/378
-[pr-379]: https://github.com/regclient/regclient/pull/379
-[pr-380]: https://github.com/regclient/regclient/pull/380
-[pr-381]: https://github.com/regclient/regclient/pull/381
-[pr-382]: https://github.com/regclient/regclient/pull/382
-[pr-385]: https://github.com/regclient/regclient/pull/385
-[pr-388]: https://github.com/regclient/regclient/pull/388
-[pr-389]: https://github.com/regclient/regclient/pull/389
-[pr-392]: https://github.com/regclient/regclient/pull/392
-[pr-394]: https://github.com/regclient/regclient/pull/394
-[pr-395]: https://github.com/regclient/regclient/pull/395
-[pr-396]: https://github.com/regclient/regclient/pull/396
-[pr-399]: https://github.com/regclient/regclient/pull/399
-[pr-401]: https://github.com/regclient/regclient/pull/401
-[pr-405]: https://github.com/regclient/regclient/pull/405
-[pr-406]: https://github.com/regclient/regclient/pull/406
-[pr-408]: https://github.com/regclient/regclient/pull/408
-[pr-409]: https://github.com/regclient/regclient/pull/409
+Fixes:
+
+- Invalid references are detected before querying the registry ([PR 414][pr-414])
+- Fix handling of content-type headers. ([PR 418][pr-418])
+- Fix race when creating ocidir ([PR 420][pr-420])
+- Avoid an internal race condition when managing the referrers fallback tag. ([PR 427][pr-427])
+- Fix: close reader when converting a blob to an OCI config ([PR 434][pr-434])
+- Support manifests missing a mediaType field. ([PR 436][pr-436])
+- Fix GitHub badges. ([PR 437][pr-437])
+- Handle symlinks in the tar file with `regctl image import` ([PR 452][pr-452])
+- Fix GCR credential helper to work on Artifact Registry ([PR 455][pr-455])
+- Fix deadlock when referrers or digest tags refer to a parent manifest ([PR 464][pr-464])
+- Improve error handling of `regctl artifact tree`. ([PR 470][pr-470])
+- Fix copy when both referrers and digest-tags are included. ([PR 471][pr-471])
+- Fix handling of copy with looping referrers or digest-tags to validating registries ([PR 475][pr-475])
+
+[pr-400]: https://github.com/regclient/regclient/pull/400
+[pr-413]: https://github.com/regclient/regclient/pull/413
+[pr-414]: https://github.com/regclient/regclient/pull/414
+[pr-418]: https://github.com/regclient/regclient/pull/418
+[pr-419]: https://github.com/regclient/regclient/pull/419
+[pr-420]: https://github.com/regclient/regclient/pull/420
+[pr-427]: https://github.com/regclient/regclient/pull/427
+[pr-434]: https://github.com/regclient/regclient/pull/434
+[pr-436]: https://github.com/regclient/regclient/pull/436
+[pr-437]: https://github.com/regclient/regclient/pull/437
+[pr-438]: https://github.com/regclient/regclient/pull/438
+[pr-440]: https://github.com/regclient/regclient/pull/440
+[pr-441]: https://github.com/regclient/regclient/pull/441
+[pr-446]: https://github.com/regclient/regclient/pull/446
+[pr-447]: https://github.com/regclient/regclient/pull/447
+[pr-449]: https://github.com/regclient/regclient/pull/449
+[pr-452]: https://github.com/regclient/regclient/pull/452
+[pr-454]: https://github.com/regclient/regclient/pull/454
+[pr-455]: https://github.com/regclient/regclient/pull/455
+[pr-456]: https://github.com/regclient/regclient/pull/456
+[pr-457]: https://github.com/regclient/regclient/pull/457
+[pr-463]: https://github.com/regclient/regclient/pull/463
+[pr-464]: https://github.com/regclient/regclient/pull/464
+[pr-467]: https://github.com/regclient/regclient/pull/467
+[pr-470]: https://github.com/regclient/regclient/pull/470
+[pr-471]: https://github.com/regclient/regclient/pull/471
+[pr-472]: https://github.com/regclient/regclient/pull/472
+[pr-475]: https://github.com/regclient/regclient/pull/475
+[pr-476]: https://github.com/regclient/regclient/pull/476
+[pr-477]: https://github.com/regclient/regclient/pull/477
+[pr-482]: https://github.com/regclient/regclient/pull/482
