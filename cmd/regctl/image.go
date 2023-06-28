@@ -7,12 +7,16 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient"
+	"github.com/regclient/regclient/internal/ascii"
+	"github.com/regclient/regclient/internal/units"
 	"github.com/regclient/regclient/mod"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/types"
@@ -146,9 +150,11 @@ var imageOpts struct {
 	checkSkipConfig bool
 	create          string
 	exportRef       string
+	fastCheck       bool
 	forceRecursive  bool
 	format          string
 	formatFile      string
+	importName      string
 	includeExternal bool
 	digestTags      bool
 	list            bool
@@ -168,7 +174,9 @@ func init() {
 	imageCheckBaseCmd.Flags().BoolVarP(&imageOpts.checkSkipConfig, "no-config", "", false, "Skip check of config history")
 	imageCheckBaseCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 
+	imageCopyCmd.Flags().BoolVarP(&imageOpts.fastCheck, "fast", "", false, "Fast check, skip referrers and digest tag checks when image exists, overrides force-recursive")
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.forceRecursive, "force-recursive", "", false, "Force recursive copy of image, repairs missing nested blobs and manifests")
+	imageCopyCmd.Flags().StringVarP(&imageOpts.format, "format", "", "", "Format output with go template syntax")
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.includeExternal, "include-external", "", false, "Include external layers")
 	imageCopyCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageCopyCmd.Flags().StringArrayVarP(&imageOpts.platforms, "platforms", "", []string{}, "Copy only specific platforms, registry validation must be disabled")
@@ -190,6 +198,8 @@ func init() {
 
 	imageExportCmd.Flags().StringVar(&imageOpts.exportRef, "name", "", "Name of image to embed for docker load")
 	imageExportCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
+
+	imageImportCmd.Flags().StringVar(&imageOpts.importName, "name", "", "Name of image or tag to import when multiple images are packaged in the tar")
 
 	imageInspectCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageInspectCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
@@ -220,7 +230,7 @@ func init() {
 			}
 			return nil
 		},
-	}, "annotation", "", `set an annotation (name=value)`)
+	}, "annotation", "", `set an annotation (name=value, omit value to delete, prefix with platform list [p1,p2] or [*] for all images)`)
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
@@ -614,6 +624,9 @@ func runImageCopy(cmd *cobra.Command, args []string) error {
 		"digest-tags": imageOpts.digestTags,
 	}).Debug("Image copy")
 	opts := []regclient.ImageOpts{}
+	if imageOpts.fastCheck {
+		opts = append(opts, regclient.ImageWithFastCheck())
+	}
 	if imageOpts.forceRecursive {
 		opts = append(opts, regclient.ImageWithForceRecursive())
 	}
@@ -629,7 +642,174 @@ func runImageCopy(cmd *cobra.Command, args []string) error {
 	if len(imageOpts.platforms) > 0 {
 		opts = append(opts, regclient.ImageWithPlatforms(imageOpts.platforms))
 	}
-	return rc.ImageCopy(ctx, rSrc, rTgt, opts...)
+	// check for a tty and attach progress reporter
+	done := make(chan bool)
+	var progress *imageProgress
+	if !flagChanged(cmd, "verbosity") && ascii.IsWriterTerminal(cmd.ErrOrStderr()) {
+		progress = &imageProgress{
+			start:   time.Now(),
+			entries: map[string]*imageProgressEntry{},
+			asciOut: ascii.NewLines(cmd.ErrOrStderr()),
+			bar:     ascii.NewProgressBar(cmd.ErrOrStderr()),
+		}
+		ticker := time.NewTicker(progressFreq)
+		defer ticker.Stop()
+		go func() {
+			for {
+				select {
+				case <-done:
+					ticker.Stop()
+					return
+				case <-ticker.C:
+					progress.display(cmd.ErrOrStderr(), false)
+				}
+			}
+		}()
+		opts = append(opts, regclient.ImageWithCallback(progress.callback))
+	}
+	err = rc.ImageCopy(ctx, rSrc, rTgt, opts...)
+	if progress != nil {
+		close(done)
+		progress.display(cmd.ErrOrStderr(), true)
+	}
+	if err != nil {
+		return err
+	}
+	if !flagChanged(cmd, "format") {
+		imageOpts.format = "{{ .CommonName }}\n"
+	}
+	return template.Writer(cmd.OutOrStdout(), imageOpts.format, rTgt)
+}
+
+type imageProgress struct {
+	mu      sync.Mutex
+	start   time.Time
+	entries map[string]*imageProgressEntry
+	asciOut *ascii.Lines
+	bar     *ascii.ProgressBar
+	changed bool
+}
+
+type imageProgressEntry struct {
+	kind        types.CallbackKind
+	instance    string
+	state       types.CallbackState
+	start, last time.Time
+	cur, total  int64
+	bps         []float64
+}
+
+func (ip *imageProgress) callback(kind types.CallbackKind, instance string, state types.CallbackState, cur, total int64) {
+	// track kind/instance
+	ip.mu.Lock()
+	defer ip.mu.Unlock()
+	ip.changed = true
+	now := time.Now()
+	if e, ok := ip.entries[kind.String()+":"+instance]; ok {
+		e.state = state
+		diff := now.Sub(e.last)
+		bps := float64(cur-e.cur) / diff.Seconds()
+		e.state = state
+		e.last = now
+		e.cur = cur
+		e.total = total
+		if len(e.bps) >= 10 {
+			e.bps = append(e.bps[1:], bps)
+		} else {
+			e.bps = append(e.bps, bps)
+		}
+	} else {
+		ip.entries[kind.String()+":"+instance] = &imageProgressEntry{
+			kind:     kind,
+			instance: instance,
+			state:    state,
+			start:    now,
+			last:     now,
+			cur:      cur,
+			total:    total,
+			bps:      []float64{},
+		}
+	}
+}
+
+func (ip *imageProgress) display(w io.Writer, final bool) {
+	ip.mu.Lock()
+	defer ip.mu.Unlock()
+	if !ip.changed && !final {
+		return // skip since no changes since last display and not the final display
+	}
+	var manifestTotal, manifestFinished, sum, skipped, queued int64
+	// sort entry keys by start time
+	keys := make([]string, 0, len(ip.entries))
+	for k := range ip.entries {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(a, b int) bool {
+		if ip.entries[keys[a]].state != ip.entries[keys[b]].state {
+			return ip.entries[keys[a]].state > ip.entries[keys[b]].state
+		} else if ip.entries[keys[a]].state != types.CallbackActive {
+			return ip.entries[keys[a]].last.Before(ip.entries[keys[b]].last)
+		} else {
+			return ip.entries[keys[a]].cur > ip.entries[keys[b]].cur
+		}
+	})
+	startCount, startLimit := 0, 2
+	finishedCount, finishedLimit := 0, 2
+	// hide old finished entries
+	for i := len(keys) - 1; i >= 0; i-- {
+		e := ip.entries[keys[i]]
+		if e.kind != types.CallbackManifest && e.state == types.CallbackFinished {
+			finishedCount++
+			if finishedCount > finishedLimit {
+				e.state = types.CallbackArchived
+			}
+		}
+	}
+	for _, k := range keys {
+		e := ip.entries[k]
+		switch e.kind {
+		case types.CallbackManifest:
+			manifestTotal++
+			if e.state == types.CallbackFinished || e.state == types.CallbackSkipped {
+				manifestFinished++
+			}
+		default:
+			// show progress bars
+			if !final && (e.state == types.CallbackActive || (e.state == types.CallbackStarted && startCount < startLimit) || e.state == types.CallbackFinished) {
+				if e.state == types.CallbackStarted {
+					startCount++
+				}
+				pre := e.instance + " "
+				if len(pre) > 15 {
+					pre = pre[:14] + " "
+				}
+				pct := float64(e.cur) / float64(e.total)
+				post := fmt.Sprintf(" %4.2f%% %s/%s", pct*100, units.HumanSize(float64(e.cur)), units.HumanSize(float64(e.total)))
+				ip.asciOut.Add(ip.bar.Generate(pct, pre, post))
+			}
+			// track stats
+			if e.state == types.CallbackSkipped {
+				skipped += e.total
+			} else if e.total > 0 {
+				sum += e.cur
+				queued += e.total - e.cur
+			}
+		}
+	}
+	// show stats summary
+	ip.asciOut.Add([]byte(fmt.Sprintf("Manifests: %d/%d | Blobs: %s copied, %s skipped",
+		manifestFinished, manifestTotal,
+		units.HumanSize(float64(sum)),
+		units.HumanSize(float64(skipped)))))
+	if queued > 0 {
+		ip.asciOut.Add([]byte(fmt.Sprintf(", %s queued",
+			units.HumanSize(float64(queued)))))
+	}
+	ip.asciOut.Add([]byte(fmt.Sprintf(" | Elapsed: %ds\n", int64(time.Since(ip.start).Seconds()))))
+	ip.asciOut.Flush()
+	if !final {
+		ip.asciOut.Return()
+	}
 }
 
 func runImageExport(cmd *cobra.Command, args []string) error {
@@ -752,6 +932,12 @@ func runImageGetFile(cmd *cobra.Command, args []string) error {
 		th, rdr, err := btr.ReadFile(filename)
 		if err != nil {
 			if errors.Is(err, types.ErrFileNotFound) {
+				if err := btr.Close(); err != nil {
+					return err
+				}
+				if err := blob.Close(); err != nil {
+					return err
+				}
 				continue
 			}
 			return fmt.Errorf("failed pulling from layer %d: %w", i, err)
@@ -780,6 +966,12 @@ func runImageGetFile(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
+		if err := btr.Close(); err != nil {
+			return err
+		}
+		if err := blob.Close(); err != nil {
+			return err
+		}
 		return nil
 	}
 	// all layers exhausted, not found or deleted
@@ -791,6 +983,10 @@ func runImageImport(cmd *cobra.Command, args []string) error {
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
+	}
+	opts := []regclient.ImageOpts{}
+	if imageOpts.importName != "" {
+		opts = append(opts, regclient.ImageWithImportName(imageOpts.importName))
 	}
 	rs, err := os.Open(args[1])
 	if err != nil {
@@ -804,7 +1000,7 @@ func runImageImport(cmd *cobra.Command, args []string) error {
 		"file": args[1],
 	}).Debug("Image import")
 
-	return rc.ImageImport(ctx, r, rs)
+	return rc.ImageImport(ctx, r, rs, opts...)
 }
 
 func runImageInspect(cmd *cobra.Command, args []string) error {
@@ -858,50 +1054,42 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 
 func runImageMod(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
-	r, err := ref.New(args[0])
+	rSrc, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
-	var rNew ref.Ref
+	var rTgt ref.Ref
 	if imageOpts.create != "" {
 		if strings.ContainsAny(imageOpts.create, "/:") {
-			rNew, err = ref.New((imageOpts.create))
+			rTgt, err = ref.New((imageOpts.create))
 			if err != nil {
 				return fmt.Errorf("failed to parse new image name %s: %w", imageOpts.create, err)
 			}
 		} else {
-			rNew = r
-			rNew.Digest = ""
-			rNew.Tag = imageOpts.create
+			rTgt = rSrc
+			rTgt.Digest = ""
+			rTgt.Tag = imageOpts.create
 		}
 	} else if imageOpts.replace {
-		if r.Tag == "" {
-			return fmt.Errorf("cannot replace an image digest, must include a tag")
-		}
-		rNew = r
-		rNew.Digest = ""
+		rTgt = rSrc
+	} else {
+		rTgt = rSrc
+		rTgt.Tag = ""
 	}
+	imageOpts.modOpts = append(imageOpts.modOpts, mod.WithRefTgt(rTgt))
 	rc := newRegClient()
 
 	log.WithFields(logrus.Fields{
-		"ref": r.CommonName(),
+		"ref": rSrc.CommonName(),
 	}).Debug("Modifying image")
 
-	defer rc.Close(ctx, r)
-	rOut, err := mod.Apply(ctx, rc, r, imageOpts.modOpts...)
+	defer rc.Close(ctx, rSrc)
+	rOut, err := mod.Apply(ctx, rc, rSrc, imageOpts.modOpts...)
 	if err != nil {
 		return err
 	}
-	if rNew.Tag != "" {
-		defer rc.Close(ctx, rNew)
-		err = rc.ImageCopy(ctx, rOut, rNew)
-		if err != nil {
-			return fmt.Errorf("failed copying image to new name: %w", err)
-		}
-		fmt.Printf("%s\n", rNew.CommonName())
-	} else {
-		fmt.Printf("%s\n", rOut.CommonName())
-	}
+	fmt.Printf("%s\n", rOut.CommonName())
+	rc.Close(ctx, rOut)
 	return nil
 }
 

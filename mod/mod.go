@@ -33,7 +33,7 @@ var (
 )
 
 // Apply applies a set of modifications to an image (manifest, configs, and layers)
-func Apply(ctx context.Context, rc *regclient.RegClient, r ref.Ref, opts ...Opts) (ref.Ref, error) {
+func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...Opts) (ref.Ref, error) {
 	// check for the various types of mods (manifest, config, layer)
 	// some may span like copying layers from config to manifest
 	// run changes in order (deleting layers before pulling and changing a layer)
@@ -41,33 +41,36 @@ func Apply(ctx context.Context, rc *regclient.RegClient, r ref.Ref, opts ...Opts
 	// e.g. layer hash changing in config, or a deleted layer from the config deleting from the manifest
 	// do I need to store a DAG in memory with pointers back to parents and modified bool, so change to digest can be rippled up and modified objects are pushed?
 
-	rMod := r
 	// pull the image metadata into a DAG
-	dm, err := dagGet(ctx, rc, r, types.Descriptor{})
+	dm, err := dagGet(ctx, rc, rSrc, types.Descriptor{})
 	if err != nil {
-		return rMod, err
+		return rSrc, err
 	}
 	dm.top = true
 
 	// load the options
+	rTgt := rSrc
+	rTgt.Tag = ""
+	rTgt.Digest = ""
 	dc := dagConfig{
-		stepsManifest:  []func(context.Context, *regclient.RegClient, ref.Ref, *dagManifest) error{},
-		stepsOCIConfig: []func(context.Context, *regclient.RegClient, ref.Ref, *dagOCIConfig) error{},
-		stepsLayer:     []func(context.Context, *regclient.RegClient, ref.Ref, *dagLayer) error{},
-		stepsLayerFile: []func(context.Context, *regclient.RegClient, ref.Ref, *dagLayer, *tar.Header, io.Reader) (*tar.Header, io.Reader, changes, error){},
+		stepsManifest:  []func(context.Context, *regclient.RegClient, ref.Ref, ref.Ref, *dagManifest) error{},
+		stepsOCIConfig: []func(context.Context, *regclient.RegClient, ref.Ref, ref.Ref, *dagOCIConfig) error{},
+		stepsLayerFile: []func(context.Context, *regclient.RegClient, ref.Ref, ref.Ref, *dagLayer, *tar.Header, io.Reader) (*tar.Header, io.Reader, changes, error){},
 		maxDataSize:    -1, // unchanged, if a data field exists, preserve it
+		rTgt:           rTgt,
 	}
 	for _, opt := range opts {
 		if err := opt(&dc, dm); err != nil {
-			return rMod, err
+			return rSrc, err
 		}
 	}
+	rTgt = dc.rTgt
 
 	// perform manifest changes
 	if len(dc.stepsManifest) > 0 {
 		err = dagWalkManifests(dm, func(dm *dagManifest) (*dagManifest, error) {
 			for _, fn := range dc.stepsManifest {
-				err := fn(ctx, rc, r, dm)
+				err := fn(ctx, rc, rSrc, rTgt, dm)
 				if err != nil {
 					return nil, err
 				}
@@ -75,13 +78,13 @@ func Apply(ctx context.Context, rc *regclient.RegClient, r ref.Ref, opts ...Opts
 			return dm, nil
 		})
 		if err != nil {
-			return rMod, err
+			return rTgt, err
 		}
 	}
 	if len(dc.stepsOCIConfig) > 0 {
 		err = dagWalkOCIConfig(dm, func(doc *dagOCIConfig) (*dagOCIConfig, error) {
 			for _, fn := range dc.stepsOCIConfig {
-				err := fn(ctx, rc, r, doc)
+				err := fn(ctx, rc, rSrc, rTgt, doc)
 				if err != nil {
 					return nil, err
 				}
@@ -89,27 +92,21 @@ func Apply(ctx context.Context, rc *regclient.RegClient, r ref.Ref, opts ...Opts
 			return doc, nil
 		})
 		if err != nil {
-			return rMod, err
+			return rTgt, err
 		}
 	}
-	if len(dc.stepsLayer) > 0 || len(dc.stepsLayerFile) > 0 {
+	if len(dc.stepsLayerFile) > 0 || !ref.EqualRepository(rSrc, rTgt) {
 		err = dagWalkLayers(dm, func(dl *dagLayer) (*dagLayer, error) {
 			if dl.mod == deleted || len(dl.desc.URLs) > 0 {
 				// skip deleted or external layers
 				return dl, nil
 			}
-			br, err := rc.BlobGet(ctx, r, dl.desc)
-			if err != nil {
-				return nil, err
-			}
-			defer br.Close()
-			for _, sl := range dc.stepsLayer {
-				err = sl(ctx, rc, r, dl)
+			if len(dc.stepsLayerFile) > 0 && dl.mod != deleted && inListStr(dl.desc.MediaType, mtWLTar) {
+				br, err := rc.BlobGet(ctx, rSrc, dl.desc)
 				if err != nil {
 					return nil, err
 				}
-			}
-			if len(dc.stepsLayerFile) > 0 && dl.mod != deleted && inListStr(dl.desc.MediaType, mtWLTar) {
+				defer br.Close()
 				changed := false
 				empty := true
 				// setup tar reader to process layer
@@ -154,7 +151,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, r ref.Ref, opts ...Opts
 					rdr = tr
 					for _, slf := range dc.stepsLayerFile {
 						var changeCur changes
-						th, rdr, changeCur, err = slf(ctx, rc, r, dl, th, rdr)
+						th, rdr, changeCur, err = slf(ctx, rc, rSrc, rTgt, dl, th, rdr)
 						if err != nil {
 							return nil, err
 						}
@@ -206,29 +203,43 @@ func Apply(ctx context.Context, rc *regclient.RegClient, r ref.Ref, opts ...Opts
 					if err != nil {
 						return nil, err
 					}
-					_, err = rc.BlobPut(ctx, r, dl.newDesc, fh)
+					_, err = rc.BlobPut(ctx, rTgt, dl.newDesc, fh)
 					if err != nil {
 						return nil, err
 					}
 					dl.mod = replaced
 				}
 			}
+			if dl.mod == unchanged && !ref.EqualRepository(rSrc, rTgt) {
+				err = rc.BlobCopy(ctx, rSrc, rTgt, dl.desc)
+				if err != nil {
+					return nil, err
+				}
+			}
 			return dl, nil
 		})
 		if err != nil {
-			return rMod, err
+			return rTgt, err
 		}
 	}
 
-	err = dagPut(ctx, rc, dc, r, dm)
+	err = dagPut(ctx, rc, dc, rSrc, rTgt, dm)
 	if err != nil {
-		return rMod, err
+		return rTgt, err
 	}
-	if dm.mod == replaced {
-		rMod.Digest = string(dm.newDesc.Digest)
-		rMod.Tag = ""
+	if rTgt.Tag == "" {
+		rTgt.Digest = dm.m.GetDescriptor().Digest.String()
 	}
-	return rMod, nil
+	return rTgt, nil
+}
+
+// WithRefTgt sets the target manifest.
+// Apply will default to pushing to the same name by digest.
+func WithRefTgt(rTgt ref.Ref) Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		dc.rTgt = rTgt
+		return nil
+	}
 }
 
 // WithData sets the descriptor data field max size.

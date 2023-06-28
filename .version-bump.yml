@@ -5,7 +5,7 @@ files:
       - docker-arg-go-tag
       - docker-arg-go
       - git-commit-ecr
-      - git-commit-gcr
+      - git-tag-gcr
       - git-commit-lunajson
       - git-commit-semver
   ".github/workflows/*.yml":
@@ -18,10 +18,14 @@ files:
       - gha-cosign-version
   "Makefile":
     scans:
+      - makefile-markdown-lint
       - makefile-staticcheck
       - makefile-syft-version
       - makefile-syft-version2
       - makefile-syft-digest
+  "go.mod":
+    scans:
+      - go-mod-golang-release
 
 scans:
   docker-arg-alpine:
@@ -48,12 +52,12 @@ scans:
       regexp: '^ARG ECR_HELPER_VER=(?P<Version>[0-9a-f]+)\s*$'
       repo: "https://github.com/awslabs/amazon-ecr-credential-helper.git"
       ref: main
-  git-commit-gcr:
+  git-tag-gcr:
     type: "regexp"
-    source: "git-commit"
+    source: "git-tag-semver"
     args:
-      regexp: '^ARG GCR_HELPER_VER=(?P<Version>[0-9a-f]+)\s*$'
-      repo: "https://github.com/GoogleCloudPlatform/docker-credential-gcr.git"
+      regexp: '^ARG GCR_HELPER_VER=(?P<Version>[^\s]+)\s*$'
+      repo: "github.com/GoogleCloudPlatform/docker-credential-gcr"
       ref: master
   git-commit-lunajson:
     type: "regexp"
@@ -101,6 +105,17 @@ scans:
     args:
       regexp: '^\s*cosign-release: "(?P<Version>v[0-9\.]+)"\s*$'
       repo: "github.com/sigstore/cosign"
+  go-mod-golang-release:
+    type: "regexp"
+    source: "registry-golang-latest"
+    args:
+      regexp: '^go (?P<Version>[0-9\.]+)\s*$'
+  makefile-markdown-lint:
+    type: "regexp"
+    source: "registry-tag-arg-semver"
+    args:
+      regexp: '^MARKDOWN_LINT_VER\?=(?P<Version>v[0-9\.]+)\s*$'
+      repo: "ghcr.io/igorshubovych/markdownlint-cli"
   makefile-staticcheck:
     type: "regexp"
     source: "git-tag-semver"

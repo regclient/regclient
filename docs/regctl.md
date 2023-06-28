@@ -137,6 +137,7 @@ Available Commands:
   import      import image
   inspect     inspect image
   manifest    show manifest or manifest list
+  mod         modify an image
   ratelimit   show the current rate limit
 ```
 
@@ -163,6 +164,10 @@ This can be useful with image pruning scripts, or other tools that need the imag
 
 The `manifest` command shows the low level layers and digests that can be pulled from the registry to retrieve individual components of an image.
 This is also useful for analyzing multi-platform manifest lists to see what platforms are available for a particular image.
+
+The `mod` command is used to modify existing images.
+This is useful for making changes to an image that aren't available in the build tooling, or to convert images received from an external source.
+Example uses include converting from Docker to OCI media types, adding annotations, adjusting timestamps, and rebasing images.
 
 The `ratelimit` command shows the current rate limit on the manifest API using a http HEAD request that does not count against the Docker Hub limits.
 

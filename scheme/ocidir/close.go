@@ -19,8 +19,8 @@ func (o *OCIDir) Close(ctx context.Context, r ref.Ref) error {
 
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	if _, ok := o.modRefs[r.Path]; !ok {
-		// unmodified, no need to gc ref
+	if gc, ok := o.modRefs[r.Path]; !ok || !gc.mod || gc.locks > 0 {
+		// unmodified or locked, skip gc
 		return nil
 	}
 
@@ -30,7 +30,7 @@ func (o *OCIDir) Close(ctx context.Context, r ref.Ref) error {
 	}).Debug("running GC")
 	dl := map[string]bool{}
 	// recurse through index, manifests, and blob lists, generating a digest list
-	index, err := o.readIndex(r)
+	index, err := o.readIndex(r, true)
 	if err != nil {
 		return err
 	}
@@ -85,7 +85,7 @@ func (o *OCIDir) closeProcManifest(ctx context.Context, r ref.Ref, m manifest.Ma
 			cr.Tag = ""
 			cr.Digest = cur.Digest.String()
 			(*dl)[cr.Digest] = true
-			cm, err := o.ManifestGet(ctx, cr)
+			cm, err := o.manifestGet(ctx, cr)
 			if err != nil {
 				// ignore errors in case a manifest has been deleted or sparse copy
 				o.log.WithFields(logrus.Fields{

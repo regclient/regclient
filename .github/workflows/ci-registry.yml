@@ -1,0 +1,39 @@
+name: CI - Registry
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches: [ main ]
+
+jobs:
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    env:
+      RELEASE_GO_VER: "1.20"
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v3
+
+    - name: "Set up Go ${{ env.RELEASE_GO_VER }}"
+      uses: actions/setup-go@v4
+      with:
+        go-version: "${{ env.RELEASE_GO_VER }}"
+        check-latest: true
+      id: go
+
+    - name: Build
+      run: make
+
+    - name: Registry - Distribution
+      run: make ci-distribution
+
+    - name: Registry - Zot
+      run: make ci-zot

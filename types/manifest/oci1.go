@@ -171,6 +171,12 @@ func (m *oci1Manifest) GetSubject() (*types.Descriptor, error) {
 	}
 	return m.Manifest.Subject, nil
 }
+func (m *oci1Index) GetSubject() (*types.Descriptor, error) {
+	if !m.manifSet {
+		return nil, types.ErrManifestNotSet
+	}
+	return m.Index.Subject, nil
+}
 func (m *oci1Artifact) GetSubject() (*types.Descriptor, error) {
 	if !m.manifSet {
 		return nil, types.ErrManifestNotSet
@@ -215,6 +221,9 @@ func (m *oci1Manifest) MarshalPretty() ([]byte, error) {
 		fmt.Fprintf(tw, "Name:\t%s\n", m.r.Reference)
 	}
 	fmt.Fprintf(tw, "MediaType:\t%s\n", m.desc.MediaType)
+	if m.ArtifactType != "" {
+		fmt.Fprintf(tw, "ArtifactType:\t%s\n", m.ArtifactType)
+	}
 	fmt.Fprintf(tw, "Digest:\t%s\n", m.desc.Digest.String())
 	if m.Annotations != nil && len(m.Annotations) > 0 {
 		fmt.Fprintf(tw, "Annotations:\t\n")
@@ -269,6 +278,9 @@ func (m *oci1Index) MarshalPretty() ([]byte, error) {
 		fmt.Fprintf(tw, "Name:\t%s\n", m.r.Reference)
 	}
 	fmt.Fprintf(tw, "MediaType:\t%s\n", m.desc.MediaType)
+	if m.ArtifactType != "" {
+		fmt.Fprintf(tw, "ArtifactType:\t%s\n", m.ArtifactType)
+	}
 	fmt.Fprintf(tw, "Digest:\t%s\n", m.desc.Digest.String())
 	if m.Annotations != nil && len(m.Annotations) > 0 {
 		fmt.Fprintf(tw, "Annotations:\t\n")
@@ -296,6 +308,14 @@ func (m *oci1Index) MarshalPretty() ([]byte, error) {
 			return []byte{}, err
 		}
 	}
+	if m.Subject != nil {
+		fmt.Fprintf(tw, "\t\n")
+		fmt.Fprintf(tw, "Subject:\t\n")
+		err := m.Subject.MarshalPrettyTW(tw, "  ")
+		if err != nil {
+			return []byte{}, err
+		}
+	}
 	tw.Flush()
 	return buf.Bytes(), nil
 }
@@ -309,6 +329,7 @@ func (m *oci1Artifact) MarshalPretty() ([]byte, error) {
 		fmt.Fprintf(tw, "Name:\t%s\n", m.r.Reference)
 	}
 	fmt.Fprintf(tw, "MediaType:\t%s\n", m.desc.MediaType)
+	fmt.Fprintf(tw, "ArtifactType:\t%s\n", m.ArtifactType)
 	fmt.Fprintf(tw, "Digest:\t%s\n", m.desc.Digest.String())
 	if m.Annotations != nil && len(m.Annotations) > 0 {
 		fmt.Fprintf(tw, "Annotations:\t\n")
@@ -355,7 +376,11 @@ func (m *oci1Manifest) SetAnnotation(key, val string) error {
 	if m.Annotations == nil {
 		m.Annotations = map[string]string{}
 	}
-	m.Annotations[key] = val
+	if val != "" {
+		m.Annotations[key] = val
+	} else {
+		delete(m.Annotations, key)
+	}
 	return m.updateDesc()
 }
 func (m *oci1Index) SetAnnotation(key, val string) error {
@@ -365,7 +390,11 @@ func (m *oci1Index) SetAnnotation(key, val string) error {
 	if m.Annotations == nil {
 		m.Annotations = map[string]string{}
 	}
-	m.Annotations[key] = val
+	if val != "" {
+		m.Annotations[key] = val
+	} else {
+		delete(m.Annotations, key)
+	}
 	return m.updateDesc()
 }
 func (m *oci1Artifact) SetAnnotation(key, val string) error {
@@ -375,7 +404,11 @@ func (m *oci1Artifact) SetAnnotation(key, val string) error {
 	if m.Annotations == nil {
 		m.Annotations = map[string]string{}
 	}
-	m.Annotations[key] = val
+	if val != "" {
+		m.Annotations[key] = val
+	} else {
+		delete(m.Annotations, key)
+	}
 	return m.updateDesc()
 }
 
@@ -457,6 +490,13 @@ func (m *oci1Manifest) SetSubject(d *types.Descriptor) error {
 		return types.ErrManifestNotSet
 	}
 	m.Manifest.Subject = d
+	return m.updateDesc()
+}
+func (m *oci1Index) SetSubject(d *types.Descriptor) error {
+	if !m.manifSet {
+		return types.ErrManifestNotSet
+	}
+	m.Index.Subject = d
 	return m.updateDesc()
 }
 

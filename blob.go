@@ -4,21 +4,50 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"time"
 
+	"github.com/regclient/regclient/internal/throttle"
+	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/sirupsen/logrus"
 )
 
+const blobCBFreq = time.Millisecond * 100
+
+type blobOpt struct {
+	callback func(kind types.CallbackKind, instance string, state types.CallbackState, cur, total int64)
+}
+
+// BlobOpts define options for the Image* commands
+type BlobOpts func(*blobOpt)
+
+// BlobWithCallback provides progress data to a callback function
+func BlobWithCallback(callback func(kind types.CallbackKind, instance string, state types.CallbackState, cur, total int64)) BlobOpts {
+	return func(opts *blobOpt) {
+		opts.callback = callback
+	}
+}
+
 // BlobCopy copies a blob between two locations
 // If the blob already exists in the target, the copy is skipped
 // A server side cross repository blob mount is attempted
-func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor) error {
+func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor, opts ...BlobOpts) error {
+	var opt blobOpt
+	for _, optFn := range opts {
+		optFn(&opt)
+	}
 	tDesc := d
 	tDesc.URLs = []string{} // ignore URLs when pushing to target
+	if opt.callback != nil {
+		opt.callback(types.CallbackBlob, d.Digest.String(), types.CallbackStarted, 0, d.Size)
+	}
 	// for the same repository, there's nothing to copy
 	if ref.EqualRepository(refSrc, refTgt) {
+		if opt.callback != nil {
+			opt.callback(types.CallbackBlob, d.Digest.String(), types.CallbackSkipped, 0, d.Size)
+		}
 		rc.log.WithFields(logrus.Fields{
 			"src":    refTgt.Reference,
 			"tgt":    refTgt.Reference,
@@ -28,16 +57,46 @@ func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Re
 	}
 	// check if layer already exists
 	if _, err := rc.BlobHead(ctx, refTgt, tDesc); err == nil {
+		if opt.callback != nil {
+			opt.callback(types.CallbackBlob, d.Digest.String(), types.CallbackSkipped, 0, d.Size)
+		}
 		rc.log.WithFields(logrus.Fields{
 			"tgt":    refTgt.Reference,
 			"digest": d,
 		}).Debug("Blob copy skipped, already exists")
 		return nil
 	}
+	// acquire throttle for both src and tgt to avoid deadlocks
+	tList := []*throttle.Throttle{}
+	schemeSrcAPI, err := rc.schemeGet(refSrc.Scheme)
+	if err != nil {
+		return err
+	}
+	schemeTgtAPI, err := rc.schemeGet(refTgt.Scheme)
+	if err != nil {
+		return err
+	}
+	if tSrc, ok := schemeSrcAPI.(scheme.Throttler); ok {
+		tList = append(tList, tSrc.Throttle(refSrc, false)...)
+	}
+	if tTgt, ok := schemeTgtAPI.(scheme.Throttler); ok {
+		tList = append(tList, tTgt.Throttle(refTgt, true)...)
+	}
+	if len(tList) > 0 {
+		ctx, err = throttle.AcquireMulti(ctx, tList)
+		if err != nil {
+			return err
+		}
+		defer throttle.ReleaseMulti(ctx, tList)
+	}
+
 	// try mounting blob from the source repo is the registry is the same
 	if ref.EqualRegistry(refSrc, refTgt) {
 		err := rc.BlobMount(ctx, refSrc, refTgt, d)
 		if err == nil {
+			if opt.callback != nil {
+				opt.callback(types.CallbackBlob, d.Digest.String(), types.CallbackSkipped, 0, d.Size)
+			}
 			rc.log.WithFields(logrus.Fields{
 				"src":    refTgt.Reference,
 				"tgt":    refTgt.Reference,
@@ -60,6 +119,31 @@ func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Re
 			"digest": d,
 		}).Warn("Failed to retrieve blob")
 		return err
+	}
+	if opt.callback != nil {
+		opt.callback(types.CallbackBlob, d.Digest.String(), types.CallbackStarted, 0, d.Size)
+		ticker := time.NewTicker(blobCBFreq)
+		done := make(chan bool)
+		defer func() {
+			close(done)
+			ticker.Stop()
+			if ctx.Err() == nil {
+				opt.callback(types.CallbackBlob, d.Digest.String(), types.CallbackFinished, d.Size, d.Size)
+			}
+		}()
+		go func() {
+			for {
+				select {
+				case <-done:
+					return
+				case <-ticker.C:
+					offset, err := blobIO.Seek(0, io.SeekCurrent)
+					if err == nil && offset > 0 {
+						opt.callback(types.CallbackBlob, d.Digest.String(), types.CallbackActive, offset, d.Size)
+					}
+				}
+			}
+		}()
 	}
 	defer blobIO.Close()
 	if _, err := rc.BlobPut(ctx, refTgt, blobIO.GetDescriptor(), blobIO); err != nil {

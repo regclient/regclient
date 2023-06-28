@@ -24,6 +24,7 @@ import (
 	"github.com/regclient/regclient/types/docker/schema2"
 	"github.com/regclient/regclient/types/manifest"
 	v1 "github.com/regclient/regclient/types/oci/v1"
+	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/regclient/regclient/types/tag"
 	"github.com/sirupsen/logrus"
@@ -86,19 +87,21 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 				"delete-date": now.String(),
 			},
 		},
-		OS:           "linux",
-		Architecture: "amd64",
+		Platform: platform.Platform{
+			OS:           "linux",
+			Architecture: "amd64",
+		},
 		History: []v1.History{
 			{
 				Created:   &now,
 				CreatedBy: "# regclient",
-				Comment:   "scratch blob",
+				Comment:   "empty JSON blob",
 			},
 		},
 		RootFS: v1.RootFS{
 			Type: "layers",
 			DiffIDs: []digest.Digest{
-				types.ScratchDigest,
+				types.EmptyDigest,
 			},
 		},
 	}
@@ -128,8 +131,8 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 			Layers: []types.Descriptor{
 				{
 					MediaType: types.MediaTypeOCI1Layer,
-					Size:      int64(len(types.ScratchData)),
-					Digest:    types.ScratchDigest,
+					Size:      int64(len(types.EmptyData)),
+					Digest:    types.EmptyDigest,
 				},
 			},
 		}))
@@ -147,8 +150,8 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 			Layers: []types.Descriptor{
 				{
 					MediaType: types.MediaTypeDocker2LayerGzip,
-					Size:      int64(len(types.ScratchData)),
-					Digest:    types.ScratchDigest,
+					Size:      int64(len(types.EmptyData)),
+					Digest:    types.EmptyDigest,
 				},
 			},
 		}))
@@ -160,8 +163,8 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 		"ref": r.Reference,
 	}).Debug("Sending dummy manifest to replace tag")
 
-	// push scratch layer
-	_, err = reg.BlobPut(ctx, r, types.Descriptor{Digest: types.ScratchDigest, Size: int64(len(types.ScratchData))}, bytes.NewReader(types.ScratchData))
+	// push empty layer
+	_, err = reg.BlobPut(ctx, r, types.Descriptor{Digest: types.EmptyDigest, Size: int64(len(types.EmptyData))}, bytes.NewReader(types.EmptyData))
 	if err != nil {
 		return err
 	}

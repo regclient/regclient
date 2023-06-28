@@ -31,8 +31,10 @@ Flags:
 The `check` command is useful for reporting any stale images that need to be updated.
 
 The `once` command can be placed in a cron or CI job to perform the synchronization immediately rather than following the schedule.
+Use the `--missing` option to only copy tags that are missing from the target.
 
 The `server` command is useful to run a background process that continuously updates the target repositories as the source changes.
+This performs an initial pass to copy tags missing from the target before running on the schedule.
 
 `--logopt` currently accepts `json` to format all logs as json instead of text.
 This is useful for parsing in external tools like Elastic/Splunk.
@@ -124,6 +126,14 @@ sync:
       -----END CERTIFICATE-----
     ```
 
+  - `clientCert`:
+    Client certificate used for mTLS authentication.
+    Both `clientCert` and `clientKey` need to be defined for mTLS.
+    See `regcert` for details of how to include this in yaml.
+  - `clientKey`:
+    Client key used for mTLS authentication.
+    Both `clientCert` and `clientKey` need to be defined for mTLS.
+    See `regcert` for details of how to include this in yaml.
   - `pathPrefix`:
     Path added before all images pulled from this registry.
     This is useful for some mirror configurations that place images under a specific path.
@@ -183,6 +193,7 @@ sync:
   - `referrerFilters`: (array) list of filters for referrers to include, by default all referrers are included.
     - `artifactType`: (string) artifact types to include.
     - `annotations`: (map) mapping of annotations for referrers.
+  - `fastCopy`: (bool) skip referrers and digest tag checks when image exists, overrides `forceRecursive`.
   - `forceRecursive`: (bool) forces a copy of all manifests and blobs even when the target parent manifest already exists.
   - `mediaTypes`:
     Array of media types to include.
@@ -214,7 +225,7 @@ sync:
     By default all platforms are copied along with the original upstream manifest list.
     Note that looking up the platform from a multi-platform image counts against the Docker Hub rate limit, and that rate limits are not checked prior to resolving the platform.
     When run with "server", the platform is only resolved once for each multi-platform digest seen.
-  - `backup`, `interval`, `schedule`, `ratelimit`, `digestTags`, `referrers`, `referrerFilters`, `forceRecursive`, and `mediaTypes`:
+  - `backup`, `interval`, `schedule`, `ratelimit`, `digestTags`, `referrers`, `referrerFilters`, `fastCopy`, `forceRecursive`, and `mediaTypes`:
     See description under `defaults`.
 
 - `x-*`:
@@ -223,7 +234,7 @@ sync:
 
 ## Templates
 
-[Go templates](https://golang.org/pkg/text/template/) are used to expand values in `registry`, `user`, `pass`, `regcert`, `source`, `target`, and `backup`.
+[Go templates](https://golang.org/pkg/text/template/) are used to expand values in `registry`, `user`, `pass`, `regcert`, `clientCert`, `clientKey`, `source`, `target`, and `backup`.
 
 The `source` and `target` templates support the following objects:
 

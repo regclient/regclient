@@ -9,6 +9,7 @@ import (
 	"io"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	// crypto libraries included for go-digest
@@ -49,8 +50,10 @@ type dockerTarManifest struct {
 type tarFileHandler func(header *tar.Header, trd *tarReadData) error
 type tarReadData struct {
 	tr          *tar.Reader
+	name        string
 	handleAdded bool
 	handlers    map[string]tarFileHandler
+	links       map[string][]string
 	processed   map[string]bool
 	finish      []func() error
 	// data processed from various handlers
@@ -71,22 +74,40 @@ type tarWriteData struct {
 }
 
 type imageOpt struct {
+	callback        func(kind types.CallbackKind, instance string, state types.CallbackState, cur, total int64)
 	checkBaseDigest string
 	checkBaseRef    string
 	checkSkipConfig bool
 	child           bool
 	exportRef       ref.Ref
+	fastCheck       bool
 	forceRecursive  bool
+	importName      string
 	includeExternal bool
 	digestTags      bool
 	platform        string
 	platforms       []string
 	referrerConfs   []scheme.ReferrerConfig
 	tagList         []string
+	mu              sync.Mutex
+	seen            map[string]*imageSeen
+	finalFn         []func(context.Context) error
+}
+
+type imageSeen struct {
+	done chan struct{}
+	err  error
 }
 
 // ImageOpts define options for the Image* commands
 type ImageOpts func(*imageOpt)
+
+// ImageWithCallback provides progress data to a callback function
+func ImageWithCallback(callback func(kind types.CallbackKind, instance string, state types.CallbackState, cur, total int64)) ImageOpts {
+	return func(opts *imageOpt) {
+		opts.callback = callback
+	}
+}
 
 // ImageWithCheckBaseDigest provides a base digest to compare
 func ImageWithCheckBaseDigest(d string) ImageOpts {
@@ -123,10 +144,24 @@ func ImageWithExportRef(r ref.Ref) ImageOpts {
 	}
 }
 
+// ImageWithFastCheck skips check for referrers when manifest has already been copied.
+func ImageWithFastCheck() ImageOpts {
+	return func(opts *imageOpt) {
+		opts.fastCheck = true
+	}
+}
+
 // ImageWithForceRecursive attempts to copy every manifest and blob even if parent manifests already exist.
 func ImageWithForceRecursive() ImageOpts {
 	return func(opts *imageOpt) {
 		opts.forceRecursive = true
+	}
+}
+
+// ImageWithImportName selects the name of the image to import when multiple images are included
+func ImageWithImportName(name string) ImageOpts {
+	return func(opts *imageOpt) {
+		opts.importName = name
 	}
 }
 
@@ -393,7 +428,10 @@ func (rc *RegClient) ImageCheckBase(ctx context.Context, r ref.Ref, opts ...Imag
 // On the same registry, it will attempt to use cross-repository blob mounts to avoid pulling blobs
 // Blobs are only pulled when they don't exist on the target and a blob mount fails
 func (rc *RegClient) ImageCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, opts ...ImageOpts) error {
-	var opt imageOpt
+	opt := imageOpt{
+		seen:    map[string]*imageSeen{},
+		finalFn: []func(context.Context) error{},
+	}
 	for _, optFn := range opts {
 		optFn(&opt)
 	}
@@ -401,196 +439,171 @@ func (rc *RegClient) ImageCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.R
 	if w := warning.FromContext(ctx); w == nil {
 		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
 	}
-	return rc.imageCopyOpt(ctx, refSrc, refTgt, types.Descriptor{}, opt.child, &opt)
+	// block GC from running (in OCIDir) during the copy
+	schemeTgtAPI, err := rc.schemeGet(refTgt.Scheme)
+	if err != nil {
+		return err
+	}
+	if tgtGCLocker, isGCLocker := schemeTgtAPI.(scheme.GCLocker); isGCLocker {
+		tgtGCLocker.GCLock(refTgt)
+		defer tgtGCLocker.GCUnlock(refTgt)
+	}
+	// run the copy of manifests and blobs recursively
+	err = rc.imageCopyOpt(ctx, refSrc, refTgt, types.Descriptor{}, opt.child, []digest.Digest{}, &opt)
+	if err != nil {
+		return err
+	}
+	// run any final functions, digest-tags and referrers that detected loops are retried here
+	for _, fn := range opt.finalFn {
+		err := fn(ctx)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor, child bool, opt *imageOpt) error {
+// imageCopyOpt is a thread safe copy of a manifest and nested content
+func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor, child bool, parents []digest.Digest, opt *imageOpt) (err error) {
+	var mSrc, mTgt manifest.Manifest
+	var sDig digest.Digest
+	seenCB := func(error) {}
+	defer func() {
+		if seenCB != nil {
+			seenCB(err)
+		}
+	}()
+	// if digest is provided and we are already copying it, wait
+	if d.Digest != "" {
+		sDig = d.Digest
+	} else if refSrc.Digest != "" {
+		sDig = digest.Digest(refSrc.Digest)
+	}
+	if sDig != "" {
+		if seenCB, err = imageSeenOrWait(ctx, opt, refTgt.Tag, sDig, parents); seenCB == nil {
+			return err
+		}
+	}
+	// check target with head request
+	mTgt, err = rc.ManifestHead(ctx, refTgt, WithManifestRequireDigest())
+	// for non-recursive copies, compare to source digest
+	if err == nil && (opt.fastCheck || (!opt.forceRecursive && opt.referrerConfs == nil && !opt.digestTags)) {
+		if sDig == "" {
+			mSrc, err = rc.ManifestHead(ctx, refSrc, WithManifestRequireDigest())
+			if err != nil {
+				return fmt.Errorf("copy failed, error getting source: %w", err)
+			}
+			sDig = mSrc.GetDescriptor().Digest
+			if seenCB, err = imageSeenOrWait(ctx, opt, refTgt.Tag, sDig, parents); seenCB == nil {
+				return err
+			}
+		}
+		if sDig == mTgt.GetDescriptor().Digest {
+			if opt.callback != nil {
+				opt.callback(types.CallbackManifest, d.Digest.String(), types.CallbackSkipped, mTgt.GetDescriptor().Size, mTgt.GetDescriptor().Size)
+			}
+			return nil
+		}
+	}
+	// when copying/updating digest tags or referrers, only the source digest is needed for an image
+	if mTgt != nil && mSrc == nil && !opt.forceRecursive && sDig == "" {
+		mSrc, err = rc.ManifestHead(ctx, refSrc, WithManifestRequireDigest())
+		if err != nil {
+			return fmt.Errorf("copy failed, error getting source: %w", err)
+		}
+		sDig = mSrc.GetDescriptor().Digest
+		if seenCB, err = imageSeenOrWait(ctx, opt, refTgt.Tag, sDig, parents); seenCB == nil {
+			return err
+		}
+	}
+	// get the source manifest when a copy is needed or recursion into the content is needed
+	if sDig == "" || mTgt == nil || sDig != mTgt.GetDescriptor().Digest || opt.forceRecursive || mTgt.IsList() {
+		mSrc, err = rc.ManifestGet(ctx, refSrc, WithManifestDesc(d))
+		if err != nil {
+			return fmt.Errorf("copy failed, error getting source: %w", err)
+		}
+		if sDig == "" {
+			sDig = mSrc.GetDescriptor().Digest
+			if seenCB, err = imageSeenOrWait(ctx, opt, refTgt.Tag, sDig, parents); seenCB == nil {
+				return err
+			}
+		}
+	}
+	// setup vars for a copy
 	mOpts := []ManifestOpts{}
 	if child {
 		mOpts = append(mOpts, WithManifestChild())
 	}
-	// check if scheme/refTgt prefers parent manifests pushed first
-	// if so, this should automatically set forceRecursive
-	tgtSI, err := rc.schemeInfo(refTgt)
-	if err != nil {
-		return fmt.Errorf("failed looking up scheme for %s: %v", refTgt.CommonName(), err)
+	bOpt := []BlobOpts{}
+	if opt.callback != nil {
+		bOpt = append(bOpt, BlobWithCallback(opt.callback))
 	}
-	if tgtSI.ManifestPushFirst {
-		opt.forceRecursive = true
+	waitCh := make(chan error)
+	waitCount := 0
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	parentsNew := make([]digest.Digest, len(parents)+1)
+	copy(parentsNew, parents)
+	parentsNew[len(parentsNew)-1] = sDig
+	if opt.callback != nil {
+		opt.callback(types.CallbackManifest, d.Digest.String(), types.CallbackStarted, 0, d.Size)
 	}
-	// check if source and destination already match
-	mdh, errD := rc.ManifestHead(ctx, refTgt, WithManifestRequireDigest())
-	if opt.forceRecursive {
-		// copy forced, unable to run below skips
-	} else if errD == nil && refTgt.Digest != "" && digest.Digest(refTgt.Digest) == mdh.GetDescriptor().Digest {
-		rc.log.WithFields(logrus.Fields{
-			"target": refTgt.Reference,
-			"digest": mdh.GetDescriptor().Digest.String(),
-		}).Info("Copy not needed, target already up to date")
-		return nil
-	} else if errD == nil && refTgt.Digest == "" {
-		msh, errS := rc.ManifestHead(ctx, refSrc, WithManifestRequireDigest())
-		if errS == nil && msh.GetDescriptor().Digest == mdh.GetDescriptor().Digest {
-			rc.log.WithFields(logrus.Fields{
-				"source": refSrc.Reference,
-				"target": refTgt.Reference,
-				"digest": mdh.GetDescriptor().Digest.String(),
-			}).Info("Copy not needed, target already up to date")
-			return nil
-		}
-	}
-
-	// get the manifest for the source
-	m, err := rc.ManifestGet(ctx, refSrc, WithManifestDesc(d))
-	if err != nil {
-		rc.log.WithFields(logrus.Fields{
-			"ref": refSrc.Reference,
-			"err": err,
-		}).Warn("Failed to get source manifest")
-		return err
-	}
-
-	if tgtSI.ManifestPushFirst {
-		// push manifest to target
-		err = rc.ManifestPut(ctx, refTgt, m, mOpts...)
+	// process entries in an index
+	if mSrcIndex, ok := mSrc.(manifest.Indexer); ok && mSrc.IsSet() && !ref.EqualRepository(refSrc, refTgt) {
+		// manifest lists need to recursively copy nested images by digest
+		dList, err := mSrcIndex.GetManifestList()
 		if err != nil {
-			rc.log.WithFields(logrus.Fields{
-				"target": refTgt.Reference,
-				"err":    err,
-			}).Warn("Failed to push manifest")
 			return err
 		}
-	}
-
-	if !ref.EqualRepository(refSrc, refTgt) {
-		// copy components of the image if the repository is different
-		if mi, ok := m.(manifest.Indexer); ok {
-			// manifest lists need to recursively copy nested images by digest
-			pd, err := mi.GetManifestList()
-			if err != nil {
-				return err
-			}
-			for _, entry := range pd {
-				// skip copy of platforms not specifically included
-				if len(opt.platforms) > 0 {
-					match, err := imagePlatformInList(entry.Platform, opt.platforms)
-					if err != nil {
-						return err
-					}
-					if !match {
-						rc.log.WithFields(logrus.Fields{
-							"platform": entry.Platform,
-						}).Debug("Platform excluded from copy")
-						continue
-					}
+		for _, dEntry := range dList {
+			// skip copy of platforms not specifically included
+			if len(opt.platforms) > 0 {
+				match, err := imagePlatformInList(dEntry.Platform, opt.platforms)
+				if err != nil {
+					return err
 				}
+				if !match {
+					rc.log.WithFields(logrus.Fields{
+						"platform": dEntry.Platform,
+					}).Debug("Platform excluded from copy")
+					continue
+				}
+			}
+			dEntry := dEntry
+			waitCount++
+			go func() {
+				var err error
 				rc.log.WithFields(logrus.Fields{
-					"platform": entry.Platform,
-					"digest":   entry.Digest.String(),
+					"platform": dEntry.Platform,
+					"digest":   dEntry.Digest.String(),
 				}).Debug("Copy platform")
 				entrySrc := refSrc
 				entryTgt := refTgt
 				entrySrc.Tag = ""
 				entryTgt.Tag = ""
-				entrySrc.Digest = entry.Digest.String()
-				entryTgt.Digest = entry.Digest.String()
-				switch entry.MediaType {
+				entrySrc.Digest = dEntry.Digest.String()
+				entryTgt.Digest = dEntry.Digest.String()
+				switch dEntry.MediaType {
 				case types.MediaTypeDocker1Manifest, types.MediaTypeDocker1ManifestSigned,
 					types.MediaTypeDocker2Manifest, types.MediaTypeDocker2ManifestList,
 					types.MediaTypeOCI1Manifest, types.MediaTypeOCI1ManifestList:
 					// known manifest media type
-					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, entry, true, opt)
+					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, dEntry, true, parentsNew, opt)
 				case types.MediaTypeDocker2ImageConfig, types.MediaTypeOCI1ImageConfig,
 					types.MediaTypeDocker2LayerGzip, types.MediaTypeOCI1Layer, types.MediaTypeOCI1LayerGzip,
 					types.MediaTypeBuildkitCacheConfig:
 					// known blob media type
-					err = rc.BlobCopy(ctx, entrySrc, entryTgt, entry)
+					err = rc.imageCopyBlob(ctx, entrySrc, entryTgt, dEntry, opt, bOpt...)
 				default:
 					// unknown media type, first try an image copy
-					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, entry, true, opt)
+					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, dEntry, true, parentsNew, opt)
 					if err != nil {
 						// fall back to trying to copy a blob
-						err = rc.BlobCopy(ctx, entrySrc, entryTgt, entry)
+						err = rc.imageCopyBlob(ctx, entrySrc, entryTgt, dEntry, opt, bOpt...)
 					}
 				}
-				if err != nil {
-					return err
-				}
-			}
-		}
-		if mi, ok := m.(manifest.Imager); ok {
-			// copy components of an image
-			// transfer the config
-			cd, err := mi.GetConfig()
-			if err != nil {
-				// docker schema v1 does not have a config object, ignore if it's missing
-				if !errors.Is(err, types.ErrUnsupportedMediaType) {
-					rc.log.WithFields(logrus.Fields{
-						"ref": refSrc.Reference,
-						"err": err,
-					}).Warn("Failed to get config digest from manifest")
-					return fmt.Errorf("failed to get config digest for %s: %w", refSrc.CommonName(), err)
-				}
-			} else {
-				rc.log.WithFields(logrus.Fields{
-					"source": refSrc.Reference,
-					"target": refTgt.Reference,
-					"digest": cd.Digest.String(),
-				}).Info("Copy config")
-				if err := rc.BlobCopy(ctx, refSrc, refTgt, cd); err != nil {
-					rc.log.WithFields(logrus.Fields{
-						"source": refSrc.Reference,
-						"target": refTgt.Reference,
-						"digest": cd.Digest.String(),
-						"err":    err,
-					}).Warn("Failed to copy config")
-					return err
-				}
-			}
-
-			// copy filesystem layers
-			l, err := mi.GetLayers()
-			if err != nil {
-				return err
-			}
-			for _, layerSrc := range l {
-				if len(layerSrc.URLs) > 0 && !opt.includeExternal {
-					// skip blobs where the URLs are defined, these aren't hosted and won't be pulled from the source
-					rc.log.WithFields(logrus.Fields{
-						"source":        refSrc.Reference,
-						"target":        refTgt.Reference,
-						"layer":         layerSrc.Digest.String(),
-						"external-urls": layerSrc.URLs,
-					}).Debug("Skipping external layer")
-					continue
-				}
-				rc.log.WithFields(logrus.Fields{
-					"source": refSrc.Reference,
-					"target": refTgt.Reference,
-					"layer":  layerSrc.Digest.String(),
-				}).Info("Copy layer")
-				if err := rc.BlobCopy(ctx, refSrc, refTgt, layerSrc); err != nil {
-					rc.log.WithFields(logrus.Fields{
-						"source": refSrc.Reference,
-						"target": refTgt.Reference,
-						"layer":  layerSrc.Digest.String(),
-						"err":    err,
-					}).Warn("Failed to copy layer")
-					return err
-				}
-			}
-		}
-	}
-
-	if !tgtSI.ManifestPushFirst {
-		// push manifest to target
-		err = rc.ManifestPut(ctx, refTgt, m, mOpts...)
-		if err != nil {
-			rc.log.WithFields(logrus.Fields{
-				"target": refTgt.Reference,
-				"err":    err,
-			}).Warn("Failed to push manifest")
-			return err
+				waitCh <- err
+			}()
 		}
 	}
 
@@ -612,29 +625,52 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 			}
 		}
 		for _, rDesc := range descList {
+			opt.mu.Lock()
+			seen := opt.seen[":"+rDesc.Digest.String()]
+			opt.mu.Unlock()
+			if seen != nil {
+				continue // skip referrers that have been seen
+			}
 			referrerSrc := refSrc
 			referrerSrc.Tag = ""
 			referrerSrc.Digest = rDesc.Digest.String()
 			referrerTgt := refTgt
 			referrerTgt.Tag = ""
 			referrerTgt.Digest = rDesc.Digest.String()
-			err = rc.imageCopyOpt(ctx, referrerSrc, referrerTgt, rDesc, true, opt)
-			if err != nil {
-				rc.log.WithFields(logrus.Fields{
-					"digest": rDesc.Digest.String(),
-					"src":    referrerSrc.CommonName(),
-					"tgt":    referrerTgt.CommonName(),
-				}).Warn("Failed to copy referrer")
-				return err
-			}
+			rDesc := rDesc
+			waitCount++
+			go func() {
+				err := rc.imageCopyOpt(ctx, referrerSrc, referrerTgt, rDesc, true, parentsNew, opt)
+				if errors.Is(err, types.ErrLoopDetected) {
+					// if a loop is detected, push the referrers copy to the end
+					opt.mu.Lock()
+					opt.finalFn = append(opt.finalFn, func(ctx context.Context) error {
+						return rc.imageCopyOpt(ctx, referrerSrc, referrerTgt, rDesc, true, []digest.Digest{}, opt)
+					})
+					opt.mu.Unlock()
+					waitCh <- nil
+				} else {
+					if err != nil {
+						rc.log.WithFields(logrus.Fields{
+							"digest": rDesc.Digest.String(),
+							"src":    referrerSrc.CommonName(),
+							"tgt":    referrerTgt.CommonName(),
+						}).Warn("Failed to copy referrer")
+					}
+					waitCh <- err
+				}
+			}()
 		}
 	}
 
 	// lookup digest tags to include artifacts with image
 	if opt.digestTags {
-		if len(opt.tagList) == 0 {
+		// load tag listing for digest tag copy
+		opt.mu.Lock()
+		if opt.tagList == nil {
 			tl, err := rc.TagList(ctx, refSrc)
 			if err != nil {
+				opt.mu.Unlock()
 				rc.log.WithFields(logrus.Fields{
 					"source": refSrc.Reference,
 					"err":    err,
@@ -643,22 +679,32 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 			}
 			tags, err := tl.GetTags()
 			if err != nil {
+				opt.mu.Unlock()
 				rc.log.WithFields(logrus.Fields{
 					"source": refSrc.Reference,
 					"err":    err,
 				}).Warn("Failed to list tags for digest-tag copy")
 				return err
 			}
+			if tags == nil {
+				tags = []string{}
+			}
 			opt.tagList = tags
 		}
-		prefix := fmt.Sprintf("%s-%s", m.GetDescriptor().Digest.Algorithm(), m.GetDescriptor().Digest.Encoded())
+		opt.mu.Unlock()
+		prefix := fmt.Sprintf("%s-%s", sDig.Algorithm(), sDig.Encoded())
 		for _, tag := range opt.tagList {
 			if strings.HasPrefix(tag, prefix) {
 				// skip referrers that were copied above
+				found := false
 				for _, referrerTag := range referrerTags {
 					if referrerTag == tag {
-						continue
+						found = true
+						break
 					}
+				}
+				if found {
+					continue
 				}
 				refTagSrc := refSrc
 				refTagSrc.Tag = tag
@@ -666,20 +712,233 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 				refTagTgt := refTgt
 				refTagTgt.Tag = tag
 				refTagTgt.Digest = ""
-				err = rc.imageCopyOpt(ctx, refTagSrc, refTagTgt, types.Descriptor{}, false, opt)
-				if err != nil {
-					rc.log.WithFields(logrus.Fields{
-						"tag": tag,
-						"src": refTagSrc.CommonName(),
-						"tgt": refTagTgt.CommonName(),
-					}).Warn("Failed to copy digest-tag")
-					return err
-				}
+				tag := tag
+				waitCount++
+				go func() {
+					err := rc.imageCopyOpt(ctx, refTagSrc, refTagTgt, types.Descriptor{}, false, parentsNew, opt)
+					if errors.Is(err, types.ErrLoopDetected) {
+						// if a loop is detected, push the digest tag copy back to the end
+						opt.mu.Lock()
+						opt.finalFn = append(opt.finalFn, func(ctx context.Context) error {
+							return rc.imageCopyOpt(ctx, refTagSrc, refTagTgt, types.Descriptor{}, false, []digest.Digest{}, opt)
+						})
+						opt.mu.Unlock()
+						waitCh <- nil
+					} else {
+						if err != nil {
+							rc.log.WithFields(logrus.Fields{
+								"tag": tag,
+								"src": refTagSrc.CommonName(),
+								"tgt": refTagTgt.CommonName(),
+							}).Warn("Failed to copy digest-tag")
+						}
+						waitCh <- err
+					}
+				}()
 			}
 		}
 	}
 
+	// check for any errors and abort early if found
+	err = nil
+	done := false
+	for !done && waitCount > 0 {
+		if err == nil {
+			select {
+			case err = <-waitCh:
+				if err != nil {
+					cancel()
+				}
+			default:
+				done = true // happy path
+			}
+		} else {
+			<-waitCh
+		}
+		if !done {
+			waitCount--
+		}
+	}
+	if err != nil {
+		rc.log.WithFields(logrus.Fields{
+			"err":  err,
+			"sDig": sDig,
+		}).Debug("child manifest copy failed")
+		return err
+	}
+
+	// If source is image, copy blobs
+	if mSrcImg, ok := mSrc.(manifest.Imager); ok && mSrc.IsSet() && !ref.EqualRepository(refSrc, refTgt) {
+		// copy the config
+		cd, err := mSrcImg.GetConfig()
+		if err != nil {
+			// docker schema v1 does not have a config object, ignore if it's missing
+			if !errors.Is(err, types.ErrUnsupportedMediaType) {
+				rc.log.WithFields(logrus.Fields{
+					"ref": refSrc.Reference,
+					"err": err,
+				}).Warn("Failed to get config digest from manifest")
+				return fmt.Errorf("failed to get config digest for %s: %w", refSrc.CommonName(), err)
+			}
+		} else {
+			waitCount++
+			go func() {
+				rc.log.WithFields(logrus.Fields{
+					"source": refSrc.Reference,
+					"target": refTgt.Reference,
+					"digest": cd.Digest.String(),
+				}).Info("Copy config")
+				err := rc.imageCopyBlob(ctx, refSrc, refTgt, cd, opt, bOpt...)
+				if err != nil {
+					rc.log.WithFields(logrus.Fields{
+						"source": refSrc.Reference,
+						"target": refTgt.Reference,
+						"digest": cd.Digest.String(),
+						"err":    err,
+					}).Warn("Failed to copy config")
+				}
+				waitCh <- err
+			}()
+		}
+
+		// copy filesystem layers
+		l, err := mSrcImg.GetLayers()
+		if err != nil {
+			return err
+		}
+		for _, layerSrc := range l {
+			if len(layerSrc.URLs) > 0 && !opt.includeExternal {
+				// skip blobs where the URLs are defined, these aren't hosted and won't be pulled from the source
+				rc.log.WithFields(logrus.Fields{
+					"source":        refSrc.Reference,
+					"target":        refTgt.Reference,
+					"layer":         layerSrc.Digest.String(),
+					"external-urls": layerSrc.URLs,
+				}).Debug("Skipping external layer")
+				continue
+			}
+			waitCount++
+			layerSrc := layerSrc
+			go func() {
+				rc.log.WithFields(logrus.Fields{
+					"source": refSrc.Reference,
+					"target": refTgt.Reference,
+					"layer":  layerSrc.Digest.String(),
+				}).Info("Copy layer")
+				err := rc.imageCopyBlob(ctx, refSrc, refTgt, layerSrc, opt, bOpt...)
+				if err != nil {
+					rc.log.WithFields(logrus.Fields{
+						"source": refSrc.Reference,
+						"target": refTgt.Reference,
+						"layer":  layerSrc.Digest.String(),
+						"err":    err,
+					}).Warn("Failed to copy layer")
+				}
+				waitCh <- err
+			}()
+		}
+	}
+
+	// wait for background tasks to finish
+	err = nil
+	for waitCount > 0 {
+		if err == nil {
+			err = <-waitCh
+			if err != nil {
+				cancel()
+			}
+		} else {
+			<-waitCh
+		}
+		waitCount--
+	}
+	if err != nil {
+		return err
+	}
+
+	// push manifest
+	if mTgt == nil || sDig != mTgt.GetDescriptor().Digest || opt.forceRecursive {
+		err = rc.ManifestPut(ctx, refTgt, mSrc, mOpts...)
+		if err != nil {
+			rc.log.WithFields(logrus.Fields{
+				"target": refTgt.Reference,
+				"err":    err,
+			}).Warn("Failed to push manifest")
+			return err
+		}
+		if opt.callback != nil {
+			opt.callback(types.CallbackManifest, d.Digest.String(), types.CallbackFinished, d.Size, d.Size)
+		}
+	} else {
+		if opt.callback != nil {
+			opt.callback(types.CallbackManifest, d.Digest.String(), types.CallbackSkipped, d.Size, d.Size)
+		}
+	}
+	if seenCB != nil {
+		seenCB(nil)
+		seenCB = nil
+	}
+
 	return nil
+}
+
+func (rc *RegClient) imageCopyBlob(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor, opt *imageOpt, bOpt ...BlobOpts) error {
+	seenCB, err := imageSeenOrWait(ctx, opt, "", d.Digest, []digest.Digest{})
+	if seenCB == nil {
+		return err
+	}
+	err = rc.BlobCopy(ctx, refSrc, refTgt, d, bOpt...)
+	seenCB(err)
+	return err
+}
+
+// imageSeenOrWait returns either a callback to report the error when the digest hasn't been seen before
+// or it will wait for the previous copy to run and return the error from that copy
+func imageSeenOrWait(ctx context.Context, opt *imageOpt, tag string, dig digest.Digest, parents []digest.Digest) (func(error), error) {
+	var seenNew *imageSeen
+	key := tag + ":" + dig.String()
+	opt.mu.Lock()
+	seen := opt.seen[key]
+	if seen == nil {
+		seenNew = &imageSeen{
+			done: make(chan struct{}),
+		}
+		opt.seen[key] = seenNew
+	}
+	opt.mu.Unlock()
+	if seen != nil {
+		// quick check for the previous copy already done
+		select {
+		case <-seen.done:
+			return nil, seen.err
+		default:
+		}
+		// look for loops in parents
+		for _, p := range parents {
+			if key == tag+":"+p.String() {
+				return nil, types.ErrLoopDetected
+			}
+		}
+		// wait for copy to finish or context to cancel
+		done := ctx.Done()
+		select {
+		case <-seen.done:
+			return nil, seen.err
+		case <-done:
+			return nil, ctx.Err()
+		}
+	} else {
+		return func(err error) {
+			seenNew.err = err
+			close(seenNew.done)
+			// on failures, delete the history to allow a retry
+			if err != nil {
+				opt.mu.Lock()
+				delete(opt.seen, key)
+				opt.mu.Unlock()
+			}
+		}, nil
+	}
 }
 
 // ImageExport exports an image to an output stream.
@@ -914,9 +1173,16 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 }
 
 // ImageImport pushes an image from a tar file to a registry
-func (rc *RegClient) ImageImport(ctx context.Context, ref ref.Ref, rs io.ReadSeeker) error {
+func (rc *RegClient) ImageImport(ctx context.Context, ref ref.Ref, rs io.ReadSeeker, opts ...ImageOpts) error {
+	var opt imageOpt
+	for _, optFn := range opts {
+		optFn(&opt)
+	}
+
 	trd := &tarReadData{
+		name:      opt.importName,
 		handlers:  map[string]tarFileHandler{},
+		links:     map[string][]string{},
 		processed: map[string]bool{},
 		finish:    []func() error{},
 		manifests: map[digest.Digest]manifest.Manifest{},
@@ -992,20 +1258,46 @@ func (rc *RegClient) imageImportDockerAddLayerHandlers(ctx context.Context, ref 
 	delete(trd.handlers, ociLayoutFilename)
 	delete(trd.handlers, ociIndexFilename)
 
+	index := 0
+	if trd.name != "" {
+		found := false
+		tags := []string{}
+		for i, entry := range trd.dockerManifestList {
+			tags = append(tags, entry.RepoTags...)
+			for _, tag := range entry.RepoTags {
+				if tag == trd.name {
+					index = i
+					found = true
+					break
+				}
+			}
+			if found {
+				break
+			}
+		}
+		if !found {
+			rc.log.WithFields(logrus.Fields{
+				"tags": tags,
+				"name": trd.name,
+			}).Warn("Could not find requested name")
+			return
+		}
+	}
+
 	// make a docker v2 manifest from first json array entry (can only tag one image)
 	trd.dockerManifest.SchemaVersion = 2
 	trd.dockerManifest.MediaType = types.MediaTypeDocker2Manifest
-	trd.dockerManifest.Layers = make([]types.Descriptor, len(trd.dockerManifestList[0].Layers))
+	trd.dockerManifest.Layers = make([]types.Descriptor, len(trd.dockerManifestList[index].Layers))
 
 	// add handler for config
-	trd.handlers[filepath.Clean(trd.dockerManifestList[0].Config)] = func(header *tar.Header, trd *tarReadData) error {
+	trd.handlers[filepath.Clean(trd.dockerManifestList[index].Config)] = func(header *tar.Header, trd *tarReadData) error {
 		// upload blob, digest is unknown
 		d, err := rc.BlobPut(ctx, ref, types.Descriptor{Size: header.Size}, trd.tr)
 		if err != nil {
 			return err
 		}
 		// save the resulting descriptor to the manifest
-		if od, ok := trd.dockerManifestList[0].LayerSources[d.Digest]; ok {
+		if od, ok := trd.dockerManifestList[index].LayerSources[d.Digest]; ok {
 			trd.dockerManifest.Config = od
 		} else {
 			d.MediaType = types.MediaTypeDocker2ImageConfig
@@ -1014,7 +1306,7 @@ func (rc *RegClient) imageImportDockerAddLayerHandlers(ctx context.Context, ref 
 		return nil
 	}
 	// add handlers for each layer
-	for i, layerFile := range trd.dockerManifestList[0].Layers {
+	for i, layerFile := range trd.dockerManifestList[index].Layers {
 		func(i int) {
 			trd.handlers[filepath.Clean(layerFile)] = func(header *tar.Header, trd *tarReadData) error {
 				// ensure blob is compressed with gzip to match media type
@@ -1028,7 +1320,7 @@ func (rc *RegClient) imageImportDockerAddLayerHandlers(ctx context.Context, ref 
 					return err
 				}
 				// save the resulting descriptor in the appropriate layer
-				if od, ok := trd.dockerManifestList[0].LayerSources[d.Digest]; ok {
+				if od, ok := trd.dockerManifestList[index].LayerSources[d.Digest]; ok {
 					trd.dockerManifest.Layers[i] = od
 				} else {
 					d.MediaType = types.MediaTypeDocker2LayerGzip
@@ -1158,6 +1450,16 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 			d = dl[0]
 		} else if ref.Digest != "" {
 			d.Digest = digest.Digest(ref.Digest)
+		} else if trd.name != "" {
+			for _, cur := range dl {
+				if cur.Annotations[annotationRefName] == trd.name {
+					d = cur
+					break
+				}
+			}
+			if d.Digest.String() == "" {
+				return fmt.Errorf("could not find requested tag in index.json, %s", trd.name)
+			}
 		} else {
 			if ref.Tag == "" {
 				ref.Tag = "latest"
@@ -1169,9 +1471,9 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 					break
 				}
 			}
-		}
-		if d.Digest.String() == "" {
-			return fmt.Errorf("could not find requested tag in index.json, %s", ref.Tag)
+			if d.Digest.String() == "" {
+				return fmt.Errorf("could not find requested tag in index.json, %s", ref.Tag)
+			}
 		}
 		handleManifest(d, false)
 		// add a finish step to tag the selected digest
@@ -1310,17 +1612,57 @@ func (trd *tarReadData) tarReadAll(rs io.ReadSeeker) error {
 				return err
 			}
 			name := filepath.Clean(header.Name)
-			// if a handler exists, run it, remove handler, and check if we are done
-			if trd.handlers[name] != nil {
-				err = trd.handlers[name](header, trd)
+			// track symlinks
+			if header.Typeflag == tar.TypeSymlink || header.Typeflag == tar.TypeLink {
+				// normalize target relative to root of tar
+				target := header.Linkname
+				if !filepath.IsAbs(target) {
+					target, err = filepath.Rel(filepath.Dir(name), target)
+					if err != nil {
+						return err
+					}
+				}
+				target = filepath.Clean("/" + target)[1:]
+				// track and set handleAdded if an existing handler points to the target
+				if trd.linkAdd(name, target) && !trd.handleAdded {
+					list, err := trd.linkList(target)
+					if err != nil {
+						return err
+					}
+					for _, src := range append(list, name) {
+						if trd.handlers[src] != nil {
+							trd.handleAdded = true
+						}
+					}
+				}
+			} else {
+				// loop through filename and symlinks to file in search of handlers
+				list, err := trd.linkList(name)
 				if err != nil {
 					return err
 				}
-				delete(trd.handlers, name)
-				trd.processed[name] = true
-				// return if last handler processed
-				if len(trd.handlers) == 0 {
-					return nil
+				list = append(list, name)
+				trdUsed := false
+				for _, entry := range list {
+					if trd.handlers[entry] != nil {
+						// trd cannot be reused, force the loop to run again
+						if trdUsed {
+							trd.handleAdded = true
+							break
+						}
+						trdUsed = true
+						// run handler
+						err = trd.handlers[entry](header, trd)
+						if err != nil {
+							return err
+						}
+						delete(trd.handlers, entry)
+						trd.processed[entry] = true
+						// return if last handler processed
+						if len(trd.handlers) == 0 {
+							return nil
+						}
+					}
 				}
 			}
 		}
@@ -1329,6 +1671,27 @@ func (trd *tarReadData) tarReadAll(rs io.ReadSeeker) error {
 			return fmt.Errorf("unable to read all files from tar: %w", types.ErrNotFound)
 		}
 	}
+}
+
+func (trd *tarReadData) linkAdd(src, tgt string) bool {
+	for _, entry := range trd.links[tgt] {
+		if entry == src {
+			return false
+		}
+	}
+	trd.links[tgt] = append(trd.links[tgt], src)
+	return true
+}
+
+func (trd *tarReadData) linkList(tgt string) ([]string, error) {
+	list := trd.links[tgt]
+	for _, entry := range list {
+		if entry == tgt {
+			return nil, fmt.Errorf("symlink loop encountered for %s", tgt)
+		}
+		list = append(list, trd.links[entry]...)
+	}
+	return list, nil
 }
 
 // tarReadFileJSON reads the current tar entry and unmarshals json into provided interface

@@ -8,6 +8,8 @@ import (
 	"path"
 	"regexp"
 	"strings"
+
+	"github.com/regclient/regclient/types"
 )
 
 const (
@@ -28,7 +30,7 @@ var (
 	hostDomainS = `(?:` + hostPartS + `(?:(?:` + regexp.QuoteMeta(`.`) + hostPartS + `)+` + regexp.QuoteMeta(`.`) + `?|` + regexp.QuoteMeta(`.`) + `))`
 	hostUpperS  = `(?:[a-zA-Z0-9]*[A-Z][a-zA-Z0-9-]*[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[A-Z][a-zA-Z0-9]*)`
 	registryS   = `(?:` + hostDomainS + `|` + hostPortS + `|` + hostUpperS + `|localhost(?:` + regexp.QuoteMeta(`:`) + `[0-9]+))`
-	repoPartS   = `[a-z0-9]+(?:(?:[_.]|__|[-]*)[a-z0-9]+)*`
+	repoPartS   = `[a-z0-9]+(?:(?:[_.-]|__)[a-z0-9]+)*`
 	pathS       = `[/a-zA-Z0-9_\-. ]+`
 	tagS        = `[\w][\w.-]{0,127}`
 	digestS     = `[A-Za-z][A-Za-z0-9]*(?:[-_+.][A-Za-z][A-Za-z0-9]*)*[:][[:xdigit:]]{32,}`
@@ -76,9 +78,9 @@ func New(parse string) (Ref, error) {
 		matchRef := refRE.FindStringSubmatch(path)
 		if matchRef == nil || len(matchRef) < 5 {
 			if refRE.FindStringSubmatch(strings.ToLower(path)) != nil {
-				return Ref{}, fmt.Errorf("invalid reference \"%s\", repo must be lowercase", path)
+				return Ref{}, fmt.Errorf("%w \"%s\", repo must be lowercase", types.ErrInvalidReference, path)
 			}
-			return Ref{}, fmt.Errorf("invalid reference \"%s\"", path)
+			return Ref{}, fmt.Errorf("%w \"%s\"", types.ErrInvalidReference, path)
 		}
 		ret.Registry = matchRef[1]
 		ret.Repository = matchRef[2]
@@ -102,13 +104,13 @@ func New(parse string) (Ref, error) {
 			ret.Tag = "latest"
 		}
 		if ret.Repository == "" {
-			return Ref{}, fmt.Errorf("invalid reference \"%s\"", path)
+			return Ref{}, fmt.Errorf("%w \"%s\"", types.ErrInvalidReference, path)
 		}
 
 	case "ocidir", "ocifile":
 		matchPath := pathRE.FindStringSubmatch(path)
 		if matchPath == nil || len(matchPath) < 2 || matchPath[1] == "" {
-			return Ref{}, fmt.Errorf("invalid path for scheme \"%s\": %s", scheme, path)
+			return Ref{}, fmt.Errorf("%w, invalid path for scheme \"%s\": %s", types.ErrInvalidReference, scheme, path)
 		}
 		ret.Path = matchPath[1]
 		if len(matchPath) > 2 && matchPath[2] != "" {
@@ -119,7 +121,7 @@ func New(parse string) (Ref, error) {
 		}
 
 	default:
-		return Ref{}, fmt.Errorf("unhandled reference scheme \"%s\" in \"%s\"", scheme, parse)
+		return Ref{}, fmt.Errorf("%w, unknown scheme \"%s\" in \"%s\"", types.ErrInvalidReference, scheme, parse)
 	}
 	return ret, nil
 }

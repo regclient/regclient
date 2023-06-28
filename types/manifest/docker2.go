@@ -223,7 +223,11 @@ func (m *docker2Manifest) SetAnnotation(key, val string) error {
 	if m.Annotations == nil {
 		m.Annotations = map[string]string{}
 	}
-	m.Annotations[key] = val
+	if val != "" {
+		m.Annotations[key] = val
+	} else {
+		delete(m.Annotations, key)
+	}
 	return m.updateDesc()
 }
 func (m *docker2ManifestList) SetAnnotation(key, val string) error {
@@ -233,7 +237,11 @@ func (m *docker2ManifestList) SetAnnotation(key, val string) error {
 	if m.Annotations == nil {
 		m.Annotations = map[string]string{}
 	}
-	m.Annotations[key] = val
+	if val != "" {
+		m.Annotations[key] = val
+	} else {
+		delete(m.Annotations, key)
+	}
 	return m.updateDesc()
 }
 

@@ -44,8 +44,8 @@ type Descriptor struct {
 	ArtifactType string `json:"artifactType,omitempty"`
 }
 
-var ScratchData = []byte("{}")
-var ScratchDigest = digest.FromBytes(ScratchData)
+var EmptyData = []byte("{}")
+var EmptyDigest = digest.FromBytes(EmptyData)
 var emptyDigest = digest.FromBytes([]byte{})
 var mtToOCI map[string]string
 

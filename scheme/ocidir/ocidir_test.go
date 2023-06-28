@@ -161,11 +161,11 @@ func TestIndex(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := o.writeIndex(r, tt.index)
+			err := o.writeIndex(r, tt.index, false)
 			if err != nil {
 				t.Errorf("failed to write index: %v", err)
 			}
-			index, err := o.readIndex(r)
+			index, err := o.readIndex(r, false)
 			if err != nil {
 				t.Errorf("failed to read index: %v", err)
 			}

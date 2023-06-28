@@ -39,6 +39,10 @@ func TestMod(t *testing.T) {
 	// create regclient
 	rc := regclient.New(regclient.WithFS(fsMem))
 
+	rTgt1, err := ref.New("ocidir://tgtrepo:v1")
+	if err != nil {
+		t.Errorf("failed to parse ref: %v", err)
+	}
 	rb1, err := ref.New("ocidir://testrepo:b1")
 	if err != nil {
 		t.Errorf("failed to parse ref: %v", err)
@@ -97,20 +101,35 @@ func TestMod(t *testing.T) {
 			wantSame: true,
 		},
 		{
-			name: "To Docker",
+			name: "To OCI Copy",
 			opts: []Opts{
-				WithManifestToDocker(),
+				WithManifestToOCI(),
+				WithRefTgt(rTgt1),
 			},
 			ref:      "ocidir://testrepo:v1",
-			wantSame: false,
+			wantSame: true,
+		},
+		{
+			name: "To Docker Copy",
+			opts: []Opts{
+				WithManifestToDocker(),
+				WithRefTgt(rTgt1),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Docker To OCI",
+			opts: []Opts{
+				WithManifestToOCI(),
+			},
+			ref: rTgt1.CommonName(),
 		},
 		{
 			name: "To OCI Referrers",
 			opts: []Opts{
 				WithManifestToOCIReferrers(),
 			},
-			ref:      "ocidir://testrepo:v1",
-			wantSame: false,
+			ref: "ocidir://testrepo:v1",
 		},
 		{
 			name: "Add Annotation",
@@ -120,11 +139,49 @@ func TestMod(t *testing.T) {
 			ref: "ocidir://testrepo:v1",
 		},
 		{
+			name: "Add Annotation All",
+			opts: []Opts{
+				WithAnnotation("[*]test", "hello"),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Add Annotation AMD64/ARM64",
+			opts: []Opts{
+				WithAnnotation("[linux/amd64,linux/arm64]test", "hello"),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Add Annotation Missing",
+			opts: []Opts{
+				WithAnnotation("[linux/i386,linux/s390x]test", "hello"),
+			},
+			ref:      "ocidir://testrepo:v1",
+			wantSame: true,
+		},
+		{
+			name: "Add Annotation Platform Parse Error",
+			opts: []Opts{
+				WithAnnotation("[linux/invalid.arch!]test", "hello"),
+			},
+			ref:     "ocidir://testrepo:v1",
+			wantErr: fmt.Errorf("failed to parse annotation platform linux/invalid.arch!: invalid platform component invalid.arch! in linux/invalid.arch!"),
+		},
+		{
 			name: "Delete Annotation",
 			opts: []Opts{
 				WithAnnotation("org.example.version", ""),
 			},
 			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Delete Missing Annotation",
+			opts: []Opts{
+				WithAnnotation("[*]missing", ""),
+			},
+			ref:      "ocidir://testrepo:v1",
+			wantSame: true,
 		},
 		{
 			name: "Add Base Annotations",
@@ -420,12 +477,23 @@ func TestMod(t *testing.T) {
 				return
 			}
 
+			mSrc, err := rc.ManifestHead(ctx, r, regclient.WithManifestRequireDigest())
+			if err != nil {
+				t.Errorf("failed to get manifest from src: %v", err)
+				return
+			}
+			mTgt, err := rc.ManifestHead(ctx, rMod, regclient.WithManifestRequireDigest())
+			if err != nil {
+				t.Errorf("failed to get manifest from mod \"%s\": %v", rMod.CommonName(), err)
+				return
+			}
+
 			if tt.wantSame {
-				if r.Digest != rMod.Digest {
+				if !mSrc.GetDescriptor().Equal(mTgt.GetDescriptor()) {
 					t.Errorf("digest changed")
 				}
 			} else {
-				if r.Digest == rMod.Digest {
+				if mSrc.GetDescriptor().Equal(mTgt.GetDescriptor()) {
 					t.Errorf("digest did not change")
 				}
 			}

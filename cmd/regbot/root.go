@@ -3,20 +3,18 @@ package main
 import (
 	"context"
 	"os"
-	"os/signal"
 	"sync"
-	"syscall"
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/cmd/regbot/sandbox"
 	"github.com/regclient/regclient/config"
+	"github.com/regclient/regclient/internal/throttle"
 	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/scheme/reg"
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/sync/semaphore"
 )
 
 const (
@@ -35,10 +33,10 @@ var rootOpts struct {
 }
 
 var (
-	conf *Config
-	log  *logrus.Logger
-	rc   *regclient.RegClient
-	sem  *semaphore.Weighted
+	conf      *Config
+	log       *logrus.Logger
+	rc        *regclient.RegClient
+	throttleC *throttle.Throttle
 )
 
 var rootCmd = &cobra.Command{
@@ -122,16 +120,7 @@ func runOnce(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(cmd.Context())
-	// handle interrupt signal
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-sig
-		log.WithFields(logrus.Fields{}).Debug("Interrupt received, stopping")
-		// clean shutdown
-		cancel()
-	}()
+	ctx := cmd.Context()
 	var wg sync.WaitGroup
 	var mainErr error
 	for _, s := range conf.Scripts {
@@ -167,7 +156,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(cmd.Context())
+	ctx := cmd.Context()
 	var wg sync.WaitGroup
 	var mainErr error
 	c := cron.New(cron.WithChain(
@@ -203,13 +192,13 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}
 	c.Start()
 	// wait on interrupt signal
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-	<-sig
-	log.WithFields(logrus.Fields{}).Debug("Interrupt received, stopping")
+	done := ctx.Done()
+	if done != nil {
+		<-done
+	}
+	log.WithFields(logrus.Fields{}).Info("Stopping server")
 	// clean shutdown
 	c.Stop()
-	cancel()
 	log.WithFields(logrus.Fields{}).Debug("Waiting on running tasks")
 	wg.Wait()
 	return mainErr
@@ -235,15 +224,15 @@ func loadConf() error {
 	} else {
 		return ErrMissingInput
 	}
-	// use a semaphore to control parallelism
-	concurrent := int64(conf.Defaults.Parallel)
+	// use a throttle to control parallelism
+	concurrent := conf.Defaults.Parallel
 	if concurrent <= 0 {
 		concurrent = 1
 	}
 	log.WithFields(logrus.Fields{
 		"concurrent": concurrent,
 	}).Debug("Configuring parallel settings")
-	sem = semaphore.NewWeighted(concurrent)
+	throttleC = throttle.New(concurrent)
 	// set the regclient, loading docker creds unless disabled, and inject logins from config file
 	rcOpts := []regclient.Opt{
 		regclient.WithLog(log),
@@ -295,7 +284,7 @@ func (s ConfigScript) process(ctx context.Context) error {
 		sandbox.WithContext(ctx),
 		sandbox.WithRegClient(rc),
 		sandbox.WithLog(log),
-		sandbox.WithSemaphore(sem),
+		sandbox.WithThrottle(throttleC),
 	}
 	if rootOpts.dryRun {
 		sbOpts = append(sbOpts, sandbox.WithDryRun())

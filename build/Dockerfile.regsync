@@ -1,8 +1,8 @@
 ARG REGISTRY=docker.io
-ARG ALPINE_VER=3@sha256:124c7d2707904eea7431fffe91522a01e5a861a624ee31d03372cc1d138a3126
-ARG GO_VER=1.20-alpine@sha256:08e9c086194875334d606765bd60aa064abd3c215abfbcf5737619110d48d114
-ARG ECR_HELPER_VER=077b4a917a90e9f927e4207f8b6d22f9a057b7cb
-ARG GCR_HELPER_VER=62afb2723512fd6572c6300024e0c94f734b0ae3
+ARG ALPINE_VER=3@sha256:82d1e9d7ed48a7523bdebc18cf6290bdb97b82302a8a9c27d4fe885949ea94d1
+ARG GO_VER=1.20-alpine@sha256:fd9d9d7194ec40a9a6ae89fcaef3e47c47de7746dd5848ab5343695dbbd09f8c
+ARG ECR_HELPER_VER=222387e5a3b0f74bffb52b7ae0287a64481f34a6
+ARG GCR_HELPER_VER=v2.1.10
 
 FROM ${REGISTRY}/library/golang:${GO_VER} as golang
 RUN apk add --no-cache \
@@ -14,13 +14,10 @@ RUN adduser -D appuser \
  && chown -R appuser /home/appuser
 WORKDIR /src
 
-FROM golang as dev
+FROM golang as build
+COPY go.* /src/
+RUN go mod download
 COPY . /src/
-ENV PATH=${PATH}:/src/bin
-CMD make bin/regsync && bin/regsync
-
-FROM dev as build
-ARG LD_FLAGS
 RUN make vendor bin/regsync
 USER appuser
 CMD [ "bin/regsync" ]
@@ -37,7 +34,9 @@ FROM golang as docker-cred-gcr
 ARG TARGETOS
 ARG TARGETARCH
 ARG GCR_HELPER_VER
-RUN CGO_ENABLED=0 go install -trimpath -ldflags=-buildid= github.com/GoogleCloudPlatform/docker-credential-gcr@${GCR_HELPER_VER} \
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 \
+    go install -trimpath -ldflags="-buildid= -s -w" \
+      github.com/GoogleCloudPlatform/docker-credential-gcr/v2@${GCR_HELPER_VER} \
  && ( cp "${GOPATH}/bin/docker-credential-gcr" /usr/local/bin/docker-credential-gcr \
    || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-gcr" /usr/local/bin/docker-credential-gcr )
 

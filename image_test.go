@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/types"
@@ -21,7 +22,9 @@ func TestImageCheckBase(t *testing.T) {
 		t.Errorf("failed to setup memfs copy: %v", err)
 		return
 	}
-	rc := New(WithFS(fsMem))
+	delayInit, _ := time.ParseDuration("0.05s")
+	delayMax, _ := time.ParseDuration("0.10s")
+	rc := New(WithFS(fsMem), WithRetryDelay(delayInit, delayMax))
 	rb1, err := ref.New("ocidir://testrepo:b1")
 	if err != nil {
 		t.Errorf("failed to setup ref: %v", err)
@@ -127,6 +130,87 @@ func TestImageCheckBase(t *testing.T) {
 	}
 }
 
+func TestCopy(t *testing.T) {
+	ctx := context.Background()
+	// create regclient
+	delayInit, _ := time.ParseDuration("0.05s")
+	delayMax, _ := time.ParseDuration("0.10s")
+	rc := New(WithRetryDelay(delayInit, delayMax))
+	tempDir := t.TempDir()
+	rSrc, err := ref.New("ocidir://./testdata/testrepo:v1")
+	if err != nil {
+		t.Errorf("failed to parse src ref: %v", err)
+	}
+	rTgt, err := ref.New("ocidir://" + tempDir + ":v1")
+	if err != nil {
+		t.Errorf("failed to parse tgt ref: %v", err)
+	}
+	err = rc.ImageCopy(ctx, rSrc, rTgt)
+	if err != nil {
+		t.Errorf("failed to copy: %v", err)
+	}
+	rSrc, err = ref.New("ocidir://./testdata/testrepo:v2")
+	if err != nil {
+		t.Errorf("failed to parse src ref: %v", err)
+	}
+	rTgt, err = ref.New("ocidir://" + tempDir + ":v2")
+	if err != nil {
+		t.Errorf("failed to parse tgt ref: %v", err)
+	}
+	err = rc.ImageCopy(ctx, rSrc, rTgt, ImageWithReferrers(), ImageWithDigestTags())
+	if err != nil {
+		t.Errorf("failed to copy: %v", err)
+	}
+	rSrc, err = ref.New("ocidir://./testdata/testrepo:v3")
+	if err != nil {
+		t.Errorf("failed to parse src ref: %v", err)
+	}
+	rTgt, err = ref.New("ocidir://" + tempDir + ":v3")
+	if err != nil {
+		t.Errorf("failed to parse tgt ref: %v", err)
+	}
+	err = rc.ImageCopy(ctx, rSrc, rTgt)
+	if err != nil {
+		t.Errorf("failed to copy: %v", err)
+	}
+	rSrc, err = ref.New("ocidir://./testdata/testrepo:v3")
+	if err != nil {
+		t.Errorf("failed to parse src ref: %v", err)
+	}
+	rTgt, err = ref.New("ocidir://" + tempDir + ":v3")
+	if err != nil {
+		t.Errorf("failed to parse tgt ref: %v", err)
+	}
+	err = rc.ImageCopy(ctx, rSrc, rTgt, ImageWithReferrers(), ImageWithDigestTags(), ImageWithFastCheck())
+	if err != nil {
+		t.Errorf("failed to copy: %v", err)
+	}
+	rSrc, err = ref.New("ocidir://./testdata/testrepo:child")
+	if err != nil {
+		t.Errorf("failed to parse src ref: %v", err)
+	}
+	rTgt, err = ref.New("ocidir://" + tempDir + ":child")
+	if err != nil {
+		t.Errorf("failed to parse tgt ref: %v", err)
+	}
+	err = rc.ImageCopy(ctx, rSrc, rTgt, ImageWithReferrers(), ImageWithDigestTags())
+	if err != nil {
+		t.Errorf("failed to copy: %v", err)
+	}
+	rSrc, err = ref.New("ocidir://./testdata/testrepo:mirror")
+	if err != nil {
+		t.Errorf("failed to parse src ref: %v", err)
+	}
+	rTgt, err = ref.New("ocidir://" + tempDir + ":mirror")
+	if err != nil {
+		t.Errorf("failed to parse tgt ref: %v", err)
+	}
+	err = rc.ImageCopy(ctx, rSrc, rTgt, ImageWithDigestTags())
+	if err != nil {
+		t.Errorf("failed to copy: %v", err)
+	}
+}
+
 func TestExportImport(t *testing.T) {
 	ctx := context.Background()
 	// copy testdata images into memory
@@ -138,7 +222,9 @@ func TestExportImport(t *testing.T) {
 		return
 	}
 	// create regclient
-	rc := New(WithFS(fsMem))
+	delayInit, _ := time.ParseDuration("0.05s")
+	delayMax, _ := time.ParseDuration("0.10s")
+	rc := New(WithFS(fsMem), WithRetryDelay(delayInit, delayMax))
 	rIn, err := ref.New("ocidir://testrepo:v1")
 	if err != nil {
 		t.Errorf("failed to parse ref: %v", err)

@@ -43,6 +43,7 @@ type ConfigDefaults struct {
 	DigestTags      *bool                  `yaml:"digestTags" json:"digestTags"`
 	Referrers       *bool                  `yaml:"referrers" json:"referrers"`
 	ReferrerFilters []ConfigReferrerFilter `yaml:"referrerFilters" json:"referrerFilters"`
+	FastCheck       *bool                  `yaml:"fastCheck" json:"fastCheck"`
 	ForceRecursive  *bool                  `yaml:"forceRecursive" json:"forceRecursive"`
 	IncludeExternal *bool                  `yaml:"includeExternal" json:"includeExternal"`
 	MediaTypes      []string               `yaml:"mediaTypes" json:"mediaTypes"`
@@ -70,6 +71,7 @@ type ConfigSync struct {
 	ReferrerFilters []ConfigReferrerFilter `yaml:"referrerFilters" json:"referrerFilters"`
 	Platform        string                 `yaml:"platform" json:"platform"`
 	Platforms       []string               `yaml:"platforms" json:"platforms"`
+	FastCheck       *bool                  `yaml:"fastCheck" json:"fastCheck"`
 	ForceRecursive  *bool                  `yaml:"forceRecursive" json:"forceRecursive"`
 	IncludeExternal *bool                  `yaml:"includeExternal" json:"includeExternal"`
 	Backup          string                 `yaml:"backup" json:"backup"`
@@ -187,6 +189,16 @@ func configExpandTemplates(c *Config) error {
 			return err
 		}
 		c.Creds[i].RegCert = val
+		val, err = template.String(c.Creds[i].ClientCert, nil)
+		if err != nil {
+			return err
+		}
+		c.Creds[i].ClientCert = val
+		val, err = template.String(c.Creds[i].ClientKey, nil)
+		if err != nil {
+			return err
+		}
+		c.Creds[i].ClientKey = val
 	}
 	for i := range c.Sync {
 		dataSync.Sync = c.Sync[i]
@@ -241,6 +253,10 @@ func syncSetDefaults(s *ConfigSync, d ConfigDefaults) {
 	}
 	if s.ReferrerFilters == nil {
 		s.ReferrerFilters = d.ReferrerFilters
+	}
+	if s.FastCheck == nil {
+		b := (d.FastCheck != nil && *d.FastCheck)
+		s.FastCheck = &b
 	}
 	if s.ForceRecursive == nil {
 		b := (d.ForceRecursive != nil && *d.ForceRecursive)

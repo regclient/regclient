@@ -1,5 +1,7 @@
 package types
 
+import "strings"
+
 const (
 	// MediaTypeDocker1Manifest deprecated media type for docker schema1 manifests
 	MediaTypeDocker1Manifest = "application/vnd.docker.distribution.manifest.v1+json"
@@ -35,6 +37,14 @@ const (
 	MediaTypeOCI1ForeignLayerGzip = "application/vnd.oci.image.layer.nondistributable.v1.tar+gzip"
 	// MediaTypeOCI1ForeignLayerZstd is the zstd compressed foreign layer for OCI v1
 	MediaTypeOCI1ForeignLayerZstd = "application/vnd.oci.image.layer.nondistributable.v1.tar+zstd"
+	// MediaTypeOCI1Empty is used for blobs containing the empty JSON data `{}`
+	MediaTypeOCI1Empty = "application/vnd.oci.empty.v1+json"
 	// MediaTypeBuildkitCacheConfig is used by buildkit cache images
 	MediaTypeBuildkitCacheConfig = "application/vnd.buildkit.cacheconfig.v0"
 )
+
+// MediaTypeBase cleans the Content-Type header to return only the lower case base media type
+func MediaTypeBase(orig string) string {
+	base, _, _ := strings.Cut(orig, ";")
+	return strings.TrimSpace(strings.ToLower(base))
+}

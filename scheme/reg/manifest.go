@@ -92,6 +92,7 @@ func (reg *Reg) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest, 
 			types.MediaTypeDocker2ManifestList,
 			types.MediaTypeOCI1Manifest,
 			types.MediaTypeOCI1ManifestList,
+			types.MediaTypeOCI1Artifact,
 		},
 	}
 	req := &reghttp.Req{
@@ -148,6 +149,7 @@ func (reg *Reg) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest,
 			types.MediaTypeDocker2ManifestList,
 			types.MediaTypeOCI1Manifest,
 			types.MediaTypeOCI1ManifestList,
+			types.MediaTypeOCI1Artifact,
 		},
 	}
 	req := &reghttp.Req{
@@ -222,7 +224,7 @@ func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest,
 	if err != nil {
 		return fmt.Errorf("failed to put manifest %s: %w", r.CommonName(), err)
 	}
-	defer resp.Close()
+	resp.Close()
 	if resp.HTTPResponse().StatusCode != 201 {
 		return fmt.Errorf("failed to put manifest %s: %w", r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 	}
@@ -233,7 +235,7 @@ func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest,
 		if err != nil {
 			return err
 		}
-		if mDesc != nil && mDesc.MediaType != "" && mDesc.Size > 0 {
+		if mDesc != nil && mDesc.MediaType != "" && mDesc.Size > 0 && mDesc.Digest.String() != resp.HTTPResponse().Header.Get(OCISubjectHeader) {
 			err = reg.referrerPut(ctx, r, m)
 			if err != nil {
 				return err

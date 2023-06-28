@@ -5,11 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/signal"
 	"regexp"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	// crypto libraries included for go-digest
@@ -19,6 +17,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
+	"github.com/regclient/regclient/internal/throttle"
 	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/scheme"
@@ -30,7 +29,6 @@ import (
 	"github.com/robfig/cron/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/sync/semaphore"
 )
 
 const (
@@ -40,18 +38,27 @@ More details at https://github.com/regclient/regclient`
 	UserAgent = "regclient/regsync"
 )
 
-var rootOpts struct {
+type actionType int
+
+const (
+	actionCheck actionType = iota
+	actionCopy
+	actionMissing
+)
+
+var cliOpts struct {
 	confFile  string
 	verbosity string
 	logopts   []string
 	format    string // for Go template formatting of various commands
+	missing   bool
 }
 
 var (
-	conf *Config
-	log  *logrus.Logger
-	rc   *regclient.RegClient
-	sem  *semaphore.Weighted
+	conf      *Config
+	log       *logrus.Logger
+	rc        *regclient.RegClient
+	throttleC *throttle.Throttle
 )
 
 var rootCmd = &cobra.Command{
@@ -62,16 +69,14 @@ var rootCmd = &cobra.Command{
 	SilenceErrors: true,
 }
 var serverCmd = &cobra.Command{
-	Use: "server",
-	// Aliases: []string{"list"},
+	Use:   "server",
 	Short: "run the regsync server",
 	Long:  `Sync registries according to the configuration.`,
 	Args:  cobra.RangeArgs(0, 0),
 	RunE:  runServer,
 }
 var checkCmd = &cobra.Command{
-	Use: "check",
-	// Aliases: []string{"list"},
+	Use:   "check",
 	Short: "processes each sync command once but skip actual copy",
 	Long: `Processes each sync command in the configuration file in order.
 Manifests are checked to see if a copy is needed, but only log, skip copying.
@@ -81,8 +86,7 @@ sync step is finished.`,
 	RunE: runCheck,
 }
 var onceCmd = &cobra.Command{
-	Use: "once",
-	// Aliases: []string{"list"},
+	Use:   "once",
 	Short: "processes each sync command once, ignoring cron schedule",
 	Long: `Processes each sync command in the configuration file in order.
 No jobs are run in parallel, and the command returns after any error or last
@@ -114,10 +118,11 @@ func init() {
 		Hooks:     make(logrus.LevelHooks),
 		Level:     logrus.InfoLevel,
 	}
-	rootCmd.PersistentFlags().StringVarP(&rootOpts.confFile, "config", "c", "", "Config file")
-	rootCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.InfoLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
-	rootCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
-	versionCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+	rootCmd.PersistentFlags().StringVarP(&cliOpts.confFile, "config", "c", "", "Config file")
+	rootCmd.PersistentFlags().StringVarP(&cliOpts.verbosity, "verbosity", "v", logrus.InfoLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
+	rootCmd.PersistentFlags().StringArrayVar(&cliOpts.logopts, "logopt", []string{}, "Log options")
+	versionCmd.Flags().StringVar(&cliOpts.format, "format", "{{printPretty .}}", "Format output with go template syntax")
+	onceCmd.Flags().BoolVar(&cliOpts.missing, "missing", false, "Only copy tags that are missing on target")
 
 	rootCmd.MarkPersistentFlagFilename("config")
 	serverCmd.MarkPersistentFlagRequired("config")
@@ -135,13 +140,13 @@ func init() {
 }
 
 func rootPreRun(cmd *cobra.Command, args []string) error {
-	lvl, err := logrus.ParseLevel(rootOpts.verbosity)
+	lvl, err := logrus.ParseLevel(cliOpts.verbosity)
 	if err != nil {
 		return err
 	}
 	log.SetLevel(lvl)
 	log.Formatter = &logrus.TextFormatter{FullTimestamp: true}
-	for _, opt := range rootOpts.logopts {
+	for _, opt := range cliOpts.logopts {
 		if opt == "json" {
 			log.Formatter = new(logrus.JSONFormatter)
 		}
@@ -151,7 +156,7 @@ func rootPreRun(cmd *cobra.Command, args []string) error {
 
 func runVersion(cmd *cobra.Command, args []string) error {
 	info := version.GetInfo()
-	return template.Writer(os.Stdout, rootOpts.format, info)
+	return template.Writer(os.Stdout, cliOpts.format, info)
 }
 
 // runConfig processes the file in one pass, ignoring cron
@@ -170,16 +175,11 @@ func runOnce(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(cmd.Context())
-	// handle interrupt signal
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-sig
-		log.WithFields(logrus.Fields{}).Debug("Interrupt received, stopping")
-		// clean shutdown
-		cancel()
-	}()
+	action := actionCopy
+	if cliOpts.missing {
+		action = actionMissing
+	}
+	ctx := cmd.Context()
 	var wg sync.WaitGroup
 	var mainErr error
 	for _, s := range conf.Sync {
@@ -188,7 +188,7 @@ func runOnce(cmd *cobra.Command, args []string) error {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				err := s.process(ctx, "copy")
+				err := s.process(ctx, action)
 				if err != nil {
 					if mainErr == nil {
 						mainErr = err
@@ -197,7 +197,7 @@ func runOnce(cmd *cobra.Command, args []string) error {
 				}
 			}()
 		} else {
-			err := s.process(ctx, "copy")
+			err := s.process(ctx, action)
 			if err != nil {
 				if mainErr == nil {
 					mainErr = err
@@ -215,7 +215,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithCancel(cmd.Context())
+	ctx := cmd.Context()
 	var wg sync.WaitGroup
 	var mainErr error
 	c := cron.New(cron.WithChain(
@@ -242,7 +242,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 				}).Debug("Running task")
 				wg.Add(1)
 				defer wg.Done()
-				err := s.process(ctx, "copy")
+				err := s.process(ctx, actionCopy)
 				if mainErr == nil {
 					mainErr = err
 				}
@@ -252,7 +252,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					err := s.process(ctx, "missing")
+					err := s.process(ctx, actionMissing)
 					if err != nil {
 						if mainErr == nil {
 							mainErr = err
@@ -261,7 +261,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 					}
 				}()
 			} else {
-				err := s.process(ctx, "missing")
+				err := s.process(ctx, actionMissing)
 				if err != nil {
 					if mainErr == nil {
 						mainErr = err
@@ -280,13 +280,13 @@ func runServer(cmd *cobra.Command, args []string) error {
 	wg.Wait()
 	c.Start()
 	// wait on interrupt signal
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-	<-sig
-	log.WithFields(logrus.Fields{}).Debug("Interrupt received, stopping")
+	done := ctx.Done()
+	if done != nil {
+		<-done
+	}
+	log.WithFields(logrus.Fields{}).Info("Stopping server")
 	// clean shutdown
 	c.Stop()
-	cancel()
 	log.WithFields(logrus.Fields{}).Debug("Waiting on running tasks")
 	wg.Wait()
 	return mainErr
@@ -301,7 +301,7 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	var mainErr error
 	ctx := cmd.Context()
 	for _, s := range conf.Sync {
-		err := s.process(ctx, "check")
+		err := s.process(ctx, actionCheck)
 		if err != nil {
 			if mainErr == nil {
 				mainErr = err
@@ -313,13 +313,13 @@ func runCheck(cmd *cobra.Command, args []string) error {
 
 func loadConf() error {
 	var err error
-	if rootOpts.confFile == "-" {
+	if cliOpts.confFile == "-" {
 		conf, err = ConfigLoadReader(os.Stdin)
 		if err != nil {
 			return err
 		}
-	} else if rootOpts.confFile != "" {
-		r, err := os.Open(rootOpts.confFile)
+	} else if cliOpts.confFile != "" {
+		r, err := os.Open(cliOpts.confFile)
 		if err != nil {
 			return err
 		}
@@ -331,15 +331,15 @@ func loadConf() error {
 	} else {
 		return ErrMissingInput
 	}
-	// use a semaphore to control parallelism
-	concurrent := int64(conf.Defaults.Parallel)
+	// use a throttle to control parallelism
+	concurrent := conf.Defaults.Parallel
 	if concurrent <= 0 {
 		concurrent = 1
 	}
 	log.WithFields(logrus.Fields{
 		"concurrent": concurrent,
 	}).Debug("Configuring parallel settings")
-	sem = semaphore.NewWeighted(concurrent)
+	throttleC = throttle.New(concurrent)
 	// set the regclient, loading docker creds unless disabled, and inject logins from config file
 	rcOpts := []regclient.Opt{
 		regclient.WithLog(log),
@@ -377,227 +377,20 @@ func loadConf() error {
 }
 
 // process a sync step
-func (s ConfigSync) process(ctx context.Context, action string) error {
-	var retErr error
+func (s ConfigSync) process(ctx context.Context, action actionType) error {
 	switch s.Type {
 	case "registry":
-		last := ""
-		for {
-			repoOpts := []scheme.RepoOpts{}
-			if last != "" {
-				repoOpts = append(repoOpts, scheme.WithRepoLast(last))
-			}
-			sRepos, err := rc.RepoList(ctx, s.Source, repoOpts...)
-			if err != nil {
-				log.WithFields(logrus.Fields{
-					"source": s.Source,
-					"error":  err,
-				}).Error("Failed to list source repositories")
-				return err
-			}
-			sRepoList, err := sRepos.GetRepos()
-			if err != nil {
-				log.WithFields(logrus.Fields{
-					"source": s.Source,
-					"error":  err,
-				}).Error("Failed to list source repositories")
-				return err
-			}
-			if len(sRepoList) == 0 || last == sRepoList[len(sRepoList)-1] {
-				break
-			}
-			last = sRepoList[len(sRepoList)-1]
-			for _, repo := range sRepoList {
-				sRepoRef, err := ref.New(fmt.Sprintf("%s/%s", s.Source, repo))
-				if err != nil {
-					log.WithFields(logrus.Fields{
-						"source": s.Source,
-						"repo":   repo,
-						"error":  err,
-					}).Error("Failed to define source reference")
-					return err
-				}
-				sTags, err := rc.TagList(ctx, sRepoRef)
-				if err != nil {
-					log.WithFields(logrus.Fields{
-						"source": sRepoRef.CommonName(),
-						"error":  err,
-					}).Error("Failed getting source tags")
-					retErr = err
-					continue
-				}
-				sTagsList, err := sTags.GetTags()
-				if err != nil {
-					log.WithFields(logrus.Fields{
-						"source": sRepoRef.CommonName(),
-						"error":  err,
-					}).Error("Failed getting source tags")
-					retErr = err
-					continue
-				}
-				sTagList, err := s.filterTags(sTagsList)
-				if err != nil {
-					log.WithFields(logrus.Fields{
-						"source": sRepoRef.CommonName(),
-						"allow":  s.Tags.Allow,
-						"deny":   s.Tags.Deny,
-						"error":  err,
-					}).Error("Failed processing tag filters")
-					retErr = err
-					continue
-				}
-				if len(sTagList) == 0 {
-					log.WithFields(logrus.Fields{
-						"source":    sRepoRef.CommonName(),
-						"allow":     s.Tags.Allow,
-						"deny":      s.Tags.Deny,
-						"available": sTagsList,
-					}).Info("No matching tags found")
-					retErr = err
-					continue
-				}
-				tRepoRef, err := ref.New(fmt.Sprintf("%s/%s", s.Target, repo))
-				if err != nil {
-					log.WithFields(logrus.Fields{
-						"target": s.Target,
-						"repo":   repo,
-						"error":  err,
-					}).Error("Failed parsing target")
-					return err
-				}
-				for _, tag := range sTagList {
-					sRef := sRepoRef
-					sRef.Tag = tag
-					tRef := tRepoRef
-					tRef.Tag = tag
-					err = s.processRef(ctx, sRef, tRef, action)
-					if err != nil {
-						log.WithFields(logrus.Fields{
-							"target": tRef.CommonName(),
-							"source": sRef.CommonName(),
-							"error":  err,
-						}).Error("Failed to sync")
-						retErr = err
-					}
-					err = rc.Close(ctx, tRef)
-					if err != nil {
-						log.WithFields(logrus.Fields{
-							"ref":   tRef.CommonName(),
-							"error": err,
-						}).Error("Error closing ref")
-					}
-				}
-			}
+		if err := s.processRegistry(ctx, s.Source, s.Target, action); err != nil {
+			return err
 		}
 	case "repository":
-		sRepoRef, err := ref.New(s.Source)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"source": s.Source,
-				"error":  err,
-			}).Error("Failed parsing source")
+		if err := s.processRepo(ctx, s.Source, s.Target, action); err != nil {
 			return err
 		}
-		sTags, err := rc.TagList(ctx, sRepoRef)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"source": sRepoRef.CommonName(),
-				"error":  err,
-			}).Error("Failed getting source tags")
-			return err
-		}
-		sTagsList, err := sTags.GetTags()
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"source": sRepoRef.CommonName(),
-				"error":  err,
-			}).Error("Failed getting source tags")
-			return err
-		}
-		sTagList, err := s.filterTags(sTagsList)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"source": sRepoRef.CommonName(),
-				"allow":  s.Tags.Allow,
-				"deny":   s.Tags.Deny,
-				"error":  err,
-			}).Error("Failed processing tag filters")
-			return err
-		}
-		if len(sTagList) == 0 {
-			log.WithFields(logrus.Fields{
-				"source":    sRepoRef.CommonName(),
-				"allow":     s.Tags.Allow,
-				"deny":      s.Tags.Deny,
-				"available": sTagsList,
-			}).Warn("No matching tags found")
-			return nil
-		}
-		tRepoRef, err := ref.New(s.Target)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"target": s.Target,
-				"error":  err,
-			}).Error("Failed parsing target")
-			return err
-		}
-		for _, tag := range sTagList {
-			sRef := sRepoRef
-			sRef.Tag = tag
-			tRef := tRepoRef
-			tRef.Tag = tag
-			err = s.processRef(ctx, sRef, tRef, action)
-			if err != nil {
-				log.WithFields(logrus.Fields{
-					"target": tRef.CommonName(),
-					"source": sRef.CommonName(),
-					"error":  err,
-				}).Error("Failed to sync")
-				retErr = err
-			}
-			err = rc.Close(ctx, tRef)
-			if err != nil {
-				log.WithFields(logrus.Fields{
-					"ref":   tRef.CommonName(),
-					"error": err,
-				}).Error("Error closing ref")
-			}
-		}
-
 	case "image":
-		sRef, err := ref.New(s.Source)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"source": s.Source,
-				"error":  err,
-			}).Error("Failed parsing source")
+		if err := s.processImage(ctx, s.Source, s.Target, action); err != nil {
 			return err
 		}
-		tRef, err := ref.New(s.Target)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"target": s.Target,
-				"error":  err,
-			}).Error("Failed parsing target")
-			return err
-		}
-		err = s.processRef(ctx, sRef, tRef, action)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"target": tRef.CommonName(),
-				"source": sRef.CommonName(),
-				"error":  err,
-			}).Error("Failed to sync")
-			retErr = err
-		}
-		err = rc.Close(ctx, tRef)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"ref":   tRef.CommonName(),
-				"error": err,
-			}).Error("Error closing ref")
-		}
-
 	default:
 		log.WithFields(logrus.Fields{
 			"step": s,
@@ -605,11 +398,185 @@ func (s ConfigSync) process(ctx context.Context, action string) error {
 		}).Error("Type not recognized, must be one of: registry, repository, or image")
 		return ErrInvalidInput
 	}
+	return nil
+}
+
+func (s ConfigSync) processRegistry(ctx context.Context, src, tgt string, action actionType) error {
+	last := ""
+	var retErr error
+	for {
+		repoOpts := []scheme.RepoOpts{}
+		if last != "" {
+			repoOpts = append(repoOpts, scheme.WithRepoLast(last))
+		}
+		sRepos, err := rc.RepoList(ctx, src, repoOpts...)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"source": src,
+				"error":  err,
+			}).Error("Failed to list source repositories")
+			return err
+		}
+		sRepoList, err := sRepos.GetRepos()
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"source": src,
+				"error":  err,
+			}).Error("Failed to list source repositories")
+			return err
+		}
+		if len(sRepoList) == 0 || last == sRepoList[len(sRepoList)-1] {
+			break
+		}
+		last = sRepoList[len(sRepoList)-1]
+		for _, repo := range sRepoList {
+			if err := s.processRepo(ctx, fmt.Sprintf("%s/%s", src, repo), fmt.Sprintf("%s/%s", tgt, repo), action); err != nil {
+				retErr = err
+			}
+		}
+	}
 	return retErr
 }
 
+func (s ConfigSync) processRepo(ctx context.Context, src, tgt string, action actionType) error {
+	sRepoRef, err := ref.New(src)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"source": src,
+			"error":  err,
+		}).Error("Failed parsing source")
+		return err
+	}
+	sTags, err := rc.TagList(ctx, sRepoRef)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"source": sRepoRef.CommonName(),
+			"error":  err,
+		}).Error("Failed getting source tags")
+		return err
+	}
+	sTagsList, err := sTags.GetTags()
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"source": sRepoRef.CommonName(),
+			"error":  err,
+		}).Error("Failed getting source tags")
+		return err
+	}
+	sTagList, err := s.filterTags(sTagsList)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"source": sRepoRef.CommonName(),
+			"allow":  s.Tags.Allow,
+			"deny":   s.Tags.Deny,
+			"error":  err,
+		}).Error("Failed processing tag filters")
+		return err
+	}
+	if len(sTagList) == 0 {
+		log.WithFields(logrus.Fields{
+			"source":    sRepoRef.CommonName(),
+			"allow":     s.Tags.Allow,
+			"deny":      s.Tags.Deny,
+			"available": sTagsList,
+		}).Warn("No matching tags found")
+		return nil
+	}
+	// if only copying missing entries, delete tags that already exist on target
+	if action == actionMissing {
+		tRepoRef, err := ref.New(tgt)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"target": tgt,
+				"error":  err,
+			}).Error("Failed parsing target")
+			return err
+		}
+		tTags, err := rc.TagList(ctx, tRepoRef)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"target": tRepoRef.CommonName(),
+				"error":  err,
+			}).Debug("Failed getting target tags")
+		}
+		tTagList := []string{}
+		if err == nil {
+			tTagList, err = tTags.GetTags()
+			if err != nil {
+				log.WithFields(logrus.Fields{
+					"target": tRepoRef.CommonName(),
+					"error":  err,
+				}).Debug("Failed getting target tags")
+			}
+		}
+		sI := len(sTagList) - 1
+		tI := len(tTagList) - 1
+		for sI >= 0 && tI >= 0 {
+			switch strings.Compare(sTagList[sI], tTagList[tI]) {
+			case 0:
+				sTagList = append(sTagList[:sI], sTagsList[sI+1:]...)
+				sI--
+				tI--
+			case -1:
+				tI--
+			case 1:
+				sI--
+			default:
+				log.WithFields(logrus.Fields{
+					"result": strings.Compare(sTagList[sI], tTagList[tI]),
+					"left":   sTagList[sI],
+					"right":  tTagList[tI],
+				}).Warn("strings.Compare unexpected result")
+				sI--
+				tI--
+			}
+		}
+	}
+	var retErr error
+	for _, tag := range sTagList {
+		if err := s.processImage(ctx, fmt.Sprintf("%s:%s", src, tag), fmt.Sprintf("%s:%s", tgt, tag), action); err != nil {
+			retErr = err
+		}
+	}
+	return retErr
+}
+
+func (s ConfigSync) processImage(ctx context.Context, src, tgt string, action actionType) error {
+	sRef, err := ref.New(src)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"source": src,
+			"error":  err,
+		}).Error("Failed parsing source")
+		return err
+	}
+	tRef, err := ref.New(tgt)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"target": tgt,
+			"error":  err,
+		}).Error("Failed parsing target")
+		return err
+	}
+	err = s.processRef(ctx, sRef, tRef, action)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"target": tRef.CommonName(),
+			"source": sRef.CommonName(),
+			"error":  err,
+		}).Error("Failed to sync")
+	}
+	if err := rc.Close(ctx, tRef); err != nil {
+		log.WithFields(logrus.Fields{
+			"ref":   tRef.CommonName(),
+			"error": err,
+		}).Error("Error closing ref")
+	}
+	return err
+}
+
 // process a sync step
-func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action string) error {
+func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action actionType) error {
 	mSrc, err := rc.ManifestHead(ctx, src, regclient.WithManifestRequireDigest())
 	if err != nil && errors.Is(err, types.ErrUnsupportedAPI) {
 		mSrc, err = rc.ManifestGet(ctx, src)
@@ -621,20 +588,24 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 		}).Error("Failed to lookup source manifest")
 		return err
 	}
+	fastCheck := (s.FastCheck != nil && *s.FastCheck)
+	forceRecursive := (s.ForceRecursive != nil && *s.ForceRecursive)
+	referrers := (s.Referrers != nil && *s.Referrers)
+	digestTags := (s.DigestTags != nil && *s.DigestTags)
 	mTgt, err := rc.ManifestHead(ctx, tgt, regclient.WithManifestRequireDigest())
 	tgtExists := (err == nil)
 	tgtMatches := false
 	if err == nil && manifest.GetDigest(mSrc).String() == manifest.GetDigest(mTgt).String() {
 		tgtMatches = true
 	}
-	if tgtMatches && (s.ForceRecursive == nil || !*s.ForceRecursive) {
+	if tgtMatches && (fastCheck || (!forceRecursive && !referrers && !digestTags)) {
 		log.WithFields(logrus.Fields{
 			"source": src.CommonName(),
 			"target": tgt.CommonName(),
 		}).Debug("Image matches")
 		return nil
 	}
-	if tgtExists && action == "missing" {
+	if tgtExists && action == actionMissing {
 		log.WithFields(logrus.Fields{
 			"source": src.CommonName(),
 			"target": tgt.CommonName(),
@@ -681,36 +652,40 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 	}
 	if tgtMatches {
 		log.WithFields(logrus.Fields{
-			"source": src.CommonName(),
-			"target": tgt.CommonName(),
-		}).Info("Image sync forced")
+			"source":     src.CommonName(),
+			"target":     tgt.CommonName(),
+			"forced":     forceRecursive,
+			"digestTags": digestTags,
+			"referrers":  referrers,
+		}).Info("Image refreshing")
 	} else {
 		log.WithFields(logrus.Fields{
 			"source": src.CommonName(),
 			"target": tgt.CommonName(),
 		}).Info("Image sync needed")
 	}
-	if action == "check" {
+	if action == actionCheck {
 		return nil
 	}
 
 	// wait for parallel tasks
-	sem.Acquire(ctx, 1)
+	throttleC.Acquire(ctx)
 	// delay for rate limit on source
 	if s.RateLimit.Min > 0 && manifest.GetRateLimit(mSrc).Set {
-		// refresh current rate limit after acquiring semaphore
+		// refresh current rate limit after acquiring throttle
 		mSrc, err = rc.ManifestHead(ctx, src)
 		if err != nil {
 			log.WithFields(logrus.Fields{
 				"source": src.CommonName(),
 				"error":  err,
 			}).Error("rate limit check failed")
+			throttleC.Release(ctx)
 			return err
 		}
 		// delay if rate limit exceeded
 		rlSrc := manifest.GetRateLimit(mSrc)
 		for rlSrc.Remain < s.RateLimit.Min {
-			sem.Release(1)
+			throttleC.Release(ctx)
 			log.WithFields(logrus.Fields{
 				"source":        src.CommonName(),
 				"source-remain": rlSrc.Remain,
@@ -723,14 +698,15 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 				return ErrCanceled
 			case <-time.After(s.RateLimit.Retry):
 			}
-			sem.Acquire(ctx, 1)
+			throttleC.Acquire(ctx)
 			mSrc, err = rc.ManifestHead(ctx, src)
 			if err != nil {
-				sem.Release(1)
+				throttleC.Release(ctx)
 				log.WithFields(logrus.Fields{
 					"source": src.CommonName(),
 					"error":  err,
 				}).Error("rate limit check failed")
+				throttleC.Release(ctx)
 				return err
 			}
 			rlSrc = manifest.GetRateLimit(mSrc)
@@ -741,9 +717,9 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 			"step-min":      s.RateLimit.Min,
 		}).Debug("Rate limit passed")
 	}
-	defer sem.Release(1)
+	defer throttleC.Release(ctx)
 
-	// verify context has not been canceled while waiting for semaphore
+	// verify context has not been canceled while waiting for throttle
 	select {
 	case <-ctx.Done():
 		return ErrCanceled
@@ -822,6 +798,9 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action str
 				opts = append(opts, regclient.ImageWithReferrers(rOpts...))
 			}
 		}
+	}
+	if s.FastCheck != nil && *s.FastCheck {
+		opts = append(opts, regclient.ImageWithFastCheck())
 	}
 	if s.ForceRecursive != nil && *s.ForceRecursive {
 		opts = append(opts, regclient.ImageWithForceRecursive())

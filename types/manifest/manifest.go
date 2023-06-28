@@ -106,7 +106,7 @@ func New(opts ...Opts) (Manifest, error) {
 	// extract fields from header where available
 	if mc.header != nil {
 		if c.desc.MediaType == "" {
-			c.desc.MediaType = mc.header.Get("Content-Type")
+			c.desc.MediaType = types.MediaTypeBase(mc.header.Get("Content-Type"))
 		}
 		if c.desc.Size == 0 {
 			cl, _ := strconv.Atoi(mc.header.Get("Content-Length"))
@@ -436,12 +436,14 @@ func fromCommon(c common) (Manifest, error) {
 	// extract common data from from rawBody
 	if len(c.rawBody) > 0 {
 		c.manifSet = true
-		// extract media type from body if needed
+		// extract media type from body, either explicitly or with duck typing
 		if c.desc.MediaType == "" {
 			mt := struct {
-				MediaType     string        `json:"mediaType,omitempty"`
-				SchemaVersion int           `json:"schemaVersion,omitempty"`
-				Signatures    []interface{} `json:"signatures,omitempty"`
+				MediaType     string             `json:"mediaType,omitempty"`
+				SchemaVersion int                `json:"schemaVersion,omitempty"`
+				Signatures    []interface{}      `json:"signatures,omitempty"`
+				Manifests     []types.Descriptor `json:"manifests,omitempty"`
+				Layers        []types.Descriptor `json:"layers,omitempty"`
 			}{}
 			err = json.Unmarshal(c.rawBody, &mt)
 			if mt.MediaType != "" {
@@ -450,6 +452,18 @@ func fromCommon(c common) (Manifest, error) {
 				c.desc.MediaType = types.MediaTypeDocker1ManifestSigned
 			} else if mt.SchemaVersion == 1 {
 				c.desc.MediaType = types.MediaTypeDocker1Manifest
+			} else if len(mt.Manifests) > 0 {
+				if strings.HasPrefix(mt.Manifests[0].MediaType, "application/vnd.docker.") {
+					c.desc.MediaType = types.MediaTypeDocker2ManifestList
+				} else {
+					c.desc.MediaType = types.MediaTypeOCI1ManifestList
+				}
+			} else if len(mt.Layers) > 0 {
+				if strings.HasPrefix(mt.Layers[0].MediaType, "application/vnd.docker.") {
+					c.desc.MediaType = types.MediaTypeDocker2Manifest
+				} else {
+					c.desc.MediaType = types.MediaTypeOCI1Manifest
+				}
 			}
 		}
 		// compute digest

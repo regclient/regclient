@@ -4,7 +4,10 @@ package scheme
 import (
 	"context"
 	"io"
+	"sort"
+	"strings"
 
+	"github.com/regclient/regclient/internal/throttle"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
 	"github.com/regclient/regclient/types/manifest"
@@ -15,9 +18,6 @@ import (
 
 // API is used to interface between different methods to store images
 type API interface {
-	// Info is experimental, do not use
-	Info() Info
-
 	// BlobDelete removes a blob from the repository
 	BlobDelete(ctx context.Context, r ref.Ref, d types.Descriptor) error
 	// BlobGet retrieves a blob, returning a reader
@@ -52,9 +52,18 @@ type Closer interface {
 	Close(ctx context.Context, r ref.Ref) error
 }
 
-// Info provides details on the scheme, this is experimental, do not use
-type Info struct {
-	ManifestPushFirst bool
+// GCLocker is used to indicate locking is available for GC management
+type GCLocker interface {
+	// GCLock a reference to prevent GC from triggering during a put, locks are not exclusive.
+	GCLock(r ref.Ref)
+	// GCUnlock a reference to allow GC (once all locks are released).
+	// The reference should be closed after this step and unlock should only be called once per each Lock call.
+	GCUnlock(r ref.Ref)
+}
+
+// Throttler is used to indicate the scheme implements Throttle
+type Throttler interface {
+	Throttle(r ref.Ref, put bool) []*throttle.Throttle
 }
 
 // ManifestConfig is used by schemes to import ManifestOpts
@@ -97,6 +106,8 @@ type ReferrerConfig struct {
 	FilterArtifactType string
 	FilterAnnotation   map[string]string
 	Platform           string
+	SortAnnotation     string
+	SortDesc           bool
 }
 
 // ReferrerOpts is used to set options on referrer APIs
@@ -150,6 +161,29 @@ func ReferrerFilter(config ReferrerConfig, rlIn referrer.ReferrerList) referrer.
 			}
 		}
 	}
+	// sort the results if requested
+	if config.SortAnnotation != "" {
+		sort.Slice(rlOut.Descriptors, func(i, j int) bool {
+			// if annotations are not defined, sort to the very end
+			if rlOut.Descriptors[i].Annotations == nil {
+				return false
+			}
+			if _, ok := rlOut.Descriptors[i].Annotations[config.SortAnnotation]; !ok {
+				return false
+			}
+			if rlOut.Descriptors[j].Annotations == nil {
+				return true
+			}
+			if _, ok := rlOut.Descriptors[j].Annotations[config.SortAnnotation]; !ok {
+				return true
+			}
+			// else sort by string
+			if strings.Compare(rlOut.Descriptors[i].Annotations[config.SortAnnotation], rlOut.Descriptors[j].Annotations[config.SortAnnotation]) < 0 {
+				return !config.SortDesc
+			}
+			return config.SortDesc
+		})
+	}
 	return rlOut
 }
 
@@ -157,6 +191,14 @@ func ReferrerFilter(config ReferrerConfig, rlIn referrer.ReferrerList) referrer.
 func WithReferrerPlatform(platform string) ReferrerOpts {
 	return func(config *ReferrerConfig) {
 		config.Platform = platform
+	}
+}
+
+// WithReferrerSort orders the resulting referrers listing according to a specified annotation.
+func WithReferrerSort(annotation string, desc bool) ReferrerOpts {
+	return func(config *ReferrerConfig) {
+		config.SortAnnotation = annotation
+		config.SortDesc = desc
 	}
 }
 
