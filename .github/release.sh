@@ -90,7 +90,7 @@ if [ "$opt_dry_run" = "1" ]; then
 fi
 if [ -z "$tag" ] || git show-ref "refs/tags/${tag}" --quiet; then
   # extract patch version from prev_tag
-  next_patch="$(expr 1 + "${prev_tag##*.}"
+  next_patch="$(expr 1 + "${prev_tag##*.}")"
   next_tag="${prev_tag%.*}.${next_patch}"
   read -p "Enter tag to create [${next_tag}]: " tag
   if [ -z "$tag" ]; then
@@ -124,7 +124,7 @@ git merge main -m "Merge for release ${tag}"
 generate_changelog ${prev_tag} >release.md
 
 # prompt user to make any changes to release.md and approve release
-cat <<<EOF
+cat <<EOF
 # Verify and update the release.md, then execute the following:
 git add release.md
 git commit -sm "Release ${tag}"
