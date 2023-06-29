@@ -115,7 +115,7 @@ scans:
     source: "registry-tag-arg-semver"
     args:
       regexp: '^MARKDOWN_LINT_VER\?=(?P<Version>v[0-9\.]+)\s*$'
-      repo: "ghcr.io/igorshubovych/markdownlint-cli"
+      repo: "davidanson/markdownlint-cli2"
   makefile-staticcheck:
     type: "regexp"
     source: "git-tag-semver"
