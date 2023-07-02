@@ -17,13 +17,13 @@ import (
 // Descriptor is used in manifests to refer to content by media type, size, and digest.
 type Descriptor struct {
 	// MediaType describe the type of the content.
-	MediaType string `json:"mediaType,omitempty"`
+	MediaType string `json:"mediaType"`
 
 	// Size in bytes of content.
-	Size int64 `json:"size,omitempty"`
+	Size int64 `json:"size"`
 
 	// Digest uniquely identifies the content.
-	Digest digest.Digest `json:"digest,omitempty"`
+	Digest digest.Digest `json:"digest"`
 
 	// URLs contains the source URLs of this content.
 	URLs []string `json:"urls,omitempty"`

@@ -165,10 +165,6 @@ func (m *oci1Manifest) GetSubject() (*types.Descriptor, error) {
 	if !m.manifSet {
 		return nil, types.ErrManifestNotSet
 	}
-	// TODO: remove fall back support for refers in a future release
-	if m.Manifest.Subject == nil && m.Manifest.Refers != nil {
-		return m.Manifest.Refers, nil
-	}
 	return m.Manifest.Subject, nil
 }
 func (m *oci1Index) GetSubject() (*types.Descriptor, error) {
@@ -180,10 +176,6 @@ func (m *oci1Index) GetSubject() (*types.Descriptor, error) {
 func (m *oci1Artifact) GetSubject() (*types.Descriptor, error) {
 	if !m.manifSet {
 		return nil, types.ErrManifestNotSet
-	}
-	// TODO: remove fall back support for refers in a future release
-	if m.ArtifactManifest.Subject == nil && m.ArtifactManifest.Refers != nil {
-		return m.ArtifactManifest.Refers, nil
 	}
 	return m.ArtifactManifest.Subject, nil
 }

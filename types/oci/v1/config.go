@@ -1,5 +1,8 @@
 package v1
 
+// Docker specific content in this file is included from
+// https://github.com/moby/moby/blob/master/api/types/container/config.go
+
 import (
 	"time"
 	// crypto libraries included for go-digest
@@ -39,6 +42,10 @@ type ImageConfig struct {
 	// StopSignal contains the system call signal that will be sent to the container to exit.
 	StopSignal string `json:"StopSignal,omitempty"`
 
+	// StopTimeout is the time in seconds to stop the container.
+	// This is a Docker specific extension to the config, and not part of the OCI spec.
+	StopTimeout *int `json:",omitempty"`
+
 	// ArgsEscaped `[Deprecated]` - This field is present only for legacy
 	// compatibility with Docker and should not be used by new image builders.
 	// It is used by Docker for Windows images to indicate that the `Entrypoint`
@@ -47,6 +54,18 @@ type ImageConfig struct {
 	// the value in `Entrypoint` or `Cmd` should be used as-is to avoid double
 	// escaping.
 	ArgsEscaped bool `json:"ArgsEscaped,omitempty"`
+
+	// Healthcheck describes how to check if the container is healthy.
+	// This is a Docker specific extension to the config, and not part of the OCI spec.
+	Healthcheck *HealthConfig `json:"Healthcheck,omitempty"`
+
+	// OnBuild lists any ONBUILD steps defined in the Dockerfile.
+	// This is a Docker specific extension to the config, and not part of the OCI spec.
+	OnBuild []string `json:"OnBuild,omitempty"`
+
+	// Shell for the shell-form of RUN, CMD, and ENTRYPOINT.
+	// This is a Docker specific extension to the config, and not part of the OCI spec.
+	Shell []string `json:"Shell,omitempty"`
 }
 
 // RootFS describes a layer content addresses
@@ -96,4 +115,26 @@ type Image struct {
 
 	// History describes the history of each layer.
 	History []History `json:"history,omitempty"`
+}
+
+// HealthConfig holds configuration settings for the HEALTHCHECK feature.
+// This is a Docker specific extension to the config, and not part of the OCI spec.
+type HealthConfig struct {
+	// Test is the test to perform to check that the container is healthy.
+	// An empty slice means to inherit the default.
+	// The options are:
+	// {} : inherit healthcheck
+	// {"NONE"} : disable healthcheck
+	// {"CMD", args...} : exec arguments directly
+	// {"CMD-SHELL", command} : run command with system's default shell
+	Test []string `json:",omitempty"`
+
+	// Zero means to inherit. Durations are expressed as integer nanoseconds.
+	Interval    time.Duration `json:",omitempty"` // Interval is the time to wait between checks.
+	Timeout     time.Duration `json:",omitempty"` // Timeout is the time to wait before considering the check to have hung.
+	StartPeriod time.Duration `json:",omitempty"` // The start period for the container to initialize before the retries starts to count down.
+
+	// Retries is the number of consecutive failures needed to consider a container as unhealthy.
+	// Zero means inherit.
+	Retries int `json:",omitempty"`
 }
