@@ -21,6 +21,7 @@ func TestArtifactPut(t *testing.T) {
 		t.Errorf("failed creating test conf: %v", err)
 		return
 	}
+	saveArtifactOpts := artifactOpts
 
 	tt := []struct {
 		name        string
@@ -74,6 +75,7 @@ func TestArtifactPut(t *testing.T) {
 				rootCmd.SetIn(bytes.NewBuffer(tc.in))
 			}
 			out, err := cobraTest(t, tc.args...)
+			artifactOpts = saveArtifactOpts
 			if tc.expectErr != nil {
 				if err == nil {
 					t.Errorf("did not receive expected error: %v", tc.expectErr)
@@ -97,6 +99,7 @@ func TestArtifactPut(t *testing.T) {
 }
 
 func TestArtifactTree(t *testing.T) {
+	saveArtifactOpts := artifactOpts
 	tt := []struct {
 		name        string
 		args        []string
@@ -151,6 +154,7 @@ func TestArtifactTree(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			out, err := cobraTest(t, tc.args...)
+			artifactOpts = saveArtifactOpts
 			if tc.expectErr != nil {
 				if err == nil {
 					t.Errorf("did not receive expected error: %v", tc.expectErr)
