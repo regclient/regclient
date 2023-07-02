@@ -164,10 +164,10 @@ func TestRef(t *testing.T) {
 		},
 		{
 			name:       "separators in repo",
-			ref:        "e.xample.co/g-r.o__u_p/image:a",
+			ref:        "e.xample.co/g-r.o__u_p/im----age:a",
 			scheme:     "reg",
 			registry:   "e.xample.co",
-			repository: "g-r.o__u_p/image",
+			repository: "g-r.o__u_p/im----age",
 			tag:        "a",
 			digest:     "",
 			path:       "",
@@ -319,8 +319,8 @@ func TestRef(t *testing.T) {
 			wantE: types.ErrInvalidReference,
 		},
 		{
-			name:  "invalid repo multiple dash",
-			ref:   "project/image--x:tag",
+			name:  "invalid repo triple underscore",
+			ref:   "project/image___x:tag",
 			wantE: types.ErrInvalidReference,
 		},
 		{
