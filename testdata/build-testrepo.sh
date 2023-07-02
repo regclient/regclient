@@ -114,45 +114,10 @@ regctl image copy ocidir://testrepo:v3 "ocidir://testrepo:sha256-${v1_dig}.${v3_
 
 # create a looping index that references a child in both the manifests and subject
 echo "child" | regctl artifact put --artifact-type application/example.child ocidir://testrepo:child
-dig_tag="$(regctl manifest head --format 'sha256-{{.GetDescriptor.Digest.Hex}}' ocidir://testrepo:child)"
-mt_child="$(regctl manifest head --format '{{.GetDescriptor.MediaType}}' ocidir://testrepo:child)"
-size_child="$(regctl manifest head --format '{{.GetDescriptor.Size}}' ocidir://testrepo:child)"
-digest_child="$(regctl manifest head --format '{{.GetDescriptor.Digest}}' ocidir://testrepo:child)"
-mt_loop="$(regctl manifest head --format '{{.GetDescriptor.MediaType}}' ocidir://testrepo:loop)"
-size_loop="$(regctl manifest head --format '{{.GetDescriptor.Size}}' ocidir://testrepo:loop)"
-digest_loop="$(regctl manifest head --format '{{.GetDescriptor.Digest}}' ocidir://testrepo:loop)"
-regctl manifest put ocidir://testrepo:loop <<EOF
-{
-  "schemaVersion": 2,
-  "mediaType": "application/vnd.oci.image.index.v1+json",
-  "manifests": [
-    {
-      "mediaType": "${mt_child}",
-      "size": ${size_child},
-      "digest": "${digest_child}"
-    }
-  ],
-  "subject": {
-    "mediaType": "${mt_child}",
-    "size": ${size_child},
-    "digest": "${digest_child}"
-  }
-}
-EOF
-regctl manifest put ocidir://testrepo:${dig_tag} <<EOF
-{
-  "schemaVersion": 2,
-  "mediaType": "application/vnd.oci.image.index.v1+json",
-  "manifests": [
-    {
-      "mediaType": "${mt_loop}",
-      "size": ${size_loop},
-      "digest": "${digest_loop}",
-      "artifactType": "application/example.child"
-    }
-  ]
-}
-EOF
+regctl index create ocidir://testrepo:loop \
+  --artifact-type application/example.loop \
+  --subject child \
+  --ref ocidir://testrepo:child
 
 # create an artifact with a digest tag to itself
 echo mirror | regctl artifact put \

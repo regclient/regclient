@@ -8,6 +8,8 @@ import (
 // TODO: implement tests
 
 func TestBlob(t *testing.T) {
+	saveBlobOpts := blobOpts
+	saveManifestOpts := manifestOpts
 	repo := "ocidir://../../testdata/testrepo"
 	digBaseA, err := cobraTest(t, "manifest", "get", repo+":b1", "--platform", "linux/amd64", "--format", "{{(index .Layers 0).Digest}}")
 	if err != nil {
@@ -25,10 +27,12 @@ func TestBlob(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed getting layer digest: %v", err)
 	}
+	manifestOpts = saveManifestOpts
 
 	t.Run("Get", func(t *testing.T) {
 		// run a get request
 		out, err := cobraTest(t, "blob", "get", "--format", "{{printPretty .}}", repo, digBaseA)
+		blobOpts = saveBlobOpts
 		if err != nil {
 			t.Errorf("failed to blob get: %v", err)
 		}
@@ -37,6 +41,7 @@ func TestBlob(t *testing.T) {
 		}
 		// run a head request
 		out, err = cobraTest(t, "blob", "head", "--format", "{{printPretty .}}", repo, digBaseA)
+		blobOpts = saveBlobOpts
 		if err != nil {
 			t.Errorf("failed to blob head: %v", err)
 		}
@@ -45,6 +50,7 @@ func TestBlob(t *testing.T) {
 		}
 		// get a file from the blob
 		out, err = cobraTest(t, "blob", "get-file", repo, digBaseA, "base.txt")
+		blobOpts = saveBlobOpts
 		if err != nil {
 			t.Errorf("failed to blob get-file: %v", err)
 		}
@@ -62,11 +68,13 @@ func TestBlob(t *testing.T) {
 		defer rootCmd.SetIn(origIn)
 		// put a blob
 		dig, err := cobraTest(t, "blob", "put", "--format", "{{println .Digest}}", "ocidir://"+dir)
+		blobOpts = saveBlobOpts
 		if err != nil {
 			t.Errorf("failed to blob copy: %v", err)
 		}
 		// get the blob from the tempdir
 		out, err := cobraTest(t, "blob", "get", "--format", "{{printPretty .}}", "ocidir://"+dir, dig)
+		blobOpts = saveBlobOpts
 		if err != nil {
 			t.Errorf("failed to blob get: %v", err)
 		}
@@ -79,11 +87,13 @@ func TestBlob(t *testing.T) {
 		dir := t.TempDir()
 		// copy the blob to the tempdir
 		_, err := cobraTest(t, "blob", "copy", repo, "ocidir://"+dir, digBaseA)
+		blobOpts = saveBlobOpts
 		if err != nil {
 			t.Errorf("failed to blob copy: %v", err)
 		}
 		// get the blob from the tempdir
 		out, err := cobraTest(t, "blob", "get", "--format", "{{printPretty .}}", "ocidir://"+dir, digBaseA)
+		blobOpts = saveBlobOpts
 		if err != nil {
 			t.Errorf("failed to blob get: %v", err)
 		}
@@ -95,6 +105,7 @@ func TestBlob(t *testing.T) {
 	t.Run("Diff", func(t *testing.T) {
 		// diff the layers between two images
 		out, err := cobraTest(t, "blob", "diff-layer", repo, digBaseA, repo, digBaseB)
+		blobOpts = saveBlobOpts
 		if err != nil {
 			t.Errorf("failed to diff layers: %v", err)
 		}
@@ -103,6 +114,7 @@ func TestBlob(t *testing.T) {
 		}
 		// diff the config between two images
 		out, err = cobraTest(t, "blob", "diff-config", repo, digConf1, repo, digConf3)
+		blobOpts = saveBlobOpts
 		if err != nil {
 			t.Errorf("failed to diff config: %v", err)
 		}
