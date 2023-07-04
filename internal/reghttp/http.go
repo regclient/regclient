@@ -457,7 +457,6 @@ func (resp *clientResp) Next() error {
 								"Err": err,
 							}).Warn("Failed to handle auth request")
 						}
-						backoff = true
 						dropHost = true
 					} else {
 						err = fmt.Errorf("authentication required")
