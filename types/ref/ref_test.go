@@ -2,6 +2,7 @@ package ref
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/regclient/regclient/types"
@@ -174,6 +175,17 @@ func TestRef(t *testing.T) {
 			wantE:      nil,
 		},
 		{
+			name:       "separators in tag",
+			ref:        "e.xample.co/g/roup/image:__a--b..5__",
+			scheme:     "reg",
+			registry:   "e.xample.co",
+			repository: "g/roup/image",
+			tag:        "__a--b..5__",
+			digest:     "",
+			path:       "",
+			wantE:      nil,
+		},
+		{
 			name:       "Localhost registry",
 			ref:        "localhost/group/image:v42",
 			scheme:     "reg",
@@ -331,6 +343,11 @@ func TestRef(t *testing.T) {
 		{
 			name:  "invalid tag chars",
 			ref:   "project/image:tag^1",
+			wantE: types.ErrInvalidReference,
+		},
+		{
+			name:  "invalid tag length",
+			ref:   "project/image:" + strings.Repeat("x", 129),
 			wantE: types.ErrInvalidReference,
 		},
 		{
