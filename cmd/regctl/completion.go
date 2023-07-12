@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 
@@ -13,17 +14,17 @@ import (
 var completionCmd = &cobra.Command{
 	Use:   "completion [bash|zsh|fish|powershell]",
 	Short: "Generate completion script",
-	Long: `To load completions:
+	Long: fmt.Sprintf(`To load completions:
 
 Bash:
 
-  $ source <(regctl completion bash)
+  $ source <(%[1]s completion bash)
 
   # To load completions for each session, execute once:
   # Linux:
-  $ regctl completion bash > /etc/bash_completion.d/regctl
+  $ %[1]s completion bash > /etc/bash_completion.d/%[1]s
   # macOS:
-  $ regctl completion bash > /usr/local/etc/bash_completion.d/regctl
+  $ %[1]s completion bash > $(brew --prefix)/etc/bash_completion.d/%[1]s
 
 Zsh:
 
@@ -33,28 +34,28 @@ Zsh:
   $ echo "autoload -U compinit; compinit" >> ~/.zshrc
 
   # To load completions for each session, execute once:
-  $ regctl completion zsh > "${fpath[1]}/_regctl"
+  $ %[1]s completion zsh > "${fpath[1]}/_%[1]s"
 
   # You will need to start a new shell for this setup to take effect.
 
 fish:
 
-  $ regctl completion fish | source
+  $ %[1]s completion fish | source
 
   # To load completions for each session, execute once:
-  $ regctl completion fish > ~/.config/fish/completions/regctl.fish
+  $ %[1]s completion fish > ~/.config/fish/completions/%[1]s.fish
 
 PowerShell:
 
-  PS> regctl completion powershell | Out-String | Invoke-Expression
+  PS> %[1]s completion powershell | Out-String | Invoke-Expression
 
   # To load completions for every new session, run:
-  PS> regctl completion powershell > regctl.ps1
+  PS> %[1]s completion powershell > %[1]s.ps1
   # and source this file from your PowerShell profile.
-`,
+`, rootCmd.Root().Name()),
 	DisableFlagsInUseLine: true,
 	ValidArgs:             []string{"bash", "zsh", "fish", "powershell"},
-	Args:                  cobra.ExactValidArgs(1),
+	Args:                  cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
 	Run: func(cmd *cobra.Command, args []string) {
 		switch args[0] {
 		case "bash":
