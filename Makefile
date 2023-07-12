@@ -27,8 +27,8 @@ endif
 MARKDOWN_LINT_VER?=v0.8.1
 SYFT?=$(shell command -v syft 2>/dev/null)
 SYFT_CMD_VER:=$(shell [ -x "$(SYFT)" ] && echo "v$$($(SYFT) version | awk '/^Version: / {print $$2}')" || echo "0")
-SYFT_VERSION?=v0.84.1
-SYFT_CONTAINER?=anchore/syft:v0.84.1@sha256:1b1d190a2cc0f761861380f603f7b3489aa0aba01dc856dc9f7fae9e3673761c
+SYFT_VERSION?=v0.85.0
+SYFT_CONTAINER?=anchore/syft:v0.85.0@sha256:dd40bc09ff2bf3b860c399e7cf5c2db088e84c85937ac05fdeca3cd88fe2a728
 ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 	SYFT=docker run --rm \
 		-v "$(shell pwd)/:$(shell pwd)/" -w "$(shell pwd)" \
@@ -153,7 +153,7 @@ plugin-host:
 
 .PHONY: util-golang-update
 util-golang-update: ## update go module versions
-	go get -u
+	go get -u -t ./...
 	go mod tidy
 	go mod vendor
 	
