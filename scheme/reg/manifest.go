@@ -86,12 +86,12 @@ func (reg *Reg) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest, 
 	// build/send request
 	headers := http.Header{
 		"Accept": []string{
-			types.MediaTypeDocker1Manifest,
-			types.MediaTypeDocker1ManifestSigned,
-			types.MediaTypeDocker2Manifest,
-			types.MediaTypeDocker2ManifestList,
-			types.MediaTypeOCI1Manifest,
 			types.MediaTypeOCI1ManifestList,
+			types.MediaTypeOCI1Manifest,
+			types.MediaTypeDocker2ManifestList,
+			types.MediaTypeDocker2Manifest,
+			types.MediaTypeDocker1ManifestSigned,
+			types.MediaTypeDocker1Manifest,
 			types.MediaTypeOCI1Artifact,
 		},
 	}
@@ -143,12 +143,12 @@ func (reg *Reg) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest,
 	// build/send request
 	headers := http.Header{
 		"Accept": []string{
-			types.MediaTypeDocker1Manifest,
-			types.MediaTypeDocker1ManifestSigned,
-			types.MediaTypeDocker2Manifest,
-			types.MediaTypeDocker2ManifestList,
-			types.MediaTypeOCI1Manifest,
 			types.MediaTypeOCI1ManifestList,
+			types.MediaTypeOCI1Manifest,
+			types.MediaTypeDocker2ManifestList,
+			types.MediaTypeDocker2Manifest,
+			types.MediaTypeDocker1ManifestSigned,
+			types.MediaTypeDocker1Manifest,
 			types.MediaTypeOCI1Artifact,
 		},
 	}
