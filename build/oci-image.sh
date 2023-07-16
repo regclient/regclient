@@ -91,6 +91,7 @@ regctl image mod \
   --time-max "${vcs_date}" \
   --annotation "[*]org.opencontainers.image.created=${vcs_date}" \
   --annotation "[*]org.opencontainers.image.source=${vcs_repo}" \
+  --annotation "[*]org.opencontainers.image.version=${vcs_version}" \
   --annotation "[*]org.opencontainers.image.revision=${vcs_sha}" \
   >/dev/null
 

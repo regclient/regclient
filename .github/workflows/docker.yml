@@ -156,6 +156,7 @@ jobs:
           --time-max "${vcs_date}" \
           --annotation "[*]org.opencontainers.image.created=${vcs_date}" \
           --annotation "[*]org.opencontainers.image.source=${{ steps.prep.outputs.repo_url }}" \
+          --annotation "[*]org.opencontainers.image.version=${{ steps.prep.outputs.version }}" \
           --annotation "[*]org.opencontainers.image.revision=${{ github.sha }}"
         if [ -n "$base_name" ] && [ -n "$base_digest" ]; then
           regctl image mod "${local_tag}" --replace \
