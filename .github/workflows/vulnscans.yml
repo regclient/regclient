@@ -1,4 +1,4 @@
-name: Vulnerability Check
+name: Vulnerability Scans
 
 on:
   schedule:
@@ -29,3 +29,11 @@ jobs:
     - name: "Run govulncheck"
       run: |
         govulncheck ./...
+
+    - name: "Install OSV Scanner"
+      run: |
+        go install github.com/google/osv-scanner/cmd/osv-scanner@latest
+
+    - name: "Run OSV Scanner"
+      run: |
+        osv-scanner -r .
