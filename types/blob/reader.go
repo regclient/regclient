@@ -111,7 +111,7 @@ func (b *reader) Read(p []byte) (int, error) {
 		if b.desc.Digest == "" {
 			b.desc.Digest = b.digester.Digest()
 		} else if b.desc.Digest != b.digester.Digest() {
-			err = fmt.Errorf("expected digest mismatch [expected %s, calculated %s]: %w", b.desc.Digest.String(), b.digester.Digest().String(), err)
+			err = fmt.Errorf("%w [expected %s, calculated %s]: %v", types.ErrDigestMismatch, b.desc.Digest.String(), b.digester.Digest().String(), err)
 		}
 	}
 	return size, err

@@ -70,6 +70,8 @@ var (
 		Digest:    exDigest,
 		Size:      exLen,
 	}
+	fileLayer   = "../../testdata/layer.tar"
+	fileLayerWH = "../../testdata/layer-wh.tar"
 )
 
 func TestCommon(t *testing.T) {
@@ -382,7 +384,7 @@ func TestOCI(t *testing.T) {
 }
 
 func TestTarReader(t *testing.T) {
-	fh, err := os.Open("../../testdata/layer.tar")
+	fh, err := os.Open(fileLayer)
 	if err != nil {
 		t.Errorf("failed to open test data: %v", err)
 		return
@@ -429,7 +431,7 @@ func TestTarReader(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fh, err := os.Open("../../testdata/layer.tar")
+			fh, err := os.Open(fileLayer)
 			if err != nil {
 				t.Errorf("failed to open test data: %v", err)
 				return
@@ -514,15 +516,20 @@ func TestReadFile(t *testing.T) {
 			expectErr: fmt.Errorf(".wh. prefix is reserved for whiteout files"),
 		},
 	}
+	fileBytes, err := os.ReadFile(fileLayerWH)
+	if err != nil {
+		t.Errorf("failed to open test data: %v", err)
+		return
+	}
+	blobDigest := digest.FromBytes(fileBytes)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fh, err := os.Open("../../testdata/layer-wh.tar")
+			fh, err := os.Open(fileLayerWH)
 			if err != nil {
 				t.Errorf("failed to open test data: %v", err)
 				return
 			}
-			btr := NewTarReader(WithReader(fh))
-			defer btr.Close()
+			btr := NewTarReader(WithReader(fh), WithDesc(types.Descriptor{Size: int64(len(fileBytes)), Digest: blobDigest, MediaType: types.MediaTypeOCI1Layer}))
 			th, rdr, err := btr.ReadFile(tt.filename)
 			if tt.expectErr != nil {
 				if err == nil {
@@ -530,18 +537,25 @@ func TestReadFile(t *testing.T) {
 				} else if !errors.Is(err, tt.expectErr) && err.Error() != tt.expectErr.Error() {
 					t.Errorf("unexpected error, expected %v, received %v", tt.expectErr, err)
 				}
+				err = btr.Close()
+				if err != nil {
+					t.Errorf("failed to close tar reader: %v", err)
+				}
 				return
 			}
 			if err != nil {
 				t.Errorf("ReadFile failed: %v", err)
+				btr.Close()
 				return
 			}
 			if th == nil {
 				t.Errorf("tar header is nil")
+				btr.Close()
 				return
 			}
 			if rdr == nil {
 				t.Errorf("reader is nil")
+				btr.Close()
 				return
 			}
 			content, err := io.ReadAll(rdr)
@@ -551,9 +565,26 @@ func TestReadFile(t *testing.T) {
 			if tt.content != string(content) {
 				t.Errorf("file content mismatch: expected %s, received %s", tt.content, string(content))
 			}
+			err = btr.Close()
+			if err != nil {
+				t.Errorf("failed to close tar reader: %v", err)
+			}
 		})
 	}
-
+	t.Run("bad digest", func(t *testing.T) {
+		fh, err := os.Open(fileLayerWH)
+		if err != nil {
+			t.Errorf("failed to open test data: %v", err)
+			return
+		}
+		btr := NewTarReader(WithReader(fh), WithDesc(types.Descriptor{Size: int64(len(fileBytes)), Digest: digest.FromString("bad digest"), MediaType: types.MediaTypeOCI1Layer}))
+		_, _, err = btr.ReadFile("missing.txt")
+		if err == nil {
+			t.Errorf("ReadFile did not fail")
+		} else if !errors.Is(err, types.ErrDigestMismatch) {
+			t.Errorf("unexpected error, expected %v, received %v", types.ErrDigestMismatch, err)
+		}
+	})
 }
 
 func cmpSliceString(a, b []string) bool {
