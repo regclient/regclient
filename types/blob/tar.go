@@ -55,23 +55,11 @@ func NewTarReader(opts ...Opts) TarReader {
 
 // Close attempts to close the reader and populates/validates the digest
 func (tr *tarReader) Close() error {
-	var err error
-	if tr.digester != nil {
-		dig := tr.digester.Digest()
-		tr.digester = nil
-		if tr.desc.Digest.String() != "" && dig != tr.desc.Digest {
-			err = fmt.Errorf("digest mismatch, expected %s, received %s", tr.desc.Digest.String(), dig.String())
-		}
-		tr.desc.Digest = dig
-	}
-	if tr.origRdr == nil {
-		return err
-	}
 	// attempt to close if available in original reader
-	if trc, ok := tr.origRdr.(io.Closer); ok {
+	if trc, ok := tr.origRdr.(io.Closer); ok && trc != nil {
 		return trc.Close()
 	}
-	return err
+	return nil
 }
 
 // GetTarReader returns the tar.Reader for the blob
@@ -100,6 +88,14 @@ func (tr *tarReader) RawBody() ([]byte, error) {
 	b, err := io.ReadAll(tr.reader)
 	if err != nil {
 		return b, err
+	}
+	if tr.digester != nil {
+		dig := tr.digester.Digest()
+		tr.digester = nil
+		if tr.desc.Digest.String() != "" && dig != tr.desc.Digest {
+			return b, fmt.Errorf("%w, expected %s, received %s", types.ErrDigestMismatch, tr.desc.Digest.String(), dig.String())
+		}
+		tr.desc.Digest = dig
 	}
 	err = tr.Close()
 	return b, err
@@ -147,8 +143,18 @@ func (tr *tarReader) ReadFile(filename string) (*tar.Header, io.Reader, error) {
 			whiteout = true
 		}
 	}
+	// EOF encountered
 	if whiteout {
 		return nil, nil, types.ErrFileDeleted
+	}
+	if tr.digester != nil {
+		io.Copy(io.Discard, tr.reader) // process/digest any trailing bytes from reader
+		dig := tr.digester.Digest()
+		tr.digester = nil
+		if tr.desc.Digest.String() != "" && dig != tr.desc.Digest {
+			return nil, nil, fmt.Errorf("%w, expected %s, received %s", types.ErrDigestMismatch, tr.desc.Digest.String(), dig.String())
+		}
+		tr.desc.Digest = dig
 	}
 	return nil, nil, types.ErrFileNotFound
 }
