@@ -17,7 +17,7 @@
 {"name":"gha-uses-vx","key":"docker/setup-buildx-action","version":"v2"}
 {"name":"gha-uses-vx","key":"softprops/action-gh-release","version":"v1"}
 {"name":"git-commit","key":"https://github.com/GoogleCloudPlatform/docker-credential-gcr.git:master","version":"62afb2723512fd6572c6300024e0c94f734b0ae3"}
-{"name":"git-commit","key":"https://github.com/awslabs/amazon-ecr-credential-helper.git:main","version":"febd4ff26a29fe84c5e06f2acb5ac64279aff4ba"}
+{"name":"git-commit","key":"https://github.com/awslabs/amazon-ecr-credential-helper.git:main","version":"8c2948d9a0fe82c1151ce8f7a31d1143bae76fb6"}
 {"name":"git-commit","key":"https://github.com/grafi-tt/lunajson.git:master","version":"e6063d37de97dfdfe2749e24de949472bfad0945"}
 {"name":"git-commit","key":"https://github.com/kikito/semver.lua.git:master","version":"af495adc857d51fd1507a112be18523828a1da0d"}
 {"name":"git-tag-semver","key":"github.com/GoogleCloudPlatform/docker-credential-gcr","version":"v2.1.10"}
