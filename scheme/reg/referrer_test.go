@@ -30,7 +30,7 @@ func TestReferrer(t *testing.T) {
 	repoPath := "/proj"
 	tagV1 := "v1"
 	tagV1List := "v1-list"
-	extraAnnot := "org.opencontainers.artifact.sbom.format"
+	extraAnnot := "org.example.sbom.format"
 	extraValue := "json"
 	extraValue2 := "x509"
 	digest1 := digest.FromString("example1")

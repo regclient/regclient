@@ -111,14 +111,14 @@ for digest in $(regctl manifest get ocidir://output/${image}:${release} --format
     | regctl artifact put --subject "ocidir://output/${image}@${digest}" \
         --artifact-type application/vnd.cyclonedx+json \
         -m application/vnd.cyclonedx+json \
-        --annotation "org.opencontainers.artifact.created=${now_date}" \
-        --annotation "org.opencontainers.artifact.description=CycloneDX JSON SBOM"
+        --annotation "org.opencontainers.image.created=${now_date}" \
+        --annotation "org.opencontainers.image.description=CycloneDX JSON SBOM"
   syft packages -q "oci-dir:output/${image}-sbom" --source-name "docker:docker.io/regclient/${image}@${digest}" -o spdx-json \
     | regctl artifact put --subject "ocidir://output/${image}@${digest}" \
         --artifact-type application/spdx+json \
         -m application/spdx+json \
-        --annotation "org.opencontainers.artifact.created=${now_date}" \
-        --annotation "org.opencontainers.artifact.description=SPDX JSON SBOM"
+        --annotation "org.opencontainers.image.created=${now_date}" \
+        --annotation "org.opencontainers.image.description=SPDX JSON SBOM"
   rm -r output/${image}-sbom
 done
 
