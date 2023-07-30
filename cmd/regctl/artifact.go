@@ -104,6 +104,7 @@ var artifactOpts struct {
 	formatList       string
 	formatPut        string
 	formatTree       string
+	latest           bool
 	outputDir        string
 	platform         string
 	refers           string
@@ -114,26 +115,28 @@ var artifactOpts struct {
 }
 
 func init() {
-	artifactGetCmd.Flags().StringVarP(&artifactOpts.subject, "subject", "", "", "Get a referrer to the subject reference")
+	artifactGetCmd.Flags().StringVar(&artifactOpts.subject, "subject", "", "Get a referrer to the subject reference")
 	artifactGetCmd.Flags().StringVarP(&artifactOpts.platform, "platform", "p", "", "Specify platform of a subject (e.g. linux/amd64 or local)")
-	artifactGetCmd.Flags().StringVarP(&artifactOpts.filterAT, "filter-artifact-type", "", "", "Filter referrers by artifactType")
-	artifactGetCmd.Flags().StringArrayVarP(&artifactOpts.filterAnnot, "filter-annotation", "", []string{}, "Filter referrers by annotation (key=value)")
-	artifactGetCmd.Flags().StringVarP(&artifactOpts.artifactConfig, "config-file", "", "", "Config filename to output")
+	artifactGetCmd.Flags().StringVar(&artifactOpts.filterAT, "filter-artifact-type", "", "Filter referrers by artifactType")
+	artifactGetCmd.Flags().StringArrayVar(&artifactOpts.filterAnnot, "filter-annotation", []string{}, "Filter referrers by annotation (key=value)")
+	artifactGetCmd.Flags().StringVar(&artifactOpts.artifactConfig, "config-file", "", "Config filename to output")
 	artifactGetCmd.Flags().StringArrayVarP(&artifactOpts.artifactFile, "file", "f", []string{}, "Filter by artifact filename")
 	artifactGetCmd.Flags().StringArrayVarP(&artifactOpts.artifactFileMT, "file-media-type", "m", []string{}, "Filter by artifact media-type")
 	artifactGetCmd.RegisterFlagCompletionFunc("file-media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return artifactFileKnownTypes, cobra.ShellCompDirectiveNoFileComp
 	})
+	artifactGetCmd.Flags().BoolVar(&artifactOpts.latest, "latest", false, "Get the most recent referrer using the OCI created annotation")
 	artifactGetCmd.Flags().StringVarP(&artifactOpts.outputDir, "output", "o", "", "Output directory for multiple artifacts")
-	artifactGetCmd.Flags().BoolVarP(&artifactOpts.stripDirs, "strip-dirs", "", false, "Strip directories from filenames in output dir")
-	artifactGetCmd.Flags().StringVarP(&artifactOpts.refers, "refers", "", "", "Deprecated: Get a referrer to the reference")
+	artifactGetCmd.Flags().BoolVar(&artifactOpts.stripDirs, "strip-dirs", false, "Strip directories from filenames in output dir")
+	artifactGetCmd.Flags().StringVar(&artifactOpts.refers, "refers", "", "Deprecated: Get a referrer to the reference")
 	artifactGetCmd.Flags().MarkHidden("refers")
 	artifactGetCmd.Flags().StringVar(&artifactOpts.sortAnnot, "sort-annotation", "", "Annotation used for sorting results")
 	artifactGetCmd.Flags().BoolVar(&artifactOpts.sortDesc, "sort-desc", false, "Sort in descending order")
 
-	artifactListCmd.Flags().StringVarP(&artifactOpts.filterAT, "filter-artifact-type", "", "", "Filter descriptors by artifactType")
-	artifactListCmd.Flags().StringArrayVarP(&artifactOpts.filterAnnot, "filter-annotation", "", []string{}, "Filter descriptors by annotation (key=value)")
-	artifactListCmd.Flags().StringVarP(&artifactOpts.formatList, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+	artifactListCmd.Flags().StringVar(&artifactOpts.filterAT, "filter-artifact-type", "", "Filter descriptors by artifactType")
+	artifactListCmd.Flags().StringArrayVar(&artifactOpts.filterAnnot, "filter-annotation", []string{}, "Filter descriptors by annotation (key=value)")
+	artifactListCmd.Flags().StringVar(&artifactOpts.formatList, "format", "{{printPretty .}}", "Format output with go template syntax")
+	artifactListCmd.Flags().BoolVar(&artifactOpts.latest, "latest", false, "Sort using the OCI created annotation")
 	artifactListCmd.Flags().StringVarP(&artifactOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	artifactListCmd.Flags().StringVar(&artifactOpts.sortAnnot, "sort-annotation", "", "Annotation used for sorting results")
 	artifactListCmd.Flags().BoolVar(&artifactOpts.sortDesc, "sort-desc", false, "Sort in descending order")
@@ -143,10 +146,10 @@ func init() {
 		return manifestKnownTypes, cobra.ShellCompDirectiveNoFileComp
 	})
 	artifactPutCmd.Flags().MarkHidden("media-type")
-	artifactPutCmd.Flags().StringVarP(&artifactOpts.artifactType, "artifact-type", "", "", "Artifact type (recommended)")
+	artifactPutCmd.Flags().StringVar(&artifactOpts.artifactType, "artifact-type", "", "Artifact type (recommended)")
 	artifactPutCmd.RegisterFlagCompletionFunc("artifact-type", completeArgNone)
-	artifactPutCmd.Flags().StringVarP(&artifactOpts.artifactConfig, "config-file", "", "", "Filename for config content")
-	artifactPutCmd.Flags().StringVarP(&artifactOpts.artifactConfigMT, "config-type", "", "", "Config mediaType")
+	artifactPutCmd.Flags().StringVar(&artifactOpts.artifactConfig, "config-file", "", "Filename for config content")
+	artifactPutCmd.Flags().StringVar(&artifactOpts.artifactConfigMT, "config-type", "", "Config mediaType")
 	artifactPutCmd.RegisterFlagCompletionFunc("config-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return configKnownTypes, cobra.ShellCompDirectiveNoFileComp
 	})
@@ -155,18 +158,18 @@ func init() {
 	artifactPutCmd.RegisterFlagCompletionFunc("file-media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return artifactFileKnownTypes, cobra.ShellCompDirectiveNoFileComp
 	})
-	artifactPutCmd.Flags().StringArrayVarP(&artifactOpts.annotations, "annotation", "", []string{}, "Annotation to include on manifest")
-	artifactPutCmd.Flags().BoolVarP(&artifactOpts.byDigest, "by-digest", "", false, "Push manifest by digest instead of tag")
-	artifactPutCmd.Flags().StringVarP(&artifactOpts.formatPut, "format", "", "", "Format output with go template syntax")
-	artifactPutCmd.Flags().StringVarP(&artifactOpts.subject, "subject", "", "", "Set the subject to a reference (used for referrer queries)")
-	artifactPutCmd.Flags().BoolVarP(&artifactOpts.stripDirs, "strip-dirs", "", false, "Strip directories from filenames in artifact")
+	artifactPutCmd.Flags().StringArrayVar(&artifactOpts.annotations, "annotation", []string{}, "Annotation to include on manifest")
+	artifactPutCmd.Flags().BoolVar(&artifactOpts.byDigest, "by-digest", false, "Push manifest by digest instead of tag")
+	artifactPutCmd.Flags().StringVar(&artifactOpts.formatPut, "format", "", "Format output with go template syntax")
+	artifactPutCmd.Flags().StringVar(&artifactOpts.subject, "subject", "", "Set the subject to a reference (used for referrer queries)")
+	artifactPutCmd.Flags().BoolVar(&artifactOpts.stripDirs, "strip-dirs", false, "Strip directories from filenames in artifact")
 	artifactPutCmd.Flags().StringVarP(&artifactOpts.platform, "platform", "p", "", "Specify platform of a subject (e.g. linux/amd64 or local)")
-	artifactPutCmd.Flags().StringVarP(&artifactOpts.refers, "refers", "", "", "EXPERIMENTAL: Set a referrer to the reference")
+	artifactPutCmd.Flags().StringVar(&artifactOpts.refers, "refers", "", "EXPERIMENTAL: Set a referrer to the reference")
 	artifactPutCmd.Flags().MarkHidden("refers")
 
-	artifactTreeCmd.Flags().StringVarP(&artifactOpts.filterAT, "filter-artifact-type", "", "", "Filter descriptors by artifactType")
-	artifactTreeCmd.Flags().StringArrayVarP(&artifactOpts.filterAnnot, "filter-annotation", "", []string{}, "Filter descriptors by annotation (key=value)")
-	artifactTreeCmd.Flags().StringVarP(&artifactOpts.formatTree, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+	artifactTreeCmd.Flags().StringVar(&artifactOpts.filterAT, "filter-artifact-type", "", "Filter descriptors by artifactType")
+	artifactTreeCmd.Flags().StringArrayVar(&artifactOpts.filterAnnot, "filter-annotation", []string{}, "Filter descriptors by annotation (key=value)")
+	artifactTreeCmd.Flags().StringVar(&artifactOpts.formatTree, "format", "{{printPretty .}}", "Format output with go template syntax")
 
 	artifactCmd.AddCommand(artifactGetCmd)
 	artifactCmd.AddCommand(artifactListCmd)
@@ -186,11 +189,14 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 			artifactOpts.subject = artifactOpts.refers
 		}
 	}
+	if artifactOpts.latest && artifactOpts.sortAnnot != "" {
+		return fmt.Errorf("--latest cannot be used with --sort-annotation")
+	}
 	// if output dir defined, ensure it exists
 	if artifactOpts.outputDir != "" {
 		fi, err := os.Stat(artifactOpts.outputDir)
 		if err != nil {
-			return err
+			return fmt.Errorf("output directory unavailable: %w", err)
 		}
 		if !fi.IsDir() {
 			return fmt.Errorf("output must be a directory: \"%s\"", artifactOpts.outputDir)
@@ -223,7 +229,9 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 		if artifactOpts.platform != "" {
 			referrerOpts = append(referrerOpts, scheme.WithReferrerPlatform(artifactOpts.platform))
 		}
-		if artifactOpts.sortAnnot != "" {
+		if artifactOpts.latest {
+			referrerOpts = append(referrerOpts, scheme.WithReferrerSort(types.AnnotationCreated, true))
+		} else if artifactOpts.sortAnnot != "" {
 			referrerOpts = append(referrerOpts, scheme.WithReferrerSort(artifactOpts.sortAnnot, artifactOpts.sortDesc))
 		}
 
@@ -233,7 +241,7 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 		}
 		if len(rl.Descriptors) == 0 {
 			return fmt.Errorf("no matching referrers to %s", artifactOpts.subject)
-		} else if len(rl.Descriptors) > 1 && artifactOpts.sortAnnot == "" {
+		} else if len(rl.Descriptors) > 1 && artifactOpts.sortAnnot == "" && !artifactOpts.latest {
 			log.Warnf("found %d matching referrers to %s, using first match, use --sort-annotation", len(rl.Descriptors), artifactOpts.subject)
 		}
 		r = rSubject
@@ -416,6 +424,9 @@ func runArtifactList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if artifactOpts.latest && artifactOpts.sortAnnot != "" {
+		return fmt.Errorf("--latest cannot be used with --sort-annotation")
+	}
 
 	rc := newRegClient()
 	defer rc.Close(ctx, rSubject)
@@ -439,7 +450,9 @@ func runArtifactList(cmd *cobra.Command, args []string) error {
 	if artifactOpts.platform != "" {
 		referrerOpts = append(referrerOpts, scheme.WithReferrerPlatform(artifactOpts.platform))
 	}
-	if artifactOpts.sortAnnot != "" {
+	if artifactOpts.latest {
+		referrerOpts = append(referrerOpts, scheme.WithReferrerSort(types.AnnotationCreated, true))
+	} else if artifactOpts.sortAnnot != "" {
 		referrerOpts = append(referrerOpts, scheme.WithReferrerSort(artifactOpts.sortAnnot, artifactOpts.sortDesc))
 	}
 
