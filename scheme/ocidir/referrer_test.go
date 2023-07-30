@@ -41,7 +41,7 @@ func TestReferrer(t *testing.T) {
 	aType := "application/example.sbom"
 	bType := "application/example.sig"
 	cType := "application/example.attestation"
-	extraAnnot := "org.opencontainers.artifact.sbom.format"
+	extraAnnot := "org.example.sbom.format"
 	timeAnnot := "org.opencontainers.image.created"
 	extraValueA := "json"
 	extraValueB := "yaml"
