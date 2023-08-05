@@ -347,6 +347,9 @@ func loadConf() error {
 	if conf.Defaults.BlobLimit != 0 {
 		rcOpts = append(rcOpts, regclient.WithRegOpts(reg.WithBlobLimit(conf.Defaults.BlobLimit)))
 	}
+	if conf.Defaults.CacheCount > 0 && conf.Defaults.CacheTime > 0 {
+		rcOpts = append(rcOpts, regclient.WithRegOpts(reg.WithCache(conf.Defaults.CacheTime, conf.Defaults.CacheCount)))
+	}
 	if !conf.Defaults.SkipDockerConf {
 		rcOpts = append(rcOpts, regclient.WithDockerCreds(), regclient.WithDockerCerts())
 	}

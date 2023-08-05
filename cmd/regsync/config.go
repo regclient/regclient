@@ -13,16 +13,12 @@ import (
 )
 
 // delay checking for at least 5 minutes when rate limit is exceeded
-var rateLimitRetryMin time.Duration
+var rateLimitRetryMin = time.Minute * 5
 var defaultMediaTypes = []string{
 	types.MediaTypeDocker2Manifest,
 	types.MediaTypeDocker2ManifestList,
 	types.MediaTypeOCI1Manifest,
 	types.MediaTypeOCI1ManifestList,
-}
-
-func init() {
-	rateLimitRetryMin, _ = time.ParseDuration("5m")
 }
 
 // Config is parsed configuration file for regsync
@@ -49,9 +45,11 @@ type ConfigDefaults struct {
 	MediaTypes      []string               `yaml:"mediaTypes" json:"mediaTypes"`
 	Hooks           ConfigHooks            `yaml:"hooks" json:"hooks"`
 	// general options
-	BlobLimit      int64  `yaml:"blobLimit" json:"blobLimit"`
-	SkipDockerConf bool   `yaml:"skipDockerConfig" json:"skipDockerConfig"`
-	UserAgent      string `yaml:"userAgent" json:"userAgent"`
+	BlobLimit      int64         `yaml:"blobLimit" json:"blobLimit"`
+	CacheCount     int           `yaml:"cacheCount" json:"cacheCount"`
+	CacheTime      time.Duration `yaml:"cacheTime" json:"cacheTime"`
+	SkipDockerConf bool          `yaml:"skipDockerConfig" json:"skipDockerConfig"`
+	UserAgent      string        `yaml:"userAgent" json:"userAgent"`
 }
 
 // ConfigRateLimit is for rate limit settings

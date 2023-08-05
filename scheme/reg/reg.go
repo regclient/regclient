@@ -7,9 +7,12 @@ import (
 	"time"
 
 	"github.com/regclient/regclient/config"
+	"github.com/regclient/regclient/internal/cache"
 	"github.com/regclient/regclient/internal/reghttp"
 	"github.com/regclient/regclient/internal/throttle"
+	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
+	"github.com/regclient/regclient/types/referrer"
 	"github.com/sirupsen/logrus"
 )
 
@@ -34,6 +37,8 @@ type Reg struct {
 	blobChunkSize  int64
 	blobChunkLimit int64
 	blobMaxPut     int64
+	cacheMan       *cache.Cache[ref.Ref, manifest.Manifest]
+	cacheRL        *cache.Cache[ref.Ref, referrer.ReferrerList]
 	muHost         sync.Mutex
 	muRefTag       sync.Mutex
 }
@@ -138,6 +143,16 @@ func WithBlobLimit(limit int64) Opts {
 		if r.blobMaxPut > 0 && r.blobMaxPut < limit {
 			r.blobMaxPut = limit
 		}
+	}
+}
+
+// WithCache defines a cache used for various requests
+func WithCache(timeout time.Duration, count int) Opts {
+	return func(r *Reg) {
+		cm := cache.New[ref.Ref, manifest.Manifest](cache.WithAge(timeout), cache.WithCount(count))
+		r.cacheMan = &cm
+		crl := cache.New[ref.Ref, referrer.ReferrerList](cache.WithAge(timeout), cache.WithCount(count))
+		r.cacheRL = &crl
 	}
 }
 

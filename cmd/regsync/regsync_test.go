@@ -783,6 +783,7 @@ func TestProcessRef(t *testing.T) {
 }
 
 func TestConfigRead(t *testing.T) {
+	// CAUTION: the below yaml is space indented and will not parse with tabs
 	cRead := bytes.NewReader([]byte(`
     version: 1
     creds:
@@ -796,6 +797,8 @@ func TestConfigRead(t *testing.T) {
       parallel: 2
       interval: 60m
       backup: "bkup-{{.Ref.Tag}}"
+      cacheCount: 500
+      cacheTime: "5m"
     x-sync-hub: &sync-hub
       target: registry:5000/hub/{{ .Sync.Source }}
     x-sync-gcr: &sync-gcr
