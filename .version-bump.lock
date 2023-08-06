@@ -17,17 +17,17 @@
 {"name":"gha-uses-vx","key":"docker/setup-buildx-action","version":"v2"}
 {"name":"gha-uses-vx","key":"softprops/action-gh-release","version":"v1"}
 {"name":"git-commit","key":"https://github.com/GoogleCloudPlatform/docker-credential-gcr.git:master","version":"62afb2723512fd6572c6300024e0c94f734b0ae3"}
-{"name":"git-commit","key":"https://github.com/awslabs/amazon-ecr-credential-helper.git:main","version":"8c2948d9a0fe82c1151ce8f7a31d1143bae76fb6"}
+{"name":"git-commit","key":"https://github.com/awslabs/amazon-ecr-credential-helper.git:main","version":"5c087f35e29c21d4e42a4c999c7e6c4cad32d7db"}
 {"name":"git-commit","key":"https://github.com/grafi-tt/lunajson.git:master","version":"e6063d37de97dfdfe2749e24de949472bfad0945"}
 {"name":"git-commit","key":"https://github.com/kikito/semver.lua.git:master","version":"af495adc857d51fd1507a112be18523828a1da0d"}
-{"name":"git-tag-semver","key":"github.com/GoogleCloudPlatform/docker-credential-gcr","version":"v2.1.10"}
+{"name":"git-tag-semver","key":"github.com/GoogleCloudPlatform/docker-credential-gcr","version":"v2.1.11"}
 {"name":"git-tag-semver","key":"github.com/dominikh/go-tools","version":"v0.4.3"}
 {"name":"git-tag-semver","key":"github.com/google/osv-scanner","version":"v1.3.6"}
 {"name":"git-tag-semver","key":"github.com/sigstore/cosign","version":"v2.1.1"}
 {"name":"git-tag-semver","key":"go.googlesource.com/vuln","version":"v1.0.0"}
 {"name":"registry-digest-arg","key":"alpine:3","version":"sha256:82d1e9d7ed48a7523bdebc18cf6290bdb97b82302a8a9c27d4fe885949ea94d1"}
 {"name":"registry-digest-arg","key":"golang:1.19-alpine","version":"sha256:2381c1e5f8350a901597d633b2e517775eeac7a6682be39225a93b22cfd0f8bb"}
-{"name":"registry-digest-arg","key":"golang:1.20-alpine","version":"sha256:7839c9f01b5502d7cb5198b2c032857023424470b3e31ae46a8261ffca72912a"}
+{"name":"registry-digest-arg","key":"golang:1.20-alpine","version":"sha256:7efb78dac256c450d194e556e96f80936528335033a26d703ec8146cec8c2090"}
 {"name":"registry-digest-match","key":"anchore/syft:v0.72.0","version":"sha256:f4735b4c31d4b9ad979eb650712cdcdb1156afe80c7d63653ac87439b379e468"}
 {"name":"registry-digest-match","key":"anchore/syft:v0.73.0","version":"sha256:6a13beb5cc8eedb2a42a5b91a69a36105880a2a1fdba75cc8c4dbcd61a0eed2b"}
 {"name":"registry-digest-match","key":"anchore/syft:v0.77.0","version":"sha256:0135d844712731b86fab20ea584e594ad25b9f5a7fd262b5feb490e865edef89"}
@@ -37,9 +37,10 @@
 {"name":"registry-digest-match","key":"anchore/syft:v0.84.0","version":"sha256:bd5ef3acf08b5be457905430f8fcda530d907bb173bf086e4749acb41077acb1"}
 {"name":"registry-digest-match","key":"anchore/syft:v0.84.1","version":"sha256:1b1d190a2cc0f761861380f603f7b3489aa0aba01dc856dc9f7fae9e3673761c"}
 {"name":"registry-digest-match","key":"anchore/syft:v0.85.0","version":"sha256:dd40bc09ff2bf3b860c399e7cf5c2db088e84c85937ac05fdeca3cd88fe2a728"}
+{"name":"registry-digest-match","key":"anchore/syft:v0.86.1","version":"sha256:f2794d19ace079ec97defa96c4b75bdb7544ac96bf146497a7620aafa48603c6"}
 {"name":"registry-golang-latest","key":"golang-latest","version":"1.20"}
 {"name":"registry-golang-matrix","key":"golang-matrix","version":"[\"1.18\", \"1.19\", \"1.20\"]"}
-{"name":"registry-tag-arg-semver","key":"anchore/syft","version":"v0.85.0"}
+{"name":"registry-tag-arg-semver","key":"anchore/syft","version":"v0.86.1"}
 {"name":"registry-tag-arg-semver","key":"davidanson/markdownlint-cli2","version":"v0.8.1"}
 {"name":"registry-tag-arg-semver","key":"ghcr.io/igorshubovych/markdownlint-cli","version":"v0.35.0"}
-{"name":"registry-tag-match-semver","key":"anchore/syft","version":"v0.85.0"}
+{"name":"registry-tag-match-semver","key":"anchore/syft","version":"v0.86.1"}
