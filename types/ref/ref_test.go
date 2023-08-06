@@ -2,6 +2,7 @@ package ref
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/regclient/regclient/types"
@@ -164,11 +165,22 @@ func TestRef(t *testing.T) {
 		},
 		{
 			name:       "separators in repo",
-			ref:        "e.xample.co/g-r.o__u_p/image:a",
+			ref:        "e.xample.co/g-r.o__u_p/im----age:a",
 			scheme:     "reg",
 			registry:   "e.xample.co",
-			repository: "g-r.o__u_p/image",
+			repository: "g-r.o__u_p/im----age",
 			tag:        "a",
+			digest:     "",
+			path:       "",
+			wantE:      nil,
+		},
+		{
+			name:       "separators in tag",
+			ref:        "e.xample.co/g/roup/image:__a--b..5__",
+			scheme:     "reg",
+			registry:   "e.xample.co",
+			repository: "g/roup/image",
+			tag:        "__a--b..5__",
 			digest:     "",
 			path:       "",
 			wantE:      nil,
@@ -319,8 +331,8 @@ func TestRef(t *testing.T) {
 			wantE: types.ErrInvalidReference,
 		},
 		{
-			name:  "invalid repo multiple dash",
-			ref:   "project/image--x:tag",
+			name:  "invalid repo triple underscore",
+			ref:   "project/image___x:tag",
 			wantE: types.ErrInvalidReference,
 		},
 		{
@@ -331,6 +343,11 @@ func TestRef(t *testing.T) {
 		{
 			name:  "invalid tag chars",
 			ref:   "project/image:tag^1",
+			wantE: types.ErrInvalidReference,
+		},
+		{
+			name:  "invalid tag length",
+			ref:   "project/image:" + strings.Repeat("x", 129),
 			wantE: types.ErrInvalidReference,
 		},
 		{

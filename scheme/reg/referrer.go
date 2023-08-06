@@ -63,24 +63,47 @@ func (reg *Reg) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Refe
 		r.Digest = m.GetDescriptor().Digest.String()
 	}
 
-	referrerEnabled, ok := reg.featureGet("referrer", r.Registry, r.Repository)
-	var err error
-	if !ok || referrerEnabled {
-		// attempt to call the referrer API
-		rl, err = reg.referrerListByAPI(ctx, r, config)
-		if !ok {
-			// save the referrer API state
-			reg.featureSet("referrer", r.Registry, r.Repository, err == nil)
+	found := false
+	// try cache
+	rCache := r
+	rCache.Tag = ""
+	rCache.Reference = rCache.CommonName()
+	rl, err := reg.cacheRL.Get(rCache)
+	if err == nil {
+		found = true
+	}
+	// try referrers API
+	if !found {
+		referrerEnabled, ok := reg.featureGet("referrer", r.Registry, r.Repository)
+		if !ok || referrerEnabled {
+			// attempt to call the referrer API
+			rl, err = reg.referrerListByAPI(ctx, r, config)
+			if !ok {
+				// save the referrer API state
+				reg.featureSet("referrer", r.Registry, r.Repository, err == nil)
+			}
+			if err == nil {
+				if config.FilterArtifactType == "" {
+					// only cache if successful and artifactType is not filtered
+					reg.cacheRL.Set(rCache, rl)
+				}
+				found = true
+			}
 		}
 	}
-	if (ok && !referrerEnabled) || err != nil {
+	// fall back to tag
+	if !found {
 		rl, err = reg.referrerListByTag(ctx, r)
+		if err == nil {
+			reg.cacheRL.Set(rCache, rl)
+		}
 	}
 	if err != nil {
 		return rl, err
 	}
-	rl = scheme.ReferrerFilter(config, rl)
 
+	// apply client side filters and return result
+	rl = scheme.ReferrerFilter(config, rl)
 	return rl, nil
 }
 
@@ -246,6 +269,10 @@ func (reg *Reg) referrerDelete(ctx context.Context, r ref.Ref, m manifest.Manife
 	rSubject := r
 	rSubject.Tag = ""
 	rSubject.Digest = subject.Digest.String()
+	rSubject.Reference = rSubject.CommonName()
+
+	// remove from cache
+	reg.cacheRL.Delete(rSubject)
 
 	// if referrer API is available, nothing to do, return
 	if reg.referrerPing(ctx, rSubject) {
@@ -295,6 +322,7 @@ func (reg *Reg) referrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest)
 	rSubject := r
 	rSubject.Tag = ""
 	rSubject.Digest = subject.Digest.String()
+	rSubject.Reference = rSubject.CommonName()
 
 	// lock to avoid internal race conditions between pulling and pushing tag
 	reg.muRefTag.Lock()
@@ -323,7 +351,14 @@ func (reg *Reg) referrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest)
 	if err != nil {
 		return err
 	}
-	return reg.ManifestPut(ctx, rlTag, rl.Manifest)
+	if len(rl.Tags) == 0 {
+		rl.Tags = []string{rlTag.Tag}
+	}
+	err = reg.ManifestPut(ctx, rlTag, rl.Manifest)
+	if err == nil {
+		reg.cacheRL.Set(rSubject, rl)
+	}
+	return err
 }
 
 // referrerPing verifies the registry supports the referrers API

@@ -30,9 +30,9 @@ var (
 	hostDomainS = `(?:` + hostPartS + `(?:(?:` + regexp.QuoteMeta(`.`) + hostPartS + `)+` + regexp.QuoteMeta(`.`) + `?|` + regexp.QuoteMeta(`.`) + `))`
 	hostUpperS  = `(?:[a-zA-Z0-9]*[A-Z][a-zA-Z0-9-]*[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[A-Z][a-zA-Z0-9]*)`
 	registryS   = `(?:` + hostDomainS + `|` + hostPortS + `|` + hostUpperS + `|localhost(?:` + regexp.QuoteMeta(`:`) + `[0-9]+))`
-	repoPartS   = `[a-z0-9]+(?:(?:[_.-]|__)[a-z0-9]+)*`
+	repoPartS   = `[a-z0-9]+(?:(?:\.|_|__|-+)[a-z0-9]+)*`
 	pathS       = `[/a-zA-Z0-9_\-. ]+`
-	tagS        = `[\w][\w.-]{0,127}`
+	tagS        = `[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}`
 	digestS     = `[A-Za-z][A-Za-z0-9]*(?:[-_+.][A-Za-z][A-Za-z0-9]*)*[:][[:xdigit:]]{32,}`
 	refRE       = regexp.MustCompile(`^(?:(` + registryS + `)` + regexp.QuoteMeta(`/`) + `)?` +
 		`(` + repoPartS + `(?:` + regexp.QuoteMeta(`/`) + repoPartS + `)*)` +

@@ -24,11 +24,13 @@ ifeq "$(strip $(VER_BUMP))" ''
 		-u "$(shell id -u):$(shell id -g)" \
 		$(VER_BUMP_CONTAINER)
 endif
-MARKDOWN_LINT_VER?=v0.35.0
+MARKDOWN_LINT_VER?=v0.8.1
+GO_VULNCHECK_VER?=v1.0.0
+OSV_SCANNER_VER?=v1.3.6
 SYFT?=$(shell command -v syft 2>/dev/null)
 SYFT_CMD_VER:=$(shell [ -x "$(SYFT)" ] && echo "v$$($(SYFT) version | awk '/^Version: / {print $$2}')" || echo "0")
-SYFT_VERSION?=v0.84.0
-SYFT_CONTAINER?=anchore/syft:v0.84.0@sha256:bd5ef3acf08b5be457905430f8fcda530d907bb173bf086e4749acb41077acb1
+SYFT_VERSION?=v0.86.1
+SYFT_CONTAINER?=anchore/syft:v0.86.1@sha256:f2794d19ace079ec97defa96c4b75bdb7544ac96bf146497a7620aafa48603c6
 ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 	SYFT=docker run --rm \
 		-v "$(shell pwd)/:$(shell pwd)/" -w "$(shell pwd)" \
@@ -64,11 +66,18 @@ lint-go: $(GOPATH)/bin/staticcheck .FORCE ## Run linting for Go
 
 .PHONY: lint-md
 lint-md: .FORCE ## Run linting for markdown
-	docker run --rm -v "$(PWD):/workdir:ro" ghcr.io/igorshubovych/markdownlint-cli:$(MARKDOWN_LINT_VER) \
-	  --ignore vendor .
+	docker run --rm -v "$(PWD):/workdir:ro" davidanson/markdownlint-cli2:$(MARKDOWN_LINT_VER) \
+	  **/*.md "#vendor"
+
+.PHONY: vulnerability-scan
+vulnerability-scan: osv-scanner vulncheck-go ## Run all vulnerability scanners
+
+.PHONY: osv-scanner
+osv-scanner: $(GOPATH)/bin/osv-scanner .FORCE ## Run OSV Scanner
+	$(GOPATH)/bin/osv-scanner -r .
 
 .PHONY: vulncheck-go
-vulncheck-go: $(GOPATH)/bin/govulncheck .FORCE ## Run vulnerability scan for Go
+vulncheck-go: $(GOPATH)/bin/govulncheck .FORCE ## Run govulncheck
 	$(GOPATH)/bin/govulncheck ./...
 
 .PHONY: vendor
@@ -153,7 +162,7 @@ plugin-host:
 
 .PHONY: util-golang-update
 util-golang-update: ## update go module versions
-	go get -u
+	go get -u -t ./...
 	go mod tidy
 	go mod vendor
 	
@@ -171,8 +180,14 @@ $(GOPATH)/bin/staticcheck: .FORCE
 	|| go install "honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VER)"
 
 $(GOPATH)/bin/govulncheck: .FORCE
-	# for now, keep installing the latest until they start releasing versions
-	go install "golang.org/x/vuln/cmd/govulncheck@latest"
+	@[ $$(go version -m $(GOPATH)/bin/govulncheck | \
+		awk -F ' ' '{ if ($$1 == "mod" && $$2 == "golang.org/x/vuln") { printf "%s\n", $$3 } }') = "$(GO_VULNCHECK_VER)" ] \
+	|| CGO_ENABLED=0 go install "golang.org/x/vuln/cmd/govulncheck@$(GO_VULNCHECK_VER)"
+
+$(GOPATH)/bin/osv-scanner: .FORCE
+	@[ $$(go version -m $(GOPATH)/bin/osv-scanner | \
+		awk -F ' ' '{ if ($$1 == "mod" && $$2 == "github.com/google/osv-scanner") { printf "%s\n", $$3 } }') = "$(OSV_SCANNER_VER)" ] \
+	|| CGO_ENABLED=0 go install "github.com/google/osv-scanner/cmd/osv-scanner@$(OSV_SCANNER_VER)"
 
 .PHONY: help
 help: # Display help

@@ -352,7 +352,6 @@ func runBlobGetFile(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer blob.Close()
 	tr, err := blob.ToTarReader()
 	if err != nil {
 		return err
@@ -382,6 +381,12 @@ func runBlobGetFile(cmd *cobra.Command, args []string) error {
 	}
 	_, err = io.Copy(w, rdr)
 	if err != nil {
+		return err
+	}
+	if err := tr.Close(); err != nil {
+		return err
+	}
+	if err := blob.Close(); err != nil {
 		return err
 	}
 	return nil

@@ -89,16 +89,17 @@ regctl image mod \
   "ocidir://output/${image}:${release}" --replace \
   --to-oci-referrers \
   --time-max "${vcs_date}" \
-  --annotation "[*]oci.opencontainers.image.created=${vcs_date}" \
-  --annotation "[*]oci.opencontainers.image.source=${vcs_repo}" \
-  --annotation "[*]oci.opencontainers.image.revision=${vcs_sha}" \
+  --annotation "[*]org.opencontainers.image.created=${vcs_date}" \
+  --annotation "[*]org.opencontainers.image.source=${vcs_repo}" \
+  --annotation "[*]org.opencontainers.image.version=${vcs_version}" \
+  --annotation "[*]org.opencontainers.image.revision=${vcs_sha}" \
   >/dev/null
 
 if [ -n "$base_name" ] && [ -n "$base_digest" ]; then
   regctl image mod \
     "ocidir://output/${image}:${release}" --replace \
-    --annotation "[*]oci.opencontainers.image.base.name=${base_name}" \
-    --annotation "[*]oci.opencontainers.image.base.digest=${base_digest}" \
+    --annotation "[*]org.opencontainers.image.base.name=${base_name}" \
+    --annotation "[*]org.opencontainers.image.base.digest=${base_digest}" \
     >/dev/null
 fi
 
@@ -110,14 +111,14 @@ for digest in $(regctl manifest get ocidir://output/${image}:${release} --format
     | regctl artifact put --subject "ocidir://output/${image}@${digest}" \
         --artifact-type application/vnd.cyclonedx+json \
         -m application/vnd.cyclonedx+json \
-        --annotation "org.opencontainers.artifact.created=${now_date}" \
-        --annotation "org.opencontainers.artifact.description=CycloneDX JSON SBOM"
+        --annotation "org.opencontainers.image.created=${now_date}" \
+        --annotation "org.opencontainers.image.description=CycloneDX JSON SBOM"
   syft packages -q "oci-dir:output/${image}-sbom" --source-name "docker:docker.io/regclient/${image}@${digest}" -o spdx-json \
     | regctl artifact put --subject "ocidir://output/${image}@${digest}" \
         --artifact-type application/spdx+json \
         -m application/spdx+json \
-        --annotation "org.opencontainers.artifact.created=${now_date}" \
-        --annotation "org.opencontainers.artifact.description=SPDX JSON SBOM"
+        --annotation "org.opencontainers.image.created=${now_date}" \
+        --annotation "org.opencontainers.image.description=SPDX JSON SBOM"
   rm -r output/${image}-sbom
 done
 

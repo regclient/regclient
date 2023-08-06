@@ -121,7 +121,8 @@ git merge main -m "Merge for release ${tag}"
 # query for all logs since last tag, extract PR list with PR number and title
 # look into pulling PR text from GH and extracting change log message
 # format the log output to extract the PR number and commit id, don't show local branches
-generate_changelog ${prev_tag} >release.md
+echo "Generating changelog..."
+generate_changelog ${tag} | tee release.md
 
 # prompt user to make any changes to release.md and approve release
 cat <<EOF
@@ -129,7 +130,7 @@ cat <<EOF
 git add release.md
 git commit -sm "Release ${tag}"
 git push upstream releases/${branch}
-git tag -a -m "Release ${tag}" ${tag}
+git tag -asm "Release ${tag}" ${tag}
 git push upstream ${tag}
 git checkout main
 EOF

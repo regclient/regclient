@@ -18,7 +18,9 @@ files:
       - gha-cosign-version
   "Makefile":
     scans:
+      - makefile-go-vulncheck
       - makefile-markdown-lint
+      - makefile-osv-scanner
       - makefile-staticcheck
       - makefile-syft-version
       - makefile-syft-version2
@@ -110,12 +112,24 @@ scans:
     source: "registry-golang-latest"
     args:
       regexp: '^go (?P<Version>[0-9\.]+)\s*$'
+  makefile-go-vulncheck:
+    type: "regexp"
+    source: "git-tag-semver"
+    args:
+      regexp: '^GO_VULNCHECK_VER\?=(?P<Version>v[0-9\.]+)\s*$'
+      repo: "go.googlesource.com/vuln"
   makefile-markdown-lint:
     type: "regexp"
     source: "registry-tag-arg-semver"
     args:
       regexp: '^MARKDOWN_LINT_VER\?=(?P<Version>v[0-9\.]+)\s*$'
-      repo: "ghcr.io/igorshubovych/markdownlint-cli"
+      repo: "davidanson/markdownlint-cli2"
+  makefile-osv-scanner:
+    type: "regexp"
+    source: "git-tag-semver"
+    args:
+      regexp: '^OSV_SCANNER_VER\?=(?P<Version>v[0-9\.]+)\s*$'
+      repo: "github.com/google/osv-scanner"
   makefile-staticcheck:
     type: "regexp"
     source: "git-tag-semver"

@@ -117,16 +117,16 @@ jobs:
 
     - name: Install cosign
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
-      uses: sigstore/cosign-installer@v3.1.0
+      uses: sigstore/cosign-installer@v3.1.1
       with:
-        cosign-release: "v2.1.0"
+        cosign-release: "v2.1.1"
     
     - name: Install syft
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       uses: anchore/sbom-action/download-syft@v0.14.3
       id: syft
       with:
-        syft-version: "v0.84.0"
+        syft-version: "v0.86.1"
     
     # Dogfooding, use regctl to modify regclient images to improve reproducibility
     - name: Install regctl
@@ -154,13 +154,14 @@ jobs:
         regctl image mod "${local_tag}" --replace \
           --to-oci-referrers \
           --time-max "${vcs_date}" \
-          --annotation "[*]oci.opencontainers.image.created=${vcs_date}" \
-          --annotation "[*]oci.opencontainers.image.source=${{ steps.prep.outputs.repo_url }}" \
-          --annotation "[*]oci.opencontainers.image.revision=${{ github.sha }}"
+          --annotation "[*]org.opencontainers.image.created=${vcs_date}" \
+          --annotation "[*]org.opencontainers.image.source=${{ steps.prep.outputs.repo_url }}" \
+          --annotation "[*]org.opencontainers.image.version=${{ steps.prep.outputs.version }}" \
+          --annotation "[*]org.opencontainers.image.revision=${{ github.sha }}"
         if [ -n "$base_name" ] && [ -n "$base_digest" ]; then
           regctl image mod "${local_tag}" --replace \
-            --annotation "[*]oci.opencontainers.image.base.name=${base_name}" \
-            --annotation "[*]oci.opencontainers.image.base.digest=${base_digest}"
+            --annotation "[*]org.opencontainers.image.base.name=${base_name}" \
+            --annotation "[*]org.opencontainers.image.base.digest=${base_digest}"
         fi
         echo "digest=$(regctl image digest ${local_tag})" >>$GITHUB_OUTPUT
 
@@ -178,15 +179,15 @@ jobs:
             | regctl artifact put --subject "ocidir://output/${{matrix.image}}@${digest}" \
                 --artifact-type application/vnd.cyclonedx+json \
                 -m application/vnd.cyclonedx+json \
-                --annotation "org.opencontainers.artifact.created=${now_date}" \
-                --annotation "org.opencontainers.artifact.description=CycloneDX JSON SBOM"
+                --annotation "org.opencontainers.image.created=${now_date}" \
+                --annotation "org.opencontainers.image.description=CycloneDX JSON SBOM"
           ${{steps.syft.outputs.cmd}} packages -q "oci-dir:output/${{matrix.image}}-sbom" \
               --source-name "docker:docker.io/regclient/${{matrix.image}}@${digest}" -o spdx-json \
             | regctl artifact put --subject "ocidir://output/${{matrix.image}}@${digest}" \
                 --artifact-type application/spdx+json \
                 -m application/spdx+json \
-                --annotation "org.opencontainers.artifact.created=${now_date}" \
-                --annotation "org.opencontainers.artifact.description=SPDX JSON SBOM"
+                --annotation "org.opencontainers.image.created=${now_date}" \
+                --annotation "org.opencontainers.image.description=SPDX JSON SBOM"
           rm -r output/${{matrix.image}}-sbom
         done
 

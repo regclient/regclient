@@ -47,6 +47,10 @@ func (reg *Reg) ManifestDelete(ctx context.Context, r ref.Ref, opts ...scheme.Ma
 			}
 		}
 	}
+	rCache := r
+	rCache.Tag = ""
+	rCache.Reference = rCache.CommonName()
+	reg.cacheMan.Delete(rCache)
 
 	// build/send request
 	req := &reghttp.Req{
@@ -76,6 +80,12 @@ func (reg *Reg) ManifestDelete(ctx context.Context, r ref.Ref, opts ...scheme.Ma
 func (reg *Reg) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest, error) {
 	var tagOrDigest string
 	if r.Digest != "" {
+		rCache := r
+		rCache.Tag = ""
+		rCache.Reference = rCache.CommonName()
+		if m, err := reg.cacheMan.Get(rCache); err == nil {
+			return m, nil
+		}
 		tagOrDigest = r.Digest
 	} else if r.Tag != "" {
 		tagOrDigest = r.Tag
@@ -86,12 +96,12 @@ func (reg *Reg) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest, 
 	// build/send request
 	headers := http.Header{
 		"Accept": []string{
-			types.MediaTypeDocker1Manifest,
-			types.MediaTypeDocker1ManifestSigned,
-			types.MediaTypeDocker2Manifest,
-			types.MediaTypeDocker2ManifestList,
-			types.MediaTypeOCI1Manifest,
 			types.MediaTypeOCI1ManifestList,
+			types.MediaTypeOCI1Manifest,
+			types.MediaTypeDocker2ManifestList,
+			types.MediaTypeDocker2Manifest,
+			types.MediaTypeDocker1ManifestSigned,
+			types.MediaTypeDocker1Manifest,
 			types.MediaTypeOCI1Artifact,
 		},
 	}
@@ -121,11 +131,20 @@ func (reg *Reg) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest, 
 		return nil, fmt.Errorf("error reading manifest for %s: %w", r.CommonName(), err)
 	}
 
-	return manifest.New(
+	m, err := manifest.New(
 		manifest.WithRef(r),
 		manifest.WithHeader(resp.HTTPResponse().Header),
 		manifest.WithRaw(rawBody),
 	)
+	if err != nil {
+		return nil, err
+	}
+	rCache := r
+	rCache.Tag = ""
+	rCache.Digest = m.GetDescriptor().Digest.String()
+	rCache.Reference = rCache.CommonName()
+	reg.cacheMan.Set(rCache, m)
+	return m, nil
 }
 
 // ManifestHead returns metadata on the manifest from the registry
@@ -133,6 +152,12 @@ func (reg *Reg) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest,
 	// build the request
 	var tagOrDigest string
 	if r.Digest != "" {
+		rCache := r
+		rCache.Tag = ""
+		rCache.Reference = rCache.CommonName()
+		if m, err := reg.cacheMan.Get(rCache); err == nil {
+			return m, nil
+		}
 		tagOrDigest = r.Digest
 	} else if r.Tag != "" {
 		tagOrDigest = r.Tag
@@ -143,12 +168,12 @@ func (reg *Reg) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest,
 	// build/send request
 	headers := http.Header{
 		"Accept": []string{
-			types.MediaTypeDocker1Manifest,
-			types.MediaTypeDocker1ManifestSigned,
-			types.MediaTypeDocker2Manifest,
-			types.MediaTypeDocker2ManifestList,
-			types.MediaTypeOCI1Manifest,
 			types.MediaTypeOCI1ManifestList,
+			types.MediaTypeOCI1Manifest,
+			types.MediaTypeDocker2ManifestList,
+			types.MediaTypeDocker2Manifest,
+			types.MediaTypeDocker1ManifestSigned,
+			types.MediaTypeDocker1Manifest,
 			types.MediaTypeOCI1Artifact,
 		},
 	}
@@ -229,16 +254,29 @@ func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest,
 		return fmt.Errorf("failed to put manifest %s: %w", r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 	}
 
+	rCache := r
+	rCache.Tag = ""
+	rCache.Digest = m.GetDescriptor().Digest.String()
+	rCache.Reference = rCache.CommonName()
+	reg.cacheMan.Set(rCache, m)
+
 	// update referrers if defined on this manifest
 	if mr, ok := m.(manifest.Subjecter); ok {
 		mDesc, err := mr.GetSubject()
 		if err != nil {
 			return err
 		}
-		if mDesc != nil && mDesc.MediaType != "" && mDesc.Size > 0 && mDesc.Digest.String() != resp.HTTPResponse().Header.Get(OCISubjectHeader) {
-			err = reg.referrerPut(ctx, r, m)
-			if err != nil {
-				return err
+		if mDesc != nil && mDesc.MediaType != "" && mDesc.Size > 0 && mDesc.Digest.String() != "" {
+			rSubj := r
+			rSubj.Tag = ""
+			rSubj.Digest = mDesc.Digest.String()
+			rSubj.Reference = rSubj.CommonName()
+			reg.cacheRL.Delete(rSubj)
+			if mDesc.Digest.String() != resp.HTTPResponse().Header.Get(OCISubjectHeader) {
+				err = reg.referrerPut(ctx, r, m)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}

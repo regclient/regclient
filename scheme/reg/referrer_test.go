@@ -30,7 +30,7 @@ func TestReferrer(t *testing.T) {
 	repoPath := "/proj"
 	tagV1 := "v1"
 	tagV1List := "v1-list"
-	extraAnnot := "org.opencontainers.artifact.sbom.format"
+	extraAnnot := "org.example.sbom.format"
 	extraValue := "json"
 	extraValue2 := "x509"
 	digest1 := digest.FromString("example1")
@@ -757,13 +757,14 @@ func TestReferrer(t *testing.T) {
 		WithConfigHosts(rcHosts),
 		WithLog(log),
 		WithDelay(delayInit, delayMax),
+		WithCache(time.Minute*5, 500),
 	)
 
 	// list empty
 	t.Run("List empty NoAPI", func(t *testing.T) {
 		r, err := ref.New(tsURLNoAPI.Host + repoPath + ":" + tagV1)
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
+			t.Errorf("Failed creating ref: %v", err)
 			return
 		}
 		rl, err := reg.ReferrerList(ctx, r)
@@ -779,7 +780,7 @@ func TestReferrer(t *testing.T) {
 	t.Run("List empty NoAPIAuth", func(t *testing.T) {
 		r, err := ref.New(tsURLNoAPIAuth.Host + repoPath + ":" + tagV1)
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
+			t.Errorf("Failed creating ref: %v", err)
 			return
 		}
 		rl, err := reg.ReferrerList(ctx, r)
@@ -795,7 +796,7 @@ func TestReferrer(t *testing.T) {
 	t.Run("List empty API", func(t *testing.T) {
 		r, err := ref.New(tsURLAPI.Host + repoPath + ":" + tagV1)
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
+			t.Errorf("Failed creating ref: %v", err)
 		}
 		rl, err := reg.ReferrerList(ctx, r)
 		if err != nil {
@@ -812,7 +813,7 @@ func TestReferrer(t *testing.T) {
 	t.Run("Put A NoAPI", func(t *testing.T) {
 		r, err := ref.New(tsURLNoAPI.Host + repoPath + "@" + artifactM.GetDescriptor().Digest.String())
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
+			t.Errorf("Failed creating ref: %v", err)
 		}
 		err = reg.ManifestPut(ctx, r, artifactM)
 		if err != nil {
@@ -823,7 +824,7 @@ func TestReferrer(t *testing.T) {
 	t.Run("Put A NoAPIAuth", func(t *testing.T) {
 		r, err := ref.New(tsURLNoAPIAuth.Host + repoPath + "@" + artifactM.GetDescriptor().Digest.String())
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
+			t.Errorf("Failed creating ref: %v", err)
 		}
 		err = reg.ManifestPut(ctx, r, artifactM)
 		if err != nil {
@@ -834,7 +835,7 @@ func TestReferrer(t *testing.T) {
 	t.Run("Put A API", func(t *testing.T) {
 		r, err := ref.New(tsURLAPI.Host + repoPath + "@" + artifactM.GetDescriptor().Digest.String())
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
+			t.Errorf("Failed creating ref: %v", err)
 		}
 		err = reg.ManifestPut(ctx, r, artifactM)
 		if err != nil {
@@ -847,7 +848,7 @@ func TestReferrer(t *testing.T) {
 	t.Run("List A NoAPI", func(t *testing.T) {
 		r, err := ref.New(tsURLNoAPI.Host + repoPath + ":" + tagV1)
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
+			t.Errorf("Failed creating ref: %v", err)
 			return
 		}
 		rl, err := reg.ReferrerList(ctx, r)
@@ -872,7 +873,7 @@ func TestReferrer(t *testing.T) {
 	t.Run("List A NoAPIAuth", func(t *testing.T) {
 		r, err := ref.New(tsURLNoAPIAuth.Host + repoPath + ":" + tagV1)
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
+			t.Errorf("Failed creating ref: %v", err)
 			return
 		}
 		rl, err := reg.ReferrerList(ctx, r)
@@ -897,7 +898,7 @@ func TestReferrer(t *testing.T) {
 	t.Run("List A API", func(t *testing.T) {
 		r, err := ref.New(tsURLAPI.Host + repoPath + ":" + tagV1)
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
+			t.Errorf("Failed creating ref: %v", err)
 		}
 		rl, err := reg.ReferrerList(ctx, r)
 		if err != nil {
@@ -923,7 +924,7 @@ func TestReferrer(t *testing.T) {
 	t.Run("Put B NoAPI", func(t *testing.T) {
 		r, err := ref.New(tsURLNoAPI.Host + repoPath + "@" + artifact2M.GetDescriptor().Digest.String())
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
+			t.Errorf("Failed creating ref: %v", err)
 		}
 		err = reg.ManifestPut(ctx, r, artifact2M)
 		if err != nil {
@@ -934,7 +935,7 @@ func TestReferrer(t *testing.T) {
 	t.Run("Put B API", func(t *testing.T) {
 		r, err := ref.New(tsURLAPI.Host + repoPath + "@" + artifact2M.GetDescriptor().Digest.String())
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
+			t.Errorf("Failed creating ref: %v", err)
 		}
 		err = reg.ManifestPut(ctx, r, artifact2M)
 		if err != nil {
@@ -947,7 +948,7 @@ func TestReferrer(t *testing.T) {
 	t.Run("List Both NoAPI", func(t *testing.T) {
 		r, err := ref.New(tsURLNoAPI.Host + repoPath + ":" + tagV1)
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
+			t.Errorf("Failed creating ref: %v", err)
 			return
 		}
 		rl, err := reg.ReferrerList(ctx, r)
@@ -980,7 +981,7 @@ func TestReferrer(t *testing.T) {
 	t.Run("List Both API", func(t *testing.T) {
 		r, err := ref.New(tsURLAPI.Host + repoPath + ":" + tagV1)
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
+			t.Errorf("Failed creating ref: %v", err)
 		}
 		rl, err := reg.ReferrerList(ctx, r)
 		if err != nil {
@@ -1013,7 +1014,7 @@ func TestReferrer(t *testing.T) {
 	t.Run("List with artifact filter API", func(t *testing.T) {
 		r, err := ref.New(tsURLAPI.Host + repoPath + ":" + tagV1)
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
+			t.Errorf("Failed creating ref: %v", err)
 			return
 		}
 		rl, err := reg.ReferrerList(ctx, r, scheme.WithReferrerAT(configMTA))
@@ -1038,7 +1039,7 @@ func TestReferrer(t *testing.T) {
 	t.Run("List with annotation filter", func(t *testing.T) {
 		r, err := ref.New(tsURLAPI.Host + repoPath + ":" + tagV1)
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
+			t.Errorf("Failed creating ref: %v", err)
 			return
 		}
 		rl, err := reg.ReferrerList(ctx, r, scheme.WithReferrerAnnotations(map[string]string{extraAnnot: extraValue2}))
@@ -1073,7 +1074,7 @@ func TestReferrer(t *testing.T) {
 	t.Run("List for platform", func(t *testing.T) {
 		r, err := ref.New(tsURLAPI.Host + repoPath + ":" + tagV1List)
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
+			t.Errorf("Failed creating ref: %v", err)
 			return
 		}
 		rl, err := reg.ReferrerList(ctx, r, scheme.WithReferrerPlatform(platStr))
@@ -1091,7 +1092,7 @@ func TestReferrer(t *testing.T) {
 	t.Run("Delete B NoAPI", func(t *testing.T) {
 		r, err := ref.New(tsURLNoAPI.Host + repoPath + "@" + artifact2M.GetDescriptor().Digest.String())
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
+			t.Errorf("Failed creating ref: %v", err)
 		}
 		err = reg.ManifestDelete(ctx, r, scheme.WithManifestCheckReferrers())
 		if err != nil {
@@ -1102,7 +1103,7 @@ func TestReferrer(t *testing.T) {
 	t.Run("Delete B API", func(t *testing.T) {
 		r, err := ref.New(tsURLAPI.Host + repoPath + "@" + artifact2M.GetDescriptor().Digest.String())
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
+			t.Errorf("Failed creating ref: %v", err)
 		}
 		err = reg.ManifestDelete(ctx, r, scheme.WithManifestCheckReferrers())
 		if err != nil {
@@ -1114,7 +1115,7 @@ func TestReferrer(t *testing.T) {
 	t.Run("Delete A NoAPI", func(t *testing.T) {
 		r, err := ref.New(tsURLNoAPI.Host + repoPath + "@" + artifactM.GetDescriptor().Digest.String())
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
+			t.Errorf("Failed creating ref: %v", err)
 		}
 		err = reg.ManifestDelete(ctx, r, scheme.WithManifest(artifactM))
 		if err != nil {
@@ -1125,7 +1126,7 @@ func TestReferrer(t *testing.T) {
 	t.Run("Delete A API", func(t *testing.T) {
 		r, err := ref.New(tsURLAPI.Host + repoPath + "@" + artifactM.GetDescriptor().Digest.String())
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
+			t.Errorf("Failed creating ref: %v", err)
 		}
 		err = reg.ManifestDelete(ctx, r, scheme.WithManifest(artifactM))
 		if err != nil {
@@ -1138,7 +1139,7 @@ func TestReferrer(t *testing.T) {
 	t.Run("List empty after delete NoAPI", func(t *testing.T) {
 		r, err := ref.New(tsURLNoAPI.Host + repoPath + ":" + tagV1)
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
+			t.Errorf("Failed creating ref: %v", err)
 			return
 		}
 		rl, err := reg.ReferrerList(ctx, r)
@@ -1154,7 +1155,7 @@ func TestReferrer(t *testing.T) {
 	t.Run("List empty after delete API", func(t *testing.T) {
 		r, err := ref.New(tsURLAPI.Host + repoPath + ":" + tagV1)
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
+			t.Errorf("Failed creating ref: %v", err)
 		}
 		rl, err := reg.ReferrerList(ctx, r)
 		if err != nil {
