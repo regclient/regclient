@@ -10,6 +10,7 @@ import (
 	_ "crypto/sha512"
 
 	"github.com/opencontainers/go-digest"
+	"github.com/regclient/regclient/internal/limitread"
 	"github.com/regclient/regclient/types"
 )
 
@@ -71,7 +72,14 @@ func NewReader(opts ...Opts) Reader {
 	if bc.rdr != nil {
 		br.blobSet = true
 		br.digester = digest.Canonical.Digester()
-		br.reader = io.TeeReader(bc.rdr, br.digester.Hash())
+		rdr := bc.rdr
+		if br.desc.Size > 0 {
+			rdr = &limitread.LimitRead{
+				Reader: rdr,
+				Limit:  br.desc.Size,
+			}
+		}
+		br.reader = io.TeeReader(rdr, br.digester.Hash())
 	}
 	return &br
 }
@@ -104,8 +112,10 @@ func (b *reader) Read(p []byte) (int, error) {
 		// check/save size
 		if b.desc.Size == 0 {
 			b.desc.Size = b.readBytes
-		} else if b.readBytes != b.desc.Size {
-			err = fmt.Errorf("expected size mismatch [expected %d, received %d]: %w", b.desc.Size, b.readBytes, err)
+		} else if b.readBytes < b.desc.Size {
+			err = fmt.Errorf("%w [expected %d, received %d]: %v", types.ErrShortRead, b.desc.Size, b.readBytes, err)
+		} else if b.readBytes > b.desc.Size {
+			err = fmt.Errorf("%w [expected %d, received %d]: %v", types.ErrSizeLimitExceeded, b.desc.Size, b.readBytes, err)
 		}
 		// check/save digest
 		if b.desc.Digest == "" {
@@ -135,11 +145,17 @@ func (b *reader) Seek(offset int64, whence int) (int64, error) {
 		return b.readBytes, err
 	}
 	// reset internal offset and digest calculation
+	rdr := b.origRdr
+	if b.desc.Size > 0 {
+		rdr = &limitread.LimitRead{
+			Reader: rdr,
+			Limit:  b.desc.Size,
+		}
+	}
 	digester := digest.Canonical.Digester()
-	digestRdr := io.TeeReader(b.origRdr, digester.Hash())
+	b.reader = io.TeeReader(rdr, digester.Hash())
 	b.digester = digester
 	b.readBytes = 0
-	b.reader = digestRdr
 
 	return 0, nil
 }

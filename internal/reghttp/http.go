@@ -508,7 +508,6 @@ func (resp *clientResp) Next() error {
 		// return on success
 		if err == nil {
 			resp.throttle = h.config.Throttle()
-			resp.backoffClear()
 			return nil
 		}
 		// backoff, dropHost, and/or go to next host in the list
@@ -552,6 +551,7 @@ func (resp *clientResp) Read(b []byte) (int, error) {
 	resp.readCur += int64(i)
 	if err == io.EOF || err == io.ErrUnexpectedEOF {
 		if resp.resp.Request.Method == "HEAD" || resp.readCur >= resp.readMax {
+			resp.backoffClear()
 			resp.done = true
 		} else {
 			// short read, retry?
@@ -560,8 +560,10 @@ func (resp *clientResp) Read(b []byte) (int, error) {
 				"contentLen": resp.readMax,
 			}).Debug("EOF before reading all content, retrying")
 			// retry
-			resp.backoffSet()
-			respErr := resp.Next()
+			respErr := resp.backoffSet()
+			if respErr == nil {
+				respErr = resp.Next()
+			}
 			// unrecoverable EOF
 			if respErr != nil {
 				resp.client.log.WithFields(logrus.Fields{
@@ -579,6 +581,7 @@ func (resp *clientResp) Read(b []byte) (int, error) {
 				"expected": resp.digest,
 				"computed": resp.digester.Digest(),
 			}).Warn("Digest mismatch")
+			resp.backoffSet()
 			resp.done = true
 			return i, fmt.Errorf("%w, expected %s, computed %s", types.ErrDigestMismatch,
 				resp.digest.String(), resp.digester.Digest().String())
@@ -598,6 +601,9 @@ func (resp *clientResp) Close() error {
 	}
 	if resp.resp == nil {
 		return types.ErrNotFound
+	}
+	if !resp.done {
+		resp.backoffClear()
 	}
 	resp.done = true
 	return resp.resp.Body.Close()
