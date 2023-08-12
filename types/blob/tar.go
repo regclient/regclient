@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/opencontainers/go-digest"
+	"github.com/regclient/regclient/internal/limitread"
 	"github.com/regclient/regclient/pkg/archive"
 	"github.com/regclient/regclient/types"
 )
@@ -48,7 +49,14 @@ func NewTarReader(opts ...Opts) TarReader {
 	if bc.rdr != nil {
 		tr.blobSet = true
 		tr.digester = digest.Canonical.Digester()
-		tr.reader = io.TeeReader(bc.rdr, tr.digester.Hash())
+		rdr := bc.rdr
+		if tr.desc.Size > 0 {
+			rdr = &limitread.LimitRead{
+				Reader: rdr,
+				Limit:  tr.desc.Size,
+			}
+		}
+		tr.reader = io.TeeReader(rdr, tr.digester.Hash())
 	}
 	return &tr
 }
