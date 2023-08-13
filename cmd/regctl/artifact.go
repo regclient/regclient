@@ -519,30 +519,29 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	}
 
 	// validate/set artifactType and config.mediaType
+	if artifactOpts.artifactType == "" {
+		// always set artifactType field
+		if artifactOpts.artifactConfigMT != "" {
+			artifactOpts.artifactType = artifactOpts.artifactConfigMT
+		} else {
+			log.Warnf("using default value for artifact-type is not recommended")
+			artifactOpts.artifactType = defaultMTArtifact
+		}
+	}
 	if hasConfig && artifactOpts.artifactConfigMT == "" {
 		if artifactOpts.artifactConfig == "" {
 			artifactOpts.artifactConfigMT = types.MediaTypeOCI1Empty
-			if artifactOpts.artifactType == "" {
-				log.Warnf("using default value for artifact-type is not recommended")
-				artifactOpts.artifactType = defaultMTArtifact
-			}
 		} else {
 			if artifactOpts.artifactType != "" {
 				artifactOpts.artifactConfigMT = artifactOpts.artifactType
-				artifactOpts.artifactType = ""
-				log.Warnf("setting config-type using artifact-type is deprecated")
+				log.Warnf("setting config-type using artifact-type")
 			} else {
 				return fmt.Errorf("config-type is required for config-file")
 			}
 		}
-	} else if !hasConfig {
-		if artifactOpts.artifactConfig != "" || artifactOpts.artifactConfigMT != "" {
-			return fmt.Errorf("cannot set config-type or config-file on %s%.0w", artifactOpts.artifactMT, types.ErrUnsupportedMediaType)
-		}
-		if artifactOpts.artifactType == "" {
-			log.Warnf("using default value for artifact-type is not recommended")
-			artifactOpts.artifactType = defaultMTArtifact
-		}
+	}
+	if !hasConfig && (artifactOpts.artifactConfig != "" || artifactOpts.artifactConfigMT != "") {
+		return fmt.Errorf("cannot set config-type or config-file on %s%.0w", artifactOpts.artifactMT, types.ErrUnsupportedMediaType)
 	}
 
 	// validate artifact files with media types
