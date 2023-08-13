@@ -10,7 +10,7 @@ jobs:
     name: Go Vuln Check
     runs-on: ubuntu-latest
     env:
-      RELEASE_GO_VER: "1.20"
+      RELEASE_GO_VER: "1.21"
 
     steps:
     - name: Check out code

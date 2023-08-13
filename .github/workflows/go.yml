@@ -16,10 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        gover: ["1.18", "1.19", "1.20"]
+        gover: ["1.19", "1.20", "1.21"]
 
     env:
-      RELEASE_GO_VER: "1.20"
+      RELEASE_GO_VER: "1.21"
 
     permissions:
       # id-token is used by cosign's OIDC based signing
