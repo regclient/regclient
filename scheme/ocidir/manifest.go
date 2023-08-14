@@ -51,7 +51,7 @@ func (o *OCIDir) ManifestDelete(ctx context.Context, r ref.Ref, opts ...scheme.M
 			if err == nil && sDesc != nil && sDesc.MediaType != "" && sDesc.Size > 0 {
 				// attempt to delete the referrer, but ignore if the referrer entry wasn't found
 				err = o.referrerDelete(ctx, r, mc.Manifest)
-				if err != nil && !errors.Is(err, types.ErrNotFound) {
+				if err != nil && !errors.Is(err, types.ErrNotFound) && !errors.Is(err, fs.ErrNotExist) {
 					return err
 				}
 			}

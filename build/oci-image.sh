@@ -82,7 +82,7 @@ docker buildx build --platform="$platforms" \
   ${build_opts} .
 
 echo "Importing tar"
-regctl manifest rm --referrers --force-tag-dereference "ocidir://output/${image}:${release}" 2>/dev/null || true
+regctl tag rm "ocidir://output/${image}:${release}" 2>/dev/null || true
 regctl image import "ocidir://output/${image}:${release}" "output/${image}-${release}.tar"
 echo "Modding image"
 regctl image mod \
@@ -120,6 +120,13 @@ for digest in $(regctl manifest get ocidir://output/${image}:${release} --format
         --annotation "org.opencontainers.image.created=${now_date}" \
         --annotation "org.opencontainers.image.description=SPDX JSON SBOM"
   rm -r output/${image}-sbom
+done
+
+# manually prune old digest tags from previous builds and before the mod
+for tag in $(regctl tag ls ocidir://output/${image}); do
+  if [ "${tag}" != "${tag#sha256-}" ] && ! regctl manifest head "ocidir://output/${image}@sha256:${tag#sha256-}" 2>/dev/null; then
+    regctl tag rm "ocidir://output/${image}:${tag}"
+  fi
 done
 
 echo "\033[32mDigest for ${image}-${release}:\033[0m $(regctl image digest "ocidir://output/${image}:${release}")"
