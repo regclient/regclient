@@ -758,7 +758,11 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	}
 
 	// push manifest
-	err = rc.ManifestPut(ctx, r, mm)
+	putOpts := []regclient.ManifestOpts{}
+	if rArt.IsZero() {
+		putOpts = append(putOpts, regclient.WithManifestChild())
+	}
+	err = rc.ManifestPut(ctx, r, mm, putOpts...)
 	if err != nil {
 		return err
 	}
