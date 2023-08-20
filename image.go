@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -486,6 +487,10 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 	}
 	// check target with head request
 	mTgt, err = rc.ManifestHead(ctx, refTgt, WithManifestRequireDigest())
+	var urlError *url.Error
+	if err != nil && errors.As(err, &urlError) {
+		return fmt.Errorf("failed to access target registry: %w", err)
+	}
 	// for non-recursive copies, compare to source digest
 	if err == nil && (opt.fastCheck || (!opt.forceRecursive && opt.referrerConfs == nil && !opt.digestTags)) {
 		if sDig == "" {
