@@ -84,6 +84,7 @@ func (o *OCIDir) TagList(ctx context.Context, r ref.Ref, opts ...scheme.TagOpts)
 		tag.WithRaw(ib),
 		tag.WithRef(r),
 		tag.WithMT(types.MediaTypeOCI1ManifestList),
+		tag.WithLayoutIndex(index),
 		tag.WithTags(tl),
 	)
 	if err != nil {
