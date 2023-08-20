@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/regclient/regclient/types"
+	ociv1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -21,6 +22,7 @@ type List struct {
 	tagCommon
 	DockerList
 	GCRList
+	LayoutList
 }
 
 type tagCommon struct {
@@ -44,11 +46,17 @@ type GCRList struct {
 	Manifests map[string]GCRManifestInfo `json:"manifest,omitempty"`
 }
 
+// LayoutList includes the OCI Index from an OCI Layout
+type LayoutList struct {
+	Index ociv1.Index
+}
+
 type tagConfig struct {
 	ref    ref.Ref
 	mt     string
 	raw    []byte
 	header http.Header
+	index  ociv1.Index
 	tags   []string
 	url    *url.URL
 }
@@ -77,6 +85,9 @@ func New(opts ...Opts) (*List, error) {
 	if len(conf.tags) > 0 {
 		tl.Tags = conf.tags
 	}
+	if conf.index.Manifests != nil {
+		tl.LayoutList.Index = conf.index
+	}
 	if len(conf.raw) > 0 {
 		mt := types.MediaTypeBase(conf.mt)
 		switch mt {
@@ -100,6 +111,13 @@ func New(opts ...Opts) (*List, error) {
 func WithHeaders(header http.Header) Opts {
 	return func(tConf *tagConfig) {
 		tConf.header = header
+	}
+}
+
+// WithLayoutIndex include the index from an OCI Layout
+func WithLayoutIndex(index ociv1.Index) Opts {
+	return func(tConf *tagConfig) {
+		tConf.index = index
 	}
 }
 

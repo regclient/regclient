@@ -19,8 +19,12 @@ var tagDeleteCmd = &cobra.Command{
 	Use:     "delete <image_ref>",
 	Aliases: []string{"del", "rm", "remove"},
 	Short:   "delete a tag in a repo",
-	Long: `Delete a tag in a repository without removing other tags pointing to the
-same manifest`,
+	Long: `Delete a tag in a repository.
+This avoids deleting the manifest when multiple tags reference the same image.
+For registries that do not support the OCI tag delete API, this is implemented
+by pushing a unique dummy manifest and deleting that by digest.
+If the registry does not support the delete API, the dummy manifest will remain.
+`,
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: completeArgTag,
 	RunE:              runTagDelete,
@@ -30,7 +34,9 @@ var tagLsCmd = &cobra.Command{
 	Aliases: []string{"list"},
 	Short:   "list tags in a repo",
 	Long: `List tags in a repository.
-Note: most registries ignore the pagination options.`,
+Note: many registries ignore the pagination options.
+For an OCI Layout, the index is available as Index (--format "{{.Index}}").
+`,
 	Args:      cobra.ExactArgs(1),
 	ValidArgs: []string{},
 	RunE:      runTagLs,
