@@ -225,28 +225,45 @@ func TestExportImport(t *testing.T) {
 	delayInit, _ := time.ParseDuration("0.05s")
 	delayMax, _ := time.ParseDuration("0.10s")
 	rc := New(WithFS(fsMem), WithRetryDelay(delayInit, delayMax))
-	rIn, err := ref.New("ocidir://testrepo:v1")
+	rIn1, err := ref.New("ocidir://testrepo:v1")
 	if err != nil {
 		t.Errorf("failed to parse ref: %v", err)
 	}
-	rOut, err := ref.New("ocidir://testout:v1")
+	rOut1, err := ref.New("ocidir://testout:v1")
+	if err != nil {
+		t.Errorf("failed to parse ref: %v", err)
+	}
+	rIn3, err := ref.New("ocidir://testrepo:v3")
+	if err != nil {
+		t.Errorf("failed to parse ref: %v", err)
+	}
+	rOut3, err := ref.New("ocidir://testout:v3")
 	if err != nil {
 		t.Errorf("failed to parse ref: %v", err)
 	}
 
 	// export repo to tar
-	fileOut, err := fsMem.Create("test.tar")
+	fileOut1, err := fsMem.Create("test1.tar")
 	if err != nil {
 		t.Errorf("failed to create output tar: %v", err)
 	}
-	err = rc.ImageExport(ctx, rIn, fileOut)
-	fileOut.Close()
+	err = rc.ImageExport(ctx, rIn1, fileOut1)
+	fileOut1.Close()
+	if err != nil {
+		t.Errorf("failed to export: %v", err)
+	}
+	fileOut3, err := fsMem.Create("test3.tar.gz")
+	if err != nil {
+		t.Errorf("failed to create output tar: %v", err)
+	}
+	err = rc.ImageExport(ctx, rIn3, fileOut3, ImageWithExportCompress())
+	fileOut3.Close()
 	if err != nil {
 		t.Errorf("failed to export: %v", err)
 	}
 
 	// modify tar for tests
-	fileR, err := fsMem.Open("test.tar")
+	fileR, err := fsMem.Open("test1.tar")
 	if err != nil {
 		t.Errorf("failed to open tar: %v", err)
 	}
@@ -280,16 +297,29 @@ func TestExportImport(t *testing.T) {
 	fileW.Close()
 
 	// import tar to repo
-	fileIn, err := fsMem.Open("test2.tar")
+	fileIn2, err := fsMem.Open("test2.tar")
 	if err != nil {
 		t.Errorf("failed to open tar: %v", err)
 	}
-	fileInSeeker, ok := fileIn.(io.ReadSeeker)
+	fileIn2Seeker, ok := fileIn2.(io.ReadSeeker)
 	if !ok {
-		t.Fatalf("could not convert fileIn to io.ReadSeeker, type %T", fileIn)
+		t.Fatalf("could not convert fileIn to io.ReadSeeker, type %T", fileIn2)
 	}
-	err = rc.ImageImport(ctx, rOut, fileInSeeker)
+	err = rc.ImageImport(ctx, rOut1, fileIn2Seeker)
 	if err != nil {
-		t.Errorf("failed to export: %v", err)
+		t.Errorf("failed to import: %v", err)
+	}
+
+	fileIn3, err := fsMem.Open("test3.tar.gz")
+	if err != nil {
+		t.Errorf("failed to open tar: %v", err)
+	}
+	fileIn3Seeker, ok := fileIn3.(io.ReadSeeker)
+	if !ok {
+		t.Fatalf("could not convert fileIn to io.ReadSeeker, type %T", fileIn3)
+	}
+	err = rc.ImageImport(ctx, rOut3, fileIn3Seeker)
+	if err != nil {
+		t.Errorf("failed to import: %v", err)
 	}
 }
