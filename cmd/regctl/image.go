@@ -83,6 +83,7 @@ var imageExportCmd = &cobra.Command{
 	Short: "export image",
 	Long: `Exports an image into a tar file that can be later loaded into a docker
 engine with "docker load". The tar file is output to stdout by default.
+Compression is typically not useful since layers are already compressed.
 Example usage: regctl image export registry:5000/yourimg:v1 >yourimg-v1.tar`,
 	Args:              cobra.RangeArgs(1, 2),
 	ValidArgsFunction: completeArgTag,
@@ -149,6 +150,7 @@ var imageOpts struct {
 	checkBaseDigest string
 	checkSkipConfig bool
 	create          string
+	exportCompress  bool
 	exportRef       string
 	fastCheck       bool
 	forceRecursive  bool
@@ -196,6 +198,7 @@ func init() {
 	imageGetFileCmd.Flags().StringVarP(&imageOpts.formatFile, "format", "", "", "Format output with go template syntax")
 	imageGetFileCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 
+	imageExportCmd.Flags().BoolVar(&imageOpts.exportCompress, "compress", false, "Compress output with gzip")
 	imageExportCmd.Flags().StringVar(&imageOpts.exportRef, "name", "", "Name of image to embed for docker load")
 	imageExportCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 
@@ -846,6 +849,9 @@ func runImageExport(cmd *cobra.Command, args []string) error {
 			}
 			r.Digest = d.Digest.String()
 		}
+	}
+	if imageOpts.exportCompress {
+		opts = append(opts, regclient.ImageWithExportCompress())
 	}
 	if imageOpts.exportRef != "" {
 		eRef, err := ref.New(imageOpts.exportRef)

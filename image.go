@@ -2,6 +2,7 @@ package regclient
 
 import (
 	"archive/tar"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -80,6 +81,7 @@ type imageOpt struct {
 	checkBaseRef    string
 	checkSkipConfig bool
 	child           bool
+	exportCompress  bool
 	exportRef       ref.Ref
 	fastCheck       bool
 	forceRecursive  bool
@@ -135,6 +137,13 @@ func ImageWithCheckSkipConfig() ImageOpts {
 func ImageWithChild() ImageOpts {
 	return func(opts *imageOpt) {
 		opts.child = true
+	}
+}
+
+// ImageWithExportCompress adds gzip compression to tar export output
+func ImageWithExportCompress() ImageOpts {
+	return func(opts *imageOpt) {
+		opts.exportCompress = true
 	}
 }
 
@@ -970,7 +979,13 @@ func (rc *RegClient) ImageExport(ctx context.Context, r ref.Ref, outStream io.Wr
 	}
 
 	// create tar writer object
-	tw := tar.NewWriter(outStream)
+	out := outStream
+	if opt.exportCompress {
+		gzOut := gzip.NewWriter(out)
+		defer gzOut.Close()
+		out = gzOut
+	}
+	tw := tar.NewWriter(out)
 	defer tw.Close()
 	twd := &tarWriteData{
 		tw:    tw,
@@ -1606,7 +1621,11 @@ func (trd *tarReadData) tarReadAll(rs io.ReadSeeker) error {
 		if err != nil {
 			return err
 		}
-		trd.tr = tar.NewReader(rs)
+		dr, err := archive.Decompress(rs)
+		if err != nil {
+			return err
+		}
+		trd.tr = tar.NewReader(dr)
 		trd.handleAdded = false
 		// loop over each entry of the tar file
 		for {
