@@ -236,6 +236,74 @@ func TestMod(t *testing.T) {
 			wantSame: true,
 		},
 		{
+			name: "Config Time Missing Set",
+			opts: []Opts{
+				WithConfigTimestamp(OptTime{}),
+			},
+			ref:     "ocidir://testrepo:v1",
+			wantErr: fmt.Errorf("WithConfigTimestamp requires a time to set"),
+		},
+		{
+			name: "Config Time Set",
+			opts: []Opts{
+				WithConfigTimestamp(OptTime{
+					Set: tTime,
+				}),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Config Time Base Ref",
+			opts: []Opts{
+				WithConfigTimestamp(OptTime{
+					Set:     tTime,
+					BaseRef: rb1,
+				}),
+			},
+			ref: "ocidir://testrepo:v3",
+		},
+		{
+			name: "Config Time Base Count",
+			opts: []Opts{
+				WithConfigTimestamp(OptTime{
+					Set:        tTime,
+					BaseLayers: 1,
+				}),
+			},
+			ref: "ocidir://testrepo:v3",
+		},
+		{
+			name: "Config Time Label Missing",
+			opts: []Opts{
+				WithConfigTimestamp(OptTime{
+					FromLabel: "org.opencontainers.image.created",
+				}),
+			},
+			ref:     "ocidir://testrepo:v1",
+			wantErr: fmt.Errorf("label not found: org.opencontainers.image.created"),
+		},
+		{
+			name: "Config Time Artifact",
+			opts: []Opts{
+				WithConfigTimestamp(OptTime{
+					Set: tTime,
+				}),
+			},
+			ref:      "ocidir://testrepo:a1",
+			wantSame: true,
+		},
+		{
+			name: "Config Time After Unchanged",
+			opts: []Opts{
+				WithConfigTimestamp(OptTime{
+					Set:   tTime,
+					After: time.Now(),
+				}),
+			},
+			ref:      "ocidir://testrepo:v1",
+			wantSame: true,
+		},
+		{
 			name: "Expose Port",
 			opts: []Opts{
 				WithExposeAdd("8080"),
@@ -303,6 +371,97 @@ func TestMod(t *testing.T) {
 				WithLayerStripFile("/layer2"),
 			},
 			ref: "ocidir://testrepo:v3",
+		},
+		{
+			name: "Layer Timestamp Set Missing",
+			opts: []Opts{
+				WithLayerTimestamp(OptTime{}),
+			},
+			ref:     "ocidir://testrepo:v1",
+			wantErr: fmt.Errorf("WithLayerTimestamp requires a time to set"),
+		},
+		{
+			name: "Layer Timestamp Missing Label",
+			opts: []Opts{
+				WithLayerTimestamp(OptTime{
+					FromLabel: "missing",
+				}),
+			},
+			ref:     "ocidir://testrepo:v1",
+			wantErr: fmt.Errorf("label not found: missing"),
+		},
+		{
+			name: "Layer Timestamp",
+			opts: []Opts{
+				WithLayerTimestamp(OptTime{
+					Set: tTime,
+				}),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Layer Timestamp After Unchanged",
+			opts: []Opts{
+				WithLayerTimestamp(OptTime{
+					Set:   tTime,
+					After: time.Now(),
+				}),
+			},
+			ref:      "ocidir://testrepo:v1",
+			wantSame: true,
+		},
+		{
+			name: "Layer Timestamp Base Ref",
+			opts: []Opts{
+				WithLayerTimestamp(OptTime{
+					Set:     tTime,
+					BaseRef: rb1,
+				}),
+			},
+			ref: "ocidir://testrepo:v3",
+		},
+		{
+			name: "Layer Timestamp Base Ref Same",
+			opts: []Opts{
+				WithLayerTimestamp(OptTime{
+					Set:     tTime,
+					BaseRef: r3,
+				}),
+			},
+			ref:      "ocidir://testrepo:v3",
+			wantSame: true,
+		},
+		{
+			name: "Layer Timestamp Base Count Same",
+			opts: []Opts{
+				WithLayerTimestamp(OptTime{
+					Set:        tTime,
+					BaseLayers: 99,
+				}),
+			},
+			ref:      "ocidir://testrepo:v3",
+			wantSame: true,
+		},
+		{
+			name: "Layer Timestamp Base Count",
+			opts: []Opts{
+				WithLayerTimestamp(OptTime{
+					Set:        tTime,
+					BaseLayers: 1,
+				}),
+			},
+			ref: "ocidir://testrepo:v3",
+		},
+		{
+			name: "Layer Timestamp Artifact",
+			opts: []Opts{
+				WithLayerTimestamp(OptTime{
+					Set:   tTime,
+					After: tTime,
+				}),
+			},
+			ref:      "ocidir://testrepo:a1",
+			wantSame: true,
 		},
 		{
 			name: "Layer File Tar Timestamp",

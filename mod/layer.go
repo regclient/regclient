@@ -11,7 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient"
+	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -114,7 +116,144 @@ func WithLayerStripFile(file string) Opts {
 	}
 }
 
+// WithLayerTimestamp sets the timestamp on files in the layers based on options
+func WithLayerTimestamp(optTime OptTime) Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		if optTime.Set.IsZero() && optTime.FromLabel == "" {
+			return fmt.Errorf("WithLayerTimestamp requires a time to set")
+		}
+		baseProcessed := false
+		baseDigests := map[digest.Digest]bool{}
+		// add base layers by count
+		if optTime.BaseLayers > 0 {
+			dl, err := layerGetBaseCount(optTime.BaseLayers, dm)
+			if err != nil {
+				return fmt.Errorf("failed to get base layers: %w", err)
+			}
+			for _, d := range dl {
+				baseDigests[d] = true
+			}
+		}
+		if optTime.FromLabel != "" {
+			dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
+				oc := doc.oc.GetConfig()
+				tl, ok := oc.Config.Labels[optTime.FromLabel]
+				if !ok {
+					return fmt.Errorf("label not found: %s", optTime.FromLabel)
+				}
+				tNew, err := time.Parse(time.RFC3339, tl)
+				if err != nil {
+					// TODO: add fallbacks
+					return fmt.Errorf("could not parse time %s from %s: %w", tl, optTime.FromLabel, err)
+				}
+				if !optTime.Set.IsZero() && !optTime.Set.Equal(tNew) {
+					return fmt.Errorf("conflicting time labels found %s and %s", optTime.Set.String(), tNew.String())
+				}
+				optTime.Set = tNew
+				return nil
+			})
+		}
+		dc.stepsLayerFile = append(dc.stepsLayerFile,
+			func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dl *dagLayer, th *tar.Header, tr io.Reader) (*tar.Header, io.Reader, changes, error) {
+				if optTime.Set.IsZero() {
+					return nil, nil, unchanged, fmt.Errorf("timestamp not available")
+				}
+				// for base ref, lookup all digests from base image to exclude
+				if !baseProcessed {
+					if !optTime.BaseRef.IsZero() {
+						m, err := rc.ManifestGet(c, optTime.BaseRef)
+						if err != nil {
+							return nil, nil, unchanged, fmt.Errorf("failed to get base image: %w", err)
+						}
+						dl, err := layerGetBaseRef(c, rc, optTime.BaseRef, m)
+						if err != nil {
+							return nil, nil, unchanged, fmt.Errorf("failed to get base layers: %w", err)
+						}
+						for _, d := range dl {
+							baseDigests[d] = true
+						}
+					}
+					baseProcessed = true
+				}
+				// skip layers from base image
+				if baseDigests[dl.desc.Digest] {
+					return th, tr, unchanged, nil
+				}
+				if th == nil || tr == nil {
+					return nil, nil, unchanged, fmt.Errorf("missing header or reader")
+				}
+				var ca, cc, cm bool
+				// do not mod times that are currently zero, underlying tar format may not support changing
+				if !th.AccessTime.IsZero() {
+					th.AccessTime, ca = timeModOpt(th.AccessTime, optTime)
+				}
+				if !th.ChangeTime.IsZero() {
+					th.ChangeTime, cc = timeModOpt(th.ChangeTime, optTime)
+				}
+				if !th.ModTime.IsZero() {
+					th.ModTime, cm = timeModOpt(th.ModTime, optTime)
+				}
+				if ca || cc || cm {
+					return th, tr, replaced, nil
+				}
+				return th, tr, unchanged, nil
+			},
+		)
+		return nil
+	}
+}
+
+func layerGetBaseCount(count int, dm *dagManifest) ([]digest.Digest, error) {
+	dl := []digest.Digest{}
+	for _, dmChild := range dm.manifests {
+		dlChild, err := layerGetBaseCount(count, dmChild)
+		if err != nil {
+			return dl, err
+		}
+		dl = append(dl, dlChild...)
+	}
+	for i, layer := range dm.layers {
+		if i < count {
+			dl = append(dl, layer.desc.Digest)
+		}
+	}
+	return dl, nil
+}
+
+func layerGetBaseRef(c context.Context, rc *regclient.RegClient, r ref.Ref, m manifest.Manifest) ([]digest.Digest, error) {
+	dl := []digest.Digest{}
+	if mi, ok := m.(manifest.Indexer); ok {
+		ml, err := mi.GetManifestList()
+		if err != nil {
+			return dl, err
+		}
+		for _, d := range ml {
+			mChild, err := rc.ManifestGet(c, r, regclient.WithManifestDesc(d))
+			if err != nil {
+				return dl, err
+			}
+			dlChild, err := layerGetBaseRef(c, rc, r, mChild)
+			if err != nil {
+				return dl, err
+			}
+			dl = append(dl, dlChild...)
+		}
+	}
+	if mi, ok := m.(manifest.Imager); ok {
+		layers, err := mi.GetLayers()
+		if err != nil {
+			return dl, err
+		}
+		for _, l := range layers {
+			dl = append(dl, l.Digest)
+		}
+	}
+	return dl, nil
+}
+
 // WithLayerTimestampFromLabel sets the max layer timestamp based on a label in the image
+//
+// Deprecated: replace with WithLayerTimestamp
 func WithLayerTimestampFromLabel(label string) Opts {
 	t := time.Time{}
 	return func(dc *dagConfig, dm *dagManifest) error {
@@ -167,34 +306,13 @@ func WithLayerTimestampFromLabel(label string) Opts {
 }
 
 // WithLayerTimestampMax ensures no file timestamps are after specified time
+//
+// Deprecated: replace with WithLayerTimestamp
 func WithLayerTimestampMax(t time.Time) Opts {
-	return func(dc *dagConfig, dm *dagManifest) error {
-		dc.stepsLayerFile = append(dc.stepsLayerFile,
-			func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dl *dagLayer, th *tar.Header, tr io.Reader) (*tar.Header, io.Reader, changes, error) {
-				changed := false
-				if th == nil || tr == nil {
-					return nil, nil, unchanged, fmt.Errorf("missing header or reader")
-				}
-				if t.Before(th.AccessTime) {
-					th.AccessTime = t
-					changed = true
-				}
-				if t.Before(th.ChangeTime) {
-					th.ChangeTime = t
-					changed = true
-				}
-				if t.Before(th.ModTime) {
-					th.ModTime = t
-					changed = true
-				}
-				if changed {
-					return th, tr, replaced, nil
-				}
-				return th, tr, unchanged, nil
-			},
-		)
-		return nil
-	}
+	return WithLayerTimestamp(OptTime{
+		Set:   t,
+		After: t,
+	})
 }
 
 // WithFileTarTimeMax processes a tar file within a layer and rewrites the contents with a max timestamp
