@@ -153,7 +153,6 @@ jobs:
         echo "Modifying image for reproducibility"
         regctl image mod "${local_tag}" --replace \
           --to-oci-referrers \
-          --time-max "${vcs_date}" \
           --annotation "[*]org.opencontainers.image.created=${vcs_date}" \
           --annotation "[*]org.opencontainers.image.source=${{ steps.prep.outputs.repo_url }}" \
           --annotation "[*]org.opencontainers.image.version=${{ steps.prep.outputs.version }}" \
@@ -161,10 +160,13 @@ jobs:
         if [ -n "$base_name" ] && [ -n "$base_digest" ]; then
           regctl image mod "${local_tag}" --replace \
             --annotation "[*]org.opencontainers.image.base.name=${base_name}" \
-            --annotation "[*]org.opencontainers.image.base.digest=${base_digest}"
+            --annotation "[*]org.opencontainers.image.base.digest=${base_digest}" \
+            --time "set=${vcs_date},base-ref=${base_name}@${base_digest}"
+        else
+          regctl image mod "${local_tag}" --replace \
+            --time "set=${vcs_date}"
         fi
         echo "digest=$(regctl image digest ${local_tag})" >>$GITHUB_OUTPUT
-
     - name: Attach SBOMs
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       id: sbom

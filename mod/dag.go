@@ -441,14 +441,14 @@ func dagWalkManifests(dm *dagManifest, fn func(*dagManifest) (*dagManifest, erro
 			}
 		}
 	}
-	if dm.referrers != nil {
-		for _, child := range dm.referrers {
-			err := dagWalkManifests(child, fn)
-			if err != nil {
-				return err
-			}
-		}
-	}
+	// if dm.referrers != nil {
+	// 	for _, child := range dm.referrers {
+	// 		err := dagWalkManifests(child, fn)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 	}
+	// }
 	mmNew, err := fn(dm)
 	if err != nil {
 		return err
@@ -466,14 +466,14 @@ func dagWalkOCIConfig(dm *dagManifest, fn func(*dagOCIConfig) (*dagOCIConfig, er
 			}
 		}
 	}
-	if dm.referrers != nil {
-		for _, child := range dm.referrers {
-			err := dagWalkOCIConfig(child, fn)
-			if err != nil {
-				return err
-			}
-		}
-	}
+	// if dm.referrers != nil {
+	// 	for _, child := range dm.referrers {
+	// 		err := dagWalkOCIConfig(child, fn)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 	}
+	// }
 	if dm.config != nil {
 		docNew, err := fn(dm.config)
 		if err != nil {
@@ -494,14 +494,14 @@ func dagWalkLayers(dm *dagManifest, fn func(*dagLayer) (*dagLayer, error)) error
 			}
 		}
 	}
-	if dm.referrers != nil {
-		for _, child := range dm.referrers {
-			err = dagWalkLayers(child, fn)
-			if err != nil {
-				return err
-			}
-		}
-	}
+	// if dm.referrers != nil {
+	// 	for _, child := range dm.referrers {
+	// 		err = dagWalkLayers(child, fn)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 	}
+	// }
 	if dm.layers != nil {
 		for i, layer := range dm.layers {
 			if layer.mod == deleted {

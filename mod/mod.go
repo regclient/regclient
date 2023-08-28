@@ -7,6 +7,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"time"
 
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient"
@@ -17,6 +18,15 @@ import (
 
 // Opts defines options for Apply
 type Opts func(*dagConfig, *dagManifest) error
+
+// OptTime defines time settings for WithConfigTimestamp and WithLayerTimestamp
+type OptTime struct {
+	Set        time.Time // time to set, this or FromLabel are required
+	FromLabel  string    // label from which to extract set time
+	After      time.Time // only change times that are after this
+	BaseRef    ref.Ref   // define base image, do not alter timestamps from base layers
+	BaseLayers int       // define a number of layers to not modify (count of the layers in a base image)
+}
 
 var (
 	// whitelist of tar media types

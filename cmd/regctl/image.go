@@ -127,9 +127,18 @@ var imageManifestCmd = &cobra.Command{
 	RunE:              runManifestGet,
 }
 var imageModCmd = &cobra.Command{
-	Use:               "mod <image_ref>",
-	Short:             "modify an image",
-	Long:              `EXPERIMENTAL: Applies requested modifications to an image`, // TODO: remove EXPERIMENTAL when stable
+	Use:   "mod <image_ref>",
+	Short: "modify an image",
+	// TODO: remove EXPERIMENTAL when stable
+	Long: `EXPERIMENTAL: Applies requested modifications to an image
+For time options, the value is a comma separated list of key/value pairs:
+  set=${time}: time to set in rfc3339 format, e.g. 2006-01-02T15:04:05Z
+  from-label=${label}: label used to extract time in rfc3339 format
+  after=${time_in_rfc3339}: adjust any time after this
+  base-ref=${image}: image to lookup base layers, which are skipped
+  base-layers=${count}: number of layers to skip changing (from the base image)
+  * set or from-label is required in the time options
+`,
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: completeArgTag,
 	RunE:              runImageMod,
@@ -298,14 +307,32 @@ func init() {
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
+			ot, err := imageParseOptTime(val)
+			if err != nil {
+				return err
+			}
+			imageOpts.modOpts = append(imageOpts.modOpts,
+				mod.WithConfigTimestamp(ot),
+			)
+			return nil
+		},
+	}, "config-time", "", `set timestamp for the config`)
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "string",
+		f: func(val string) error {
 			t, err := time.Parse(time.RFC3339, val)
 			if err != nil {
 				return fmt.Errorf("time must be formatted %s: %w", time.RFC3339, err)
 			}
-			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithConfigTimestampMax(t))
+			imageOpts.modOpts = append(imageOpts.modOpts,
+				mod.WithConfigTimestamp(mod.OptTime{
+					Set:   t,
+					After: t,
+				}))
 			return nil
 		},
 	}, "config-time-max", "", `max timestamp for a config`)
+	imageModCmd.Flags().MarkHidden("config-time-max") // TODO: deprecate config-time-max in favor of config-time
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
@@ -421,14 +448,32 @@ func init() {
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
+			ot, err := imageParseOptTime(val)
+			if err != nil {
+				return err
+			}
+			imageOpts.modOpts = append(imageOpts.modOpts,
+				mod.WithLayerTimestamp(ot),
+			)
+			return nil
+		},
+	}, "layer-time", "", `set timestamp for the layer contents`)
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "string",
+		f: func(val string) error {
 			t, err := time.Parse(time.RFC3339, val)
 			if err != nil {
 				return fmt.Errorf("time must be formatted %s: %w", time.RFC3339, err)
 			}
-			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithLayerTimestampMax(t))
+			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithLayerTimestamp(
+				mod.OptTime{
+					Set:   t,
+					After: t,
+				}))
 			return nil
 		},
 	}, "layer-time-max", "", `max timestamp for a layer`)
+	imageModCmd.Flags().MarkHidden("layer-time-max") // TODO: deprecate in favor of layer-time
 	flagRebase := imageModCmd.Flags().VarPF(&modFlagFunc{
 		t: "bool",
 		f: func(val string) error {
@@ -468,16 +513,37 @@ func init() {
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
+			ot, err := imageParseOptTime(val)
+			if err != nil {
+				return err
+			}
+			imageOpts.modOpts = append(imageOpts.modOpts,
+				mod.WithConfigTimestamp(ot),
+				mod.WithLayerTimestamp(ot),
+			)
+			return nil
+		},
+	}, "time", "", `set timestamp for both the config and layers`)
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "string",
+		f: func(val string) error {
 			t, err := time.Parse(time.RFC3339, val)
 			if err != nil {
 				return fmt.Errorf("time must be formatted %s: %w", time.RFC3339, err)
 			}
 			imageOpts.modOpts = append(imageOpts.modOpts,
-				mod.WithConfigTimestampMax(t),
-				mod.WithLayerTimestampMax(t))
+				mod.WithConfigTimestamp(mod.OptTime{
+					Set:   t,
+					After: t,
+				}),
+				mod.WithLayerTimestamp(mod.OptTime{
+					Set:   t,
+					After: t,
+				}))
 			return nil
 		},
 	}, "time-max", "", `max timestamp for both the config and layers`)
+	imageModCmd.Flags().MarkHidden("time-max") // TODO: deprecate
 	flagDocker := imageModCmd.Flags().VarPF(&modFlagFunc{
 		t: "bool",
 		f: func(val string) error {
@@ -550,6 +616,45 @@ func init() {
 	imageCmd.AddCommand(imageModCmd)
 	imageCmd.AddCommand(imageRateLimitCmd)
 	rootCmd.AddCommand(imageCmd)
+}
+
+func imageParseOptTime(s string) (mod.OptTime, error) {
+	ot := mod.OptTime{}
+	for _, ss := range strings.Split(s, ",") {
+		kv := strings.SplitN(ss, "=", 2)
+		if len(kv) != 2 {
+			return ot, fmt.Errorf("parameter without a value: %s", ss)
+		}
+		switch kv[0] {
+		case "set":
+			t, err := time.Parse(time.RFC3339, kv[1])
+			if err != nil {
+				return ot, fmt.Errorf("set time must be formatted %s: %w", time.RFC3339, err)
+			}
+			ot.Set = t
+		case "after":
+			t, err := time.Parse(time.RFC3339, kv[1])
+			if err != nil {
+				return ot, fmt.Errorf("after time must be formatted %s: %w", time.RFC3339, err)
+			}
+			ot.After = t
+		case "from-label":
+			ot.FromLabel = kv[1]
+		case "base-ref":
+			r, err := ref.New(kv[1])
+			if err != nil {
+				return ot, fmt.Errorf("failed to parse base ref: %w", err)
+			}
+			ot.BaseRef = r
+		case "base-layers":
+			i, err := strconv.Atoi(kv[1])
+			if err != nil {
+				return ot, fmt.Errorf("unable to parse base layer count: %w", err)
+			}
+			ot.BaseLayers = i
+		}
+	}
+	return ot, nil
 }
 
 func runImageCheckBase(cmd *cobra.Command, args []string) error {
@@ -1094,7 +1199,7 @@ func runImageMod(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%s\n", rOut.CommonName())
+	fmt.Fprintf(cmd.OutOrStdout(), "%s\n", rOut.CommonName())
 	rc.Close(ctx, rOut)
 	return nil
 }
