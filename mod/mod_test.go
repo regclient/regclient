@@ -335,6 +335,13 @@ func TestMod(t *testing.T) {
 			wantSame: true,
 		},
 		{
+			name: "Layer Reproducible",
+			opts: []Opts{
+				WithLayerReproducible(),
+			},
+			ref: "ocidir://testrepo:v3",
+		},
+		{
 			name: "Layer Timestamp Missing Label",
 			opts: []Opts{
 				WithLayerTimestampFromLabel("missing"),

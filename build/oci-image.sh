@@ -99,11 +99,13 @@ if [ -n "$base_name" ] && [ -n "$base_digest" ]; then
     "ocidir://output/${image}:${release}" --replace \
     --annotation "[*]org.opencontainers.image.base.name=${base_name}" \
     --annotation "[*]org.opencontainers.image.base.digest=${base_digest}" \
+    --reproducible \
     --time "set=${vcs_date},base-ref=${base_name}@${base_digest}" \
     >/dev/null
 else
   regctl image mod \
     "ocidir://output/${image}:${release}" --replace \
+    --reproducible \
     --time "set=${vcs_date}" \
     >/dev/null
 fi
