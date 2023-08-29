@@ -17,6 +17,30 @@ import (
 	"github.com/regclient/regclient/types/ref"
 )
 
+// WithLayerReproducible modifies the layer with reproducible options.
+// This currently configures users and groups with numeric ids.
+func WithLayerReproducible() Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		dc.stepsLayerFile = append(dc.stepsLayerFile,
+			func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dl *dagLayer, th *tar.Header, tr io.Reader) (*tar.Header, io.Reader, changes, error) {
+				changed := false
+				if th.Uname != "" {
+					th.Uname = ""
+					changed = true
+				}
+				if th.Gname != "" {
+					th.Gname = ""
+					changed = true
+				}
+				if changed {
+					return th, tr, replaced, nil
+				}
+				return th, tr, unchanged, nil
+			})
+		return nil
+	}
+}
+
 // WithLayerRmCreatedBy deletes a layer based on a regex of the created by field
 // in the config history for that layer
 func WithLayerRmCreatedBy(re regexp.Regexp) Opts {

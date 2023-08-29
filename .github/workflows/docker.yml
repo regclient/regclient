@@ -161,9 +161,11 @@ jobs:
           regctl image mod "${local_tag}" --replace \
             --annotation "[*]org.opencontainers.image.base.name=${base_name}" \
             --annotation "[*]org.opencontainers.image.base.digest=${base_digest}" \
+            --reproducible \
             --time "set=${vcs_date},base-ref=${base_name}@${base_digest}"
         else
           regctl image mod "${local_tag}" --replace \
+            --reproducible \
             --time "set=${vcs_date}"
         fi
         echo "digest=$(regctl image digest ${local_tag})" >>$GITHUB_OUTPUT
