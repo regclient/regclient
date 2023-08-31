@@ -87,7 +87,9 @@ regctl image import "ocidir://output/${image}:${release}" "output/${image}-${rel
 echo "Modding image"
 regctl image mod \
   "ocidir://output/${image}:${release}" --replace \
-  --to-oci-referrers \
+  --to-oci-referrers
+regctl image mod \
+  "ocidir://output/${image}:${release}" --replace \
   --annotation "[*]org.opencontainers.image.created=${vcs_date}" \
   --annotation "[*]org.opencontainers.image.source=${vcs_repo}" \
   --annotation "[*]org.opencontainers.image.version=${vcs_version}" \

@@ -340,6 +340,11 @@ func WithManifestToOCI() Opts {
 	}
 }
 
+const (
+	dockerReferenceType   = "vnd.docker.reference.type"
+	dockerReferenceDigest = "vnd.docker.reference.digest"
+)
+
 // WithManifestToOCIReferrers converts other referrer types to OCI subject/referrers
 func WithManifestToOCIReferrers() Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
@@ -347,79 +352,68 @@ func WithManifestToOCIReferrers() Opts {
 			if dm.mod == deleted {
 				return nil
 			}
-			if dm.m.IsList() {
+			mi, ok := dm.m.(manifest.Indexer)
+			if ok {
 				changed := false
+				// create a map of digests for each child DM we may need to reference later
 				dmLU := map[string]*dagManifest{
 					dm.origDesc.Digest.String(): dm,
 				}
 				for _, childDM := range dm.manifests {
 					dmLU[childDM.origDesc.Digest.String()] = childDM
 				}
-				mi, ok := dm.m.(manifest.Indexer)
-				if !ok {
-					return fmt.Errorf("manifest list is not an indexer")
-				}
 				ml, err := mi.GetManifestList()
 				if err != nil {
 					return fmt.Errorf("failed to get manifest list: %w", err)
 				}
-				mlNew := []types.Descriptor{}
-				i := 0
-				for _, desc := range ml {
-					if len(desc.Annotations) == 0 || desc.Annotations["vnd.docker.reference.type"] == "" || desc.Annotations["vnd.docker.reference.digest"] == "" {
-						mlNew = append(mlNew, desc)
-						i++
+				mlI := 0
+				for _, childDM := range dm.manifests {
+					if childDM.mod == added {
 						continue
 					}
-					if i >= len(dm.manifests) {
-						return fmt.Errorf("missing manifest from dag, i=%d", i)
+					if childDM.mod == deleted {
+						mlI++
+						continue
 					}
-					// convert docker reference type
-					changed = true
-					// move dm to referrers list
-					dmMove := dm.manifests[i]
-					if i+1 >= len(dm.manifests) {
-						// delete from tail
-						dm.manifests = dm.manifests[:i]
-					} else {
-						// delete from middle
-						dm.manifests = append(dm.manifests[:i], dm.manifests[i+1:]...)
+					// get descriptor, skip descriptors that are not docker referrers
+					if mlI >= len(ml) {
+						return fmt.Errorf("could not find descriptor, index=%d, digest=%s", mlI, dm.origDesc.Digest.String())
 					}
-					dmTgt, ok := dmLU[desc.Annotations["vnd.docker.reference.digest"]]
+					desc := ml[mlI]
+					mlI++
+					if len(desc.Annotations) == 0 || desc.Annotations[dockerReferenceType] == "" || desc.Annotations[dockerReferenceDigest] == "" {
+						continue
+					}
+					// find the subjectDM
+					subjectDM, ok := dmLU[desc.Annotations[dockerReferenceDigest]]
+					if !ok || subjectDM == nil {
+						return fmt.Errorf("could not find digest, convert referrers before other mod actions, digest=%s", desc.Annotations[dockerReferenceDigest])
+					}
+					// validate the manifest being converted
+					_, ok = childDM.m.(manifest.Subjecter)
 					if !ok {
-						return fmt.Errorf("could not find digest, convert referrers before other mod actions, digest=%s", desc.Annotations["vnd.docker.reference.digest"])
+						return fmt.Errorf("docker reference type does not support subject, mt=%s", childDM.m.GetDescriptor().MediaType)
 					}
-					dmMove.mod = added
-					sm, ok := dmMove.m.(manifest.Subjecter)
+					am, ok := childDM.m.(manifest.Annotator)
 					if !ok {
-						return fmt.Errorf("docker reference type does not support subject, mt=%s", dmMove.m.GetDescriptor().MediaType)
+						return fmt.Errorf("docker reference type does not support annotations, mt=%s", childDM.m.GetDescriptor().MediaType)
 					}
-					am, ok := dmMove.m.(manifest.Annotator)
-					if !ok {
-						return fmt.Errorf("docker reference type does not support annotations, mt=%s", dmMove.m.GetDescriptor().MediaType)
-					}
-					tgtDesc := dmTgt.m.GetDescriptor()
-					tgtDesc.Annotations = nil
-					tgtDesc.ArtifactType = ""
-					err = am.SetAnnotation("vnd.docker.reference.type", desc.Annotations["vnd.docker.reference.type"])
+					err := am.SetAnnotation(dockerReferenceType, desc.Annotations[dockerReferenceType])
 					if err != nil {
 						return fmt.Errorf("failed to set annotations: %w", err)
 					}
-					err = sm.SetSubject(&tgtDesc)
-					if err != nil {
-						return fmt.Errorf("failed to set subject: %w", err)
-					}
-					dmTgt.referrers = append(dmTgt.referrers, dmMove)
+					// copy childDM to add a referrer entry to the targetDM
+					referrerDM := *childDM
+					referrerDM.mod = added
+					subjectDM.referrers = append(subjectDM.referrers, &referrerDM)
+					// mark this childDM for deletion
+					changed = true
+					childDM.mod = deleted
 				}
 				if changed {
-					err = mi.SetManifestList(mlNew)
-					if err != nil {
-						return fmt.Errorf("failed to set manifest list: %w", err)
-					}
 					if dm.mod == unchanged {
 						dm.mod = replaced
 					}
-					dm.newDesc = dm.m.GetDescriptor()
 				}
 			}
 			return nil
