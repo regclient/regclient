@@ -198,6 +198,51 @@ func TestMod(t *testing.T) {
 			ref: "ocidir://testrepo:v1",
 		},
 		{
+			name: "Add Label to All",
+			opts: []Opts{
+				WithLabel("[*]test", "hello"),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Add Label AMD64/ARM64",
+			opts: []Opts{
+				WithLabel("[linux/amd64,linux/arm64]test", "hello"),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Add Label Missing",
+			opts: []Opts{
+				WithLabel("[linux/i386,linux/s390x]test", "hello"),
+			},
+			ref:      "ocidir://testrepo:v1",
+			wantSame: true,
+		},
+		{
+			name: "Add Label Platform Parse Error",
+			opts: []Opts{
+				WithLabel("[linux/invalid.arch!]test", "hello"),
+			},
+			ref:     "ocidir://testrepo:v1",
+			wantErr: fmt.Errorf("failed to parse label platform linux/invalid.arch!: invalid platform component invalid.arch! in linux/invalid.arch!"),
+		},
+		{
+			name: "Delete Label",
+			opts: []Opts{
+				WithLabel("version", ""),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Delete Missing Label",
+			opts: []Opts{
+				WithLabel("[*]missing", ""),
+			},
+			ref:      "ocidir://testrepo:v1",
+			wantSame: true,
+		},
+		{
 			name: "Label to Annotation",
 			opts: []Opts{
 				WithLabelToAnnotation(),
