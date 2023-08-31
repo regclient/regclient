@@ -385,22 +385,24 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rT
 	// update descriptor and update subject descriptor on all referrers
 	if dm.mod == replaced || dm.mod == added {
 		dm.newDesc = dm.m.GetDescriptor()
-		for i := range dm.referrers {
-			if dm.referrers[i].mod == deleted {
-				continue
-			}
-			sm, ok := dm.referrers[i].m.(manifest.Subjecter)
-			if !ok {
-				return fmt.Errorf("referrer does not support subject field, mt=%s", dm.referrers[i].m.GetDescriptor().MediaType)
-			}
-			err = sm.SetSubject(&dm.newDesc)
-			if err != nil {
-				return fmt.Errorf("failed to set subject: %w", err)
-			}
-			if dm.referrers[i].mod == unchanged {
-				dm.referrers[i].mod = replaced
-			}
+	}
+	for i := range dm.referrers {
+		if dm.referrers[i].mod == deleted || !(dm.mod == replaced || dm.mod == added || dm.referrers[i].mod == added) {
+			continue
 		}
+		sm, ok := dm.referrers[i].m.(manifest.Subjecter)
+		if !ok {
+			return fmt.Errorf("referrer does not support subject field, mt=%s", dm.referrers[i].m.GetDescriptor().MediaType)
+		}
+		d := dm.m.GetDescriptor()
+		err = sm.SetSubject(&d)
+		if err != nil {
+			return fmt.Errorf("failed to set subject: %w", err)
+		}
+		if dm.referrers[i].mod == unchanged {
+			dm.referrers[i].mod = replaced
+		}
+		dm.referrers[i].newDesc = dm.referrers[i].m.GetDescriptor()
 	}
 	// recursively push referrers
 	for _, child := range dm.referrers {
@@ -441,14 +443,6 @@ func dagWalkManifests(dm *dagManifest, fn func(*dagManifest) (*dagManifest, erro
 			}
 		}
 	}
-	// if dm.referrers != nil {
-	// 	for _, child := range dm.referrers {
-	// 		err := dagWalkManifests(child, fn)
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	// 	}
-	// }
 	mmNew, err := fn(dm)
 	if err != nil {
 		return err
@@ -466,14 +460,6 @@ func dagWalkOCIConfig(dm *dagManifest, fn func(*dagOCIConfig) (*dagOCIConfig, er
 			}
 		}
 	}
-	// if dm.referrers != nil {
-	// 	for _, child := range dm.referrers {
-	// 		err := dagWalkOCIConfig(child, fn)
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	// 	}
-	// }
 	if dm.config != nil {
 		docNew, err := fn(dm.config)
 		if err != nil {
@@ -494,14 +480,6 @@ func dagWalkLayers(dm *dagManifest, fn func(*dagLayer) (*dagLayer, error)) error
 			}
 		}
 	}
-	// if dm.referrers != nil {
-	// 	for _, child := range dm.referrers {
-	// 		err = dagWalkLayers(child, fn)
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	// 	}
-	// }
 	if dm.layers != nil {
 		for i, layer := range dm.layers {
 			if layer.mod == deleted {

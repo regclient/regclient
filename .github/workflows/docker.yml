@@ -152,7 +152,8 @@ jobs:
         regctl image import "${local_tag}" "output/${{matrix.image}}-${{matrix.type}}.tar"
         echo "Modifying image for reproducibility"
         regctl image mod "${local_tag}" --replace \
-          --to-oci-referrers \
+          --to-oci-referrers
+        regctl image mod "${local_tag}" --replace \
           --annotation "[*]org.opencontainers.image.created=${vcs_date}" \
           --annotation "[*]org.opencontainers.image.source=${{ steps.prep.outputs.repo_url }}" \
           --annotation "[*]org.opencontainers.image.version=${{ steps.prep.outputs.version }}" \
