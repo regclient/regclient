@@ -400,7 +400,7 @@ func init() {
 			}
 			return nil
 		},
-	}, "label", "", `set an label (name=value)`)
+	}, "label", "", `set an label (name=value, omit value to delete, prefix with platform list [p1,p2] for subset of images)`)
 	flagLabelAnnot := imageModCmd.Flags().VarPF(&modFlagFunc{
 		t: "bool",
 		f: func(val string) error {

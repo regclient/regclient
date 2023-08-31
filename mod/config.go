@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -261,7 +263,40 @@ func WithExposeRm(port string) Opts {
 // WithLabel sets or deletes a label from the image config
 func WithLabel(name, value string) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
+		// extract the list for platforms to update from the name
+		name = strings.TrimSpace(name)
+		platforms := []platform.Platform{}
+		if name[0] == '[' && strings.Index(name, "]") > 0 {
+			end := strings.Index(name, "]")
+			list := strings.Split(name[1:end], ",")
+			for _, entry := range list {
+				entry = strings.TrimSpace(entry)
+				if entry == "*" {
+					continue
+				}
+				p, err := platform.Parse(entry)
+				if err != nil {
+					return fmt.Errorf("failed to parse label platform %s: %w", entry, err)
+				}
+				platforms = append(platforms, p)
+			}
+			name = name[end+1:]
+		}
 		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
+			// if platforms are listed, skip non-matching platforms
+			if len(platforms) > 0 {
+				p := doc.oc.GetConfig().Platform
+				found := false
+				for _, pe := range platforms {
+					if platform.Match(p, pe) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					return nil
+				}
+			}
 			changed := false
 			oc := doc.oc.GetConfig()
 			if oc.Config.Labels == nil {
