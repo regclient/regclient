@@ -307,9 +307,16 @@ func init() {
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
-			ot, err := imageParseOptTime(val)
+			ot, otherFields, err := imageParseOptTime(val)
 			if err != nil {
 				return err
+			}
+			if len(otherFields) > 0 {
+				keys := []string{}
+				for k := range otherFields {
+					keys = append(keys, k)
+				}
+				return fmt.Errorf("unknown time option: %s", strings.Join(keys, ", "))
 			}
 			imageOpts.modOpts = append(imageOpts.modOpts,
 				mod.WithConfigTimestamp(ot),
@@ -375,6 +382,29 @@ func init() {
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
+			ot, otherFields, err := imageParseOptTime(val)
+			if err != nil {
+				return err
+			}
+			if otherFields["filename"] == "" {
+				return fmt.Errorf("filename must be included")
+			}
+			if len(otherFields) > 1 {
+				keys := []string{}
+				for k := range otherFields {
+					if k != "filename" {
+						keys = append(keys, k)
+					}
+				}
+				return fmt.Errorf("unknown time option: %s", strings.Join(keys, ", "))
+			}
+			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithFileTarTime(otherFields["filename"], ot))
+			return nil
+		},
+	}, "file-tar-time", "", `timestamp for contents of a tar file within a layer, set filename=${name} with time options`)
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "stringArray",
+		f: func(val string) error {
 			vs := strings.SplitN(val, ",", 2)
 			if len(vs) != 2 {
 				return fmt.Errorf("filename and timestamp both required, comma separated")
@@ -383,10 +413,14 @@ func init() {
 			if err != nil {
 				return fmt.Errorf("time must be formatted %s: %w", time.RFC3339, err)
 			}
-			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithFileTarTimeMax(vs[0], t))
+			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithFileTarTime(vs[0], mod.OptTime{
+				Set:   t,
+				After: t,
+			}))
 			return nil
 		},
 	}, "file-tar-time-max", "", `max timestamp for contents of a tar file within a layer`)
+	imageModCmd.Flags().MarkHidden("file-tar-time-max") // TODO: deprecate in favor of file-tar-time
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
@@ -448,9 +482,16 @@ func init() {
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
-			ot, err := imageParseOptTime(val)
+			ot, otherFields, err := imageParseOptTime(val)
 			if err != nil {
 				return err
+			}
+			if len(otherFields) > 0 {
+				keys := []string{}
+				for k := range otherFields {
+					keys = append(keys, k)
+				}
+				return fmt.Errorf("unknown time option: %s", strings.Join(keys, ", "))
 			}
 			imageOpts.modOpts = append(imageOpts.modOpts,
 				mod.WithLayerTimestamp(ot),
@@ -527,9 +568,16 @@ func init() {
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
-			ot, err := imageParseOptTime(val)
+			ot, otherFields, err := imageParseOptTime(val)
 			if err != nil {
 				return err
+			}
+			if len(otherFields) > 0 {
+				keys := []string{}
+				for k := range otherFields {
+					keys = append(keys, k)
+				}
+				return fmt.Errorf("unknown time option: %s", strings.Join(keys, ", "))
 			}
 			imageOpts.modOpts = append(imageOpts.modOpts,
 				mod.WithConfigTimestamp(ot),
@@ -632,24 +680,25 @@ func init() {
 	rootCmd.AddCommand(imageCmd)
 }
 
-func imageParseOptTime(s string) (mod.OptTime, error) {
+func imageParseOptTime(s string) (mod.OptTime, map[string]string, error) {
 	ot := mod.OptTime{}
+	otherFields := map[string]string{}
 	for _, ss := range strings.Split(s, ",") {
 		kv := strings.SplitN(ss, "=", 2)
 		if len(kv) != 2 {
-			return ot, fmt.Errorf("parameter without a value: %s", ss)
+			return ot, otherFields, fmt.Errorf("parameter without a value: %s", ss)
 		}
 		switch kv[0] {
 		case "set":
 			t, err := time.Parse(time.RFC3339, kv[1])
 			if err != nil {
-				return ot, fmt.Errorf("set time must be formatted %s: %w", time.RFC3339, err)
+				return ot, otherFields, fmt.Errorf("set time must be formatted %s: %w", time.RFC3339, err)
 			}
 			ot.Set = t
 		case "after":
 			t, err := time.Parse(time.RFC3339, kv[1])
 			if err != nil {
-				return ot, fmt.Errorf("after time must be formatted %s: %w", time.RFC3339, err)
+				return ot, otherFields, fmt.Errorf("after time must be formatted %s: %w", time.RFC3339, err)
 			}
 			ot.After = t
 		case "from-label":
@@ -657,18 +706,20 @@ func imageParseOptTime(s string) (mod.OptTime, error) {
 		case "base-ref":
 			r, err := ref.New(kv[1])
 			if err != nil {
-				return ot, fmt.Errorf("failed to parse base ref: %w", err)
+				return ot, otherFields, fmt.Errorf("failed to parse base ref: %w", err)
 			}
 			ot.BaseRef = r
 		case "base-layers":
 			i, err := strconv.Atoi(kv[1])
 			if err != nil {
-				return ot, fmt.Errorf("unable to parse base layer count: %w", err)
+				return ot, otherFields, fmt.Errorf("unable to parse base layer count: %w", err)
 			}
 			ot.BaseLayers = i
+		default:
+			otherFields[kv[0]] = kv[1]
 		}
 	}
-	return ot, nil
+	return ot, otherFields, nil
 }
 
 func runImageCheckBase(cmd *cobra.Command, args []string) error {
