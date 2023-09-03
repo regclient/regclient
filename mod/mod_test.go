@@ -516,16 +516,47 @@ func TestMod(t *testing.T) {
 			wantSame: true,
 		},
 		{
-			name: "Layer File Tar Timestamp",
+			name: "Layer File Tar Time Max",
 			opts: []Opts{
 				WithFileTarTimeMax("/dir/layer.tar", tTime),
 			},
 			ref: "ocidir://testrepo:v3",
 		},
 		{
-			name: "Layer File Tar Timestamp Unchanged",
+			name: "Layer File Tar Time Max Unchanged",
 			opts: []Opts{
 				WithFileTarTimeMax("/dir/layer.tar", time.Now()),
+			},
+			ref:      "ocidir://testrepo:v3",
+			wantSame: true,
+		},
+		{
+			name: "Layer File Tar Time",
+			opts: []Opts{
+				WithFileTarTime("/dir/layer.tar", OptTime{
+					Set:     tTime,
+					BaseRef: rb1,
+				}),
+			},
+			ref: "ocidir://testrepo:v3",
+		},
+		{
+			name: "Layer File Tar Time After",
+			opts: []Opts{
+				WithFileTarTime("/dir/layer.tar", OptTime{
+					Set:   tTime,
+					After: tTime,
+				}),
+			},
+			ref: "ocidir://testrepo:v3",
+		},
+		{
+			name: "Layer File Tar Time Same Base",
+			opts: []Opts{
+				WithFileTarTime("/dir/layer.tar", OptTime{
+					Set:     tTime,
+					BaseRef: r3,
+				}),
 			},
 			ref:      "ocidir://testrepo:v3",
 			wantSame: true,

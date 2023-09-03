@@ -54,11 +54,10 @@ func TestImageMod(t *testing.T) {
 	out, err := cobraTest(t, "image", "mod", srcRef, "--create", modRef, "--time", "set=2000-01-01T00:00:00Z,base-ref="+baseRef)
 	imageOpts = saveOpts
 	if err != nil {
-		t.Errorf("failed to run image import: %v", err)
+		t.Errorf("failed to run image mod: %v", err)
 		return
 	}
 	if out == "" {
 		t.Errorf("missing output")
 	}
-
 }

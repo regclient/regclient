@@ -339,11 +339,72 @@ func WithLayerTimestampMax(t time.Time) Opts {
 	})
 }
 
-// WithFileTarTimeMax processes a tar file within a layer and rewrites the contents with a max timestamp
-func WithFileTarTimeMax(name string, t time.Time) Opts {
+// WithFileTarTime processes a tar file within a layer and adjusts the timestamps according to optTime
+func WithFileTarTime(name string, optTime OptTime) Opts {
 	name = strings.TrimPrefix(name, "/")
 	return func(dc *dagConfig, dm *dagManifest) error {
+		if optTime.Set.IsZero() && optTime.FromLabel == "" {
+			return fmt.Errorf("WithFileTarTime requires a time to set")
+		}
+		baseProcessed := false
+		baseDigests := map[digest.Digest]bool{}
+		// add base layers by count
+		if optTime.BaseLayers > 0 {
+			dl, err := layerGetBaseCount(optTime.BaseLayers, dm)
+			if err != nil {
+				return fmt.Errorf("failed to get base layers: %w", err)
+			}
+			for _, d := range dl {
+				baseDigests[d] = true
+			}
+		}
+		if optTime.FromLabel != "" {
+			dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
+				oc := doc.oc.GetConfig()
+				tl, ok := oc.Config.Labels[optTime.FromLabel]
+				if !ok {
+					return fmt.Errorf("label not found: %s", optTime.FromLabel)
+				}
+				tNew, err := time.Parse(time.RFC3339, tl)
+				if err != nil {
+					// TODO: add fallbacks
+					return fmt.Errorf("could not parse time %s from %s: %w", tl, optTime.FromLabel, err)
+				}
+				if !optTime.Set.IsZero() && !optTime.Set.Equal(tNew) {
+					return fmt.Errorf("conflicting time labels found %s and %s", optTime.Set.String(), tNew.String())
+				}
+				optTime.Set = tNew
+				return nil
+			})
+		}
 		dc.stepsLayerFile = append(dc.stepsLayerFile, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dl *dagLayer, th *tar.Header, tr io.Reader) (*tar.Header, io.Reader, changes, error) {
+			if optTime.Set.IsZero() {
+				return nil, nil, unchanged, fmt.Errorf("timestamp not available")
+			}
+			// for base ref, lookup all digests from base image to exclude
+			if !baseProcessed {
+				if !optTime.BaseRef.IsZero() {
+					m, err := rc.ManifestGet(ctx, optTime.BaseRef)
+					if err != nil {
+						return nil, nil, unchanged, fmt.Errorf("failed to get base image: %w", err)
+					}
+					dl, err := layerGetBaseRef(ctx, rc, optTime.BaseRef, m)
+					if err != nil {
+						return nil, nil, unchanged, fmt.Errorf("failed to get base layers: %w", err)
+					}
+					for _, d := range dl {
+						baseDigests[d] = true
+					}
+				}
+				baseProcessed = true
+			}
+			// skip layers from base image
+			if baseDigests[dl.desc.Digest] {
+				return th, tr, unchanged, nil
+			}
+			if th == nil || tr == nil {
+				return nil, nil, unchanged, fmt.Errorf("missing header or reader")
+			}
 			// check the header for a matching filename
 			if th.Name != name {
 				return th, tr, unchanged, nil
@@ -367,18 +428,18 @@ func WithFileTarTimeMax(name string, t time.Time) Opts {
 					}
 					return th, tr, unchanged, err
 				}
-				if t.Before(fsTH.AccessTime) {
-					fsTH.AccessTime = t
-					changed = true
+				var ca, cc, cm bool
+				// do not mod times that are currently zero, underlying tar format may not support changing
+				if !fsTH.AccessTime.IsZero() {
+					fsTH.AccessTime, ca = timeModOpt(fsTH.AccessTime, optTime)
 				}
-				if t.Before(fsTH.ChangeTime) {
-					fsTH.ChangeTime = t
-					changed = true
+				if !fsTH.ChangeTime.IsZero() {
+					fsTH.ChangeTime, cc = timeModOpt(fsTH.ChangeTime, optTime)
 				}
-				if t.Before(fsTH.ModTime) {
-					fsTH.ModTime = t
-					changed = true
+				if !fsTH.ModTime.IsZero() {
+					fsTH.ModTime, cm = timeModOpt(fsTH.ModTime, optTime)
 				}
+				changed = changed || ca || cc || cm
 				err = fsTW.WriteHeader(fsTH)
 				if err != nil {
 					return th, tr, unchanged, err
@@ -416,6 +477,16 @@ func WithFileTarTimeMax(name string, t time.Time) Opts {
 		})
 		return nil
 	}
+}
+
+// WithFileTarTimeMax processes a tar file within a layer and rewrites the contents with a max timestamp
+//
+// Deprecated: replace with WithFileTarTime
+func WithFileTarTimeMax(name string, t time.Time) Opts {
+	return WithFileTarTime(name, OptTime{
+		Set:   t,
+		After: t,
+	})
 }
 
 type tmpReader struct {
