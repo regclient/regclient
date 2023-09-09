@@ -24,6 +24,7 @@ import (
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
+	"github.com/regclient/regclient/types/referrer"
 	"github.com/spf13/cobra"
 )
 
@@ -99,6 +100,7 @@ var artifactOpts struct {
 	artifactFile     []string
 	artifactFileMT   []string
 	byDigest         bool
+	digestTags       bool
 	filterAT         string
 	filterAnnot      []string
 	formatList       string
@@ -133,6 +135,7 @@ func init() {
 	artifactGetCmd.Flags().StringVar(&artifactOpts.sortAnnot, "sort-annotation", "", "Annotation used for sorting results")
 	artifactGetCmd.Flags().BoolVar(&artifactOpts.sortDesc, "sort-desc", false, "Sort in descending order")
 
+	artifactListCmd.Flags().BoolVar(&artifactOpts.digestTags, "digest-tags", false, "Include digest tags")
 	artifactListCmd.Flags().StringVar(&artifactOpts.filterAT, "filter-artifact-type", "", "Filter descriptors by artifactType")
 	artifactListCmd.Flags().StringArrayVar(&artifactOpts.filterAnnot, "filter-annotation", []string{}, "Filter descriptors by annotation (key=value)")
 	artifactListCmd.Flags().StringVar(&artifactOpts.formatList, "format", "{{printPretty .}}", "Format output with go template syntax")
@@ -167,6 +170,7 @@ func init() {
 	artifactPutCmd.Flags().StringVar(&artifactOpts.refers, "refers", "", "EXPERIMENTAL: Set a referrer to the reference")
 	artifactPutCmd.Flags().MarkHidden("refers")
 
+	artifactTreeCmd.Flags().BoolVar(&artifactOpts.digestTags, "digest-tags", false, "Include digest tags")
 	artifactTreeCmd.Flags().StringVar(&artifactOpts.filterAT, "filter-artifact-type", "", "Filter descriptors by artifactType")
 	artifactTreeCmd.Flags().StringArrayVar(&artifactOpts.filterAnnot, "filter-annotation", []string{}, "Filter descriptors by annotation (key=value)")
 	artifactTreeCmd.Flags().StringVar(&artifactOpts.formatTree, "format", "{{printPretty .}}", "Format output with go template syntax")
@@ -460,6 +464,44 @@ func runArtifactList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+
+	// include digest tags if requested
+	if artifactOpts.digestTags {
+		tl, err := rc.TagList(ctx, rSubject)
+		if err != nil {
+			return fmt.Errorf("failed to list tags: %w", err)
+		}
+		if rl.Subject.Digest == "" {
+			mh, err := rc.ManifestHead(ctx, rl.Subject, regclient.WithManifestRequireDigest())
+			if err != nil {
+				return fmt.Errorf("failed to get manifest digest: %w", err)
+			}
+			rl.Subject.Digest = mh.GetDescriptor().Digest.String()
+		}
+		prefix, err := referrer.FallbackTag(rl.Subject)
+		if err != nil {
+			return fmt.Errorf("failed to compute fallback tag: %v", err)
+		}
+		for _, t := range tl.Tags {
+			if strings.HasPrefix(t, prefix.Tag) && !sliceHasStr(rl.Tags, t) {
+				rTag := rl.Subject
+				rTag.Tag = t
+				rTag.Digest = ""
+				mh, err := rc.ManifestHead(ctx, rTag, regclient.WithManifestRequireDigest())
+				if err != nil {
+					return fmt.Errorf("failed to query digest tag: %v", err)
+				}
+				desc := mh.GetDescriptor()
+				if desc.Annotations == nil {
+					desc.Annotations = map[string]string{}
+				}
+				desc.Annotations[types.AnnotationRefName] = t
+				rl.Descriptors = append(rl.Descriptors, desc)
+				rl.Tags = append(rl.Tags, t)
+			}
+		}
+	}
+
 	switch artifactOpts.formatList {
 	case "raw":
 		artifactOpts.formatList = "{{ range $key,$vals := .Manifest.RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .Manifest.RawBody}}"
@@ -807,8 +849,18 @@ func runArtifactTree(cmd *cobra.Command, args []string) error {
 		referrerOpts = append(referrerOpts, scheme.WithReferrerAnnotations(af))
 	}
 
+	// include digest tags if requested
+	tags := []string{}
+	if artifactOpts.digestTags {
+		tl, err := rc.TagList(ctx, r)
+		if err != nil {
+			return fmt.Errorf("failed to list tags: %w", err)
+		}
+		tags = tl.Tags
+	}
+
 	seen := []string{}
-	tr, err := treeAddResult(ctx, rc, r, seen, referrerOpts)
+	tr, err := treeAddResult(ctx, rc, r, seen, referrerOpts, tags)
 	var twErr error
 	if tr != nil {
 		twErr = template.Writer(cmd.OutOrStdout(), artifactOpts.formatTree, tr)
@@ -819,7 +871,7 @@ func runArtifactTree(cmd *cobra.Command, args []string) error {
 	return twErr
 }
 
-func treeAddResult(ctx context.Context, rc *regclient.RegClient, r ref.Ref, seen []string, rOpts []scheme.ReferrerOpts) (*treeResult, error) {
+func treeAddResult(ctx context.Context, rc *regclient.RegClient, r ref.Ref, seen []string, rOpts []scheme.ReferrerOpts, tags []string) (*treeResult, error) {
 	tr := treeResult{
 		Ref: r,
 	}
@@ -856,7 +908,7 @@ func treeAddResult(ctx context.Context, rc *regclient.RegClient, r ref.Ref, seen
 			rChild := r
 			rChild.Tag = ""
 			rChild.Digest = d.Digest.String()
-			tChild, err := treeAddResult(ctx, rc, rChild, seen, rOpts)
+			tChild, err := treeAddResult(ctx, rc, rChild, seen, rOpts, tags)
 			if tChild != nil {
 				tChild.ArtifactType = d.ArtifactType
 				if d.Platform != nil {
@@ -882,7 +934,7 @@ func treeAddResult(ctx context.Context, rc *regclient.RegClient, r ref.Ref, seen
 			rReferrer := r
 			rReferrer.Tag = ""
 			rReferrer.Digest = d.Digest.String()
-			tReferrer, err := treeAddResult(ctx, rc, rReferrer, seen, rOpts)
+			tReferrer, err := treeAddResult(ctx, rc, rReferrer, seen, rOpts, tags)
 			if tReferrer != nil {
 				tReferrer.ArtifactType = d.ArtifactType
 				if d.Platform != nil {
@@ -893,6 +945,30 @@ func treeAddResult(ctx context.Context, rc *regclient.RegClient, r ref.Ref, seen
 			}
 			if err != nil {
 				return &tr, err
+			}
+		}
+	}
+
+	// include digest tags if requested
+	if artifactOpts.digestTags {
+		prefix, err := referrer.FallbackTag(r)
+		if err != nil {
+			return &tr, fmt.Errorf("failed to compute fallback tag: %v", err)
+		}
+		for _, t := range tags {
+			if strings.HasPrefix(t, prefix.Tag) && !sliceHasStr(rl.Tags, t) {
+				rTag := r
+				rTag.Tag = t
+				rTag.Digest = ""
+				tReferrer, err := treeAddResult(ctx, rc, rTag, seen, rOpts, tags)
+				if tReferrer != nil {
+					tReferrer.Ref.Tag = t
+					tReferrer.Ref.Digest = ""
+					tr.Referrer = append(tr.Referrer, tReferrer)
+				}
+				if err != nil {
+					return &tr, err
+				}
 			}
 		}
 	}
@@ -940,6 +1016,12 @@ func (tr *treeResult) marshalPretty(indent string) ([]byte, error) {
 	}
 	if tr.ArtifactType != "" {
 		_, err = result.WriteString(": " + tr.ArtifactType)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if tr.ArtifactType == "" && strings.HasPrefix(tr.Ref.Tag, "sha256-") {
+		_, err = result.WriteString(": " + tr.Ref.Tag)
 		if err != nil {
 			return nil, err
 		}
