@@ -20,7 +20,7 @@ jobs:
 
     steps:
     - name: Check out code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: "Set up Go ${{ env.RELEASE_GO_VER }}"
       uses: actions/setup-go@v4

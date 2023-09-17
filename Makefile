@@ -24,20 +24,20 @@ ifeq "$(strip $(VER_BUMP))" ''
 		-u "$(shell id -u):$(shell id -g)" \
 		$(VER_BUMP_CONTAINER)
 endif
-MARKDOWN_LINT_VER?=v0.9.2
+MARKDOWN_LINT_VER?=v0.10.0
 GO_VULNCHECK_VER?=v1.0.1
-OSV_SCANNER_VER?=v1.3.6
+OSV_SCANNER_VER?=v1.4.0
 SYFT?=$(shell command -v syft 2>/dev/null)
 SYFT_CMD_VER:=$(shell [ -x "$(SYFT)" ] && echo "v$$($(SYFT) version | awk '/^Version: / {print $$2}')" || echo "0")
-SYFT_VERSION?=v0.89.0
-SYFT_CONTAINER?=anchore/syft:v0.89.0@sha256:f630f2123432d78fedba093f32e84debbdb47c53c1f4e261dc01b90c674ba46a
+SYFT_VERSION?=v0.90.0
+SYFT_CONTAINER?=anchore/syft:v0.90.0@sha256:69d84e41b7efd62c0fa6978e01cde25464fa41bdad36068e1a53046e8c590588
 ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 	SYFT=docker run --rm \
 		-v "$(shell pwd)/:$(shell pwd)/" -w "$(shell pwd)" \
 		-u "$(shell id -u):$(shell id -g)" \
 		$(SYFT_CONTAINER)
 endif
-STATICCHECK_VER?=v0.4.5
+STATICCHECK_VER?=v0.4.6
 
 .PHONY: .FORCE
 .FORCE:
