@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -181,4 +182,90 @@ func (d Descriptor) MarshalPrettyTW(tw *tabwriter.Writer, prefix string) error {
 		}
 	}
 	return nil
+}
+
+// MatchOpt defines conditions for a match descriptor
+type MatchOpt struct {
+	Platform       *platform.Platform // Platform to match including compatible platforms (darwin/arm64 matches linux/arm64)
+	ArtifactType   string             // Match ArtifactType in the descriptor
+	Annotations    map[string]string  // Match each of the specified annotations and their value, an empty value verifies the key is set
+	SortAnnotation string             // Sort the results by an annotation, string based comparison, descriptors without the annotation are sorted last
+	SortDesc       bool               // Set to true to sort in descending order
+}
+
+// Match returns true if the descriptor matches the options, including compatible platforms
+func (d Descriptor) Match(opt MatchOpt) bool {
+	if opt.ArtifactType != "" && d.ArtifactType != opt.ArtifactType {
+		return false
+	}
+	if opt.Annotations != nil && len(opt.Annotations) > 0 {
+		if d.Annotations == nil {
+			return false
+		}
+		for k, v := range opt.Annotations {
+			if dv, ok := d.Annotations[k]; !ok || (v != "" && v != dv) {
+				return false
+			}
+		}
+	}
+	if opt.Platform != nil {
+		if d.Platform == nil {
+			return false
+		}
+		if !platform.Compatible(*opt.Platform, *d.Platform) {
+			return false
+		}
+	}
+	return true
+}
+
+// DescriptorListFilter returns a list of descriptors from the list matching the search options.
+// When opt.SortAnnotation is set, the order of descriptors with matching annotations is undefined.
+func DescriptorListFilter(dl []Descriptor, opt MatchOpt) []Descriptor {
+	ret := []Descriptor{}
+	for _, d := range dl {
+		if d.Match(opt) {
+			ret = append(ret, d)
+		}
+	}
+	if opt.SortAnnotation != "" {
+		sort.Slice(ret, func(i, j int) bool {
+			// if annotations are not defined, sort to the very end
+			if ret[i].Annotations == nil {
+				return false
+			}
+			if _, ok := ret[i].Annotations[opt.SortAnnotation]; !ok {
+				return false
+			}
+			if ret[j].Annotations == nil {
+				return true
+			}
+			if _, ok := ret[j].Annotations[opt.SortAnnotation]; !ok {
+				return true
+			}
+			// else sort by string
+			if strings.Compare(ret[i].Annotations[opt.SortAnnotation], ret[j].Annotations[opt.SortAnnotation]) < 0 {
+				return !opt.SortDesc
+			}
+			return opt.SortDesc
+		})
+	}
+	return ret
+}
+
+// DescriptorListSearch returns the first descriptor from the list matching the search options
+func DescriptorListSearch(dl []Descriptor, opt MatchOpt) (Descriptor, error) {
+	filter := DescriptorListFilter(dl, opt)
+	if len(filter) < 1 {
+		return Descriptor{}, ErrNotFound
+	}
+	// prefer exact platform match when available
+	if opt.Platform != nil {
+		for _, d := range filter {
+			if platform.Match(*opt.Platform, *d.Platform) {
+				return d, nil
+			}
+		}
+	}
+	return filter[0], nil
 }

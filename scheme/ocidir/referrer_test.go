@@ -196,7 +196,7 @@ func TestReferrer(t *testing.T) {
 			t.Errorf("Failed creating getRef: %v", err)
 			return
 		}
-		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerSort(timeAnnot, false))
+		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{SortAnnotation: timeAnnot}))
 		if err != nil {
 			t.Errorf("Failed running ReferrerList: %v", err)
 			return
@@ -224,7 +224,7 @@ func TestReferrer(t *testing.T) {
 		if len(rl.Tags) != 1 || rl.Tags[0] != tagRef {
 			t.Errorf("tag list missing entries, received: %v", rl.Tags)
 		}
-		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerSort(timeAnnot, true))
+		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{SortAnnotation: timeAnnot, SortDesc: true}))
 		if err != nil {
 			t.Errorf("Failed running ReferrerList reverse: %v", err)
 			return
@@ -245,7 +245,7 @@ func TestReferrer(t *testing.T) {
 			t.Errorf("Failed creating getRef: %v", err)
 			return
 		}
-		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerAT(aType))
+		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{ArtifactType: aType}))
 		if err != nil {
 			t.Errorf("Failed running ReferrerList: %v", err)
 			return
@@ -254,7 +254,7 @@ func TestReferrer(t *testing.T) {
 			t.Errorf("descriptor list length, expected 1, received %d", len(rl.Descriptors))
 			return
 		}
-		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerAT("application/vnd.example.unknown"))
+		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{ArtifactType: "application/vnd.example.unknown"}))
 		if err != nil {
 			t.Errorf("Failed running ReferrerList: %v", err)
 			return
@@ -270,7 +270,7 @@ func TestReferrer(t *testing.T) {
 			t.Errorf("Failed creating getRef: %v", err)
 			return
 		}
-		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerAnnotations(map[string]string{extraAnnot: extraValueB}))
+		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{Annotations: map[string]string{extraAnnot: extraValueB}}))
 		if err != nil {
 			t.Errorf("Failed running ReferrerList: %v", err)
 			return
@@ -279,7 +279,7 @@ func TestReferrer(t *testing.T) {
 			t.Errorf("descriptor list length, expected 1, received %d", len(rl.Descriptors))
 			return
 		}
-		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerAnnotations(map[string]string{extraAnnot: "unknown value"}))
+		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{Annotations: map[string]string{extraAnnot: "unknown value"}}))
 		if err != nil {
 			t.Errorf("Failed running ReferrerList: %v", err)
 			return
@@ -288,7 +288,7 @@ func TestReferrer(t *testing.T) {
 			t.Errorf("unexpected descriptors")
 			return
 		}
-		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerAnnotations(map[string]string{extraAnnot: ""}))
+		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{Annotations: map[string]string{extraAnnot: ""}}))
 		if err != nil {
 			t.Errorf("Failed running ReferrerList: %v", err)
 			return

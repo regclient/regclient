@@ -4,8 +4,6 @@ package scheme
 import (
 	"context"
 	"io"
-	"sort"
-	"strings"
 
 	"github.com/regclient/regclient/internal/throttle"
 	"github.com/regclient/regclient/types"
@@ -103,102 +101,69 @@ func WithManifest(m manifest.Manifest) ManifestOpts {
 
 // ReferrerConfig is used by schemes to import ReferrerOpts
 type ReferrerConfig struct {
-	FilterArtifactType string
-	FilterAnnotation   map[string]string
-	Platform           string
-	SortAnnotation     string
-	SortDesc           bool
+	MatchOpt types.MatchOpt // filter/sort results
+	Platform string         // get referrers for a specific platform
 }
 
 // ReferrerOpts is used to set options on referrer APIs
 type ReferrerOpts func(*ReferrerConfig)
 
+// WithReferrerMatchOpt filters results using MatchOpt
+func WithReferrerMatchOpt(mo types.MatchOpt) ReferrerOpts {
+	return func(config *ReferrerConfig) {
+		config.MatchOpt = mo
+	}
+}
+
+// WithReferrerPlatform gets referrers for a single platform from a multi-platform manifest
+func WithReferrerPlatform(p string) ReferrerOpts {
+	return func(config *ReferrerConfig) {
+		config.Platform = p
+	}
+}
+
 // WithReferrerAT filters by a specific artifactType value
+//
+// Deprecated: replace with WithReferrerMatchOpt
 func WithReferrerAT(at string) ReferrerOpts {
 	return func(config *ReferrerConfig) {
-		config.FilterArtifactType = at
+		config.MatchOpt.ArtifactType = at
 	}
 }
 
 // WithReferrerAnnotations filters by a list of annotations, all of which must match
+//
+// Deprecated: replace with WithReferrerMatchOpt
 func WithReferrerAnnotations(annotations map[string]string) ReferrerOpts {
 	return func(config *ReferrerConfig) {
-		if config.FilterAnnotation == nil {
-			config.FilterAnnotation = annotations
+		if config.MatchOpt.Annotations == nil {
+			config.MatchOpt.Annotations = annotations
 		} else {
 			for k, v := range annotations {
-				config.FilterAnnotation[k] = v
+				config.MatchOpt.Annotations[k] = v
 			}
 		}
+	}
+}
+
+// WithReferrerSort orders the resulting referrers listing according to a specified annotation.
+//
+// Deprecated: replace with WithReferrerMatchOpt
+func WithReferrerSort(annotation string, desc bool) ReferrerOpts {
+	return func(config *ReferrerConfig) {
+		config.MatchOpt.SortAnnotation = annotation
+		config.MatchOpt.SortDesc = desc
 	}
 }
 
 // ReferrerFilter filters the referrer list according to the config
 func ReferrerFilter(config ReferrerConfig, rlIn referrer.ReferrerList) referrer.ReferrerList {
-	rlOut := referrer.ReferrerList{
+	return referrer.ReferrerList{
 		Subject:     rlIn.Subject,
 		Manifest:    rlIn.Manifest,
 		Annotations: rlIn.Annotations,
 		Tags:        rlIn.Tags,
-	}
-	rlOut.Descriptors = make([]types.Descriptor, len(rlIn.Descriptors))
-	copy(rlOut.Descriptors, rlIn.Descriptors)
-	if config.FilterArtifactType != "" && len(rlOut.Descriptors) > 0 {
-		for i := len(rlOut.Descriptors) - 1; i >= 0; i-- {
-			if rlOut.Descriptors[i].ArtifactType != config.FilterArtifactType {
-				rlOut.Descriptors = append(rlOut.Descriptors[:i], rlOut.Descriptors[i+1:]...)
-			}
-		}
-	}
-	for k, v := range config.FilterAnnotation {
-		if len(rlOut.Descriptors) > 0 {
-			for i := len(rlOut.Descriptors) - 1; i >= 0; i-- {
-				if rlOut.Descriptors[i].Annotations == nil {
-					rlOut.Descriptors = append(rlOut.Descriptors[:i], rlOut.Descriptors[i+1:]...)
-				} else if rlVal, ok := rlOut.Descriptors[i].Annotations[k]; !ok || v != "" && rlVal != v {
-					rlOut.Descriptors = append(rlOut.Descriptors[:i], rlOut.Descriptors[i+1:]...)
-				}
-			}
-		}
-	}
-	// sort the results if requested
-	if config.SortAnnotation != "" {
-		sort.Slice(rlOut.Descriptors, func(i, j int) bool {
-			// if annotations are not defined, sort to the very end
-			if rlOut.Descriptors[i].Annotations == nil {
-				return false
-			}
-			if _, ok := rlOut.Descriptors[i].Annotations[config.SortAnnotation]; !ok {
-				return false
-			}
-			if rlOut.Descriptors[j].Annotations == nil {
-				return true
-			}
-			if _, ok := rlOut.Descriptors[j].Annotations[config.SortAnnotation]; !ok {
-				return true
-			}
-			// else sort by string
-			if strings.Compare(rlOut.Descriptors[i].Annotations[config.SortAnnotation], rlOut.Descriptors[j].Annotations[config.SortAnnotation]) < 0 {
-				return !config.SortDesc
-			}
-			return config.SortDesc
-		})
-	}
-	return rlOut
-}
-
-// WithReferrerPlatform gets referrers for a single platform from a multi-platform manifest
-func WithReferrerPlatform(platform string) ReferrerOpts {
-	return func(config *ReferrerConfig) {
-		config.Platform = platform
-	}
-}
-
-// WithReferrerSort orders the resulting referrers listing according to a specified annotation.
-func WithReferrerSort(annotation string, desc bool) ReferrerOpts {
-	return func(config *ReferrerConfig) {
-		config.SortAnnotation = annotation
-		config.SortDesc = desc
+		Descriptors: types.DescriptorListFilter(rlIn.Descriptors, config.MatchOpt),
 	}
 }
 

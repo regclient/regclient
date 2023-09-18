@@ -100,12 +100,12 @@ func TestProcess(t *testing.T) {
 		t.Errorf("failed to get platform ")
 	}
 	d2AMD := desc2AMD.Digest
-	desc2SBOM, err := rc.ReferrerList(ctx, r2, scheme.WithReferrerAT("application/example.sbom"))
+	desc2SBOM, err := rc.ReferrerList(ctx, r2, scheme.WithReferrerMatchOpt(types.MatchOpt{ArtifactType: "application/example.sbom"}))
 	if err != nil || len(desc2SBOM.Descriptors) == 0 {
 		t.Errorf("failed to get SBOM for v2: %v", err)
 	}
 	d2SBOM := desc2SBOM.Descriptors[0].Digest
-	desc2Sig, err := rc.ReferrerList(ctx, r2, scheme.WithReferrerAT("application/example.signature"))
+	desc2Sig, err := rc.ReferrerList(ctx, r2, scheme.WithReferrerMatchOpt(types.MatchOpt{ArtifactType: "application/example.signature"}))
 	if err != nil || len(desc2Sig.Descriptors) == 0 {
 		t.Errorf("failed to get signature for v2: %v", err)
 	}

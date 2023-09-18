@@ -96,7 +96,17 @@ func (m *docker2Manifest) GetPlatformDesc(p *platform.Platform) (*types.Descript
 	return nil, fmt.Errorf("platform lookup not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 func (m *docker2ManifestList) GetPlatformDesc(p *platform.Platform) (*types.Descriptor, error) {
-	return getPlatformDesc(p, m.Manifests)
+	if !m.manifSet {
+		return nil, types.ErrManifestNotSet
+	}
+	if p == nil {
+		return nil, fmt.Errorf("invalid input, platform is nil%.0w", types.ErrNotFound)
+	}
+	d, err := types.DescriptorListSearch(m.Manifests, types.MatchOpt{Platform: p})
+	if err != nil {
+		return nil, fmt.Errorf("platform not found: %s%.0w", *p, err)
+	}
+	return &d, nil
 }
 
 func (m *docker2Manifest) GetPlatformList() ([]*platform.Platform, error) {

@@ -208,37 +208,48 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 	}
 
 	r := ref.Ref{}
+	matchOpts := types.MatchOpt{
+		ArtifactType:   artifactOpts.filterAT,
+		SortAnnotation: artifactOpts.sortAnnot,
+		SortDesc:       artifactOpts.sortDesc,
+	}
+	if artifactOpts.filterAnnot != nil {
+		matchOpts.Annotations = map[string]string{}
+		for _, kv := range artifactOpts.filterAnnot {
+			kvSplit := strings.SplitN(kv, "=", 2)
+			if len(kvSplit) == 2 {
+				matchOpts.Annotations[kvSplit[0]] = kvSplit[1]
+			} else {
+				matchOpts.Annotations[kv] = ""
+			}
+		}
+	}
+	if artifactOpts.latest {
+		matchOpts.SortAnnotation = types.AnnotationCreated
+		matchOpts.SortDesc = true
+	}
+	if artifactOpts.platform != "" {
+		p, err := platform.Parse(artifactOpts.platform)
+		if err != nil {
+			return fmt.Errorf("platform could not be parsed: %w", err)
+		}
+		matchOpts.Platform = &p
+	}
+
+	// lookup referrers to the subject
 	if len(args) == 0 && artifactOpts.subject != "" {
 		rSubject, err := ref.New(artifactOpts.subject)
 		if err != nil {
 			return err
 		}
-		// lookup referrers to the subject
-		referrerOpts := []scheme.ReferrerOpts{}
-		if artifactOpts.filterAT != "" {
-			referrerOpts = append(referrerOpts, scheme.WithReferrerAT(artifactOpts.filterAT))
-		}
-		if artifactOpts.filterAnnot != nil {
-			af := map[string]string{}
-			for _, kv := range artifactOpts.filterAnnot {
-				kvSplit := strings.SplitN(kv, "=", 2)
-				if len(kvSplit) == 2 {
-					af[kvSplit[0]] = kvSplit[1]
-				} else {
-					af[kv] = ""
-				}
-			}
-			referrerOpts = append(referrerOpts, scheme.WithReferrerAnnotations(af))
+		referrerMatchOpts := matchOpts
+		referrerMatchOpts.Platform = nil
+		referrerOpts := []scheme.ReferrerOpts{
+			scheme.WithReferrerMatchOpt(referrerMatchOpts),
 		}
 		if artifactOpts.platform != "" {
 			referrerOpts = append(referrerOpts, scheme.WithReferrerPlatform(artifactOpts.platform))
 		}
-		if artifactOpts.latest {
-			referrerOpts = append(referrerOpts, scheme.WithReferrerSort(types.AnnotationCreated, true))
-		} else if artifactOpts.sortAnnot != "" {
-			referrerOpts = append(referrerOpts, scheme.WithReferrerSort(artifactOpts.sortAnnot, artifactOpts.sortDesc))
-		}
-
 		rl, err := rc.ReferrerList(ctx, rSubject, referrerOpts...)
 		if err != nil {
 			return err
@@ -263,11 +274,31 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 	defer rc.Close(ctx, r)
 
 	// pull the manifest
-	mm, err := rc.ManifestGet(ctx, r)
+	m, err := rc.ManifestGet(ctx, r)
 	if err != nil {
 		return err
 	}
-	mi, ok := mm.(manifest.Imager)
+	// lookup descriptor if index / manifest list is returned
+	if m.IsList() {
+		mi, ok := m.(manifest.Indexer)
+		if !ok {
+			return fmt.Errorf("manifest list does not support index methods%.0w", types.ErrUnsupportedMediaType)
+		}
+		dl, err := mi.GetManifestList()
+		if err != nil {
+			return fmt.Errorf("failed to get descriptor list: %w", err)
+		}
+		d, err := types.DescriptorListSearch(dl, matchOpts)
+		if err != nil {
+			return fmt.Errorf("no matching artifacts found in index: %w", err)
+		}
+		r.Digest = d.Digest.String()
+		m, err = rc.ManifestGet(ctx, r)
+		if err != nil {
+			return err
+		}
+	}
+	mi, ok := m.(manifest.Imager)
 	if !ok {
 		return fmt.Errorf("manifest does not support image methods%.0w", types.ErrUnsupportedMediaType)
 	}
@@ -435,29 +466,31 @@ func runArtifactList(cmd *cobra.Command, args []string) error {
 	rc := newRegClient()
 	defer rc.Close(ctx, rSubject)
 
-	referrerOpts := []scheme.ReferrerOpts{}
-	if artifactOpts.filterAT != "" {
-		referrerOpts = append(referrerOpts, scheme.WithReferrerAT(artifactOpts.filterAT))
+	matchOpts := types.MatchOpt{
+		ArtifactType:   artifactOpts.filterAT,
+		SortAnnotation: artifactOpts.sortAnnot,
+		SortDesc:       artifactOpts.sortDesc,
 	}
 	if artifactOpts.filterAnnot != nil {
-		af := map[string]string{}
+		matchOpts.Annotations = map[string]string{}
 		for _, kv := range artifactOpts.filterAnnot {
 			kvSplit := strings.SplitN(kv, "=", 2)
 			if len(kvSplit) == 2 {
-				af[kvSplit[0]] = kvSplit[1]
+				matchOpts.Annotations[kvSplit[0]] = kvSplit[1]
 			} else {
-				af[kv] = ""
+				matchOpts.Annotations[kv] = ""
 			}
 		}
-		referrerOpts = append(referrerOpts, scheme.WithReferrerAnnotations(af))
+	}
+	if artifactOpts.latest {
+		matchOpts.SortAnnotation = types.AnnotationCreated
+		matchOpts.SortDesc = true
+	}
+	referrerOpts := []scheme.ReferrerOpts{
+		scheme.WithReferrerMatchOpt(matchOpts),
 	}
 	if artifactOpts.platform != "" {
 		referrerOpts = append(referrerOpts, scheme.WithReferrerPlatform(artifactOpts.platform))
-	}
-	if artifactOpts.latest {
-		referrerOpts = append(referrerOpts, scheme.WithReferrerSort(types.AnnotationCreated, true))
-	} else if artifactOpts.sortAnnot != "" {
-		referrerOpts = append(referrerOpts, scheme.WithReferrerSort(artifactOpts.sortAnnot, artifactOpts.sortDesc))
 	}
 
 	rl, err := rc.ReferrerList(ctx, rSubject, referrerOpts...)
@@ -834,7 +867,7 @@ func runArtifactTree(cmd *cobra.Command, args []string) error {
 
 	referrerOpts := []scheme.ReferrerOpts{}
 	if artifactOpts.filterAT != "" {
-		referrerOpts = append(referrerOpts, scheme.WithReferrerAT(artifactOpts.filterAT))
+		referrerOpts = append(referrerOpts, scheme.WithReferrerMatchOpt(types.MatchOpt{ArtifactType: artifactOpts.filterAT}))
 	}
 	if artifactOpts.filterAnnot != nil {
 		af := map[string]string{}
@@ -846,7 +879,7 @@ func runArtifactTree(cmd *cobra.Command, args []string) error {
 				af[kv] = ""
 			}
 		}
-		referrerOpts = append(referrerOpts, scheme.WithReferrerAnnotations(af))
+		referrerOpts = append(referrerOpts, scheme.WithReferrerMatchOpt(types.MatchOpt{Annotations: af}))
 	}
 
 	// include digest tags if requested
