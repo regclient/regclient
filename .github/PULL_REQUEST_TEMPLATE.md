@@ -30,3 +30,5 @@ See [DCO missing](https://github.com/src-d/guide/blob/master/developer-community
 - [ ] Documentation has been added, updated, or not applicable
 - [ ] Changes have been rebased to main
 - [ ] Multiple commits to the same code have been squashed
+
+<!-- markdownlint-disable-file MD041 -->
