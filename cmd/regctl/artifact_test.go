@@ -12,6 +12,69 @@ import (
 	"github.com/regclient/regclient/types"
 )
 
+func TestArtifactGet(t *testing.T) {
+	saveArtifactOpts := artifactOpts
+	tt := []struct {
+		name        string
+		args        []string
+		expectErr   error
+		expectOut   string
+		outContains bool
+	}{
+		{
+			name:      "Missing arg",
+			args:      []string{"artifact", "get"},
+			expectErr: fmt.Errorf("either a reference or subject must be provided"),
+		},
+		{
+			name:      "Invalid ref",
+			args:      []string{"artifact", "get", "invalid*ref"},
+			expectErr: types.ErrInvalidReference,
+		},
+		{
+			name:      "Missing manifest",
+			args:      []string{"artifact", "get", "ocidir://../../testdata/testrepo:missing"},
+			expectErr: types.ErrNotFound,
+		},
+		{
+			name:      "By Manifest",
+			args:      []string{"artifact", "get", "ocidir://../../testdata/testrepo:a1"},
+			expectOut: "eggs",
+		},
+		{
+			name:      "By Subject",
+			args:      []string{"artifact", "get", "--subject", "ocidir://../../testdata/testrepo:v2", "--filter-artifact-type", "application/example.sbom"},
+			expectOut: "eggs",
+		},
+		{
+			name:      "By Index",
+			args:      []string{"artifact", "get", "ocidir://../../testdata/testrepo:ai", "--filter-annotation", "type=sbom"},
+			expectOut: "eggs",
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := cobraTest(t, tc.args...)
+			artifactOpts = saveArtifactOpts
+			if tc.expectErr != nil {
+				if err == nil {
+					t.Errorf("did not receive expected error: %v", tc.expectErr)
+				} else if !errors.Is(err, tc.expectErr) && err.Error() != tc.expectErr.Error() {
+					t.Errorf("unexpected error, received %v, expected %v", err, tc.expectErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("returned unexpected error: %v", err)
+				return
+			}
+			if (!tc.outContains && out != tc.expectOut) || (tc.outContains && !strings.Contains(out, tc.expectOut)) {
+				t.Errorf("unexpected output, expected %s, received %s", tc.expectOut, out)
+			}
+		})
+	}
+}
+
 func TestArtifactList(t *testing.T) {
 	saveArtifactOpts := artifactOpts
 	tt := []struct {

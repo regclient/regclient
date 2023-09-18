@@ -105,6 +105,17 @@ echo 64 arms | regctl artifact put \
   --artifact-type application/example.arms -m application/example.arms \
   --subject ocidir://testrepo:v2 --platform linux/arm64
 
+# create an index of artifacts
+regctl index create \
+  --artifact-type application/example.artifacts \
+  --ref ocidir://testrepo:a1 \
+  --desc-annotation "type=sbom" \
+  ocidir://testrepo:ai
+regctl index add \
+  --ref ocidir://testrepo:a2 \
+  --desc-annotation "type=sig" \
+  ocidir://testrepo:ai
+
 # create a digest tag from v3 pointing to v1
 v1_dig="$(regctl image digest ocidir://testrepo:v1)"
 v1_dig=${v1_dig#*:}

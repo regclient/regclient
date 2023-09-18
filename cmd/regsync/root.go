@@ -793,10 +793,10 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action act
 			for _, filter := range s.ReferrerFilters {
 				rOpts := []scheme.ReferrerOpts{}
 				if filter.ArtifactType != "" {
-					rOpts = append(rOpts, scheme.WithReferrerAT(filter.ArtifactType))
+					rOpts = append(rOpts, scheme.WithReferrerMatchOpt(types.MatchOpt{ArtifactType: filter.ArtifactType}))
 				}
 				if filter.Annotations != nil {
-					rOpts = append(rOpts, scheme.WithReferrerAnnotations(filter.Annotations))
+					rOpts = append(rOpts, scheme.WithReferrerMatchOpt(types.MatchOpt{Annotations: filter.Annotations}))
 				}
 				opts = append(opts, regclient.ImageWithReferrers(rOpts...))
 			}

@@ -176,7 +176,14 @@ func GetPlatformDesc(m Manifest, p *platform.Platform) (*types.Descriptor, error
 	if err != nil {
 		return nil, err
 	}
-	return getPlatformDesc(p, dl)
+	if p == nil {
+		return nil, fmt.Errorf("invalid input, platform is nil%.0w", types.ErrNotFound)
+	}
+	d, err := types.DescriptorListSearch(dl, types.MatchOpt{Platform: p})
+	if err != nil {
+		return nil, fmt.Errorf("platform not found: %s%.0w", *p, err)
+	}
+	return &d, nil
 }
 
 // GetPlatformList returns the list of platforms from an index
@@ -549,24 +556,6 @@ func verifyMT(expected, received string) error {
 		return fmt.Errorf("manifest contains an unexpected media type: expected %s, received %s", expected, received)
 	}
 	return nil
-}
-
-func getPlatformDesc(p *platform.Platform, dl []types.Descriptor) (*types.Descriptor, error) {
-	if p == nil {
-		return nil, fmt.Errorf("invalid input, platform is nil%.0w", types.ErrNotFound)
-	}
-	for _, d := range dl {
-		if d.Platform != nil && platform.Match(*p, *d.Platform) {
-			return &d, nil
-		}
-	}
-	// if no platforms match, fall back to searching for a compatible platform (Mac runs Linux images)
-	for _, d := range dl {
-		if d.Platform != nil && platform.Compatible(*p, *d.Platform) {
-			return &d, nil
-		}
-	}
-	return nil, fmt.Errorf("platform not found: %s%.0w", *p, types.ErrNotFound)
 }
 
 func getPlatformList(dl []types.Descriptor) ([]*platform.Platform, error) {

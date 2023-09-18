@@ -1017,7 +1017,7 @@ func TestReferrer(t *testing.T) {
 			t.Errorf("Failed creating ref: %v", err)
 			return
 		}
-		rl, err := reg.ReferrerList(ctx, r, scheme.WithReferrerAT(configMTA))
+		rl, err := reg.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{ArtifactType: configMTA}))
 		if err != nil {
 			t.Errorf("Failed running ReferrerList: %v", err)
 			return
@@ -1026,7 +1026,7 @@ func TestReferrer(t *testing.T) {
 			t.Errorf("descriptor list mismatch: %v", rl.Descriptors)
 			return
 		}
-		rl, err = reg.ReferrerList(ctx, r, scheme.WithReferrerAT("application/vnd.example.unknown"))
+		rl, err = reg.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{ArtifactType: "application/vnd.example.unknown"}))
 		if err != nil {
 			t.Errorf("Failed running ReferrerList: %v", err)
 			return
@@ -1042,7 +1042,7 @@ func TestReferrer(t *testing.T) {
 			t.Errorf("Failed creating ref: %v", err)
 			return
 		}
-		rl, err := reg.ReferrerList(ctx, r, scheme.WithReferrerAnnotations(map[string]string{extraAnnot: extraValue2}))
+		rl, err := reg.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{Annotations: map[string]string{extraAnnot: extraValue2}}))
 		if err != nil {
 			t.Errorf("Failed running ReferrerList: %v", err)
 			return
@@ -1051,7 +1051,7 @@ func TestReferrer(t *testing.T) {
 			t.Errorf("descriptor list mismatch: %v", rl.Descriptors)
 			return
 		}
-		rl, err = reg.ReferrerList(ctx, r, scheme.WithReferrerAnnotations(map[string]string{extraAnnot: "unknown value"}))
+		rl, err = reg.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{Annotations: map[string]string{extraAnnot: "unknown value"}}))
 		if err != nil {
 			t.Errorf("Failed running ReferrerList: %v", err)
 			return
@@ -1060,7 +1060,7 @@ func TestReferrer(t *testing.T) {
 			t.Errorf("unexpected descriptors: %v", rl.Descriptors)
 			return
 		}
-		rl, err = reg.ReferrerList(ctx, r, scheme.WithReferrerAnnotations(map[string]string{extraAnnot: ""}))
+		rl, err = reg.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{Annotations: map[string]string{extraAnnot: ""}}))
 		if err != nil {
 			t.Errorf("Failed running ReferrerList: %v", err)
 			return

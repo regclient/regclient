@@ -12,7 +12,7 @@ import (
 )
 
 func TestDescriptorData(t *testing.T) {
-	tests := []struct {
+	tt := []struct {
 		name     string
 		d        Descriptor
 		wantData []byte
@@ -58,12 +58,12 @@ func TestDescriptorData(t *testing.T) {
 			wantData: []byte("example data"),
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			out, err := tt.d.GetData()
-			if tt.wantErr != nil {
-				if err == nil || (!errors.Is(err, tt.wantErr) && err.Error() != tt.wantErr.Error()) {
-					t.Errorf("expected error %v, received %v", tt.wantErr, err)
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := tc.d.GetData()
+			if tc.wantErr != nil {
+				if err == nil || (!errors.Is(err, tc.wantErr) && err.Error() != tc.wantErr.Error()) {
+					t.Errorf("expected error %v, received %v", tc.wantErr, err)
 				}
 				return
 			}
@@ -71,8 +71,8 @@ func TestDescriptorData(t *testing.T) {
 				t.Errorf("received error %v", err)
 				return
 			}
-			if !bytes.Equal(out, tt.wantData) {
-				t.Errorf("data mismatch, expected %s, received %s", string(tt.wantData), string(out))
+			if !bytes.Equal(out, tc.wantData) {
+				t.Errorf("data mismatch, expected %s, received %s", string(tc.wantData), string(out))
 			}
 		})
 	}
@@ -81,7 +81,7 @@ func TestDescriptorData(t *testing.T) {
 func TestDescriptorEq(t *testing.T) {
 	digA := digest.FromString("test A")
 	digB := digest.FromString("test B")
-	tests := []struct {
+	tt := []struct {
 		name        string
 		d1, d2      Descriptor
 		expectEqual bool
@@ -433,13 +433,13 @@ func TestDescriptorEq(t *testing.T) {
 			expectSame:  true,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.d1.Equal(tt.d2) != tt.expectEqual {
-				t.Errorf("equal is not %v", tt.expectEqual)
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.d1.Equal(tc.d2) != tc.expectEqual {
+				t.Errorf("equal is not %v", tc.expectEqual)
 			}
-			if tt.d1.Same(tt.d2) != tt.expectSame {
-				t.Errorf("same is not %v", tt.expectSame)
+			if tc.d1.Same(tc.d2) != tc.expectSame {
+				t.Errorf("same is not %v", tc.expectSame)
 			}
 		})
 	}
@@ -530,4 +530,255 @@ func TestDataJSON(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDescriptorSearch(t *testing.T) {
+	dAMD64 := Descriptor{
+		MediaType: MediaTypeOCI1Manifest,
+		Size:      12345,
+		Digest:    EmptyDigest,
+		Platform: &platform.Platform{
+			OS:           "linux",
+			Architecture: "amd64",
+		},
+	}
+	dAMD64Win := Descriptor{
+		MediaType: MediaTypeOCI1Manifest,
+		Size:      12345,
+		Digest:    EmptyDigest,
+		Platform: &platform.Platform{
+			OS:           "windows",
+			Architecture: "amd64",
+		},
+	}
+	dARM64 := Descriptor{
+		MediaType: MediaTypeOCI1Manifest,
+		Size:      12345,
+		Digest:    EmptyDigest,
+		Platform: &platform.Platform{
+			OS:           "linux",
+			Architecture: "arm64",
+		},
+	}
+	dAnnotations := Descriptor{
+		MediaType: MediaTypeOCI1Manifest,
+		Size:      12345,
+		Digest:    EmptyDigest,
+		Platform: &platform.Platform{
+			OS:           "linux",
+			Architecture: "amd64",
+		},
+		Annotations: map[string]string{
+			"runtime": "special runtime",
+			"version": "1.2.3",
+			"date":    "2022-01-01 12:34:56",
+		},
+	}
+	dAnnotations2 := Descriptor{
+		MediaType: MediaTypeOCI1Manifest,
+		Size:      12345,
+		Digest:    EmptyDigest,
+		Platform: &platform.Platform{
+			OS:           "linux",
+			Architecture: "amd64",
+		},
+		Annotations: map[string]string{
+			"runtime": "special runtime",
+			"version": "1.3.0",
+			"date":    "2022-04-01 01:02:03",
+		},
+	}
+	dArtifact := Descriptor{
+		MediaType:    MediaTypeOCI1Manifest,
+		Size:         12345,
+		Digest:       EmptyDigest,
+		ArtifactType: "application/example.artifact",
+		Annotations: map[string]string{
+			"version": "1.2.3",
+			"date":    "2022-01-01 12:34:56",
+		},
+	}
+	dArtifact2 := Descriptor{
+		MediaType:    MediaTypeOCI1Manifest,
+		Size:         12345,
+		Digest:       EmptyDigest,
+		ArtifactType: "application/example.artifact",
+		Annotations: map[string]string{
+			"version": "1.2.9",
+			"date":    "2022-04-01 01:02:03",
+			"unique":  "x",
+		},
+	}
+	dArtifact3 := Descriptor{
+		MediaType:    MediaTypeOCI1Manifest,
+		Size:         12345,
+		Digest:       EmptyDigest,
+		ArtifactType: "application/example.artifact",
+		Annotations: map[string]string{
+			"version": "1.3.0",
+			"date":    "2022-02-28 02:04:08",
+		},
+	}
+	testDL := []Descriptor{
+		dAMD64,
+		dARM64,
+		dAMD64Win,
+		dAnnotations,
+		dAnnotations2,
+		dArtifact,
+		dArtifact2,
+		dArtifact3,
+	}
+	tt := []struct {
+		name   string
+		dl     []Descriptor
+		opt    MatchOpt
+		expect Descriptor
+		err    error
+	}{
+		{
+			name: "empty",
+			err:  ErrNotFound,
+		},
+		{
+			name: "amd64",
+			dl:   testDL,
+			opt: MatchOpt{
+				Platform: &platform.Platform{
+					OS:           "linux",
+					Architecture: "amd64",
+				},
+			},
+			expect: dAMD64,
+		},
+		{
+			name: "amd64 compat",
+			dl:   testDL,
+			opt: MatchOpt{
+				Platform: &platform.Platform{
+					OS:           "darwin",
+					Architecture: "amd64",
+				},
+			},
+			expect: dAMD64,
+		},
+		{
+			name: "amd64 windows",
+			dl:   testDL,
+			opt: MatchOpt{
+				Platform: &platform.Platform{
+					OS:           "windows",
+					Architecture: "amd64",
+				},
+			},
+			expect: dAMD64Win,
+		},
+		{
+			name: "amd64 annotations",
+			dl:   testDL,
+			opt: MatchOpt{
+				Annotations: map[string]string{
+					"runtime": "special runtime",
+				},
+				Platform: &platform.Platform{
+					OS:           "linux",
+					Architecture: "amd64",
+				},
+			},
+			expect: dAnnotations,
+		},
+		{
+			name: "artifact missing",
+			dl:   testDL,
+			opt: MatchOpt{
+				ArtifactType: "application/example.artifact",
+				Platform: &platform.Platform{
+					OS:           "linux",
+					Architecture: "amd64",
+				},
+			},
+			err: ErrNotFound,
+		},
+		{
+			name: "artifact",
+			dl:   testDL,
+			opt: MatchOpt{
+				ArtifactType: "application/example.artifact",
+				Annotations:  map[string]string{},
+			},
+			expect: dArtifact,
+		},
+		{
+			name: "artifact sort",
+			dl:   testDL,
+			opt: MatchOpt{
+				ArtifactType:   "application/example.artifact",
+				Annotations:    map[string]string{},
+				SortAnnotation: "date",
+			},
+			expect: dArtifact,
+		},
+		{
+			name: "artifact sort desc",
+			dl:   testDL,
+			opt: MatchOpt{
+				ArtifactType:   "application/example.artifact",
+				Annotations:    map[string]string{},
+				SortAnnotation: "date",
+				SortDesc:       true,
+			},
+			expect: dArtifact2,
+		},
+		{
+			name: "artifact sort unset",
+			dl:   testDL,
+			opt: MatchOpt{
+				ArtifactType:   "application/example.artifact",
+				Annotations:    map[string]string{},
+				SortAnnotation: "unique",
+			},
+			expect: dArtifact2,
+		},
+		{
+			name: "artifact sort unset desc",
+			dl:   testDL,
+			opt: MatchOpt{
+				ArtifactType:   "application/example.artifact",
+				Annotations:    map[string]string{},
+				SortAnnotation: "unique",
+				SortDesc:       true,
+			},
+			expect: dArtifact2,
+		},
+		{
+			name: "artifact sort all unique desc",
+			dl:   testDL,
+			opt: MatchOpt{
+				SortAnnotation: "unique",
+				SortDesc:       true,
+			},
+			expect: dArtifact2,
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := DescriptorListSearch(tc.dl, tc.opt)
+			if tc.err != nil {
+				if err == nil {
+					t.Error("did not fail")
+				} else if !errors.Is(err, tc.err) && err.Error() != tc.err.Error() {
+					t.Errorf("unexpected error, expected %v, received %v", tc.err, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("unexpected error, received %v", err)
+				return
+			}
+			if !tc.expect.Equal(result) {
+				t.Errorf("unexpected result, expected %v, received %v", tc.expect, result)
+			}
+		})
+	}
+
 }
