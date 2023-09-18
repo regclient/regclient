@@ -67,7 +67,7 @@ lint-go: $(GOPATH)/bin/staticcheck .FORCE ## Run linting for Go
 .PHONY: lint-md
 lint-md: .FORCE ## Run linting for markdown
 	docker run --rm -v "$(PWD):/workdir:ro" davidanson/markdownlint-cli2:$(MARKDOWN_LINT_VER) \
-	  **/*.md "#vendor"
+	  "**/*.md" "#vendor"
 
 .PHONY: vulnerability-scan
 vulnerability-scan: osv-scanner vulncheck-go ## Run all vulnerability scanners
