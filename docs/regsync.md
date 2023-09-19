@@ -81,6 +81,11 @@ sync:
   - source: localreg:5000
     target: localcopy:5000
     type: registry
+    repos:
+      allow:
+      - "team-x\/.*"
+      deny:
+      - ".*backup"
 ```
 
 - `version`:
@@ -220,6 +225,12 @@ sync:
     "registry", "repository", or "image".
     "registry" expects a registry name (host:port) and will copy every repository.
     "repository" will copy all tags from the source repository.
+  - `repos`:
+    Implements filters on repositories for "registry" types, regex values are automatically bound to the beginning and ending of each string (`^` and `$`).
+    - `allow`:
+      (array of strings) regex to allow specific repositories.
+    - `deny`:
+      (array of strings) regex to deny specific repositories.
   - `tags`:
     Implements filters on tags for "registry" and "repository" types, regex values are automatically bound to the beginning and ending of each string (`^` and `$`).
     - `allow`:
