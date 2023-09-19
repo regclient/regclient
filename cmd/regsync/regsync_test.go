@@ -282,7 +282,7 @@ func TestProcess(t *testing.T) {
 				Source: "ocidir://testrepo",
 				Target: "ocidir://test3",
 				Type:   "repository",
-				Tags: ConfigTags{
+				Tags: AllowDeny{
 					Allow: []string{"v1", "v3", "latest"},
 				},
 			},
@@ -305,7 +305,7 @@ func TestProcess(t *testing.T) {
 				Source: "ocidir://testrepo",
 				Target: "ocidir://test4",
 				Type:   "repository",
-				Tags: ConfigTags{
+				Tags: AllowDeny{
 					Deny: []string{"v2", "old"},
 				},
 			},
@@ -379,7 +379,7 @@ func TestProcess(t *testing.T) {
 				Source: "ocidir://testrepo",
 				Target: "ocidir://test-missing",
 				Type:   "repository",
-				Tags: ConfigTags{
+				Tags: AllowDeny{
 					Allow: []string{"v1", "v2", "v3", "latest"},
 				},
 			},

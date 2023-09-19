@@ -432,6 +432,17 @@ func (s ConfigSync) processRegistry(ctx context.Context, src, tgt string, action
 			break
 		}
 		last = sRepoList[len(sRepoList)-1]
+		// filter repos according to allow/deny rules
+		sRepoList, err = filterList(s.Repos, sRepoList)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"source": src,
+				"allow":  s.Repos.Allow,
+				"deny":   s.Repos.Deny,
+				"error":  err,
+			}).Error("Failed processing repo filters")
+			return err
+		}
 		for _, repo := range sRepoList {
 			if err := s.processRepo(ctx, fmt.Sprintf("%s/%s", src, repo), fmt.Sprintf("%s/%s", tgt, repo), action); err != nil {
 				retErr = err
@@ -466,7 +477,7 @@ func (s ConfigSync) processRepo(ctx context.Context, src, tgt string, action act
 		}).Error("Failed getting source tags")
 		return err
 	}
-	sTagList, err := s.filterTags(sTagsList)
+	sTagList, err := filterList(s.Tags, sTagsList)
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"source": sRepoRef.CommonName(),
@@ -832,12 +843,12 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action act
 	return nil
 }
 
-func (s ConfigSync) filterTags(in []string) ([]string, error) {
+func filterList(ad AllowDeny, in []string) ([]string, error) {
 	var result []string
 	// apply allow list
-	if len(s.Tags.Allow) > 0 {
+	if len(ad.Allow) > 0 {
 		result = make([]string, len(in))
-		for _, filter := range s.Tags.Allow {
+		for _, filter := range ad.Allow {
 			exp, err := regexp.Compile("^" + filter + "$")
 			if err != nil {
 				return result, err
@@ -854,8 +865,8 @@ func (s ConfigSync) filterTags(in []string) ([]string, error) {
 	}
 
 	// apply deny list
-	if len(s.Tags.Deny) > 0 {
-		for _, filter := range s.Tags.Deny {
+	if len(ad.Deny) > 0 {
+		for _, filter := range ad.Deny {
 			exp, err := regexp.Compile("^" + filter + "$")
 			if err != nil {
 				return result, err
