@@ -6,9 +6,18 @@ import (
 
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient/internal/rwfs"
+	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/ref"
+)
+
+// Verify OCIDir implements various interfaces.
+var (
+	_ scheme.API       = (*OCIDir)(nil)
+	_ scheme.Closer    = (*OCIDir)(nil)
+	_ scheme.GCLocker  = (*OCIDir)(nil)
+	_ scheme.Throttler = (*OCIDir)(nil)
 )
 
 func cmpSliceString(a, b []string) bool {
