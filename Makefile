@@ -67,7 +67,7 @@ lint-go: $(GOPATH)/bin/staticcheck .FORCE ## Run linting for Go
 
 .PHONY: lint-gosec
 lint-gosec: $(GOPATH)/bin/gosec .FORCE ## Run gosec
-	$(GOPATH)/bin/gosec ./...
+	$(GOPATH)/bin/gosec -terse ./...
 
 .PHONY: lint-md
 lint-md: .FORCE ## Run linting for markdown
