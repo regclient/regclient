@@ -63,7 +63,7 @@ func New(opts ...Opt) *RegClient {
 	}
 
 	// inject Docker Hub settings
-	rc.hostSet(*config.HostNewName(config.DockerRegistryAuth))
+	_ = rc.hostSet(*config.HostNewName(config.DockerRegistryAuth))
 
 	for _, opt := range opts {
 		opt(&rc)

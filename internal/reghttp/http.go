@@ -152,6 +152,7 @@ func WithCertDirs(dirs []string) Opts {
 func WithCertFiles(files []string) Opts {
 	return func(c *Client) {
 		for _, f := range files {
+			//#nosec G304 command is run by a user accessing their own files
 			cert, err := os.ReadFile(f)
 			if err != nil {
 				c.log.WithFields(logrus.Fields{
@@ -335,7 +336,7 @@ func (resp *clientResp) Next() error {
 			}
 			// close previous response
 			if resp.resp != nil && resp.resp.Body != nil {
-				resp.resp.Body.Close()
+				_ = resp.resp.Body.Close()
 			}
 			// delay for backoff if needed
 			if !h.backoffUntil.IsZero() && h.backoffUntil.After(time.Now()) {
@@ -394,7 +395,7 @@ func (resp *clientResp) Next() error {
 					if api.Method != "HEAD" && api.Method != "GET" {
 						scope = scope + ",push"
 					}
-					hAuth.AddScope(h.config.Hostname, scope)
+					_ = hAuth.AddScope(h.config.Hostname, scope)
 				}
 				// add auth headers
 				err = hAuth.UpdateRequest(httpReq)
@@ -483,7 +484,7 @@ func (resp *clientResp) Next() error {
 				}).Debug("Request failed")
 				errHTTP := HTTPError(resp.resp.StatusCode)
 				errBody, _ := io.ReadAll(resp.resp.Body)
-				resp.resp.Body.Close()
+				_ = resp.resp.Body.Close()
 				return fmt.Errorf("request failed: %w: %s", errHTTP, errBody)
 			}
 
@@ -500,7 +501,7 @@ func (resp *clientResp) Next() error {
 			// verify Content-Range header when range request used, fail if missing
 			if httpReq.Header.Get("Range") != "" && resp.resp.Header.Get("Content-Range") == "" {
 				dropHost = true
-				resp.resp.Body.Close()
+				_ = resp.resp.Body.Close()
 				return fmt.Errorf("range request not supported by server")
 			}
 			return nil
@@ -581,7 +582,7 @@ func (resp *clientResp) Read(b []byte) (int, error) {
 				"expected": resp.digest,
 				"computed": resp.digester.Digest(),
 			}).Warn("Digest mismatch")
-			resp.backoffSet()
+			_ = resp.backoffSet()
 			resp.done = true
 			return i, fmt.Errorf("%w, expected %s, computed %s", types.ErrDigestMismatch,
 				resp.digest.String(), resp.digester.Digest().String())
@@ -728,6 +729,7 @@ func (c *Client) getHost(host string) *clientHost {
 				if t.TLSClientConfig != nil {
 					tlsc = t.TLSClientConfig.Clone()
 				} else {
+					//#nosec G402 the default TLS 1.2 minimum version is allowed to support older registries
 					tlsc = &tls.Config{}
 				}
 				if h.config.TLS == config.TLSInsecure {
@@ -839,6 +841,7 @@ func makeRootPool(rootCAPool [][]byte, rootCADirs []string, hostname string, hos
 			}
 			if strings.HasSuffix(f.Name(), ".crt") {
 				f := filepath.Join(hostDir, f.Name())
+				//#nosec G304 file from a known directory and extension read by the user running the command on their own host
 				cert, err := os.ReadFile(f)
 				if err != nil {
 					return nil, fmt.Errorf("failed to read %s: %v", f, err)

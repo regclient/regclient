@@ -182,8 +182,8 @@ func (m *docker2Manifest) MarshalPretty() ([]byte, error) {
 			return []byte{}, err
 		}
 	}
-	tw.Flush()
-	return buf.Bytes(), nil
+	err = tw.Flush()
+	return buf.Bytes(), err
 }
 func (m *docker2ManifestList) MarshalPretty() ([]byte, error) {
 	if m == nil {
@@ -222,8 +222,8 @@ func (m *docker2ManifestList) MarshalPretty() ([]byte, error) {
 			return []byte{}, err
 		}
 	}
-	tw.Flush()
-	return buf.Bytes(), nil
+	err := tw.Flush()
+	return buf.Bytes(), err
 }
 
 func (m *docker2Manifest) SetAnnotation(key, val string) error {

@@ -97,7 +97,7 @@ func (r *rrHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		r.t.Errorf("Error reading request body: %v", err)
 		rw.WriteHeader(http.StatusInternalServerError)
-		rw.Write([]byte("Error reading request body"))
+		_, _ = rw.Write([]byte("Error reading request body"))
 		return
 	}
 	r.mu.Lock()
@@ -124,7 +124,7 @@ func (r *rrHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		if rr.RespEntry.Status != 0 {
 			rw.WriteHeader(rr.RespEntry.Status)
 		}
-		io.Copy(rw, bytes.NewReader(rr.RespEntry.Body))
+		_, _ = io.Copy(rw, bytes.NewReader(rr.RespEntry.Body))
 
 		// for single use test cases, delete this entry
 		if reqMatch.DelOnUse {
@@ -143,7 +143,7 @@ func (r *rrHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 	r.t.Errorf("Unhandled request: %v, body: %s, state: %s", req, reqBody, r.state)
 	rw.WriteHeader(http.StatusInternalServerError)
-	rw.Write([]byte("Unsupported request"))
+	_, _ = rw.Write([]byte("Unsupported request"))
 }
 
 // BaseEntries initial entries for a generic docker registry
@@ -164,6 +164,7 @@ var BaseEntries = []ReqResp{
 
 // NewRandomBlob outputs a reproducible random blob (based on the seed) for testing
 func NewRandomBlob(size int, seed int64) (digest.Digest, []byte) {
+	//#nosec G404 regresp is only used for testing
 	r := rand.New(rand.NewSource(seed))
 	b := make([]byte, size)
 	if n, err := r.Read(b); err != nil {

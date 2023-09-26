@@ -65,7 +65,10 @@ func (o *OCIDir) Close(ctx context.Context, r ref.Ref) error {
 					"digest": digest,
 				}).Debug("ocidir garbage collect")
 				// delete
-				o.fs.Remove(path.Join(blobsPath, blobDir.Name(), digestFile.Name()))
+				err = o.fs.Remove(path.Join(blobsPath, blobDir.Name(), digestFile.Name()))
+				if err != nil {
+					return fmt.Errorf("failed to delete %s: %w", path.Join(blobsPath, blobDir.Name(), digestFile.Name()), err)
+				}
 			}
 		}
 	}

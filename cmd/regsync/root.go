@@ -124,11 +124,11 @@ func init() {
 	versionCmd.Flags().StringVar(&cliOpts.format, "format", "{{printPretty .}}", "Format output with go template syntax")
 	onceCmd.Flags().BoolVar(&cliOpts.missing, "missing", false, "Only copy tags that are missing on target")
 
-	rootCmd.MarkPersistentFlagFilename("config")
-	serverCmd.MarkPersistentFlagRequired("config")
-	checkCmd.MarkPersistentFlagRequired("config")
-	onceCmd.MarkPersistentFlagRequired("config")
-	configCmd.MarkPersistentFlagRequired("config")
+	_ = rootCmd.MarkPersistentFlagFilename("config")
+	_ = serverCmd.MarkPersistentFlagRequired("config")
+	_ = checkCmd.MarkPersistentFlagRequired("config")
+	_ = onceCmd.MarkPersistentFlagRequired("config")
+	_ = configCmd.MarkPersistentFlagRequired("config")
 
 	rootCmd.AddCommand(serverCmd)
 	rootCmd.AddCommand(checkCmd)
@@ -217,6 +217,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	}
 	ctx := cmd.Context()
 	var wg sync.WaitGroup
+	// TODO: switch to joining array of errors once 1.20 is the minimum version
 	var mainErr error
 	c := cron.New(cron.WithChain(
 		cron.SkipIfStillRunning(cron.DefaultLogger),
@@ -234,7 +235,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 				"type":   s.Type,
 				"sched":  sched,
 			}).Debug("Scheduled task")
-			c.AddFunc(sched, func() {
+			_, errCron := c.AddFunc(sched, func() {
 				log.WithFields(logrus.Fields{
 					"source": s.Source,
 					"target": s.Target,
@@ -247,6 +248,17 @@ func runServer(cmd *cobra.Command, args []string) error {
 					mainErr = err
 				}
 			})
+			if errCron != nil {
+				log.WithFields(logrus.Fields{
+					"source": s.Source,
+					"target": s.Target,
+					"sched":  sched,
+					"err":    errCron,
+				}).Error("Failed to schedule cron")
+				if mainErr != nil {
+					mainErr = errCron
+				}
+			}
 			// immediately copy any images that are missing from target
 			if conf.Defaults.Parallel > 0 {
 				wg.Add(1)
@@ -683,7 +695,10 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action act
 	}
 
 	// wait for parallel tasks
-	throttleC.Acquire(ctx)
+	err = throttleC.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to acquire throttle: %w", err)
+	}
 	// delay for rate limit on source
 	if s.RateLimit.Min > 0 && manifest.GetRateLimit(mSrc).Set {
 		// refresh current rate limit after acquiring throttle
@@ -693,13 +708,16 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action act
 				"source": src.CommonName(),
 				"error":  err,
 			}).Error("rate limit check failed")
-			throttleC.Release(ctx)
+			_ = throttleC.Release(ctx)
 			return err
 		}
 		// delay if rate limit exceeded
 		rlSrc := manifest.GetRateLimit(mSrc)
 		for rlSrc.Remain < s.RateLimit.Min {
-			throttleC.Release(ctx)
+			err = throttleC.Release(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to release throttle: %w", err)
+			}
 			log.WithFields(logrus.Fields{
 				"source":        src.CommonName(),
 				"source-remain": rlSrc.Remain,
@@ -712,15 +730,17 @@ func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action act
 				return ErrCanceled
 			case <-time.After(s.RateLimit.Retry):
 			}
-			throttleC.Acquire(ctx)
+			err = throttleC.Acquire(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to reacquire throttle: %w", err)
+			}
 			mSrc, err = rc.ManifestHead(ctx, src)
 			if err != nil {
-				throttleC.Release(ctx)
 				log.WithFields(logrus.Fields{
 					"source": src.CommonName(),
 					"error":  err,
 				}).Error("rate limit check failed")
-				throttleC.Release(ctx)
+				_ = throttleC.Release(ctx)
 				return err
 			}
 			rlSrc = manifest.GetRateLimit(mSrc)

@@ -60,13 +60,13 @@ func init() {
 	rootCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
 	rootCmd.PersistentFlags().StringVarP(&rootOpts.userAgent, "user-agent", "", "", "Override user agent")
 
-	rootCmd.RegisterFlagCompletionFunc("verbosity", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	_ = rootCmd.RegisterFlagCompletionFunc("verbosity", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"debug", "info", "warn", "error", "fatal", "panic"}, cobra.ShellCompDirectiveNoFileComp
 	})
-	rootCmd.RegisterFlagCompletionFunc("logopt", completeArgNone)
+	_ = rootCmd.RegisterFlagCompletionFunc("logopt", completeArgNone)
 
 	versionCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
-	versionCmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	_ = versionCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
 	rootCmd.PersistentPreRunE = rootPreRun
 	rootCmd.AddCommand(versionCmd)

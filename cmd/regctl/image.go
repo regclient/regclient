@@ -192,7 +192,7 @@ func init() {
 	imageCopyCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageCopyCmd.Flags().StringArrayVarP(&imageOpts.platforms, "platforms", "", []string{}, "Copy only specific platforms, registry validation must be disabled")
 	// platforms should be treated as experimental since it will break many registries
-	imageCopyCmd.Flags().MarkHidden("platforms")
+	_ = imageCopyCmd.Flags().MarkHidden("platforms")
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.digestTags, "digest-tags", "", false, "Include digest tags (\"sha256-<digest>.*\") when copying manifests")
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.referrers, "referrers", "", false, "Include referrers")
 
@@ -201,8 +201,8 @@ func init() {
 	imageDigestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Do not resolve platform from manifest list (enabled by default)")
 	imageDigestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageDigestCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
-	imageDigestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
-	imageDigestCmd.Flags().MarkHidden("list")
+	_ = imageDigestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
+	_ = imageDigestCmd.Flags().MarkHidden("list")
 
 	imageGetFileCmd.Flags().StringVarP(&imageOpts.formatFile, "format", "", "", "Format output with go template syntax")
 	imageGetFileCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
@@ -215,16 +215,16 @@ func init() {
 
 	imageInspectCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageInspectCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
-	imageInspectCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
-	imageInspectCmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	_ = imageInspectCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
+	_ = imageInspectCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
 	imageManifestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Output manifest list if available (enabled by default)")
 	imageManifestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageManifestCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
 	imageManifestCmd.Flags().StringVarP(&manifestOpts.formatGet, "format", "", "{{printPretty .}}", "Format output with go template syntax (use \"raw-body\" for the original manifest)")
-	imageManifestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
-	imageManifestCmd.RegisterFlagCompletionFunc("format", completeArgNone)
-	imageManifestCmd.Flags().MarkHidden("list")
+	_ = imageManifestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
+	_ = imageManifestCmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	_ = imageManifestCmd.Flags().MarkHidden("list")
 
 	imageModCmd.Flags().StringVarP(&imageOpts.create, "create", "", "", "Create tag")
 	imageModCmd.Flags().BoolVarP(&imageOpts.replace, "replace", "", false, "Replace tag (ignored when \"create\" is used)")
@@ -339,7 +339,7 @@ func init() {
 			return nil
 		},
 	}, "config-time-max", "", `max timestamp for a config`)
-	imageModCmd.Flags().MarkHidden("config-time-max") // TODO: deprecate config-time-max in favor of config-time
+	_ = imageModCmd.Flags().MarkHidden("config-time-max") // TODO: deprecate config-time-max in favor of config-time
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
@@ -420,7 +420,7 @@ func init() {
 			return nil
 		},
 	}, "file-tar-time-max", "", `max timestamp for contents of a tar file within a layer`)
-	imageModCmd.Flags().MarkHidden("file-tar-time-max") // TODO: deprecate in favor of file-tar-time
+	_ = imageModCmd.Flags().MarkHidden("file-tar-time-max") // TODO: deprecate in favor of file-tar-time
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
@@ -514,7 +514,7 @@ func init() {
 			return nil
 		},
 	}, "layer-time-max", "", `max timestamp for a layer`)
-	imageModCmd.Flags().MarkHidden("layer-time-max") // TODO: deprecate in favor of layer-time
+	_ = imageModCmd.Flags().MarkHidden("layer-time-max") // TODO: deprecate in favor of layer-time
 	flagRebase := imageModCmd.Flags().VarPF(&modFlagFunc{
 		t: "bool",
 		f: func(val string) error {
@@ -605,7 +605,7 @@ func init() {
 			return nil
 		},
 	}, "time-max", "", `max timestamp for both the config and layers`)
-	imageModCmd.Flags().MarkHidden("time-max") // TODO: deprecate
+	_ = imageModCmd.Flags().MarkHidden("time-max") // TODO: deprecate
 	flagDocker := imageModCmd.Flags().VarPF(&modFlagFunc{
 		t: "bool",
 		f: func(val string) error {
@@ -664,7 +664,7 @@ func init() {
 	}, "volume-rm", "", `delete a volume definition`)
 
 	imageRateLimitCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
-	imageRateLimitCmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	_ = imageRateLimitCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
 	imageCmd.AddCommand(imageCheckBaseCmd)
 	imageCmd.AddCommand(imageCopyCmd)
@@ -1265,7 +1265,10 @@ func runImageMod(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "%s\n", rOut.CommonName())
-	rc.Close(ctx, rOut)
+	err = rc.Close(ctx, rOut)
+	if err != nil {
+		return fmt.Errorf("failed to close ref: %w", err)
+	}
 	return nil
 }
 

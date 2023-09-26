@@ -164,7 +164,7 @@ func (reg *Reg) BlobMount(ctx context.Context, rSrc ref.Ref, rTgt ref.Ref, d typ
 	_, uuid, err := reg.blobMount(ctx, rTgt, d, rSrc)
 	// if mount fails and returns an upload location, cancel that upload
 	if err != nil {
-		reg.blobUploadCancel(ctx, rTgt, uuid)
+		_ = reg.blobUploadCancel(ctx, rTgt, uuid)
 	}
 	return err
 }
@@ -524,7 +524,10 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url
 			if err != nil && !errors.Is(err, types.ErrHTTPStatus) && !errors.Is(err, types.ErrNotFound) {
 				return types.Descriptor{}, fmt.Errorf("failed to send blob (chunk), ref %s: http do: %w", r.CommonName(), err)
 			}
-			resp.Close()
+			err = resp.Close()
+			if err != nil {
+				return types.Descriptor{}, fmt.Errorf("failed to close request: %w", err)
+			}
 			httpResp := resp.HTTPResponse()
 			// distribution-spec is 202, AWS ECR returns a 201 and rejects the put
 			if resp.HTTPResponse().StatusCode == 201 {

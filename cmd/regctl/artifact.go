@@ -124,14 +124,14 @@ func init() {
 	artifactGetCmd.Flags().StringVar(&artifactOpts.artifactConfig, "config-file", "", "Config filename to output")
 	artifactGetCmd.Flags().StringArrayVarP(&artifactOpts.artifactFile, "file", "f", []string{}, "Filter by artifact filename")
 	artifactGetCmd.Flags().StringArrayVarP(&artifactOpts.artifactFileMT, "file-media-type", "m", []string{}, "Filter by artifact media-type")
-	artifactGetCmd.RegisterFlagCompletionFunc("file-media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	_ = artifactGetCmd.RegisterFlagCompletionFunc("file-media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return artifactFileKnownTypes, cobra.ShellCompDirectiveNoFileComp
 	})
 	artifactGetCmd.Flags().BoolVar(&artifactOpts.latest, "latest", false, "Get the most recent referrer using the OCI created annotation")
 	artifactGetCmd.Flags().StringVarP(&artifactOpts.outputDir, "output", "o", "", "Output directory for multiple artifacts")
 	artifactGetCmd.Flags().BoolVar(&artifactOpts.stripDirs, "strip-dirs", false, "Strip directories from filenames in output dir")
 	artifactGetCmd.Flags().StringVar(&artifactOpts.refers, "refers", "", "Deprecated: Get a referrer to the reference")
-	artifactGetCmd.Flags().MarkHidden("refers")
+	_ = artifactGetCmd.Flags().MarkHidden("refers")
 	artifactGetCmd.Flags().StringVar(&artifactOpts.sortAnnot, "sort-annotation", "", "Annotation used for sorting results")
 	artifactGetCmd.Flags().BoolVar(&artifactOpts.sortDesc, "sort-desc", false, "Sort in descending order")
 
@@ -145,20 +145,20 @@ func init() {
 	artifactListCmd.Flags().BoolVar(&artifactOpts.sortDesc, "sort-desc", false, "Sort in descending order")
 
 	artifactPutCmd.Flags().StringVarP(&artifactOpts.artifactMT, "media-type", "", types.MediaTypeOCI1Manifest, "EXPERIMENTAL: Manifest media-type")
-	artifactPutCmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	_ = artifactPutCmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return manifestKnownTypes, cobra.ShellCompDirectiveNoFileComp
 	})
-	artifactPutCmd.Flags().MarkHidden("media-type")
+	_ = artifactPutCmd.Flags().MarkHidden("media-type")
 	artifactPutCmd.Flags().StringVar(&artifactOpts.artifactType, "artifact-type", "", "Artifact type (recommended)")
-	artifactPutCmd.RegisterFlagCompletionFunc("artifact-type", completeArgNone)
+	_ = artifactPutCmd.RegisterFlagCompletionFunc("artifact-type", completeArgNone)
 	artifactPutCmd.Flags().StringVar(&artifactOpts.artifactConfig, "config-file", "", "Filename for config content")
 	artifactPutCmd.Flags().StringVar(&artifactOpts.artifactConfigMT, "config-type", "", "Config mediaType")
-	artifactPutCmd.RegisterFlagCompletionFunc("config-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	_ = artifactPutCmd.RegisterFlagCompletionFunc("config-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return configKnownTypes, cobra.ShellCompDirectiveNoFileComp
 	})
 	artifactPutCmd.Flags().StringArrayVarP(&artifactOpts.artifactFile, "file", "f", []string{}, "Artifact filename")
 	artifactPutCmd.Flags().StringArrayVarP(&artifactOpts.artifactFileMT, "file-media-type", "m", []string{}, "Set the mediaType for the individual files")
-	artifactPutCmd.RegisterFlagCompletionFunc("file-media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	_ = artifactPutCmd.RegisterFlagCompletionFunc("file-media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return artifactFileKnownTypes, cobra.ShellCompDirectiveNoFileComp
 	})
 	artifactPutCmd.Flags().StringArrayVar(&artifactOpts.annotations, "annotation", []string{}, "Annotation to include on manifest")
@@ -168,7 +168,7 @@ func init() {
 	artifactPutCmd.Flags().BoolVar(&artifactOpts.stripDirs, "strip-dirs", false, "Strip directories from filenames in artifact")
 	artifactPutCmd.Flags().StringVarP(&artifactOpts.platform, "platform", "p", "", "Specify platform of a subject (e.g. linux/amd64 or local)")
 	artifactPutCmd.Flags().StringVar(&artifactOpts.refers, "refers", "", "EXPERIMENTAL: Set a referrer to the reference")
-	artifactPutCmd.Flags().MarkHidden("refers")
+	_ = artifactPutCmd.Flags().MarkHidden("refers")
 
 	artifactTreeCmd.Flags().BoolVar(&artifactOpts.digestTags, "digest-tags", false, "Include digest tags")
 	artifactTreeCmd.Flags().StringVar(&artifactOpts.filterAT, "filter-artifact-type", "", "Filter descriptors by artifactType")
@@ -319,7 +319,10 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		defer fh.Close()
-		io.Copy(fh, rdr)
+		_, err = io.Copy(fh, rdr)
+		if err != nil {
+			return err
+		}
 	}
 
 	// get list of layers
@@ -398,6 +401,7 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 					dest := filepath.Join(artifactOpts.outputDir, filepath.Join(dirs...))
 					fi, err := os.Stat(dest)
 					if os.IsNotExist(err) {
+						//#nosec G301 defer to user umask setting, simplifies container scenarios, registry content is often public
 						err = os.MkdirAll(dest, 0777)
 						if err != nil {
 							return err
@@ -417,6 +421,7 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 				} else {
 					// create file as writer
 					out := filepath.Join(artifactOpts.outputDir, f)
+					//#nosec G304 command is run by a user accessing their own files
 					fh, err := os.Create(out)
 					if err != nil {
 						return err
@@ -445,7 +450,10 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		defer rdr.Close()
-		io.Copy(cmd.OutOrStdout(), rdr)
+		_, err = io.Copy(cmd.OutOrStdout(), rdr)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -731,6 +739,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 						f = f + "/"
 					}
 				}
+				//#nosec G304 command is run by a user accessing their own files
 				rdr, err := os.Open(openF)
 				if err != nil {
 					return err
@@ -764,7 +773,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 				// if blob already exists, skip Put
 				bRdr, err := rc.BlobHead(ctx, r, types.Descriptor{Digest: d})
 				if err == nil {
-					bRdr.Close()
+					_ = bRdr.Close()
 					return nil
 				}
 				// need to put blob

@@ -117,29 +117,29 @@ func init() {
 
 	blobGetCmd.Flags().StringVarP(&blobOpts.formatGet, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	blobGetCmd.Flags().StringVarP(&blobOpts.mt, "media-type", "", "", "Set the requested mediaType (deprecated)")
-	blobGetCmd.RegisterFlagCompletionFunc("format", completeArgNone)
-	blobGetCmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	_ = blobGetCmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	_ = blobGetCmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{
 			"application/octet-stream",
 		}, cobra.ShellCompDirectiveNoFileComp
 	})
-	blobGetCmd.Flags().MarkHidden("media-type")
+	_ = blobGetCmd.Flags().MarkHidden("media-type")
 
 	blobGetFileCmd.Flags().StringVarP(&blobOpts.formatFile, "format", "", "", "Format output with go template syntax")
 
 	blobHeadCmd.Flags().StringVarP(&blobOpts.formatHead, "format", "", "", "Format output with go template syntax")
-	blobHeadCmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	_ = blobHeadCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
 	blobPutCmd.Flags().StringVarP(&blobOpts.mt, "content-type", "", "", "Set the requested content type (deprecated)")
 	blobPutCmd.Flags().StringVarP(&blobOpts.digest, "digest", "", "", "Set the expected digest")
 	blobPutCmd.Flags().StringVarP(&blobOpts.formatPut, "format", "", "{{println .Digest}}", "Format output with go template syntax")
-	blobPutCmd.RegisterFlagCompletionFunc("content-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	_ = blobPutCmd.RegisterFlagCompletionFunc("content-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{
 			"application/octet-stream",
 		}, cobra.ShellCompDirectiveNoFileComp
 	})
-	blobPutCmd.RegisterFlagCompletionFunc("digest", completeArgNone)
-	blobPutCmd.Flags().MarkHidden("content-type")
+	_ = blobPutCmd.RegisterFlagCompletionFunc("digest", completeArgNone)
+	_ = blobPutCmd.Flags().MarkHidden("content-type")
 
 	blobCmd.AddCommand(blobDiffConfigCmd)
 	blobCmd.AddCommand(blobDiffLayerCmd)

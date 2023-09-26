@@ -5,6 +5,7 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"time"
@@ -188,7 +189,10 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 						}
 					}
 				}
-				br.Close()
+				err = br.Close()
+				if err != nil {
+					return nil, fmt.Errorf("failed to close blob: %w", err)
+				}
 				br = nil
 				if empty || dl.mod == deleted {
 					dl.mod = deleted
@@ -196,9 +200,15 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 				}
 				if changed {
 					// if modified, push blob
-					tw.Close()
+					err = tw.Close()
+					if err != nil {
+						return nil, fmt.Errorf("failed to close temporary tar layer: %w", err)
+					}
 					if gw != nil {
-						gw.Close()
+						err = gw.Close()
+						if err != nil {
+							return nil, fmt.Errorf("failed to close gzip writer: %w", err)
+						}
 					}
 					// get the file size
 					l, err := fh.Seek(0, 1)

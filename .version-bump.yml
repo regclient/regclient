@@ -20,6 +20,7 @@ files:
     scans:
       - makefile-go-vulncheck
       - makefile-markdown-lint
+      - makefile-gosec
       - makefile-osv-scanner
       - makefile-staticcheck
       - makefile-syft-version
@@ -118,6 +119,12 @@ scans:
     args:
       regexp: '^GO_VULNCHECK_VER\?=(?P<Version>v[0-9\.]+)\s*$'
       repo: "go.googlesource.com/vuln"
+  makefile-gosec:
+    type: "regexp"
+    source: "git-tag-semver"
+    args:
+      regexp: '^GOSEC_VER\?=(?P<Version>v[0-9\.]+)\s*$'
+      repo: "github.com/securego/gosec"
   makefile-markdown-lint:
     type: "regexp"
     source: "registry-tag-arg-semver"
