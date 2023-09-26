@@ -102,87 +102,87 @@ type imageSeen struct {
 	err  error
 }
 
-// ImageOpts define options for the Image* commands
+// ImageOpts define options for the Image* commands.
 type ImageOpts func(*imageOpt)
 
-// ImageWithCallback provides progress data to a callback function
+// ImageWithCallback provides progress data to a callback function.
 func ImageWithCallback(callback func(kind types.CallbackKind, instance string, state types.CallbackState, cur, total int64)) ImageOpts {
 	return func(opts *imageOpt) {
 		opts.callback = callback
 	}
 }
 
-// ImageWithCheckBaseDigest provides a base digest to compare
+// ImageWithCheckBaseDigest provides a base digest to compare in ImageCheckBase.
 func ImageWithCheckBaseDigest(d string) ImageOpts {
 	return func(opts *imageOpt) {
 		opts.checkBaseDigest = d
 	}
 }
 
-// ImageWithCheckBaseRef provides a base reference to compare
+// ImageWithCheckBaseRef provides a base reference to compare in ImageCheckBase.
 func ImageWithCheckBaseRef(r string) ImageOpts {
 	return func(opts *imageOpt) {
 		opts.checkBaseRef = r
 	}
 }
 
-// ImageWithCheckSkipConfig skips the configuration check
+// ImageWithCheckSkipConfig skips the configuration check in ImageCheckBase.
 func ImageWithCheckSkipConfig() ImageOpts {
 	return func(opts *imageOpt) {
 		opts.checkSkipConfig = true
 	}
 }
 
-// ImageWithChild attempts to copy every manifest and blob even if parent manifests already exist.
+// ImageWithChild attempts to copy every manifest and blob even if parent manifests already exist in ImageCopy.
 func ImageWithChild() ImageOpts {
 	return func(opts *imageOpt) {
 		opts.child = true
 	}
 }
 
-// ImageWithExportCompress adds gzip compression to tar export output
+// ImageWithExportCompress adds gzip compression to tar export output in ImageExport.
 func ImageWithExportCompress() ImageOpts {
 	return func(opts *imageOpt) {
 		opts.exportCompress = true
 	}
 }
 
-// ImageWithExportRef overrides the image name embedded in the export file
+// ImageWithExportRef overrides the image name embedded in the export file in ImageExport.
 func ImageWithExportRef(r ref.Ref) ImageOpts {
 	return func(opts *imageOpt) {
 		opts.exportRef = r
 	}
 }
 
-// ImageWithFastCheck skips check for referrers when manifest has already been copied.
+// ImageWithFastCheck skips check for referrers when manifest has already been copied in ImageCopy.
 func ImageWithFastCheck() ImageOpts {
 	return func(opts *imageOpt) {
 		opts.fastCheck = true
 	}
 }
 
-// ImageWithForceRecursive attempts to copy every manifest and blob even if parent manifests already exist.
+// ImageWithForceRecursive attempts to copy every manifest and blob even if parent manifests already exist in ImageCopy.
 func ImageWithForceRecursive() ImageOpts {
 	return func(opts *imageOpt) {
 		opts.forceRecursive = true
 	}
 }
 
-// ImageWithImportName selects the name of the image to import when multiple images are included
+// ImageWithImportName selects the name of the image to import when multiple images are included in ImageImport.
 func ImageWithImportName(name string) ImageOpts {
 	return func(opts *imageOpt) {
 		opts.importName = name
 	}
 }
 
-// ImageWithIncludeExternal attempts to copy every manifest and blob even if parent manifests already exist.
+// ImageWithIncludeExternal attempts to copy every manifest and blob even if parent manifests already exist in ImageCopy.
 func ImageWithIncludeExternal() ImageOpts {
 	return func(opts *imageOpt) {
 		opts.includeExternal = true
 	}
 }
 
-// ImageWithDigestTags looks for "sha-<digest>.*" tags in the repo to copy with any manifest.
+// ImageWithDigestTags looks for "sha-<digest>.*" tags in the repo to copy with any manifest in ImageCopy.
 // These are used by some artifact systems like sigstore/cosign.
 func ImageWithDigestTags() ImageOpts {
 	return func(opts *imageOpt) {
@@ -190,15 +190,14 @@ func ImageWithDigestTags() ImageOpts {
 	}
 }
 
-// ImageWithPlatform requests specific platforms from a manifest list.
-// This is used by ImageCheckBase.
+// ImageWithPlatform requests specific platforms from a manifest list in ImageCheckBase.
 func ImageWithPlatform(p string) ImageOpts {
 	return func(opts *imageOpt) {
 		opts.platform = p
 	}
 }
 
-// ImageWithPlatforms only copies specific platforms from a manifest list.
+// ImageWithPlatforms only copies specific platforms from a manifest list in ImageCopy.
 // This will result in a failure on many registries that validate manifests.
 // Use the empty string to indicate images without a platform definition should be copied.
 func ImageWithPlatforms(p []string) ImageOpts {
@@ -207,7 +206,7 @@ func ImageWithPlatforms(p []string) ImageOpts {
 	}
 }
 
-// ImageWithReferrers recursively includes images that refer to this.
+// ImageWithReferrers recursively recursively includes referrer images in ImageCopy.
 func ImageWithReferrers(rOpts ...scheme.ReferrerOpts) ImageOpts {
 	return func(opts *imageOpt) {
 		if opts.referrerConfs == nil {
@@ -433,10 +432,11 @@ func (rc *RegClient) ImageCheckBase(ctx context.Context, r ref.Ref, opts ...Imag
 	return nil
 }
 
-// ImageCopy copies an image
-// This will retag an image in the same repository, only pushing and pulling the top level manifest
-// On the same registry, it will attempt to use cross-repository blob mounts to avoid pulling blobs
-// Blobs are only pulled when they don't exist on the target and a blob mount fails
+// ImageCopy copies an image.
+// This will retag an image in the same repository, only pushing and pulling the top level manifest.
+// On the same registry, it will attempt to use cross-repository blob mounts to avoid pulling blobs.
+// Blobs are only pulled when they don't exist on the target and a blob mount fails.
+// Referrers are optionally copied recursively.
 func (rc *RegClient) ImageCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, opts ...ImageOpts) error {
 	opt := imageOpt{
 		seen:    map[string]*imageSeen{},
@@ -473,7 +473,7 @@ func (rc *RegClient) ImageCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.R
 	return nil
 }
 
-// imageCopyOpt is a thread safe copy of a manifest and nested content
+// imageCopyOpt is a thread safe copy of a manifest and nested content.
 func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor, child bool, parents []digest.Digest, opt *imageOpt) (err error) {
 	var mSrc, mTgt manifest.Manifest
 	var sDig digest.Digest
@@ -958,15 +958,16 @@ func imageSeenOrWait(ctx context.Context, opt *imageOpt, tag string, dig digest.
 // ImageExport exports an image to an output stream.
 // The format is compatible with "docker load" if a single image is selected and not a manifest list.
 // The ref must include a tag for exporting to docker (defaults to latest), and may also include a digest.
-// The export is also formatted according to OCI layout which supports multi-platform images.
-// <https://github.com/opencontainers/image-spec/blob/master/image-layout.md>
+// The export is also formatted according to [OCI Layout] which supports multi-platform images.
 // A tar file will be sent to outStream.
 //
 // Resulting filesystem:
-// oci-layout: created at top level, can be done at the start
-// index.json: created at top level, single descriptor with org.opencontainers.image.ref.name annotation pointing to the tag
-// manifest.json: created at top level, based on every layer added, only works for a single arch image
-// blobs/$algo/$hash: each content addressable object (manifest, config, or layer), created recursively
+//   - oci-layout: created at top level, can be done at the start
+//   - index.json: created at top level, single descriptor with org.opencontainers.image.ref.name annotation pointing to the tag
+//   - manifest.json: created at top level, based on every layer added, only works for a single arch image
+//   - blobs/$algo/$hash: each content addressable object (manifest, config, or layer), created recursively
+//
+// [OCI Layout]: https://github.com/opencontainers/image-spec/blob/master/image-layout.md
 func (rc *RegClient) ImageExport(ctx context.Context, r ref.Ref, outStream io.Writer, opts ...ImageOpts) error {
 	var ociIndex v1.Index
 
@@ -1192,7 +1193,7 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 	return nil
 }
 
-// ImageImport pushes an image from a tar file to a registry
+// ImageImport pushes an image from a tar file (ImageExport) to a registry.
 func (rc *RegClient) ImageImport(ctx context.Context, ref ref.Ref, rs io.ReadSeeker, opts ...ImageOpts) error {
 	var opt imageOpt
 	for _, optFn := range opts {
@@ -1260,7 +1261,7 @@ func (rc *RegClient) imageImportBlob(ctx context.Context, ref ref.Ref, desc type
 	return nil
 }
 
-// imageImportDockerAddHandler processes tar files generated by docker
+// imageImportDockerAddHandler processes tar files generated by docker.
 func (rc *RegClient) imageImportDockerAddHandler(trd *tarReadData) {
 	trd.handlers[dockerManifestFilename] = func(header *tar.Header, trd *tarReadData) error {
 		err := trd.tarReadFileJSON(&trd.dockerManifestList)
@@ -1272,7 +1273,7 @@ func (rc *RegClient) imageImportDockerAddHandler(trd *tarReadData) {
 	}
 }
 
-// imageImportDockerAddLayerHandlers imports the docker layers when OCI import fails and docker manifest found
+// imageImportDockerAddLayerHandlers imports the docker layers when OCI import fails and docker manifest found.
 func (rc *RegClient) imageImportDockerAddLayerHandlers(ctx context.Context, ref ref.Ref, trd *tarReadData) {
 	// remove handlers for OCI
 	delete(trd.handlers, ociLayoutFilename)
@@ -1353,7 +1354,7 @@ func (rc *RegClient) imageImportDockerAddLayerHandlers(ctx context.Context, ref 
 	trd.handleAdded = true
 }
 
-// imageImportOCIAddHandler adds handlers for oci-layout and index.json found in OCI layout tar files
+// imageImportOCIAddHandler adds handlers for oci-layout and index.json found in OCI layout tar files.
 func (rc *RegClient) imageImportOCIAddHandler(ctx context.Context, ref ref.Ref, trd *tarReadData) {
 	// add handler for oci-layout, index.json, and manifest.json
 	var err error
@@ -1414,7 +1415,7 @@ func (rc *RegClient) imageImportOCIAddHandler(ctx context.Context, ref ref.Ref, 
 	}
 }
 
-// imageImportOCIHandleManifest recursively processes index and manifest entries from an OCI layout tar
+// imageImportOCIHandleManifest recursively processes index and manifest entries from an OCI layout tar.
 func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.Ref, m manifest.Manifest, trd *tarReadData, push bool, child bool) error {
 	// cache the manifest to avoid needing to pull again later, this is used if index.json is a wrapper around some other manifest
 	trd.manifests[m.GetDescriptor().Digest] = m
@@ -1571,7 +1572,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 	return nil
 }
 
-// imageImportOCIPushManifests uploads manifests after OCI blobs were successfully loaded
+// imageImportOCIPushManifests uploads manifests after OCI blobs were successfully loaded.
 func (rc *RegClient) imageImportOCIPushManifests(ctx context.Context, ref ref.Ref, trd *tarReadData) error {
 	// run finish handlers in reverse order to upload nested manifests
 	for i := len(trd.finish) - 1; i >= 0; i-- {
@@ -1608,8 +1609,8 @@ func imagePlatformInList(target *platform.Platform, list []string) (bool, error)
 	return false, nil
 }
 
-// tarReadAll processes the tar file in a loop looking for matching filenames in the list of handlers
-// handlers for filenames are added at the top level, and by manifest imports
+// tarReadAll processes the tar file in a loop looking for matching filenames in the list of handlers.
+// Handlers for filenames are added at the top level, and by manifest imports.
 func (trd *tarReadData) tarReadAll(rs io.ReadSeeker) error {
 	// return immediately if nothing to do
 	if len(trd.handlers) == 0 {
@@ -1718,7 +1719,7 @@ func (trd *tarReadData) linkList(tgt string) ([]string, error) {
 	return list, nil
 }
 
-// tarReadFileJSON reads the current tar entry and unmarshals json into provided interface
+// tarReadFileJSON reads the current tar entry and unmarshals json into provided interface.
 func (trd *tarReadData) tarReadFileJSON(data interface{}) error {
 	b, err := io.ReadAll(trd.tr)
 	if err != nil {

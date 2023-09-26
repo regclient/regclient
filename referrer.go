@@ -8,7 +8,8 @@ import (
 	"github.com/regclient/regclient/types/referrer"
 )
 
-// ReferrerList retrieves a manifest
+// ReferrerList retrieves a list of referrers to a manifest.
+// The descriptor list should contain manifests that each have a subject field matching the requested ref.
 func (rc *RegClient) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.ReferrerOpts) (referrer.ReferrerList, error) {
 	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
