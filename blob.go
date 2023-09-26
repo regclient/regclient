@@ -20,19 +20,19 @@ type blobOpt struct {
 	callback func(kind types.CallbackKind, instance string, state types.CallbackState, cur, total int64)
 }
 
-// BlobOpts define options for the Image* commands
+// BlobOpts define options for the Image* commands.
 type BlobOpts func(*blobOpt)
 
-// BlobWithCallback provides progress data to a callback function
+// BlobWithCallback provides progress data to a callback function.
 func BlobWithCallback(callback func(kind types.CallbackKind, instance string, state types.CallbackState, cur, total int64)) BlobOpts {
 	return func(opts *blobOpt) {
 		opts.callback = callback
 	}
 }
 
-// BlobCopy copies a blob between two locations
-// If the blob already exists in the target, the copy is skipped
-// A server side cross repository blob mount is attempted
+// BlobCopy copies a blob between two locations.
+// If the blob already exists in the target, the copy is skipped.
+// A server side cross repository blob mount is attempted.
 func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor, opts ...BlobOpts) error {
 	var opt blobOpt
 	for _, optFn := range opts {
@@ -157,9 +157,9 @@ func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Re
 	return nil
 }
 
-// BlobDelete removes a blob from the registry
-// This method should only be used to repair a damaged registry
-// Typically a server side garbage collection should be used to purge unused blobs
+// BlobDelete removes a blob from the registry.
+// This method should only be used to repair a damaged registry.
+// Typically a server side garbage collection should be used to purge unused blobs.
 func (rc *RegClient) BlobDelete(ctx context.Context, r ref.Ref, d types.Descriptor) error {
 	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
@@ -168,7 +168,7 @@ func (rc *RegClient) BlobDelete(ctx context.Context, r ref.Ref, d types.Descript
 	return schemeAPI.BlobDelete(ctx, r, d)
 }
 
-// BlobGet retrieves a blob, returning a reader
+// BlobGet retrieves a blob, returning a reader.
 func (rc *RegClient) BlobGet(ctx context.Context, r ref.Ref, d types.Descriptor) (blob.Reader, error) {
 	data, err := d.GetData()
 	if err == nil {
@@ -181,7 +181,7 @@ func (rc *RegClient) BlobGet(ctx context.Context, r ref.Ref, d types.Descriptor)
 	return schemeAPI.BlobGet(ctx, r, d)
 }
 
-// BlobGetOCIConfig retrieves an OCI config from a blob, automatically extracting the JSON
+// BlobGetOCIConfig retrieves an OCI config from a blob, automatically extracting the JSON.
 func (rc *RegClient) BlobGetOCIConfig(ctx context.Context, ref ref.Ref, d types.Descriptor) (blob.OCIConfig, error) {
 	b, err := rc.BlobGet(ctx, ref, d)
 	if err != nil {
@@ -190,7 +190,7 @@ func (rc *RegClient) BlobGetOCIConfig(ctx context.Context, ref ref.Ref, d types.
 	return b.ToOCIConfig()
 }
 
-// BlobHead is used to verify if a blob exists and is accessible
+// BlobHead is used to verify if a blob exists and is accessible.
 func (rc *RegClient) BlobHead(ctx context.Context, r ref.Ref, d types.Descriptor) (blob.Reader, error) {
 	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
@@ -199,7 +199,7 @@ func (rc *RegClient) BlobHead(ctx context.Context, r ref.Ref, d types.Descriptor
 	return schemeAPI.BlobHead(ctx, r, d)
 }
 
-// BlobMount attempts to perform a server side copy/mount of the blob between repositories
+// BlobMount attempts to perform a server side copy/mount of the blob between repositories.
 func (rc *RegClient) BlobMount(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor) error {
 	schemeAPI, err := rc.schemeGet(refSrc.Scheme)
 	if err != nil {

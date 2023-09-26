@@ -15,7 +15,7 @@ type manifestOpt struct {
 	requireDigest bool
 }
 
-// ManifestOpts define options for the Manifest* commands
+// ManifestOpts define options for the Manifest* commands.
 type ManifestOpts func(*manifestOpt)
 
 // WithManifest passes a manifest to ManifestDelete.
@@ -26,13 +26,15 @@ func WithManifest(m manifest.Manifest) ManifestOpts {
 }
 
 // WithManifestCheckReferrers checks for referrers field on ManifestDelete.
+// This will update the client managed referrer listing.
 func WithManifestCheckReferrers() ManifestOpts {
 	return func(opts *manifestOpt) {
 		opts.schemeOpts = append(opts.schemeOpts, scheme.WithManifestCheckReferrers())
 	}
 }
 
-// WithManifestChild for ManifestPut.
+// WithManifestChild for ManifestPut indicates the manifest is not the top level manifest being copied.
+// This is used by the ocidir scheme to determine what entries to include in the index.json.
 func WithManifestChild() ManifestOpts {
 	return func(opts *manifestOpt) {
 		opts.schemeOpts = append(opts.schemeOpts, scheme.WithManifestChild())
@@ -54,9 +56,9 @@ func WithManifestRequireDigest() ManifestOpts {
 	}
 }
 
-// ManifestDelete removes a manifest, including all tags pointing to that registry
-// The reference must include the digest to delete (see TagDelete for deleting a tag)
-// All tags pointing to the manifest will be deleted
+// ManifestDelete removes a manifest, including all tags pointing to that registry.
+// The reference must include the digest to delete (see TagDelete for deleting a tag).
+// All tags pointing to the manifest will be deleted.
 func (rc *RegClient) ManifestDelete(ctx context.Context, r ref.Ref, opts ...ManifestOpts) error {
 	opt := manifestOpt{schemeOpts: []scheme.ManifestOpts{}}
 	for _, fn := range opts {
@@ -69,7 +71,7 @@ func (rc *RegClient) ManifestDelete(ctx context.Context, r ref.Ref, opts ...Mani
 	return schemeAPI.ManifestDelete(ctx, r, opt.schemeOpts...)
 }
 
-// ManifestGet retrieves a manifest
+// ManifestGet retrieves a manifest.
 func (rc *RegClient) ManifestGet(ctx context.Context, r ref.Ref, opts ...ManifestOpts) (manifest.Manifest, error) {
 	opt := manifestOpt{schemeOpts: []scheme.ManifestOpts{}}
 	for _, fn := range opts {
@@ -93,7 +95,7 @@ func (rc *RegClient) ManifestGet(ctx context.Context, r ref.Ref, opts ...Manifes
 	return schemeAPI.ManifestGet(ctx, r)
 }
 
-// ManifestHead queries for the existence of a manifest and returns metadata (digest, media-type, size)
+// ManifestHead queries for the existence of a manifest and returns metadata (digest, media-type, size).
 func (rc *RegClient) ManifestHead(ctx context.Context, r ref.Ref, opts ...ManifestOpts) (manifest.Manifest, error) {
 	opt := manifestOpt{schemeOpts: []scheme.ManifestOpts{}}
 	for _, fn := range opts {
@@ -113,8 +115,8 @@ func (rc *RegClient) ManifestHead(ctx context.Context, r ref.Ref, opts ...Manife
 	return m, err
 }
 
-// ManifestPut pushes a manifest
-// Any descriptors referenced by the manifest typically need to be pushed first
+// ManifestPut pushes a manifest.
+// Any descriptors referenced by the manifest typically need to be pushed first.
 func (rc *RegClient) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest, opts ...ManifestOpts) error {
 	opt := manifestOpt{schemeOpts: []scheme.ManifestOpts{}}
 	for _, fn := range opts {
