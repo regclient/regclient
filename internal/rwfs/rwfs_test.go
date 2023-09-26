@@ -10,6 +10,12 @@ import (
 	"testing"
 )
 
+// Verify OSFS and MemFS implement the RWFS interface.
+var (
+	_ RWFS = (*OSFS)(nil)
+	_ RWFS = (*MemFS)(nil)
+)
+
 func testRWFS(t *testing.T, rwfs RWFS) {
 	exRootFile := "root.txt"
 	exRootTxt := []byte("hello root")
