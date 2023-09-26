@@ -13,7 +13,7 @@ require (
 	github.com/yuin/gopher-lua v1.1.0
 	golang.org/x/sys v0.12.0
 	golang.org/x/term v0.12.0
-	gopkg.in/yaml.v2 v2.4.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
