@@ -95,7 +95,7 @@ func init() {
 	indexCreateCmd.Flags().StringVar(&indexOpts.subject, "subject", "", "Specify a subject tag or digest (this manifest must already exist in the repo)")
 	indexCreateCmd.Flags().StringArrayVar(&indexOpts.refs, "ref", []string{}, "References to include in new index")
 	indexCreateCmd.Flags().StringArrayVar(&indexOpts.platforms, "platform", []string{}, "Platforms to include from ref")
-	indexCreateCmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	_ = indexCreateCmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return indexKnownTypes, cobra.ShellCompDirectiveNoFileComp
 	})
 

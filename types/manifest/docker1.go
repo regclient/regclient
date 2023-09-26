@@ -136,8 +136,8 @@ func (m *docker1Manifest) MarshalPretty() ([]byte, error) {
 	for _, d := range m.FSLayers {
 		fmt.Fprintf(tw, "  Digest:\t%s\n", string(d.BlobSum))
 	}
-	tw.Flush()
-	return buf.Bytes(), nil
+	err := tw.Flush()
+	return buf.Bytes(), err
 }
 func (m *docker1SignedManifest) MarshalPretty() ([]byte, error) {
 	if m == nil {
@@ -155,8 +155,8 @@ func (m *docker1SignedManifest) MarshalPretty() ([]byte, error) {
 	for _, d := range m.FSLayers {
 		fmt.Fprintf(tw, "  Digest:\t%s\n", string(d.BlobSum))
 	}
-	tw.Flush()
-	return buf.Bytes(), nil
+	err := tw.Flush()
+	return buf.Bytes(), err
 }
 
 func (m *docker1Manifest) SetConfig(d types.Descriptor) error {

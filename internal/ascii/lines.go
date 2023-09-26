@@ -42,7 +42,10 @@ func (b *Lines) Del() {
 
 func (b *Lines) Flush() {
 	b.Clear()
-	b.out.Write(b.buf)
+	_, err := b.out.Write(b.buf)
+	if err != nil {
+		return
+	}
 	b.lines = bytes.Count(b.buf, []byte("\n"))
 	if b.width > 0 {
 		for _, line := range bytes.Split(b.buf, []byte("\n")) {

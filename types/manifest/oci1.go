@@ -263,8 +263,8 @@ func (m *oci1Manifest) MarshalPretty() ([]byte, error) {
 			return []byte{}, err
 		}
 	}
-	tw.Flush()
-	return buf.Bytes(), nil
+	err = tw.Flush()
+	return buf.Bytes(), err
 }
 func (m *oci1Index) MarshalPretty() ([]byte, error) {
 	if m == nil {
@@ -314,8 +314,8 @@ func (m *oci1Index) MarshalPretty() ([]byte, error) {
 			return []byte{}, err
 		}
 	}
-	tw.Flush()
-	return buf.Bytes(), nil
+	err := tw.Flush()
+	return buf.Bytes(), err
 }
 func (m *oci1Artifact) MarshalPretty() ([]byte, error) {
 	if m == nil {
@@ -363,8 +363,8 @@ func (m *oci1Artifact) MarshalPretty() ([]byte, error) {
 			return []byte{}, err
 		}
 	}
-	tw.Flush()
-	return buf.Bytes(), nil
+	err := tw.Flush()
+	return buf.Bytes(), err
 }
 
 func (m *oci1Manifest) SetAnnotation(key, val string) error {

@@ -69,7 +69,10 @@ func importReflect(ls *lua.LState, lv lua.LValue, v, orig reflect.Value) error {
 				if orig.IsValid() && orig.Type() == v.Type() && orig.Len() < i {
 					origI = orig.Index(i)
 				}
-				importReflect(ls, lvi.RawGetInt(i+1), v.Index(i), origI)
+				err := importReflect(ls, lvi.RawGetInt(i+1), v.Index(i), origI)
+				if err != nil {
+					return err
+				}
 			}
 		}
 		return nil
@@ -82,28 +85,39 @@ func importReflect(ls *lua.LState, lv lua.LValue, v, orig reflect.Value) error {
 				if orig.IsValid() && orig.Type() == v.Type() && orig.Len() > i {
 					origI = orig.Index(i)
 				}
-				importReflect(ls, lvi.RawGetInt(i+1), newV.Index(i), origI)
+				err := importReflect(ls, lvi.RawGetInt(i+1), newV.Index(i), origI)
+				if err != nil {
+					return err
+				}
 			}
 			v.Set(newV)
 		}
 		return nil
 	case reflect.Map:
+		// TODO: with go 1.20, switch to error list and return errors.Join
+		var retErr error
 		if lvi, ok := lv.(*lua.LTable); ok {
 			newV := reflect.MakeMap(v.Type())
 			lvi.ForEach(func(lvtKey, lvtElem lua.LValue) {
 				newKey := reflect.Indirect(reflect.New(v.Type().Key()))
 				newElem := reflect.Indirect(reflect.New(v.Type().Elem()))
-				importReflect(ls, lvtKey, newKey, reflect.Value{})
+				err := importReflect(ls, lvtKey, newKey, reflect.Value{})
+				if err != nil {
+					retErr = err
+				}
 				var origElem reflect.Value
 				if orig.IsValid() && orig.Type() == v.Type() {
 					origElem = orig.MapIndex(newKey)
 				}
-				importReflect(ls, lvtElem, newElem, origElem)
+				err = importReflect(ls, lvtElem, newElem, origElem)
+				if err != nil {
+					retErr = err
+				}
 				newV.SetMapIndex(newKey, newElem)
 			})
 			v.Set(newV)
 		}
-		return nil
+		return retErr
 	case reflect.Struct:
 		foundExported := false
 		if lvi, ok := lv.(*lua.LTable); ok {
@@ -125,7 +139,10 @@ func importReflect(ls *lua.LState, lv lua.LValue, v, orig reflect.Value) error {
 				if orig.IsValid() && orig.Type() == v.Type() {
 					origElem = orig.FieldByName(field.Name)
 				}
-				importReflect(ls, lvi.RawGetString(key), v.FieldByName(field.Name), origElem)
+				err := importReflect(ls, lvi.RawGetString(key), v.FieldByName(field.Name), origElem)
+				if err != nil {
+					return err
+				}
 			}
 		}
 		if !foundExported && orig.IsValid() && orig.Type() == v.Type() {
@@ -146,7 +163,10 @@ func importReflect(ls *lua.LState, lv lua.LValue, v, orig reflect.Value) error {
 				origElem = orig
 			}
 			// dereference pointer and recurse
-			importReflect(ls, lv, v.Elem(), origElem)
+			err := importReflect(ls, lv, v.Elem(), origElem)
+			if err != nil {
+				return err
+			}
 			// } else {
 			// 	// this doesn't work: reflect.Value.Set using unaddressable value
 			// 	v.Set(reflect.Zero(v.Type()))

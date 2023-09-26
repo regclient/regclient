@@ -34,9 +34,9 @@ func init() {
 	repoLsCmd.Flags().StringVarP(&repoOpts.last, "last", "", "", "Specify the last repo from a previous request for pagination")
 	repoLsCmd.Flags().IntVarP(&repoOpts.limit, "limit", "", 0, "Specify the number of repos to retrieve")
 	repoLsCmd.Flags().StringVarP(&repoOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
-	repoLsCmd.RegisterFlagCompletionFunc("last", completeArgNone)
-	repoLsCmd.RegisterFlagCompletionFunc("limit", completeArgNone)
-	repoLsCmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	_ = repoLsCmd.RegisterFlagCompletionFunc("last", completeArgNone)
+	_ = repoLsCmd.RegisterFlagCompletionFunc("limit", completeArgNone)
+	_ = repoLsCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
 	repoCmd.AddCommand(repoLsCmd)
 	rootCmd.AddCommand(repoCmd)

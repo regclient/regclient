@@ -25,6 +25,7 @@ ifeq "$(strip $(VER_BUMP))" ''
 		$(VER_BUMP_CONTAINER)
 endif
 MARKDOWN_LINT_VER?=v0.10.0
+GOSEC_VER?=v2.17.0
 GO_VULNCHECK_VER?=v1.0.1
 OSV_SCANNER_VER?=v1.4.0
 SYFT?=$(shell command -v syft 2>/dev/null)
@@ -58,11 +59,15 @@ test: ## go test
 	go test -cover -race ./...
 
 .PHONY: lint
-lint: lint-go lint-md ## Run all linting
+lint: lint-go lint-md lint-gosec ## Run all linting
 
 .PHONY: lint-go
 lint-go: $(GOPATH)/bin/staticcheck .FORCE ## Run linting for Go
 	$(GOPATH)/bin/staticcheck -checks all ./...
+
+.PHONY: lint-gosec
+lint-gosec: $(GOPATH)/bin/gosec .FORCE ## Run gosec
+	$(GOPATH)/bin/gosec ./...
 
 .PHONY: lint-md
 lint-md: .FORCE ## Run linting for markdown
@@ -173,6 +178,12 @@ util-version-check: ## check all dependencies for updates
 .PHONY: util-version-update
 util-version-update: ## update versions on all dependencies
 	$(VER_BUMP) update
+
+$(GOPATH)/bin/gosec: .FORCE
+	@[ -f $(GOPATH)/bin/gosec ] \
+	&& [ "$$($(GOPATH)/bin/gosec -version | grep '^Version' | cut -f 2 -d ' ')" = "$(GOSEC_VER)" ] \
+	|| go install -ldflags '-X main.Version=$(GOSEC_VER) -X main.GitTag=$(GOSEC_VER)' \
+	    github.com/securego/gosec/v2/cmd/gosec@$(GOSEC_VER)
 
 $(GOPATH)/bin/staticcheck: .FORCE
 	@[ -f $(GOPATH)/bin/staticcheck ] \

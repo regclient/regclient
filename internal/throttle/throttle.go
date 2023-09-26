@@ -133,15 +133,16 @@ func AcquireMulti(ctx context.Context, tList []*Throttle) (context.Context, erro
 		if err == nil && acquired {
 			break
 		}
+		// TODO: errors on Release should be included using errors.Join once 1.20 is the minimum version
 		// cleanup on failed attempt
 		if lockI > i {
-			tList[lockI].Release(ctx)
+			_ = tList[lockI].Release(ctx)
 		}
 		// track blocking index
 		lockI = i
 		for i > 0 {
 			i--
-			tList[i].Release(ctx)
+			_ = tList[i].Release(ctx)
 		}
 		// abort on errors
 		if err != nil {

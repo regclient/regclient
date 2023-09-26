@@ -247,9 +247,12 @@ func (o *OCIDir) manifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 	}
 	tmpName := fi.Name()
 	_, err = tmpFile.Write(b)
-	tmpFile.Close()
+	errC := tmpFile.Close()
 	if err != nil {
 		return fmt.Errorf("failed to write manifest tmpfile: %w", err)
+	}
+	if errC != nil {
+		return fmt.Errorf("failed to close manifest tmpfile: %w", errC)
 	}
 	file := path.Join(dir, desc.Digest.Encoded())
 	err = o.fs.Rename(path.Join(dir, tmpName), file)

@@ -382,7 +382,7 @@ func (reg *Reg) referrerPing(ctx context.Context, r ref.Ref) bool {
 		reg.featureSet("referrer", r.Registry, r.Repository, false)
 		return false
 	}
-	resp.Close()
+	_ = resp.Close()
 	result := resp.HTTPResponse().StatusCode == 200
 	reg.featureSet("referrer", r.Registry, r.Repository, result)
 	return result

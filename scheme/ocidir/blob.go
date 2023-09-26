@@ -35,7 +35,7 @@ func (o *OCIDir) BlobGet(ctx context.Context, r ref.Ref, d types.Descriptor) (bl
 	if d.Size <= 0 {
 		fi, err := fd.Stat()
 		if err != nil {
-			fd.Close()
+			_ = fd.Close()
 			return nil, err
 		}
 		d.Size = fi.Size()
@@ -115,9 +115,12 @@ func (o *OCIDir) BlobPut(ctx context.Context, r ref.Ref, d types.Descriptor, rdr
 	}
 	tmpName := fi.Name()
 	i, err := io.Copy(tmpFile, rdr)
-	tmpFile.Close()
+	errC := tmpFile.Close()
 	if err != nil {
 		return d, err
+	}
+	if errC != nil {
+		return d, errC
 	}
 	// validate result matches descriptor, or update descriptor if it wasn't defined
 	if d.Digest == "" || d.Size <= 0 {

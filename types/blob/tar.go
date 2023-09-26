@@ -156,7 +156,7 @@ func (tr *tarReader) ReadFile(filename string) (*tar.Header, io.Reader, error) {
 		return nil, nil, types.ErrFileDeleted
 	}
 	if tr.digester != nil {
-		io.Copy(io.Discard, tr.reader) // process/digest any trailing bytes from reader
+		_, _ = io.Copy(io.Discard, tr.reader) // process/digest any trailing bytes from reader
 		dig := tr.digester.Digest()
 		tr.digester = nil
 		if tr.desc.Digest.String() != "" && dig != tr.desc.Digest {

@@ -22,6 +22,6 @@ func printPretty(v interface{}) string {
 	enc := json.NewEncoder(buf)
 	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "  ")
-	enc.Encode(v)
+	_ = enc.Encode(v)
 	return buf.String()
 }

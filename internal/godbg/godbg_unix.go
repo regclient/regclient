@@ -19,6 +19,6 @@ func SignalTrace(sigs ...os.Signal) {
 	signal.Notify(sig, sigs...)
 	go func() {
 		<-sig
-		pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
+		_ = pprof.Lookup("goroutine").WriteTo(os.Stderr, 1)
 	}()
 }

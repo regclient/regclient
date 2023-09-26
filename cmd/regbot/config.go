@@ -74,6 +74,7 @@ func ConfigLoadReader(r io.Reader) (*Config, error) {
 func ConfigLoadFile(filename string) (*Config, error) {
 	_, err := os.Stat(filename)
 	if err == nil {
+		//#nosec G304 command is run by a user accessing their own files
 		file, err := os.Open(filename)
 		if err != nil {
 			return nil, err
