@@ -8,7 +8,7 @@ import (
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/pkg/template"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 // Config is parsed configuration file for regsync
