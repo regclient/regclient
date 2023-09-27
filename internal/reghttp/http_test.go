@@ -719,6 +719,11 @@ func TestRegHttp(t *testing.T) {
 				"server-error." + tsHost,
 			},
 		},
+		"retry." + tsHost: {
+			Name:     "retry." + tsHost,
+			Hostname: tsHost,
+			TLS:      config.TLSDisabled,
+		},
 	}
 
 	// create APIs for requests to run
@@ -1589,7 +1594,7 @@ func TestRegHttp(t *testing.T) {
 			},
 		}
 		retryReq := &Req{
-			Host: tsHost,
+			Host: "retry." + tsHost,
 			APIs: apiRetry,
 		}
 		resp, err := hc.Do(ctx, retryReq)

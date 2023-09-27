@@ -83,9 +83,9 @@ func init() {
 	rootCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
 	versionCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 
-	rootCmd.MarkPersistentFlagFilename("config")
-	serverCmd.MarkPersistentFlagRequired("config")
-	onceCmd.MarkPersistentFlagRequired("config")
+	_ = rootCmd.MarkPersistentFlagFilename("config")
+	_ = serverCmd.MarkPersistentFlagRequired("config")
+	_ = onceCmd.MarkPersistentFlagRequired("config")
 
 	rootCmd.AddCommand(serverCmd)
 	rootCmd.AddCommand(onceCmd)
@@ -173,7 +173,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 				"name":  s.Name,
 				"sched": sched,
 			}).Debug("Scheduled task")
-			c.AddFunc(sched, func() {
+			_, errCron := c.AddFunc(sched, func() {
 				log.WithFields(logrus.Fields{
 					"name": s.Name,
 				}).Debug("Running task")
@@ -184,6 +184,16 @@ func runServer(cmd *cobra.Command, args []string) error {
 					mainErr = err
 				}
 			})
+			if errCron != nil {
+				log.WithFields(logrus.Fields{
+					"name":  s.Name,
+					"sched": sched,
+					"err":   errCron,
+				}).Error("Failed to schedule cron")
+				if mainErr != nil {
+					mainErr = errCron
+				}
+			}
 		} else {
 			log.WithFields(logrus.Fields{
 				"name": s.Name,

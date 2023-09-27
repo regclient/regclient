@@ -126,11 +126,17 @@ func (m *oci1Manifest) GetPlatformDesc(p *platform.Platform) (*types.Descriptor,
 	return nil, fmt.Errorf("platform lookup not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 func (m *oci1Index) GetPlatformDesc(p *platform.Platform) (*types.Descriptor, error) {
-	dl, err := m.GetManifestList()
-	if err != nil {
-		return nil, err
+	if !m.manifSet {
+		return nil, types.ErrManifestNotSet
 	}
-	return getPlatformDesc(p, dl)
+	if p == nil {
+		return nil, fmt.Errorf("invalid input, platform is nil%.0w", types.ErrNotFound)
+	}
+	d, err := types.DescriptorListSearch(m.Manifests, types.MatchOpt{Platform: p})
+	if err != nil {
+		return nil, fmt.Errorf("platform not found: %s%.0w", *p, err)
+	}
+	return &d, nil
 }
 func (m *oci1Artifact) GetPlatformDesc(p *platform.Platform) (*types.Descriptor, error) {
 	return nil, fmt.Errorf("platform lookup not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
@@ -257,8 +263,8 @@ func (m *oci1Manifest) MarshalPretty() ([]byte, error) {
 			return []byte{}, err
 		}
 	}
-	tw.Flush()
-	return buf.Bytes(), nil
+	err = tw.Flush()
+	return buf.Bytes(), err
 }
 func (m *oci1Index) MarshalPretty() ([]byte, error) {
 	if m == nil {
@@ -308,8 +314,8 @@ func (m *oci1Index) MarshalPretty() ([]byte, error) {
 			return []byte{}, err
 		}
 	}
-	tw.Flush()
-	return buf.Bytes(), nil
+	err := tw.Flush()
+	return buf.Bytes(), err
 }
 func (m *oci1Artifact) MarshalPretty() ([]byte, error) {
 	if m == nil {
@@ -357,8 +363,8 @@ func (m *oci1Artifact) MarshalPretty() ([]byte, error) {
 			return []byte{}, err
 		}
 	}
-	tw.Flush()
-	return buf.Bytes(), nil
+	err := tw.Flush()
+	return buf.Bytes(), err
 }
 
 func (m *oci1Manifest) SetAnnotation(key, val string) error {

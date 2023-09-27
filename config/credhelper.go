@@ -21,6 +21,7 @@ func newCredHelper(prog string, env map[string]string) *credHelper {
 }
 
 func (ch *credHelper) run(arg string, input io.Reader) ([]byte, error) {
+	//#nosec G204 only untrusted arg is a hostname which the executed command should not trust
 	cmd := exec.Command(ch.prog, arg)
 	cmd.Env = os.Environ()
 	if ch.env != nil {

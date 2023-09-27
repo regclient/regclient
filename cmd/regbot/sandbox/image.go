@@ -77,7 +77,10 @@ func (s *Sandbox) configGet(ls *lua.LState) int {
 	}
 	m := s.checkManifest(ls, 1, false, false)
 	if s.throttleC != nil {
-		s.throttleC.Acquire(s.ctx)
+		err = s.throttleC.Acquire(s.ctx)
+		if err != nil {
+			ls.RaiseError("Failed to acquire throttle: %v", err)
+		}
 		defer s.throttleC.Release(s.ctx)
 	}
 	s.log.WithFields(logrus.Fields{
@@ -199,7 +202,10 @@ func (s *Sandbox) imageCopy(ls *lua.LState) int {
 		}
 	}
 	if s.throttleC != nil {
-		s.throttleC.Acquire(s.ctx)
+		err = s.throttleC.Acquire(s.ctx)
+		if err != nil {
+			ls.RaiseError("Failed to acquire throttle: %v", err)
+		}
 		defer s.throttleC.Release(s.ctx)
 	}
 	s.log.WithFields(logrus.Fields{
@@ -233,9 +239,13 @@ func (s *Sandbox) imageExportTar(ls *lua.LState) int {
 	src := s.checkReference(ls, 1)
 	file := ls.CheckString(2)
 	if s.throttleC != nil {
-		s.throttleC.Acquire(s.ctx)
+		err = s.throttleC.Acquire(s.ctx)
+		if err != nil {
+			ls.RaiseError("Failed to acquire throttle: %v", err)
+		}
 		defer s.throttleC.Release(s.ctx)
 	}
+	//#nosec G304 command is run by a user accessing their own files
 	fh, err := os.Create(file)
 	if err != nil {
 		ls.RaiseError("Failed to open \"%s\": %v", file, err)
@@ -255,9 +265,13 @@ func (s *Sandbox) imageImportTar(ls *lua.LState) int {
 	tgt := s.checkReference(ls, 1)
 	file := ls.CheckString(2)
 	if s.throttleC != nil {
-		s.throttleC.Acquire(s.ctx)
+		err = s.throttleC.Acquire(s.ctx)
+		if err != nil {
+			ls.RaiseError("Failed to acquire throttle: %v", err)
+		}
 		defer s.throttleC.Release(s.ctx)
 	}
+	//#nosec G304 command is run by a user accessing their own files
 	rs, err := os.Open(file)
 	if err != nil {
 		ls.RaiseError("Failed to read from \"%s\": %v", file, err)

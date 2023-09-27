@@ -16,10 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        gover: ["1.18", "1.19", "1.20"]
+        gover: ["1.19", "1.20", "1.21"]
 
     env:
-      RELEASE_GO_VER: "1.20"
+      RELEASE_GO_VER: "1.21"
 
     permissions:
       # id-token is used by cosign's OIDC based signing
@@ -30,7 +30,7 @@ jobs:
 
     steps:
     - name: Check out code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: "Set up Go ${{ matrix.gover }}"
       uses: actions/setup-go@v4
@@ -61,7 +61,7 @@ jobs:
       uses: anchore/sbom-action/download-syft@v0.14.3
       id: syft
       with:
-        syft-version: "v0.86.1"
+        syft-version: "v0.92.0"
 
     - name: Build artifacts
       if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main'
@@ -69,9 +69,9 @@ jobs:
 
     - name: Install cosign
       if: ( startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main' ) && matrix.gover == env.RELEASE_GO_VER
-      uses: sigstore/cosign-installer@v3.1.1
+      uses: sigstore/cosign-installer@v3.1.2
       with:
-        cosign-release: "v2.1.1"
+        cosign-release: "v2.2.0"
 
     - name: Package artifacts
       if: ( startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main' ) && matrix.gover == env.RELEASE_GO_VER

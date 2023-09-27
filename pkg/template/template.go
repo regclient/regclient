@@ -22,6 +22,7 @@ var tmplFuncs = gotemplate.FuncMap{
 		return os.Getenv(key)
 	},
 	"file": func(filename string) string {
+		//#nosec G304 file inclusion is from user provided values and user executed command
 		b, err := os.ReadFile(filename)
 		if err != nil {
 			return ""
@@ -33,7 +34,7 @@ var tmplFuncs = gotemplate.FuncMap{
 		buf := &bytes.Buffer{}
 		enc := json.NewEncoder(buf)
 		enc.SetEscapeHTML(false)
-		enc.Encode(v)
+		_ = enc.Encode(v)
 		return buf.String()
 	},
 	"jsonPretty": func(v interface{}) string {
@@ -41,7 +42,7 @@ var tmplFuncs = gotemplate.FuncMap{
 		enc := json.NewEncoder(buf)
 		enc.SetEscapeHTML(false)
 		enc.SetIndent("", "  ")
-		enc.Encode(v)
+		_ = enc.Encode(v)
 		return buf.String()
 	},
 	"printPretty": printPretty,

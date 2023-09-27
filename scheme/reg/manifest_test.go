@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -25,9 +26,12 @@ import (
 func TestManifest(t *testing.T) {
 	repoPath := "/proj"
 	getTag := "get"
+	bigTag := "big"
+	shortReadTag := "short"
 	headTag := "head"
 	noheadTag := "nohead"
 	missingTag := "missing"
+	putTag := "put"
 	digest1 := digest.FromString("example1")
 	digest2 := digest.FromString("example2")
 	m := schema2.Manifest{
@@ -132,12 +136,62 @@ func TestManifest(t *testing.T) {
 		},
 		{
 			ReqEntry: reqresp.ReqEntry{
+				Name:   "Large Manifest",
+				Method: "GET",
+				Path:   "/v2" + repoPath + "/manifests/" + bigTag,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", mLen+defaultManifestMaxPull)},
+					"Content-Type":          []string{types.MediaTypeDocker2Manifest},
+					"Docker-Content-Digest": []string{mDigest.String()},
+				},
+				Body: mBody,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "Short Length",
+				Method: "GET",
+				Path:   "/v2" + repoPath + "/manifests/" + shortReadTag,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", mLen+10)},
+					"Content-Type":          []string{types.MediaTypeDocker2Manifest},
+					"Docker-Content-Digest": []string{mDigest.String()},
+				},
+				Body: mBody,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
 				Name:   "Missing",
 				Method: "GET",
 				Path:   "/v2" + repoPath + "/manifests/" + missingTag,
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusNotFound,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "Put",
+				Method: "PUT",
+				Path:   "/v2" + repoPath + "/manifests/" + putTag,
+				Headers: http.Header{
+					"Content-Type":   []string{types.MediaTypeDocker2Manifest},
+					"Content-Length": {fmt.Sprintf("%d", mLen)},
+				},
+				Body: mBody,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusCreated,
+				Headers: http.Header{
+					"Docker-Content-Digest": []string{mDigest.String()},
+				},
 			},
 		},
 	}
@@ -180,6 +234,7 @@ func TestManifest(t *testing.T) {
 		WithConfigHosts(rcHosts),
 		WithLog(log),
 		WithDelay(delayInit, delayMax),
+		WithRetryLimit(3),
 	)
 	regCache := New(
 		WithConfigHosts(rcHosts),
@@ -323,5 +378,75 @@ func TestManifest(t *testing.T) {
 			return
 		}
 	})
-	// TODO: test ManifestPut
+	// TODO: get manifest that is larger than Content-Length header
+	t.Run("Size Limit", func(t *testing.T) {
+		bigRef, err := ref.New(tsURL.Host + repoPath + ":" + bigTag)
+		if err != nil {
+			t.Errorf("Failed creating ref: %v", err)
+		}
+		_, err = reg.ManifestGet(ctx, bigRef)
+		if err == nil {
+			t.Errorf("ManifestGet did not fail")
+			return
+		}
+		if !errors.Is(err, types.ErrSizeLimitExceeded) {
+			t.Errorf("unexpected error, expected %v, received %v", types.ErrSizeLimitExceeded, err)
+			return
+		}
+	})
+	t.Run("Read beyond size", func(t *testing.T) {
+		shortRef, err := ref.New(tsURL.Host + repoPath + ":" + shortReadTag)
+		if err != nil {
+			t.Errorf("Failed creating ref: %v", err)
+		}
+		_, err = reg.ManifestGet(ctx, shortRef)
+		if err == nil {
+			t.Errorf("ManifestGet did not fail")
+			return
+		}
+		if !errors.Is(err, types.ErrShortRead) && !errors.Is(err, io.ErrUnexpectedEOF) {
+			t.Errorf("unexpected error, expected %v, received %v", types.ErrShortRead, err)
+			return
+		}
+	})
+
+	t.Run("PUT", func(t *testing.T) {
+		putRef, err := ref.New(tsURL.Host + repoPath + ":" + putTag)
+		if err != nil {
+			t.Errorf("failed creating ref: %v", err)
+		}
+		mm, err := manifest.New(manifest.WithRaw(mBody))
+		if err != nil {
+			t.Errorf("failed to create manifest: %v", err)
+		}
+		err = reg.ManifestPut(ctx, putRef, mm)
+		if err != nil {
+			t.Errorf("failed to put manifest: %v", err)
+		}
+	})
+	t.Run("PUT size limit", func(t *testing.T) {
+		putRef, err := ref.New(tsURL.Host + repoPath + ":" + putTag)
+		if err != nil {
+			t.Errorf("failed creating ref: %v", err)
+			return
+		}
+		mLarge := make([]byte, mLen+defaultManifestMaxPush)
+		copy(mLarge, mBody)
+		for i := mLen; i < len(mLarge); i++ {
+			mLarge[i] = ' '
+		}
+		mm, err := manifest.New(manifest.WithRaw(mLarge))
+		if err != nil {
+			t.Errorf("failed to create manifest: %v", err)
+			return
+		}
+		err = reg.ManifestPut(ctx, putRef, mm)
+		if err == nil {
+			t.Errorf("put manifest did not fail")
+			return
+		}
+		if !errors.Is(err, types.ErrSizeLimitExceeded) {
+			t.Errorf("unexpected error, expected %v, received %v", types.ErrSizeLimitExceeded, err)
+		}
+	})
 }

@@ -58,6 +58,16 @@ var (
 		"Content-Length":        {fmt.Sprintf("%d", exLen)},
 		"Docker-Content-Digest": {exDigest.String()},
 	}
+	exHeadersShort = http.Header{
+		"Content-Type":          {types.MediaTypeDocker2ImageConfig},
+		"Content-Length":        {fmt.Sprintf("%d", exLen-5)},
+		"Docker-Content-Digest": {exDigest.String()},
+	}
+	exHeadersLong = http.Header{
+		"Content-Type":          {types.MediaTypeDocker2ImageConfig},
+		"Content-Length":        {fmt.Sprintf("%d", exLen+5)},
+		"Docker-Content-Digest": {exDigest.String()},
+	}
 	exResp = http.Response{
 		Status:        http.StatusText(http.StatusOK),
 		StatusCode:    http.StatusOK,
@@ -76,7 +86,7 @@ var (
 
 func TestCommon(t *testing.T) {
 	// create test list
-	tests := []struct {
+	tt := []struct {
 		name     string
 		opts     []Opts
 		eBytes   []byte
@@ -84,6 +94,7 @@ func TestCommon(t *testing.T) {
 		eHeaders http.Header
 		eLen     int64
 		eMT      string
+		eErr     error
 	}{
 		{
 			name: "empty",
@@ -136,32 +147,68 @@ func TestCommon(t *testing.T) {
 			eLen:     exLen,
 			eMT:      exMT,
 		},
+		{
+			name: "length exceeded",
+			opts: []Opts{
+				WithReader(bytes.NewReader(exBlob)),
+				WithHeader(exHeadersShort),
+				WithRef(exRef),
+			},
+			eBytes:   exBlob,
+			eDigest:  exDigest,
+			eHeaders: exHeadersShort,
+			eLen:     exLen,
+			eMT:      exMT,
+			eErr:     types.ErrSizeLimitExceeded,
+		},
+		{
+			name: "short read",
+			opts: []Opts{
+				WithReader(bytes.NewReader(exBlob)),
+				WithHeader(exHeadersLong),
+				WithRef(exRef),
+			},
+			eBytes:   exBlob,
+			eDigest:  exDigest,
+			eHeaders: exHeadersLong,
+			eLen:     exLen,
+			eMT:      exMT,
+			eErr:     types.ErrShortRead,
+		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			b := NewReader(tt.opts...)
-			if len(tt.eBytes) > 0 {
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			b := NewReader(tc.opts...)
+			if len(tc.eBytes) > 0 {
 				bb, err := b.RawBody()
+				if tc.eErr != nil {
+					if err == nil {
+						t.Errorf("read did not fail")
+					} else if err.Error() != tc.eErr.Error() && !errors.Is(err, tc.eErr) {
+						t.Errorf("unexpected error, expected %v, received %v", tc.eErr, err)
+					}
+					return
+				}
 				if err != nil {
 					t.Errorf("rawbody: %v", err)
 					return
 				}
-				if !bytes.Equal(bb, tt.eBytes) {
-					t.Errorf("rawbody, expected %s, received %s", string(tt.eBytes), string(bb))
+				if !bytes.Equal(bb, tc.eBytes) {
+					t.Errorf("rawbody, expected %s, received %s", string(tc.eBytes), string(bb))
 				}
 			}
-			if tt.eDigest != "" && b.GetDescriptor().Digest != tt.eDigest {
-				t.Errorf("digest, expected %s, received %s", tt.eDigest, b.GetDescriptor().Digest)
+			if tc.eDigest != "" && b.GetDescriptor().Digest != tc.eDigest {
+				t.Errorf("digest, expected %s, received %s", tc.eDigest, b.GetDescriptor().Digest)
 			}
-			if tt.eLen > 0 && b.GetDescriptor().Size != tt.eLen {
-				t.Errorf("length, expected %d, received %d", tt.eLen, b.GetDescriptor().Size)
+			if tc.eLen > 0 && b.GetDescriptor().Size != tc.eLen {
+				t.Errorf("length, expected %d, received %d", tc.eLen, b.GetDescriptor().Size)
 			}
-			if tt.eMT != "" && b.GetDescriptor().MediaType != tt.eMT {
-				t.Errorf("media type, expected %s, received %s", tt.eMT, b.GetDescriptor().MediaType)
+			if tc.eMT != "" && b.GetDescriptor().MediaType != tc.eMT {
+				t.Errorf("media type, expected %s, received %s", tc.eMT, b.GetDescriptor().MediaType)
 			}
-			if tt.eHeaders != nil {
+			if tc.eHeaders != nil {
 				bHeader := b.RawHeaders()
-				for k, v := range tt.eHeaders {
+				for k, v := range tc.eHeaders {
 					if _, ok := bHeader[k]; !ok {
 						t.Errorf("missing header: %s", k)
 					} else if !cmpSliceString(v, bHeader[k]) {
@@ -197,6 +244,7 @@ func TestReader(t *testing.T) {
 		// create blob
 		b := NewReader(
 			WithReader(bytes.NewReader(exBlob)),
+			WithHeader(exHeaders),
 		)
 		// test read and seek on blob1
 		bl := 500
@@ -209,16 +257,11 @@ func TestReader(t *testing.T) {
 		if i != bl {
 			t.Errorf("read length, expected %d, received %d", bl, i)
 		}
-		bSeek, ok := b.(io.Seeker)
-		if !ok {
-			t.Errorf("seek interface missing")
-			return
-		}
-		_, err = bSeek.Seek(5, io.SeekStart)
+		_, err = b.Seek(5, io.SeekStart)
 		if err == nil {
 			t.Errorf("seek to non-zero position did not fail")
 		}
-		pos, err := bSeek.Seek(0, io.SeekStart)
+		pos, err := b.Seek(0, io.SeekStart)
 		if err != nil {
 			t.Errorf("seek err: %v", err)
 			return
@@ -237,7 +280,32 @@ func TestReader(t *testing.T) {
 		if b.GetDescriptor().Size != exLen {
 			t.Errorf("length mismatch, expected %d, received %d", exLen, b.GetDescriptor().Size)
 		}
-
+		// test limit exceeded with read partial / seek 0 /read all pattern
+		b = NewReader(
+			WithReader(bytes.NewReader(exBlob)),
+			WithHeader(exHeadersShort),
+		)
+		i, err = b.Read(bb)
+		if err != nil {
+			t.Errorf("read err: %v", err)
+			return
+		}
+		if i != bl {
+			t.Errorf("read length, expected %d, received %d", bl, i)
+		}
+		_, err = b.Seek(0, io.SeekStart)
+		if err != nil {
+			t.Errorf("seek err: %v", err)
+			return
+		}
+		_, err = io.ReadAll(b)
+		if err == nil {
+			t.Errorf("readall did not fail")
+			return
+		}
+		if !errors.Is(err, types.ErrSizeLimitExceeded) {
+			t.Errorf("unexpected error on readall, expected %v, received %v", types.ErrSizeLimitExceeded, err)
+		}
 	})
 
 	t.Run("ociconfig", func(t *testing.T) {
@@ -294,10 +362,12 @@ func TestOCI(t *testing.T) {
 		t.Errorf("failed to unmarshal exBlob: %v", err)
 		return
 	}
-	tests := []struct {
+	tt := []struct {
 		name     string
 		opts     []Opts
+		fromJSON []byte
 		wantRaw  []byte
+		wantJSON []byte
 		wantDesc types.Descriptor
 	}{
 		{
@@ -308,6 +378,16 @@ func TestOCI(t *testing.T) {
 			},
 			wantDesc: exDesc,
 			wantRaw:  exBlob,
+			wantJSON: exBlob,
+		},
+		{
+			name: "JSONMarshal",
+			opts: []Opts{
+				WithDesc(exDesc),
+			},
+			fromJSON: exBlob,
+			wantDesc: exDesc,
+			wantJSON: exBlob,
 		},
 		{
 			name: "Config with Default Desc",
@@ -326,27 +406,43 @@ func TestOCI(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			oc := NewOCIConfig(tt.opts...)
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			oc := NewOCIConfig(tc.opts...)
 
-			if tt.wantDesc.Digest != "" && tt.wantDesc.Digest != oc.GetDescriptor().Digest {
-				t.Errorf("digest, expected %s, received %s", tt.wantDesc.Digest, oc.GetDescriptor().Digest)
+			if len(tc.fromJSON) > 0 {
+				err := oc.UnmarshalJSON(tc.fromJSON)
+				if err != nil {
+					t.Errorf("failed to unmarshal json: %v", err)
+				}
 			}
-			if tt.wantDesc.MediaType != "" && tt.wantDesc.MediaType != oc.GetDescriptor().MediaType {
-				t.Errorf("media type, expected %s, received %s", tt.wantDesc.MediaType, oc.GetDescriptor().MediaType)
+			if tc.wantDesc.Digest != "" && tc.wantDesc.Digest != oc.GetDescriptor().Digest {
+				t.Errorf("digest, expected %s, received %s", tc.wantDesc.Digest, oc.GetDescriptor().Digest)
 			}
-			if tt.wantDesc.Size > 0 && tt.wantDesc.Size != oc.GetDescriptor().Size {
-				t.Errorf("size, expected %d, received %d", tt.wantDesc.Size, oc.GetDescriptor().Size)
+			if tc.wantDesc.MediaType != "" && tc.wantDesc.MediaType != oc.GetDescriptor().MediaType {
+				t.Errorf("media type, expected %s, received %s", tc.wantDesc.MediaType, oc.GetDescriptor().MediaType)
 			}
-			if len(tt.wantRaw) > 0 {
+			if tc.wantDesc.Size > 0 && tc.wantDesc.Size != oc.GetDescriptor().Size {
+				t.Errorf("size, expected %d, received %d", tc.wantDesc.Size, oc.GetDescriptor().Size)
+			}
+			if len(tc.wantRaw) > 0 {
 				raw, err := oc.RawBody()
 				if err != nil {
 					t.Errorf("config rawbody: %v", err)
 					return
 				}
-				if !bytes.Equal(tt.wantRaw, raw) {
-					t.Errorf("config bytes, expected %s, received %s", string(tt.wantRaw), string(raw))
+				if !bytes.Equal(tc.wantRaw, raw) {
+					t.Errorf("config bytes, expected %s, received %s", string(tc.wantRaw), string(raw))
+				}
+			}
+			if len(tc.wantJSON) > 0 {
+				ocJSON, err := oc.MarshalJSON()
+				if err != nil {
+					t.Errorf("json marshal: %v", err)
+					return
+				}
+				if !bytes.Equal(tc.wantJSON, ocJSON) {
+					t.Errorf("json marshal, expected %s, received %s", string(tc.wantJSON), string(ocJSON))
 				}
 			}
 		})
@@ -398,7 +494,7 @@ func TestTarReader(t *testing.T) {
 	fh.Close()
 	dig := digger.Digest()
 
-	tests := []struct {
+	tt := []struct {
 		name     string
 		opts     []Opts
 		errClose bool
@@ -429,14 +525,14 @@ func TestTarReader(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
 			fh, err := os.Open(fileLayer)
 			if err != nil {
 				t.Errorf("failed to open test data: %v", err)
 				return
 			}
-			opts := append(tt.opts, WithReader(fh))
+			opts := append(tc.opts, WithReader(fh))
 			btr := NewTarReader(opts...)
 			tr, err := btr.GetTarReader()
 			if err != nil {
@@ -464,9 +560,9 @@ func TestTarReader(t *testing.T) {
 				}
 			}
 			err = btr.Close()
-			if !tt.errClose && err != nil {
+			if !tc.errClose && err != nil {
 				t.Errorf("failed to close tar reader: %v", err)
-			} else if tt.errClose && err == nil {
+			} else if tc.errClose && err == nil {
 				t.Errorf("close did not fail")
 			}
 		})
@@ -474,7 +570,7 @@ func TestTarReader(t *testing.T) {
 }
 
 func TestReadFile(t *testing.T) {
-	tests := []struct {
+	tt := []struct {
 		name      string
 		filename  string
 		content   string
@@ -522,20 +618,20 @@ func TestReadFile(t *testing.T) {
 		return
 	}
 	blobDigest := digest.FromBytes(fileBytes)
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
 			fh, err := os.Open(fileLayerWH)
 			if err != nil {
 				t.Errorf("failed to open test data: %v", err)
 				return
 			}
 			btr := NewTarReader(WithReader(fh), WithDesc(types.Descriptor{Size: int64(len(fileBytes)), Digest: blobDigest, MediaType: types.MediaTypeOCI1Layer}))
-			th, rdr, err := btr.ReadFile(tt.filename)
-			if tt.expectErr != nil {
+			th, rdr, err := btr.ReadFile(tc.filename)
+			if tc.expectErr != nil {
 				if err == nil {
 					t.Errorf("ReadFile did not fail")
-				} else if !errors.Is(err, tt.expectErr) && err.Error() != tt.expectErr.Error() {
-					t.Errorf("unexpected error, expected %v, received %v", tt.expectErr, err)
+				} else if !errors.Is(err, tc.expectErr) && err.Error() != tc.expectErr.Error() {
+					t.Errorf("unexpected error, expected %v, received %v", tc.expectErr, err)
 				}
 				err = btr.Close()
 				if err != nil {
@@ -562,8 +658,8 @@ func TestReadFile(t *testing.T) {
 			if err != nil {
 				t.Errorf("failed reading file: %v", err)
 			}
-			if tt.content != string(content) {
-				t.Errorf("file content mismatch: expected %s, received %s", tt.content, string(content))
+			if tc.content != string(content) {
+				t.Errorf("file content mismatch: expected %s, received %s", tc.content, string(content))
 			}
 			err = btr.Close()
 			if err != nil {

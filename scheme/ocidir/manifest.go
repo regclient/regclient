@@ -51,7 +51,7 @@ func (o *OCIDir) ManifestDelete(ctx context.Context, r ref.Ref, opts ...scheme.M
 			if err == nil && sDesc != nil && sDesc.MediaType != "" && sDesc.Size > 0 {
 				// attempt to delete the referrer, but ignore if the referrer entry wasn't found
 				err = o.referrerDelete(ctx, r, mc.Manifest)
-				if err != nil && !errors.Is(err, types.ErrNotFound) {
+				if err != nil && !errors.Is(err, types.ErrNotFound) && !errors.Is(err, fs.ErrNotExist) {
 					return err
 				}
 			}
@@ -247,9 +247,12 @@ func (o *OCIDir) manifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 	}
 	tmpName := fi.Name()
 	_, err = tmpFile.Write(b)
-	tmpFile.Close()
+	errC := tmpFile.Close()
 	if err != nil {
 		return fmt.Errorf("failed to write manifest tmpfile: %w", err)
+	}
+	if errC != nil {
+		return fmt.Errorf("failed to close manifest tmpfile: %w", errC)
 	}
 	file := path.Join(dir, desc.Digest.Encoded())
 	err = o.fs.Rename(path.Join(dir, tmpName), file)

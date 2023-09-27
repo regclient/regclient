@@ -97,6 +97,7 @@ func NewRetryable(opts ...Opts) Retryable {
 			if t.TLSClientConfig != nil {
 				tlsc = t.TLSClientConfig.Clone()
 			} else {
+				//#nosec G402 the default TLS 1.2 minimum version is allowed to support older registries
 				tlsc = &tls.Config{}
 			}
 			if tlsc.RootCAs == nil {
@@ -140,6 +141,7 @@ func WithCerts(certs [][]byte) Opts {
 func WithCertFiles(files []string) Opts {
 	return func(r *retryable) {
 		for _, f := range files {
+			//#nosec G304 command is run by a user accessing their own files
 			c, err := os.ReadFile(f)
 			if err != nil {
 				r.log.WithFields(logrus.Fields{
@@ -382,7 +384,7 @@ func WithScope(repo string, push bool) OptsReq {
 	}
 	return func(req *request) {
 		for _, url := range req.urls {
-			req.r.auth.AddScope(url.Host, scope)
+			_ = req.r.auth.AddScope(url.Host, scope)
 		}
 	}
 }
@@ -421,12 +423,15 @@ func (req *request) retryLoop() error {
 
 		// close any previous responses before making a new request
 		if len(req.responses) > 0 {
-			req.responses[len(req.responses)-1].Body.Close()
+			errC := req.responses[len(req.responses)-1].Body.Close()
+			if errC != nil {
+				return fmt.Errorf("failed to close connection: %w", errC)
+			}
 		}
 		// send the new request
 		httpErr = req.httpDo()
 		if httpErr != nil {
-			req.r.backoffSet(nil)
+			_ = req.r.backoffSet(nil)
 			req.nextURL(true)
 			continue
 		}
@@ -500,7 +505,7 @@ func (req *request) retryLoop() error {
 			req.nextURL(removeURL)
 		}
 		if runBackoff {
-			req.r.backoffSet(lastResp)
+			_ = req.r.backoffSet(lastResp) // ignore error indicating backoff limit reached
 		}
 	}
 }

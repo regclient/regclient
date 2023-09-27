@@ -59,6 +59,10 @@ var (
 	ErrParsingFailed = errors.New("parsing failed")
 	// ErrRetryNeeded indicates a request needs to be retried
 	ErrRetryNeeded = errors.New("retry needed")
+	// ErrShortRead if contents are less than expected the size
+	ErrShortRead = errors.New("short read")
+	// ErrSizeLimitExceeded if contents exceed the size limit
+	ErrSizeLimitExceeded = errors.New("size limit exceeded")
 	// ErrUnavailable when a requested value is not available
 	ErrUnavailable = errors.New("unavailable")
 	// ErrUnsupported indicates the request was unsupported

@@ -198,6 +198,51 @@ func TestMod(t *testing.T) {
 			ref: "ocidir://testrepo:v1",
 		},
 		{
+			name: "Add Label to All",
+			opts: []Opts{
+				WithLabel("[*]test", "hello"),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Add Label AMD64/ARM64",
+			opts: []Opts{
+				WithLabel("[linux/amd64,linux/arm64]test", "hello"),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Add Label Missing",
+			opts: []Opts{
+				WithLabel("[linux/i386,linux/s390x]test", "hello"),
+			},
+			ref:      "ocidir://testrepo:v1",
+			wantSame: true,
+		},
+		{
+			name: "Add Label Platform Parse Error",
+			opts: []Opts{
+				WithLabel("[linux/invalid.arch!]test", "hello"),
+			},
+			ref:     "ocidir://testrepo:v1",
+			wantErr: fmt.Errorf("failed to parse label platform linux/invalid.arch!: invalid platform component invalid.arch! in linux/invalid.arch!"),
+		},
+		{
+			name: "Delete Label",
+			opts: []Opts{
+				WithLabel("version", ""),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Delete Missing Label",
+			opts: []Opts{
+				WithLabel("[*]missing", ""),
+			},
+			ref:      "ocidir://testrepo:v1",
+			wantSame: true,
+		},
+		{
 			name: "Label to Annotation",
 			opts: []Opts{
 				WithLabelToAnnotation(),
@@ -236,6 +281,74 @@ func TestMod(t *testing.T) {
 			wantSame: true,
 		},
 		{
+			name: "Config Time Missing Set",
+			opts: []Opts{
+				WithConfigTimestamp(OptTime{}),
+			},
+			ref:     "ocidir://testrepo:v1",
+			wantErr: fmt.Errorf("WithConfigTimestamp requires a time to set"),
+		},
+		{
+			name: "Config Time Set",
+			opts: []Opts{
+				WithConfigTimestamp(OptTime{
+					Set: tTime,
+				}),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Config Time Base Ref",
+			opts: []Opts{
+				WithConfigTimestamp(OptTime{
+					Set:     tTime,
+					BaseRef: rb1,
+				}),
+			},
+			ref: "ocidir://testrepo:v3",
+		},
+		{
+			name: "Config Time Base Count",
+			opts: []Opts{
+				WithConfigTimestamp(OptTime{
+					Set:        tTime,
+					BaseLayers: 1,
+				}),
+			},
+			ref: "ocidir://testrepo:v3",
+		},
+		{
+			name: "Config Time Label Missing",
+			opts: []Opts{
+				WithConfigTimestamp(OptTime{
+					FromLabel: "org.opencontainers.image.created",
+				}),
+			},
+			ref:     "ocidir://testrepo:v1",
+			wantErr: fmt.Errorf("label not found: org.opencontainers.image.created"),
+		},
+		{
+			name: "Config Time Artifact",
+			opts: []Opts{
+				WithConfigTimestamp(OptTime{
+					Set: tTime,
+				}),
+			},
+			ref:      "ocidir://testrepo:a1",
+			wantSame: true,
+		},
+		{
+			name: "Config Time After Unchanged",
+			opts: []Opts{
+				WithConfigTimestamp(OptTime{
+					Set:   tTime,
+					After: time.Now(),
+				}),
+			},
+			ref:      "ocidir://testrepo:v1",
+			wantSame: true,
+		},
+		{
 			name: "Expose Port",
 			opts: []Opts{
 				WithExposeAdd("8080"),
@@ -265,6 +378,13 @@ func TestMod(t *testing.T) {
 			},
 			ref:      "ocidir://testrepo:v1",
 			wantSame: true,
+		},
+		{
+			name: "Layer Reproducible",
+			opts: []Opts{
+				WithLayerReproducible(),
+			},
+			ref: "ocidir://testrepo:v3",
 		},
 		{
 			name: "Layer Timestamp Missing Label",
@@ -305,16 +425,138 @@ func TestMod(t *testing.T) {
 			ref: "ocidir://testrepo:v3",
 		},
 		{
-			name: "Layer File Tar Timestamp",
+			name: "Layer Timestamp Set Missing",
+			opts: []Opts{
+				WithLayerTimestamp(OptTime{}),
+			},
+			ref:     "ocidir://testrepo:v1",
+			wantErr: fmt.Errorf("WithLayerTimestamp requires a time to set"),
+		},
+		{
+			name: "Layer Timestamp Missing Label",
+			opts: []Opts{
+				WithLayerTimestamp(OptTime{
+					FromLabel: "missing",
+				}),
+			},
+			ref:     "ocidir://testrepo:v1",
+			wantErr: fmt.Errorf("label not found: missing"),
+		},
+		{
+			name: "Layer Timestamp",
+			opts: []Opts{
+				WithLayerTimestamp(OptTime{
+					Set: tTime,
+				}),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Layer Timestamp After Unchanged",
+			opts: []Opts{
+				WithLayerTimestamp(OptTime{
+					Set:   tTime,
+					After: time.Now(),
+				}),
+			},
+			ref:      "ocidir://testrepo:v1",
+			wantSame: true,
+		},
+		{
+			name: "Layer Timestamp Base Ref",
+			opts: []Opts{
+				WithLayerTimestamp(OptTime{
+					Set:     tTime,
+					BaseRef: rb1,
+				}),
+			},
+			ref: "ocidir://testrepo:v3",
+		},
+		{
+			name: "Layer Timestamp Base Ref Same",
+			opts: []Opts{
+				WithLayerTimestamp(OptTime{
+					Set:     tTime,
+					BaseRef: r3,
+				}),
+			},
+			ref:      "ocidir://testrepo:v3",
+			wantSame: true,
+		},
+		{
+			name: "Layer Timestamp Base Count Same",
+			opts: []Opts{
+				WithLayerTimestamp(OptTime{
+					Set:        tTime,
+					BaseLayers: 99,
+				}),
+			},
+			ref:      "ocidir://testrepo:v3",
+			wantSame: true,
+		},
+		{
+			name: "Layer Timestamp Base Count",
+			opts: []Opts{
+				WithLayerTimestamp(OptTime{
+					Set:        tTime,
+					BaseLayers: 1,
+				}),
+			},
+			ref: "ocidir://testrepo:v3",
+		},
+		{
+			name: "Layer Timestamp Artifact",
+			opts: []Opts{
+				WithLayerTimestamp(OptTime{
+					Set:   tTime,
+					After: tTime,
+				}),
+			},
+			ref:      "ocidir://testrepo:a1",
+			wantSame: true,
+		},
+		{
+			name: "Layer File Tar Time Max",
 			opts: []Opts{
 				WithFileTarTimeMax("/dir/layer.tar", tTime),
 			},
 			ref: "ocidir://testrepo:v3",
 		},
 		{
-			name: "Layer File Tar Timestamp Unchanged",
+			name: "Layer File Tar Time Max Unchanged",
 			opts: []Opts{
 				WithFileTarTimeMax("/dir/layer.tar", time.Now()),
+			},
+			ref:      "ocidir://testrepo:v3",
+			wantSame: true,
+		},
+		{
+			name: "Layer File Tar Time",
+			opts: []Opts{
+				WithFileTarTime("/dir/layer.tar", OptTime{
+					Set:     tTime,
+					BaseRef: rb1,
+				}),
+			},
+			ref: "ocidir://testrepo:v3",
+		},
+		{
+			name: "Layer File Tar Time After",
+			opts: []Opts{
+				WithFileTarTime("/dir/layer.tar", OptTime{
+					Set:   tTime,
+					After: tTime,
+				}),
+			},
+			ref: "ocidir://testrepo:v3",
+		},
+		{
+			name: "Layer File Tar Time Same Base",
+			opts: []Opts{
+				WithFileTarTime("/dir/layer.tar", OptTime{
+					Set:     tTime,
+					BaseRef: r3,
+				}),
 			},
 			ref:      "ocidir://testrepo:v3",
 			wantSame: true,

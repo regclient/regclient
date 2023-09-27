@@ -9,7 +9,7 @@ import (
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/types"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 // delay checking for at least 5 minutes when rate limit is exceeded
@@ -63,7 +63,8 @@ type ConfigSync struct {
 	Source          string                 `yaml:"source" json:"source"`
 	Target          string                 `yaml:"target" json:"target"`
 	Type            string                 `yaml:"type" json:"type"`
-	Tags            ConfigTags             `yaml:"tags" json:"tags"`
+	Tags            AllowDeny              `yaml:"tags" json:"tags"`
+	Repos           AllowDeny              `yaml:"repos" json:"repos"`
 	DigestTags      *bool                  `yaml:"digestTags" json:"digestTags"`
 	Referrers       *bool                  `yaml:"referrers" json:"referrers"`
 	ReferrerFilters []ConfigReferrerFilter `yaml:"referrerFilters" json:"referrerFilters"`
@@ -80,8 +81,8 @@ type ConfigSync struct {
 	Hooks           ConfigHooks            `yaml:"hooks" json:"hooks"`
 }
 
-// ConfigTags is an allow and deny list of tag regex strings
-type ConfigTags struct {
+// AllowDeny is an allow and deny list of regex strings
+type AllowDeny struct {
 	Allow []string `yaml:"allow" json:"allow"`
 	Deny  []string `yaml:"deny" json:"deny"`
 }
@@ -142,6 +143,7 @@ func ConfigLoadReader(r io.Reader) (*Config, error) {
 func ConfigLoadFile(filename string) (*Config, error) {
 	_, err := os.Stat(filename)
 	if err == nil {
+		//#nosec G304 command is run by a user accessing their own files
 		file, err := os.Open(filename)
 		if err != nil {
 			return nil, err

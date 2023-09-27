@@ -5,8 +5,10 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/opencontainers/go-digest"
 	"github.com/regclient/regclient"
@@ -17,6 +19,15 @@ import (
 
 // Opts defines options for Apply
 type Opts func(*dagConfig, *dagManifest) error
+
+// OptTime defines time settings for WithConfigTimestamp and WithLayerTimestamp
+type OptTime struct {
+	Set        time.Time // time to set, this or FromLabel are required
+	FromLabel  string    // label from which to extract set time
+	After      time.Time // only change times that are after this
+	BaseRef    ref.Ref   // define base image, do not alter timestamps from base layers
+	BaseLayers int       // define a number of layers to not modify (count of the layers in a base image)
+}
 
 var (
 	// whitelist of tar media types
@@ -178,7 +189,10 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 						}
 					}
 				}
-				br.Close()
+				err = br.Close()
+				if err != nil {
+					return nil, fmt.Errorf("failed to close blob: %w", err)
+				}
 				br = nil
 				if empty || dl.mod == deleted {
 					dl.mod = deleted
@@ -186,9 +200,15 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 				}
 				if changed {
 					// if modified, push blob
-					tw.Close()
+					err = tw.Close()
+					if err != nil {
+						return nil, fmt.Errorf("failed to close temporary tar layer: %w", err)
+					}
 					if gw != nil {
-						gw.Close()
+						err = gw.Close()
+						if err != nil {
+							return nil, fmt.Errorf("failed to close gzip writer: %w", err)
+						}
 					}
 					// get the file size
 					l, err := fh.Seek(0, 1)

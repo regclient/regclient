@@ -78,8 +78,8 @@ func init() {
 	registryLoginCmd.Flags().StringVarP(&registryOpts.user, "user", "u", "", "Username")
 	registryLoginCmd.Flags().StringVarP(&registryOpts.pass, "pass", "p", "", "Password")
 	registryLoginCmd.Flags().BoolVarP(&registryOpts.passStdin, "pass-stdin", "", false, "Read password from stdin")
-	registryLoginCmd.RegisterFlagCompletionFunc("user", completeArgNone)
-	registryLoginCmd.RegisterFlagCompletionFunc("pass", completeArgNone)
+	_ = registryLoginCmd.RegisterFlagCompletionFunc("user", completeArgNone)
+	_ = registryLoginCmd.RegisterFlagCompletionFunc("pass", completeArgNone)
 
 	registrySetCmd.Flags().StringVarP(&registryOpts.credHelper, "cred-helper", "", "", "Credential helper (full binary name, including docker-credential- prefix)")
 	registrySetCmd.Flags().StringVarP(&registryOpts.cacert, "cacert", "", "", "CA Certificate (not a filename, use \"$(cat ca.pem)\" to use a file)")
@@ -96,26 +96,26 @@ func init() {
 	registrySetCmd.Flags().Float64VarP(&registryOpts.reqPerSec, "req-per-sec", "", 0, "Requests per second")
 	registrySetCmd.Flags().Int64VarP(&registryOpts.reqConcurrent, "req-concurrent", "", 0, "Concurrent requests")
 	registrySetCmd.Flags().StringArrayVarP(&registryOpts.apiOpts, "api-opts", "", nil, "List of options (key=value))")
-	registrySetCmd.RegisterFlagCompletionFunc("cacert", completeArgNone)
-	registrySetCmd.RegisterFlagCompletionFunc("tls", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	_ = registrySetCmd.RegisterFlagCompletionFunc("cacert", completeArgNone)
+	_ = registrySetCmd.RegisterFlagCompletionFunc("tls", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{
 			"enabled",
 			"insecure",
 			"disabled",
 		}, cobra.ShellCompDirectiveNoFileComp
 	})
-	registrySetCmd.RegisterFlagCompletionFunc("hostname", completeArgNone)
-	registrySetCmd.RegisterFlagCompletionFunc("path-prefix", completeArgNone)
-	registrySetCmd.RegisterFlagCompletionFunc("mirror", completeArgNone)
-	registrySetCmd.RegisterFlagCompletionFunc("priority", completeArgNone)
-	registrySetCmd.RegisterFlagCompletionFunc("blob-chunk", completeArgNone)
-	registrySetCmd.RegisterFlagCompletionFunc("blob-max", completeArgNone)
+	_ = registrySetCmd.RegisterFlagCompletionFunc("hostname", completeArgNone)
+	_ = registrySetCmd.RegisterFlagCompletionFunc("path-prefix", completeArgNone)
+	_ = registrySetCmd.RegisterFlagCompletionFunc("mirror", completeArgNone)
+	_ = registrySetCmd.RegisterFlagCompletionFunc("priority", completeArgNone)
+	_ = registrySetCmd.RegisterFlagCompletionFunc("blob-chunk", completeArgNone)
+	_ = registrySetCmd.RegisterFlagCompletionFunc("blob-max", completeArgNone)
 
 	// TODO: eventually remove
 	registrySetCmd.Flags().StringVarP(&registryOpts.scheme, "scheme", "", "", "[Deprecated] Scheme (http, https)")
 	registrySetCmd.Flags().StringArrayVarP(&registryOpts.dns, "dns", "", nil, "[Deprecated] DNS hostname or ip with port")
-	registrySetCmd.Flags().MarkHidden("scheme")
-	registrySetCmd.Flags().MarkHidden("dns")
+	_ = registrySetCmd.Flags().MarkHidden("scheme")
+	_ = registrySetCmd.Flags().MarkHidden("dns")
 
 	registryCmd.AddCommand(registryConfigCmd)
 	registryCmd.AddCommand(registryLoginCmd)

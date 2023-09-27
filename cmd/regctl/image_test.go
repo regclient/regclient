@@ -43,3 +43,21 @@ func TestImageExportImport(t *testing.T) {
 		t.Errorf("unexpected output: %v", out)
 	}
 }
+
+func TestImageMod(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcRef := "ocidir://../../testdata/testrepo:v3"
+	baseRef := "ocidir://../../testdata/testrepo:b1"
+	modRef := fmt.Sprintf("ocidir://%s/repo:mod", tmpDir)
+	saveOpts := imageOpts
+
+	out, err := cobraTest(t, "image", "mod", srcRef, "--create", modRef, "--time", "set=2000-01-01T00:00:00Z,base-ref="+baseRef)
+	imageOpts = saveOpts
+	if err != nil {
+		t.Errorf("failed to run image mod: %v", err)
+		return
+	}
+	if out == "" {
+		t.Errorf("missing output")
+	}
+}

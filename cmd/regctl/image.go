@@ -83,6 +83,7 @@ var imageExportCmd = &cobra.Command{
 	Short: "export image",
 	Long: `Exports an image into a tar file that can be later loaded into a docker
 engine with "docker load". The tar file is output to stdout by default.
+Compression is typically not useful since layers are already compressed.
 Example usage: regctl image export registry:5000/yourimg:v1 >yourimg-v1.tar`,
 	Args:              cobra.RangeArgs(1, 2),
 	ValidArgsFunction: completeArgTag,
@@ -126,9 +127,18 @@ var imageManifestCmd = &cobra.Command{
 	RunE:              runManifestGet,
 }
 var imageModCmd = &cobra.Command{
-	Use:               "mod <image_ref>",
-	Short:             "modify an image",
-	Long:              `EXPERIMENTAL: Applies requested modifications to an image`, // TODO: remove EXPERIMENTAL when stable
+	Use:   "mod <image_ref>",
+	Short: "modify an image",
+	// TODO: remove EXPERIMENTAL when stable
+	Long: `EXPERIMENTAL: Applies requested modifications to an image
+For time options, the value is a comma separated list of key/value pairs:
+  set=${time}: time to set in rfc3339 format, e.g. 2006-01-02T15:04:05Z
+  from-label=${label}: label used to extract time in rfc3339 format
+  after=${time_in_rfc3339}: adjust any time after this
+  base-ref=${image}: image to lookup base layers, which are skipped
+  base-layers=${count}: number of layers to skip changing (from the base image)
+  * set or from-label is required in the time options
+`,
 	Args:              cobra.ExactArgs(1),
 	ValidArgsFunction: completeArgTag,
 	RunE:              runImageMod,
@@ -149,6 +159,7 @@ var imageOpts struct {
 	checkBaseDigest string
 	checkSkipConfig bool
 	create          string
+	exportCompress  bool
 	exportRef       string
 	fastCheck       bool
 	forceRecursive  bool
@@ -181,7 +192,7 @@ func init() {
 	imageCopyCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageCopyCmd.Flags().StringArrayVarP(&imageOpts.platforms, "platforms", "", []string{}, "Copy only specific platforms, registry validation must be disabled")
 	// platforms should be treated as experimental since it will break many registries
-	imageCopyCmd.Flags().MarkHidden("platforms")
+	_ = imageCopyCmd.Flags().MarkHidden("platforms")
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.digestTags, "digest-tags", "", false, "Include digest tags (\"sha256-<digest>.*\") when copying manifests")
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.referrers, "referrers", "", false, "Include referrers")
 
@@ -190,12 +201,13 @@ func init() {
 	imageDigestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Do not resolve platform from manifest list (enabled by default)")
 	imageDigestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageDigestCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
-	imageDigestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
-	imageDigestCmd.Flags().MarkHidden("list")
+	_ = imageDigestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
+	_ = imageDigestCmd.Flags().MarkHidden("list")
 
 	imageGetFileCmd.Flags().StringVarP(&imageOpts.formatFile, "format", "", "", "Format output with go template syntax")
 	imageGetFileCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 
+	imageExportCmd.Flags().BoolVar(&imageOpts.exportCompress, "compress", false, "Compress output with gzip")
 	imageExportCmd.Flags().StringVar(&imageOpts.exportRef, "name", "", "Name of image to embed for docker load")
 	imageExportCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 
@@ -203,16 +215,16 @@ func init() {
 
 	imageInspectCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageInspectCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
-	imageInspectCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
-	imageInspectCmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	_ = imageInspectCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
+	_ = imageInspectCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
 	imageManifestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Output manifest list if available (enabled by default)")
 	imageManifestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageManifestCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
 	imageManifestCmd.Flags().StringVarP(&manifestOpts.formatGet, "format", "", "{{printPretty .}}", "Format output with go template syntax (use \"raw-body\" for the original manifest)")
-	imageManifestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
-	imageManifestCmd.RegisterFlagCompletionFunc("format", completeArgNone)
-	imageManifestCmd.Flags().MarkHidden("list")
+	_ = imageManifestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
+	_ = imageManifestCmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	_ = imageManifestCmd.Flags().MarkHidden("list")
 
 	imageModCmd.Flags().StringVarP(&imageOpts.create, "create", "", "", "Create tag")
 	imageModCmd.Flags().BoolVarP(&imageOpts.replace, "replace", "", false, "Replace tag (ignored when \"create\" is used)")
@@ -295,14 +307,39 @@ func init() {
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
+			ot, otherFields, err := imageParseOptTime(val)
+			if err != nil {
+				return err
+			}
+			if len(otherFields) > 0 {
+				keys := []string{}
+				for k := range otherFields {
+					keys = append(keys, k)
+				}
+				return fmt.Errorf("unknown time option: %s", strings.Join(keys, ", "))
+			}
+			imageOpts.modOpts = append(imageOpts.modOpts,
+				mod.WithConfigTimestamp(ot),
+			)
+			return nil
+		},
+	}, "config-time", "", `set timestamp for the config`)
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "string",
+		f: func(val string) error {
 			t, err := time.Parse(time.RFC3339, val)
 			if err != nil {
 				return fmt.Errorf("time must be formatted %s: %w", time.RFC3339, err)
 			}
-			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithConfigTimestampMax(t))
+			imageOpts.modOpts = append(imageOpts.modOpts,
+				mod.WithConfigTimestamp(mod.OptTime{
+					Set:   t,
+					After: t,
+				}))
 			return nil
 		},
 	}, "config-time-max", "", `max timestamp for a config`)
+	_ = imageModCmd.Flags().MarkHidden("config-time-max") // TODO: deprecate config-time-max in favor of config-time
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
@@ -345,6 +382,29 @@ func init() {
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
+			ot, otherFields, err := imageParseOptTime(val)
+			if err != nil {
+				return err
+			}
+			if otherFields["filename"] == "" {
+				return fmt.Errorf("filename must be included")
+			}
+			if len(otherFields) > 1 {
+				keys := []string{}
+				for k := range otherFields {
+					if k != "filename" {
+						keys = append(keys, k)
+					}
+				}
+				return fmt.Errorf("unknown time option: %s", strings.Join(keys, ", "))
+			}
+			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithFileTarTime(otherFields["filename"], ot))
+			return nil
+		},
+	}, "file-tar-time", "", `timestamp for contents of a tar file within a layer, set filename=${name} with time options`)
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "stringArray",
+		f: func(val string) error {
 			vs := strings.SplitN(val, ",", 2)
 			if len(vs) != 2 {
 				return fmt.Errorf("filename and timestamp both required, comma separated")
@@ -353,10 +413,14 @@ func init() {
 			if err != nil {
 				return fmt.Errorf("time must be formatted %s: %w", time.RFC3339, err)
 			}
-			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithFileTarTimeMax(vs[0], t))
+			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithFileTarTime(vs[0], mod.OptTime{
+				Set:   t,
+				After: t,
+			}))
 			return nil
 		},
 	}, "file-tar-time-max", "", `max timestamp for contents of a tar file within a layer`)
+	_ = imageModCmd.Flags().MarkHidden("file-tar-time-max") // TODO: deprecate in favor of file-tar-time
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
@@ -370,7 +434,7 @@ func init() {
 			}
 			return nil
 		},
-	}, "label", "", `set an label (name=value)`)
+	}, "label", "", `set an label (name=value, omit value to delete, prefix with platform list [p1,p2] for subset of images)`)
 	flagLabelAnnot := imageModCmd.Flags().VarPF(&modFlagFunc{
 		t: "bool",
 		f: func(val string) error {
@@ -418,14 +482,39 @@ func init() {
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
+			ot, otherFields, err := imageParseOptTime(val)
+			if err != nil {
+				return err
+			}
+			if len(otherFields) > 0 {
+				keys := []string{}
+				for k := range otherFields {
+					keys = append(keys, k)
+				}
+				return fmt.Errorf("unknown time option: %s", strings.Join(keys, ", "))
+			}
+			imageOpts.modOpts = append(imageOpts.modOpts,
+				mod.WithLayerTimestamp(ot),
+			)
+			return nil
+		},
+	}, "layer-time", "", `set timestamp for the layer contents`)
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "string",
+		f: func(val string) error {
 			t, err := time.Parse(time.RFC3339, val)
 			if err != nil {
 				return fmt.Errorf("time must be formatted %s: %w", time.RFC3339, err)
 			}
-			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithLayerTimestampMax(t))
+			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithLayerTimestamp(
+				mod.OptTime{
+					Set:   t,
+					After: t,
+				}))
 			return nil
 		},
 	}, "layer-time-max", "", `max timestamp for a layer`)
+	_ = imageModCmd.Flags().MarkHidden("layer-time-max") // TODO: deprecate in favor of layer-time
 	flagRebase := imageModCmd.Flags().VarPF(&modFlagFunc{
 		t: "bool",
 		f: func(val string) error {
@@ -462,6 +551,41 @@ func init() {
 			return nil
 		},
 	}, "rebase-ref", "", `rebase an image with base references (base:old,base:new)`)
+	flagReproducible := imageModCmd.Flags().VarPF(&modFlagFunc{
+		t: "bool",
+		f: func(val string) error {
+			b, err := strconv.ParseBool(val)
+			if err != nil {
+				return fmt.Errorf("unable to parse value %s: %w", val, err)
+			}
+			if b {
+				imageOpts.modOpts = append(imageOpts.modOpts, mod.WithLayerReproducible())
+			}
+			return nil
+		},
+	}, "reproducible", "", `fix tar headers for reproducibility`)
+	flagReproducible.NoOptDefVal = "true"
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "string",
+		f: func(val string) error {
+			ot, otherFields, err := imageParseOptTime(val)
+			if err != nil {
+				return err
+			}
+			if len(otherFields) > 0 {
+				keys := []string{}
+				for k := range otherFields {
+					keys = append(keys, k)
+				}
+				return fmt.Errorf("unknown time option: %s", strings.Join(keys, ", "))
+			}
+			imageOpts.modOpts = append(imageOpts.modOpts,
+				mod.WithConfigTimestamp(ot),
+				mod.WithLayerTimestamp(ot),
+			)
+			return nil
+		},
+	}, "time", "", `set timestamp for both the config and layers`)
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
@@ -470,11 +594,18 @@ func init() {
 				return fmt.Errorf("time must be formatted %s: %w", time.RFC3339, err)
 			}
 			imageOpts.modOpts = append(imageOpts.modOpts,
-				mod.WithConfigTimestampMax(t),
-				mod.WithLayerTimestampMax(t))
+				mod.WithConfigTimestamp(mod.OptTime{
+					Set:   t,
+					After: t,
+				}),
+				mod.WithLayerTimestamp(mod.OptTime{
+					Set:   t,
+					After: t,
+				}))
 			return nil
 		},
 	}, "time-max", "", `max timestamp for both the config and layers`)
+	_ = imageModCmd.Flags().MarkHidden("time-max") // TODO: deprecate
 	flagDocker := imageModCmd.Flags().VarPF(&modFlagFunc{
 		t: "bool",
 		f: func(val string) error {
@@ -533,7 +664,7 @@ func init() {
 	}, "volume-rm", "", `delete a volume definition`)
 
 	imageRateLimitCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
-	imageRateLimitCmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	_ = imageRateLimitCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
 	imageCmd.AddCommand(imageCheckBaseCmd)
 	imageCmd.AddCommand(imageCopyCmd)
@@ -547,6 +678,48 @@ func init() {
 	imageCmd.AddCommand(imageModCmd)
 	imageCmd.AddCommand(imageRateLimitCmd)
 	rootCmd.AddCommand(imageCmd)
+}
+
+func imageParseOptTime(s string) (mod.OptTime, map[string]string, error) {
+	ot := mod.OptTime{}
+	otherFields := map[string]string{}
+	for _, ss := range strings.Split(s, ",") {
+		kv := strings.SplitN(ss, "=", 2)
+		if len(kv) != 2 {
+			return ot, otherFields, fmt.Errorf("parameter without a value: %s", ss)
+		}
+		switch kv[0] {
+		case "set":
+			t, err := time.Parse(time.RFC3339, kv[1])
+			if err != nil {
+				return ot, otherFields, fmt.Errorf("set time must be formatted %s: %w", time.RFC3339, err)
+			}
+			ot.Set = t
+		case "after":
+			t, err := time.Parse(time.RFC3339, kv[1])
+			if err != nil {
+				return ot, otherFields, fmt.Errorf("after time must be formatted %s: %w", time.RFC3339, err)
+			}
+			ot.After = t
+		case "from-label":
+			ot.FromLabel = kv[1]
+		case "base-ref":
+			r, err := ref.New(kv[1])
+			if err != nil {
+				return ot, otherFields, fmt.Errorf("failed to parse base ref: %w", err)
+			}
+			ot.BaseRef = r
+		case "base-layers":
+			i, err := strconv.Atoi(kv[1])
+			if err != nil {
+				return ot, otherFields, fmt.Errorf("unable to parse base layer count: %w", err)
+			}
+			ot.BaseLayers = i
+		default:
+			otherFields[kv[0]] = kv[1]
+		}
+	}
+	return ot, otherFields, nil
 }
 
 func runImageCheckBase(cmd *cobra.Command, args []string) error {
@@ -847,6 +1020,9 @@ func runImageExport(cmd *cobra.Command, args []string) error {
 			r.Digest = d.Digest.String()
 		}
 	}
+	if imageOpts.exportCompress {
+		opts = append(opts, regclient.ImageWithExportCompress())
+	}
 	if imageOpts.exportRef != "" {
 		eRef, err := ref.New(imageOpts.exportRef)
 		if err != nil {
@@ -1088,8 +1264,11 @@ func runImageMod(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%s\n", rOut.CommonName())
-	rc.Close(ctx, rOut)
+	fmt.Fprintf(cmd.OutOrStdout(), "%s\n", rOut.CommonName())
+	err = rc.Close(ctx, rOut)
+	if err != nil {
+		return fmt.Errorf("failed to close ref: %w", err)
+	}
 	return nil
 }
 

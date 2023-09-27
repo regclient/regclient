@@ -3,6 +3,7 @@ package rwfs
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"math/rand"
@@ -88,9 +89,12 @@ func CopyRecursive(srcFS fs.FS, srcName string, destFS RWFS, destName string) er
 		return err
 	}
 	sfi, err := sfh.Stat()
-	sfh.Close()
+	errC := sfh.Close()
 	if err != nil {
 		return err
+	}
+	if errC != nil {
+		return fmt.Errorf("failed to close source file handle: %w", errC)
 	}
 	if !sfi.IsDir() {
 		return Copy(srcFS, srcName, destFS, destName)
@@ -134,6 +138,7 @@ func CreateTemp(rwfs RWFS, dir, pattern string) (RWFile, error) {
 	prefix = filepath.Clean(dir) + string(filepath.Separator) + prefix
 	try := 0
 	for {
+		//#nosec G404 locking and for loop used to ensure rnd value is unique
 		rnd := strconv.FormatUint(rand.Uint64(), 10)
 		name := prefix + rnd + suffix
 		f, err := rwfs.OpenFile(name, O_RDWR|O_CREATE|O_EXCL, 0600)

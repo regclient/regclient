@@ -277,9 +277,12 @@ func (o *OCIDir) writeIndex(r ref.Ref, i v1.Index, locked bool) error {
 		return fmt.Errorf("cannot marshal index: %w", err)
 	}
 	_, err = tmpFile.Write(b)
-	tmpFile.Close()
+	errC := tmpFile.Close()
 	if err != nil {
 		return fmt.Errorf("cannot write index: %w", err)
+	}
+	if errC != nil {
+		return fmt.Errorf("cannot close index: %w", errC)
 	}
 	indexFile := path.Join(r.Path, "index.json")
 	err = o.fs.Rename(path.Join(r.Path, tmpName), indexFile)

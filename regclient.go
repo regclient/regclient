@@ -1,4 +1,4 @@
-// Package regclient is used to access OCI registries
+// Package regclient is used to access OCI registries.
 package regclient
 
 import (
@@ -17,19 +17,19 @@ import (
 )
 
 const (
-	// DefaultUserAgent sets the header on http requests
+	// DefaultUserAgent sets the header on http requests.
 	DefaultUserAgent = "regclient/regclient"
-	// DockerCertDir default location for docker certs
+	// DockerCertDir default location for docker certs.
 	DockerCertDir = "/etc/docker/certs.d"
-	// DockerRegistry is the well known name of Docker Hub, "docker.io"
+	// DockerRegistry is the well known name of Docker Hub, "docker.io".
 	DockerRegistry = config.DockerRegistry
-	// DockerRegistryAuth is the name of Docker Hub seen in docker's config.json
+	// DockerRegistryAuth is the name of Docker Hub seen in docker's config.json.
 	DockerRegistryAuth = config.DockerRegistryAuth
-	// DockerRegistryDNS is the actual registry DNS name for Docker Hub
+	// DockerRegistryDNS is the actual registry DNS name for Docker Hub.
 	DockerRegistryDNS = config.DockerRegistryDNS
 )
 
-// RegClient is used to access OCI distribution-spec registries
+// RegClient is used to access OCI distribution-spec registries.
 type RegClient struct {
 	hosts map[string]*config.Host
 	log   *logrus.Logger
@@ -40,10 +40,10 @@ type RegClient struct {
 	fs        rwfs.RWFS
 }
 
-// Opt functions are used to configure NewRegClient
+// Opt functions are used to configure NewRegClient.
 type Opt func(*RegClient)
 
-// New returns a registry client
+// New returns a registry client.
 func New(opts ...Opt) *RegClient {
 	var rc = RegClient{
 		hosts:     map[string]*config.Host{},
@@ -63,7 +63,7 @@ func New(opts ...Opt) *RegClient {
 	}
 
 	// inject Docker Hub settings
-	rc.hostSet(*config.HostNewName(config.DockerRegistryAuth))
+	_ = rc.hostSet(*config.HostNewName(config.DockerRegistryAuth))
 
 	for _, opt := range opts {
 		opt(&rc)
@@ -95,54 +95,54 @@ func New(opts ...Opt) *RegClient {
 	return &rc
 }
 
-// WithBlobLimit sets the max size for chunked blob uploads which get stored in memory
+// WithBlobLimit sets the max size for chunked blob uploads which get stored in memory.
 //
-// Deprecated: replace with WithRegOpts(reg.WithBlobLimit(limit))
+// Deprecated: replace with WithRegOpts(reg.WithBlobLimit(limit)).
 func WithBlobLimit(limit int64) Opt {
 	return func(rc *RegClient) {
 		rc.regOpts = append(rc.regOpts, reg.WithBlobLimit(limit))
 	}
 }
 
-// WithBlobSize overrides default blob sizes
+// WithBlobSize overrides default blob sizes.
 //
-// Deprecated: replace with WithRegOpts(reg.WithBlobSize(chunk, max))
+// Deprecated: replace with WithRegOpts(reg.WithBlobSize(chunk, max)).
 func WithBlobSize(chunk, max int64) Opt {
 	return func(rc *RegClient) {
 		rc.regOpts = append(rc.regOpts, reg.WithBlobSize(chunk, max))
 	}
 }
 
-// WithCertDir adds a path of certificates to trust similar to Docker's /etc/docker/certs.d
+// WithCertDir adds a path of certificates to trust similar to Docker's /etc/docker/certs.d.
 //
-// Deprecated: replace with WithRegOpts(reg.WithCertDirs(path))
+// Deprecated: replace with WithRegOpts(reg.WithCertDirs(path)).
 func WithCertDir(path ...string) Opt {
 	return func(rc *RegClient) {
 		rc.regOpts = append(rc.regOpts, reg.WithCertDirs(path))
 	}
 }
 
-// WithConfigHost adds a list of config host settings
+// WithConfigHost adds a list of config host settings.
 func WithConfigHost(configHost ...config.Host) Opt {
 	return func(rc *RegClient) {
 		rc.hostLoad("host", configHost)
 	}
 }
 
-// WithConfigHosts adds a list of config host settings
+// WithConfigHosts adds a list of config host settings.
 //
-// Deprecated: replace with WithConfigHost
+// Deprecated: replace with WithConfigHost.
 func WithConfigHosts(configHosts []config.Host) Opt {
 	return WithConfigHost(configHosts...)
 }
 
-// WithDockerCerts adds certificates trusted by docker in /etc/docker/certs.d
+// WithDockerCerts adds certificates trusted by docker in /etc/docker/certs.d.
 func WithDockerCerts() Opt {
 	return WithCertDir(DockerCertDir)
 }
 
-// WithDockerCreds adds configuration from users docker config with registry logins
-// This changes the default value from the config file, and should be added after the config file is loaded
+// WithDockerCreds adds configuration from users docker config with registry logins.
+// This changes the default value from the config file, and should be added after the config file is loaded.
 func WithDockerCreds() Opt {
 	return func(rc *RegClient) {
 		configHosts, err := config.DockerLoad()
@@ -156,21 +156,21 @@ func WithDockerCreds() Opt {
 	}
 }
 
-// WithFS overrides the backing filesystem (used by ocidir)
+// WithFS overrides the backing filesystem (used by ocidir).
 func WithFS(fs rwfs.RWFS) Opt {
 	return func(rc *RegClient) {
 		rc.fs = fs
 	}
 }
 
-// WithLog overrides default logrus Logger
+// WithLog overrides default logrus Logger.
 func WithLog(log *logrus.Logger) Opt {
 	return func(rc *RegClient) {
 		rc.log = log
 	}
 }
 
-// WithRegOpts passes through opts to the reg scheme
+// WithRegOpts passes through opts to the reg scheme.
 func WithRegOpts(opts ...reg.Opts) Opt {
 	return func(rc *RegClient) {
 		if len(opts) == 0 {
@@ -180,25 +180,25 @@ func WithRegOpts(opts ...reg.Opts) Opt {
 	}
 }
 
-// WithRetryDelay specifies the time permitted for retry delays
+// WithRetryDelay specifies the time permitted for retry delays.
 //
-// Deprecated: replace with WithRegOpts(reg.WithDelay(delayInit, delayMax))
+// Deprecated: replace with WithRegOpts(reg.WithDelay(delayInit, delayMax)).
 func WithRetryDelay(delayInit, delayMax time.Duration) Opt {
 	return func(rc *RegClient) {
 		rc.regOpts = append(rc.regOpts, reg.WithDelay(delayInit, delayMax))
 	}
 }
 
-// WithRetryLimit specifies the number of retries for non-fatal errors
+// WithRetryLimit specifies the number of retries for non-fatal errors.
 //
-// Deprecated: replace with WithRegOpts(reg.WithRetryLimit(retryLimit))
+// Deprecated: replace with WithRegOpts(reg.WithRetryLimit(retryLimit)).
 func WithRetryLimit(retryLimit int) Opt {
 	return func(rc *RegClient) {
 		rc.regOpts = append(rc.regOpts, reg.WithRetryLimit(retryLimit))
 	}
 }
 
-// WithUserAgent specifies the User-Agent http header
+// WithUserAgent specifies the User-Agent http header.
 func WithUserAgent(ua string) Opt {
 	return func(rc *RegClient) {
 		rc.userAgent = ua

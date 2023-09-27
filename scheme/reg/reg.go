@@ -25,22 +25,28 @@ const (
 	defaultBlobChunkLimit = 1024 * 1024 * 1024
 	// defaultBlobMax is disabled to support registries without chunked upload support
 	defaultBlobMax = -1
+	// defaultManifestMaxPull limits the largest manifest that will be pulled
+	defaultManifestMaxPull = 1024 * 1024 * 8
+	// defaultManifestMaxPush limits the largest manifest that will be pushed
+	defaultManifestMaxPush = 1024 * 1024 * 4
 )
 
 // Reg is used for interacting with remote registry servers
 type Reg struct {
-	reghttp        *reghttp.Client
-	reghttpOpts    []reghttp.Opts
-	log            *logrus.Logger
-	hosts          map[string]*config.Host
-	features       map[featureKey]*featureVal
-	blobChunkSize  int64
-	blobChunkLimit int64
-	blobMaxPut     int64
-	cacheMan       *cache.Cache[ref.Ref, manifest.Manifest]
-	cacheRL        *cache.Cache[ref.Ref, referrer.ReferrerList]
-	muHost         sync.Mutex
-	muRefTag       sync.Mutex
+	reghttp         *reghttp.Client
+	reghttpOpts     []reghttp.Opts
+	log             *logrus.Logger
+	hosts           map[string]*config.Host
+	features        map[featureKey]*featureVal
+	blobChunkSize   int64
+	blobChunkLimit  int64
+	blobMaxPut      int64
+	manifestMaxPull int64
+	manifestMaxPush int64
+	cacheMan        *cache.Cache[ref.Ref, manifest.Manifest]
+	cacheRL         *cache.Cache[ref.Ref, referrer.ReferrerList]
+	muHost          sync.Mutex
+	muRefTag        sync.Mutex
 }
 
 type featureKey struct {
@@ -61,12 +67,14 @@ type Opts func(*Reg)
 // New returns a Reg pointer with any provided options
 func New(opts ...Opts) *Reg {
 	r := Reg{
-		reghttpOpts:    []reghttp.Opts{},
-		blobChunkSize:  defaultBlobChunk,
-		blobChunkLimit: defaultBlobChunkLimit,
-		blobMaxPut:     defaultBlobMax,
-		hosts:          map[string]*config.Host{},
-		features:       map[featureKey]*featureVal{},
+		reghttpOpts:     []reghttp.Opts{},
+		blobChunkSize:   defaultBlobChunk,
+		blobChunkLimit:  defaultBlobChunkLimit,
+		blobMaxPut:      defaultBlobMax,
+		manifestMaxPull: defaultManifestMaxPull,
+		manifestMaxPush: defaultManifestMaxPush,
+		hosts:           map[string]*config.Host{},
+		features:        map[featureKey]*featureVal{},
 	}
 	r.reghttpOpts = append(r.reghttpOpts, reghttp.WithConfigHost(r.hostGet))
 	for _, opt := range opts {
@@ -208,6 +216,14 @@ func WithLog(log *logrus.Logger) Opts {
 	return func(r *Reg) {
 		r.log = log
 		r.reghttpOpts = append(r.reghttpOpts, reghttp.WithLog(log))
+	}
+}
+
+// WithManifestMax sets the push and pull limits for manifests
+func WithManifestMax(push, pull int64) Opts {
+	return func(r *Reg) {
+		r.manifestMaxPush = push
+		r.manifestMaxPull = pull
 	}
 }
 

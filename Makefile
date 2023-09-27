@@ -24,20 +24,21 @@ ifeq "$(strip $(VER_BUMP))" ''
 		-u "$(shell id -u):$(shell id -g)" \
 		$(VER_BUMP_CONTAINER)
 endif
-MARKDOWN_LINT_VER?=v0.8.1
-GO_VULNCHECK_VER?=v1.0.0
-OSV_SCANNER_VER?=v1.3.6
+MARKDOWN_LINT_VER?=v0.10.0
+GOSEC_VER?=v2.17.0
+GO_VULNCHECK_VER?=v1.0.1
+OSV_SCANNER_VER?=v1.4.0
 SYFT?=$(shell command -v syft 2>/dev/null)
 SYFT_CMD_VER:=$(shell [ -x "$(SYFT)" ] && echo "v$$($(SYFT) version | awk '/^Version: / {print $$2}')" || echo "0")
-SYFT_VERSION?=v0.86.1
-SYFT_CONTAINER?=anchore/syft:v0.86.1@sha256:f2794d19ace079ec97defa96c4b75bdb7544ac96bf146497a7620aafa48603c6
+SYFT_VERSION?=v0.92.0
+SYFT_CONTAINER?=anchore/syft:v0.92.0@sha256:981086797ad3cb1be49d763ffaa50f2bd558c354358112f46283dd3bf8cb0c75
 ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 	SYFT=docker run --rm \
 		-v "$(shell pwd)/:$(shell pwd)/" -w "$(shell pwd)" \
 		-u "$(shell id -u):$(shell id -g)" \
 		$(SYFT_CONTAINER)
 endif
-STATICCHECK_VER?=v0.4.3
+STATICCHECK_VER?=v0.4.6
 
 .PHONY: .FORCE
 .FORCE:
@@ -58,16 +59,20 @@ test: ## go test
 	go test -cover -race ./...
 
 .PHONY: lint
-lint: lint-go lint-md ## Run all linting
+lint: lint-go lint-md lint-gosec ## Run all linting
 
 .PHONY: lint-go
 lint-go: $(GOPATH)/bin/staticcheck .FORCE ## Run linting for Go
 	$(GOPATH)/bin/staticcheck -checks all ./...
 
+.PHONY: lint-gosec
+lint-gosec: $(GOPATH)/bin/gosec .FORCE ## Run gosec
+	$(GOPATH)/bin/gosec -terse ./...
+
 .PHONY: lint-md
 lint-md: .FORCE ## Run linting for markdown
 	docker run --rm -v "$(PWD):/workdir:ro" davidanson/markdownlint-cli2:$(MARKDOWN_LINT_VER) \
-	  **/*.md "#vendor"
+	  "**/*.md" "#vendor"
 
 .PHONY: vulnerability-scan
 vulnerability-scan: osv-scanner vulncheck-go ## Run all vulnerability scanners
@@ -173,6 +178,12 @@ util-version-check: ## check all dependencies for updates
 .PHONY: util-version-update
 util-version-update: ## update versions on all dependencies
 	$(VER_BUMP) update
+
+$(GOPATH)/bin/gosec: .FORCE
+	@[ -f $(GOPATH)/bin/gosec ] \
+	&& [ "$$($(GOPATH)/bin/gosec -version | grep '^Version' | cut -f 2 -d ' ')" = "$(GOSEC_VER)" ] \
+	|| go install -ldflags '-X main.Version=$(GOSEC_VER) -X main.GitTag=$(GOSEC_VER)' \
+	    github.com/securego/gosec/v2/cmd/gosec@$(GOSEC_VER)
 
 $(GOPATH)/bin/staticcheck: .FORCE
 	@[ -f $(GOPATH)/bin/staticcheck ] \

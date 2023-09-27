@@ -16,6 +16,26 @@ import (
 	"github.com/regclient/regclient/types/ref"
 )
 
+// Verify various manifest types implement specific interfaces.
+var (
+	_ Imager = (*docker1Manifest)(nil)
+	_ Imager = (*docker1SignedManifest)(nil)
+	_ Imager = (*docker2Manifest)(nil)
+	_ Imager = (*oci1Manifest)(nil)
+	_ Imager = (*oci1Artifact)(nil)
+
+	_ Indexer = (*docker2ManifestList)(nil)
+	_ Indexer = (*oci1Index)(nil)
+
+	_ Annotator = (*oci1Index)(nil)
+	_ Annotator = (*oci1Manifest)(nil)
+	_ Annotator = (*oci1Artifact)(nil)
+
+	_ Subjecter = (*oci1Index)(nil)
+	_ Subjecter = (*oci1Manifest)(nil)
+	_ Subjecter = (*oci1Artifact)(nil)
+)
+
 var (
 	rawDockerSchema2 = []byte(`
 		{

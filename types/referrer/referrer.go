@@ -138,8 +138,8 @@ func (rl ReferrerList) MarshalPretty() ([]byte, error) {
 			fmt.Fprintf(tw, "  %s:\t%s\n", name, val)
 		}
 	}
-	tw.Flush()
-	return buf.Bytes(), nil
+	err := tw.Flush()
+	return buf.Bytes(), err
 }
 
 // FallbackTag returns the ref that should be used when the registry does not support the referrers API

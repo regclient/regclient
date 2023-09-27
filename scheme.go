@@ -17,8 +17,8 @@ func (rc *RegClient) schemeGet(scheme string) (scheme.API, error) {
 	return s, nil
 }
 
-// Close is used to free resources associated with a reference
-// With ocidir, this may trigger a garbage collection process
+// Close is used to free resources associated with a reference.
+// With ocidir, this may trigger a garbage collection process.
 func (rc *RegClient) Close(ctx context.Context, r ref.Ref) error {
 	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {

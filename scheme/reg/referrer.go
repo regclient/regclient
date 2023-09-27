@@ -83,7 +83,7 @@ func (reg *Reg) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Refe
 				reg.featureSet("referrer", r.Registry, r.Repository, err == nil)
 			}
 			if err == nil {
-				if config.FilterArtifactType == "" {
+				if config.MatchOpt.ArtifactType == "" {
 					// only cache if successful and artifactType is not filtered
 					reg.cacheRL.Set(rCache, rl)
 				}
@@ -157,8 +157,8 @@ func (reg *Reg) referrerListByAPIPage(ctx context.Context, r ref.Ref, config sch
 		Tags:    []string{},
 	}
 	query := url.Values{}
-	if config.FilterArtifactType != "" {
-		query.Set("artifactType", config.FilterArtifactType)
+	if config.MatchOpt.ArtifactType != "" {
+		query.Set("artifactType", config.MatchOpt.ArtifactType)
 	}
 	req := &reghttp.Req{
 		Host: r.Registry,
@@ -382,7 +382,7 @@ func (reg *Reg) referrerPing(ctx context.Context, r ref.Ref) bool {
 		reg.featureSet("referrer", r.Registry, r.Repository, false)
 		return false
 	}
-	resp.Close()
+	_ = resp.Close()
 	result := resp.HTTPResponse().StatusCode == 200
 	reg.featureSet("referrer", r.Registry, r.Repository, result)
 	return result

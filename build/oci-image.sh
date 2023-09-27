@@ -82,13 +82,14 @@ docker buildx build --platform="$platforms" \
   ${build_opts} .
 
 echo "Importing tar"
-regctl manifest rm --referrers --force-tag-dereference "ocidir://output/${image}:${release}" 2>/dev/null || true
+regctl tag rm "ocidir://output/${image}:${release}" 2>/dev/null || true
 regctl image import "ocidir://output/${image}:${release}" "output/${image}-${release}.tar"
 echo "Modding image"
 regctl image mod \
   "ocidir://output/${image}:${release}" --replace \
-  --to-oci-referrers \
-  --time-max "${vcs_date}" \
+  --to-oci-referrers
+regctl image mod \
+  "ocidir://output/${image}:${release}" --replace \
   --annotation "[*]org.opencontainers.image.created=${vcs_date}" \
   --annotation "[*]org.opencontainers.image.source=${vcs_repo}" \
   --annotation "[*]org.opencontainers.image.version=${vcs_version}" \
@@ -100,6 +101,14 @@ if [ -n "$base_name" ] && [ -n "$base_digest" ]; then
     "ocidir://output/${image}:${release}" --replace \
     --annotation "[*]org.opencontainers.image.base.name=${base_name}" \
     --annotation "[*]org.opencontainers.image.base.digest=${base_digest}" \
+    --reproducible \
+    --time "set=${vcs_date},base-ref=${base_name}@${base_digest}" \
+    >/dev/null
+else
+  regctl image mod \
+    "ocidir://output/${image}:${release}" --replace \
+    --reproducible \
+    --time "set=${vcs_date}" \
     >/dev/null
 fi
 
@@ -120,6 +129,13 @@ for digest in $(regctl manifest get ocidir://output/${image}:${release} --format
         --annotation "org.opencontainers.image.created=${now_date}" \
         --annotation "org.opencontainers.image.description=SPDX JSON SBOM"
   rm -r output/${image}-sbom
+done
+
+# manually prune old digest tags from previous builds and before the mod
+for tag in $(regctl tag ls ocidir://output/${image}); do
+  if [ "${tag}" != "${tag#sha256-}" ] && ! regctl manifest head "ocidir://output/${image}@sha256:${tag#sha256-}" 2>/dev/null; then
+    regctl tag rm "ocidir://output/${image}:${tag}"
+  fi
 done
 
 echo "\033[32mDigest for ${image}-${release}:\033[0m $(regctl image digest "ocidir://output/${image}:${release}")"
