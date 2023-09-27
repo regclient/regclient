@@ -14,36 +14,32 @@ import (
 	"github.com/regclient/regclient/types"
 )
 
-// TarReader reads or writes to a blob with tar contents and optional compression
-type TarReader interface {
-	Blob
-	io.Closer
-	GetTarReader() (*tar.Reader, error)
-	ReadFile(filename string) (*tar.Header, io.Reader, error)
-}
+// TarReader was previously an interface. A type alias is provided for upgrading.
+type TarReader = *BTarReader
 
-type tarReader struct {
-	common
+// BTarReader is used to read individual files from an image layer.
+type BTarReader struct {
+	BCommon
 	origRdr  io.Reader
 	reader   io.Reader
 	digester digest.Digester
 	tr       *tar.Reader
 }
 
-// NewTarReader creates a TarReader
-func NewTarReader(opts ...Opts) TarReader {
+// NewTarReader creates a BTarReader.
+// Typically a BTarReader will be created using BReader.ToTarReader().
+func NewTarReader(opts ...Opts) *BTarReader {
 	bc := blobConfig{}
 	for _, opt := range opts {
 		opt(&bc)
 	}
-	c := common{
-		desc:      bc.desc,
-		r:         bc.r,
-		rawHeader: bc.header,
-		resp:      bc.resp,
-	}
-	tr := tarReader{
-		common:  c,
+	tr := BTarReader{
+		BCommon: BCommon{
+			desc:      bc.desc,
+			r:         bc.r,
+			rawHeader: bc.header,
+			resp:      bc.resp,
+		},
 		origRdr: bc.rdr,
 	}
 	if bc.rdr != nil {
@@ -61,8 +57,8 @@ func NewTarReader(opts ...Opts) TarReader {
 	return &tr
 }
 
-// Close attempts to close the reader and populates/validates the digest
-func (tr *tarReader) Close() error {
+// Close attempts to close the reader and populates/validates the digest.
+func (tr *BTarReader) Close() error {
 	// attempt to close if available in original reader
 	if trc, ok := tr.origRdr.(io.Closer); ok && trc != nil {
 		return trc.Close()
@@ -70,8 +66,8 @@ func (tr *tarReader) Close() error {
 	return nil
 }
 
-// GetTarReader returns the tar.Reader for the blob
-func (tr *tarReader) GetTarReader() (*tar.Reader, error) {
+// GetTarReader returns the tar.Reader for the blob.
+func (tr *BTarReader) GetTarReader() (*tar.Reader, error) {
 	if tr.reader == nil {
 		return nil, fmt.Errorf("blob has no reader defined")
 	}
@@ -85,8 +81,8 @@ func (tr *tarReader) GetTarReader() (*tar.Reader, error) {
 	return tr.tr, nil
 }
 
-// RawBody returns the original body from the request
-func (tr *tarReader) RawBody() ([]byte, error) {
+// RawBody returns the original body from the request.
+func (tr *BTarReader) RawBody() ([]byte, error) {
 	if !tr.blobSet {
 		return []byte{}, fmt.Errorf("Blob is not defined")
 	}
@@ -109,8 +105,8 @@ func (tr *tarReader) RawBody() ([]byte, error) {
 	return b, err
 }
 
-// ReadFile parses the tar to find a file
-func (tr *tarReader) ReadFile(filename string) (*tar.Header, io.Reader, error) {
+// ReadFile parses the tar to find a file.
+func (tr *BTarReader) ReadFile(filename string) (*tar.Header, io.Reader, error) {
 	if strings.HasPrefix(filename, ".wh.") {
 		return nil, nil, fmt.Errorf(".wh. prefix is reserved for whiteout files")
 	}
