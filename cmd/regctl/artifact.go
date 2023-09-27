@@ -106,6 +106,7 @@ var artifactOpts struct {
 	formatList       string
 	formatPut        string
 	formatTree       string
+	index            bool
 	latest           bool
 	outputDir        string
 	platform         string
@@ -164,6 +165,7 @@ func init() {
 	artifactPutCmd.Flags().StringArrayVar(&artifactOpts.annotations, "annotation", []string{}, "Annotation to include on manifest")
 	artifactPutCmd.Flags().BoolVar(&artifactOpts.byDigest, "by-digest", false, "Push manifest by digest instead of tag")
 	artifactPutCmd.Flags().StringVar(&artifactOpts.formatPut, "format", "", "Format output with go template syntax")
+	artifactPutCmd.Flags().BoolVar(&artifactOpts.index, "index", false, "Create/append artifact to an index")
 	artifactPutCmd.Flags().StringVar(&artifactOpts.subject, "subject", "", "Set the subject to a reference (used for referrer queries)")
 	artifactPutCmd.Flags().BoolVar(&artifactOpts.stripDirs, "strip-dirs", false, "Strip directories from filenames in artifact")
 	artifactPutCmd.Flags().StringVarP(&artifactOpts.platform, "platform", "p", "", "Specify platform of a subject (e.g. linux/amd64 or local)")
@@ -836,19 +838,70 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if artifactOpts.byDigest || rArt.IsZero() {
+	if artifactOpts.byDigest || artifactOpts.index || rArt.IsZero() {
 		r.Tag = ""
 		r.Digest = mm.GetDescriptor().Digest.String()
 	}
 
 	// push manifest
 	putOpts := []regclient.ManifestOpts{}
-	if rArt.IsZero() {
+	if rArt.IsZero() || artifactOpts.index {
 		putOpts = append(putOpts, regclient.WithManifestChild())
 	}
 	err = rc.ManifestPut(ctx, r, mm, putOpts...)
 	if err != nil {
 		return err
+	}
+
+	// create/append to index
+	if artifactOpts.index && !rArt.IsZero() {
+		// create a descriptor to add
+		d := mm.GetDescriptor()
+		d.ArtifactType = artifactOpts.artifactType
+		d.Annotations = annotations
+		if artifactOpts.platform != "" {
+			p, err := platform.Parse(artifactOpts.platform)
+			if err != nil {
+				return fmt.Errorf("failed to parse platform: %w", err)
+			}
+			d.Platform = &p
+		}
+		mi, err := rc.ManifestGet(ctx, rArt)
+		if err == nil && mi.IsList() {
+			// append to existing index
+			mii, ok := mi.(manifest.Indexer)
+			if !ok {
+				return fmt.Errorf("index to append to is a list but not an Indexer?")
+			}
+			dl, err := mii.GetManifestList()
+			if err != nil {
+				return err
+			}
+			dl = append(dl, d)
+			err = mii.SetManifestList(dl)
+			if err != nil {
+				return err
+			}
+			err = rc.ManifestPut(ctx, rArt, mi)
+			if err != nil {
+				return err
+			}
+		} else {
+			// create a new index
+			mii := v1.Index{
+				Versioned: v1.IndexSchemaVersion,
+				MediaType: types.MediaTypeOCI1ManifestList,
+				Manifests: []types.Descriptor{d},
+			}
+			mi, err := manifest.New(manifest.WithOrig(mii))
+			if err != nil {
+				return err
+			}
+			err = rc.ManifestPut(ctx, rArt, mi)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	result := struct {

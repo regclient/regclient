@@ -206,6 +206,16 @@ func TestArtifactPut(t *testing.T) {
 			args: []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--config-file", "", "--subject", "ocidir://" + testDir + ":put-example-at"},
 			in:   testData,
 		},
+		{
+			name: "Put create index",
+			args: []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--config-file", "", "--annotation", "test=a", "--platform", "linux/amd64", "--index", "ocidir://" + testDir + ":index"},
+			in:   testData,
+		},
+		{
+			name: "Put append index",
+			args: []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--config-file", "", "--annotation", "test=b", "--platform", "linux/arm64", "--index", "ocidir://" + testDir + ":index"},
+			in:   testData,
+		},
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
