@@ -24,7 +24,8 @@ func main() {
 	}()
 	godbg.SignalTrace()
 
-	if err := rootCmd.ExecuteContext(ctx); err != nil {
+	rootTopCmd := NewRootCmd()
+	if err := rootTopCmd.ExecuteContext(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		// provide tips for common error messages
 		switch {

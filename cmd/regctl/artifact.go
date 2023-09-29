@@ -50,48 +50,8 @@ var configKnownTypes = []string{
 	"application/vnd.sylabs.sif.config.v1+json",
 }
 
-var artifactCmd = &cobra.Command{
-	Use:   "artifact <cmd>",
-	Short: "manage artifacts",
-}
-var artifactGetCmd = &cobra.Command{
-	Use:       "get <reference>",
-	Aliases:   []string{"pull"},
-	Short:     "download artifacts",
-	Long:      `Download artifacts from the registry.`,
-	Args:      cobra.RangeArgs(0, 1),
-	ValidArgs: []string{}, // do not auto complete repository/tag
-	RunE:      runArtifactGet,
-}
-var artifactListCmd = &cobra.Command{
-	Use:       "list <reference>",
-	Aliases:   []string{"ls"},
-	Short:     "list artifacts that have a subject to the given reference",
-	Long:      `List artifacts that have a subject to the given reference.`,
-	Args:      cobra.ExactArgs(1),
-	ValidArgs: []string{}, // do not auto complete repository/tag
-	RunE:      runArtifactList,
-}
-var artifactPutCmd = &cobra.Command{
-	Use:       "put <reference>",
-	Aliases:   []string{"push"},
-	Short:     "upload artifacts",
-	Long:      `Upload artifacts to the registry.`,
-	Args:      cobra.RangeArgs(0, 1),
-	ValidArgs: []string{}, // do not auto complete repository/tag
-	RunE:      runArtifactPut,
-}
-var artifactTreeCmd = &cobra.Command{
-	Use:       "tree <reference>",
-	Aliases:   []string{},
-	Short:     "tree listing of artifacts",
-	Long:      `Return a graph of manifests and referrers to those manifests.`,
-	Args:      cobra.ExactArgs(1),
-	ValidArgs: []string{}, // do not auto complete repository/tag
-	RunE:      runArtifactTree,
-}
-
-var artifactOpts struct {
+type artifactCmd struct {
+	rootOpts         *rootCmd
 	annotations      []string
 	artifactMT       string
 	artifactType     string
@@ -117,7 +77,52 @@ var artifactOpts struct {
 	subject          string
 }
 
-func init() {
+func NewArtifactCmd(rootOpts *rootCmd) *cobra.Command {
+	artifactOpts := artifactCmd{
+		rootOpts: rootOpts,
+	}
+
+	var artifactTopCmd = &cobra.Command{
+		Use:   "artifact <cmd>",
+		Short: "manage artifacts",
+	}
+	var artifactGetCmd = &cobra.Command{
+		Use:       "get <reference>",
+		Aliases:   []string{"pull"},
+		Short:     "download artifacts",
+		Long:      `Download artifacts from the registry.`,
+		Args:      cobra.RangeArgs(0, 1),
+		ValidArgs: []string{}, // do not auto complete repository/tag
+		RunE:      artifactOpts.runArtifactGet,
+	}
+	var artifactListCmd = &cobra.Command{
+		Use:       "list <reference>",
+		Aliases:   []string{"ls"},
+		Short:     "list artifacts that have a subject to the given reference",
+		Long:      `List artifacts that have a subject to the given reference.`,
+		Args:      cobra.ExactArgs(1),
+		ValidArgs: []string{}, // do not auto complete repository/tag
+		RunE:      artifactOpts.runArtifactList,
+	}
+	var artifactPutCmd = &cobra.Command{
+		Use:       "put <reference>",
+		Aliases:   []string{"push"},
+		Short:     "upload artifacts",
+		Long:      `Upload artifacts to the registry.`,
+		Args:      cobra.RangeArgs(0, 1),
+		ValidArgs: []string{}, // do not auto complete repository/tag
+		RunE:      artifactOpts.runArtifactPut,
+	}
+	var artifactTreeCmd = &cobra.Command{
+		Use:       "tree <reference>",
+		Aliases:   []string{},
+		Short:     "tree listing of artifacts",
+		Long:      `Return a graph of manifests and referrers to those manifests.`,
+		Args:      cobra.ExactArgs(1),
+		ValidArgs: []string{}, // do not auto complete repository/tag
+		RunE:      artifactOpts.runArtifactTree,
+	}
+
 	artifactGetCmd.Flags().StringVar(&artifactOpts.subject, "subject", "", "Get a referrer to the subject reference")
 	artifactGetCmd.Flags().StringVarP(&artifactOpts.platform, "platform", "p", "", "Specify platform of a subject (e.g. linux/amd64 or local)")
 	artifactGetCmd.Flags().StringVar(&artifactOpts.filterAT, "filter-artifact-type", "", "Filter referrers by artifactType")
@@ -177,16 +182,16 @@ func init() {
 	artifactTreeCmd.Flags().StringArrayVar(&artifactOpts.filterAnnot, "filter-annotation", []string{}, "Filter descriptors by annotation (key=value)")
 	artifactTreeCmd.Flags().StringVar(&artifactOpts.formatTree, "format", "{{printPretty .}}", "Format output with go template syntax")
 
-	artifactCmd.AddCommand(artifactGetCmd)
-	artifactCmd.AddCommand(artifactListCmd)
-	artifactCmd.AddCommand(artifactPutCmd)
-	artifactCmd.AddCommand(artifactTreeCmd)
-	rootCmd.AddCommand(artifactCmd)
+	artifactTopCmd.AddCommand(artifactGetCmd)
+	artifactTopCmd.AddCommand(artifactListCmd)
+	artifactTopCmd.AddCommand(artifactPutCmd)
+	artifactTopCmd.AddCommand(artifactTreeCmd)
+	return artifactTopCmd
 }
 
-func runArtifactGet(cmd *cobra.Command, args []string) error {
+func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
-	rc := newRegClient()
+	rc := artifactOpts.rootOpts.newRegClient()
 
 	// validate inputs
 	if artifactOpts.refers != "" {
@@ -461,7 +466,7 @@ func runArtifactGet(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runArtifactList(cmd *cobra.Command, args []string) error {
+func (artifactOpts *artifactCmd) runArtifactList(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 
 	// validate inputs
@@ -473,7 +478,7 @@ func runArtifactList(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("--latest cannot be used with --sort-annotation")
 	}
 
-	rc := newRegClient()
+	rc := artifactOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, rSubject)
 
 	matchOpts := types.MatchOpt{
@@ -556,7 +561,7 @@ func runArtifactList(cmd *cobra.Command, args []string) error {
 	return template.Writer(cmd.OutOrStdout(), artifactOpts.formatList, rl)
 }
 
-func runArtifactPut(cmd *cobra.Command, args []string) error {
+func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	mOpts := []manifest.Opts{}
 	hasConfig := false
@@ -652,7 +657,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	}
 
 	// setup regclient
-	rc := newRegClient()
+	rc := artifactOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
 	var subjectDesc *types.Descriptor
@@ -915,7 +920,7 @@ func runArtifactPut(cmd *cobra.Command, args []string) error {
 	return template.Writer(cmd.OutOrStdout(), artifactOpts.formatPut, result)
 }
 
-func runArtifactTree(cmd *cobra.Command, args []string) error {
+func (artifactOpts *artifactCmd) runArtifactTree(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 
 	// validate inputs
@@ -924,7 +929,7 @@ func runArtifactTree(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	rc := newRegClient()
+	rc := artifactOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
 	referrerOpts := []scheme.ReferrerOpts{}
@@ -955,7 +960,7 @@ func runArtifactTree(cmd *cobra.Command, args []string) error {
 	}
 
 	seen := []string{}
-	tr, err := treeAddResult(ctx, rc, r, seen, referrerOpts, tags)
+	tr, err := artifactOpts.treeAddResult(ctx, rc, r, seen, referrerOpts, tags)
 	var twErr error
 	if tr != nil {
 		twErr = template.Writer(cmd.OutOrStdout(), artifactOpts.formatTree, tr)
@@ -966,7 +971,7 @@ func runArtifactTree(cmd *cobra.Command, args []string) error {
 	return twErr
 }
 
-func treeAddResult(ctx context.Context, rc *regclient.RegClient, r ref.Ref, seen []string, rOpts []scheme.ReferrerOpts, tags []string) (*treeResult, error) {
+func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclient.RegClient, r ref.Ref, seen []string, rOpts []scheme.ReferrerOpts, tags []string) (*treeResult, error) {
 	tr := treeResult{
 		Ref: r,
 	}
@@ -1003,7 +1008,7 @@ func treeAddResult(ctx context.Context, rc *regclient.RegClient, r ref.Ref, seen
 			rChild := r
 			rChild.Tag = ""
 			rChild.Digest = d.Digest.String()
-			tChild, err := treeAddResult(ctx, rc, rChild, seen, rOpts, tags)
+			tChild, err := artifactOpts.treeAddResult(ctx, rc, rChild, seen, rOpts, tags)
 			if tChild != nil {
 				tChild.ArtifactType = d.ArtifactType
 				if d.Platform != nil {
@@ -1029,7 +1034,7 @@ func treeAddResult(ctx context.Context, rc *regclient.RegClient, r ref.Ref, seen
 			rReferrer := r
 			rReferrer.Tag = ""
 			rReferrer.Digest = d.Digest.String()
-			tReferrer, err := treeAddResult(ctx, rc, rReferrer, seen, rOpts, tags)
+			tReferrer, err := artifactOpts.treeAddResult(ctx, rc, rReferrer, seen, rOpts, tags)
 			if tReferrer != nil {
 				tReferrer.ArtifactType = d.ArtifactType
 				if d.Platform != nil {
@@ -1055,7 +1060,7 @@ func treeAddResult(ctx context.Context, rc *regclient.RegClient, r ref.Ref, seen
 				rTag := r
 				rTag.Tag = t
 				rTag.Digest = ""
-				tReferrer, err := treeAddResult(ctx, rc, rTag, seen, rOpts, tags)
+				tReferrer, err := artifactOpts.treeAddResult(ctx, rc, rTag, seen, rOpts, tags)
 				if tReferrer != nil {
 					tReferrer.Ref.Tag = t
 					tReferrer.Ref.Digest = ""

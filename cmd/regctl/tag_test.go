@@ -11,7 +11,6 @@ import (
 )
 
 func TestTagList(t *testing.T) {
-	saveTagOpts := tagOpts
 	tt := []struct {
 		name        string
 		args        []string
@@ -59,12 +58,9 @@ func TestTagList(t *testing.T) {
 			outContains: true,
 		},
 	}
-	optInit := tagOpts
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			tagOpts = optInit
-			out, err := cobraTest(t, tc.args...)
-			tagOpts = saveTagOpts
+			out, err := cobraTest(t, nil, tc.args...)
 			if tc.expectErr != nil {
 				if err == nil {
 					t.Errorf("did not receive expected error: %v", tc.expectErr)
@@ -82,5 +78,4 @@ func TestTagList(t *testing.T) {
 			}
 		})
 	}
-
 }

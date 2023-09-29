@@ -27,134 +27,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var imageCmd = &cobra.Command{
-	Use:   "image <cmd>",
-	Short: "manage images",
-}
-var imageCheckBaseCmd = &cobra.Command{
-	Use:     "check-base <image_ref>",
-	Aliases: []string{},
-	Short:   "check if the base image has changed",
-	Long: `Check the base image (found using annotations or an option).
-If the base name is not provided, annotations will be checked in the image.
-If the digest is available, this checks if that matches the base name.
-If the digest is not available, layers of each manifest are compared.
-If the layers match, the config (history and roots) are optionally compared.	
-If the base image does not match, the command exits with a non-zero status.
-Use "-v info" to see more details.`,
-	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: completeArgTag,
-	RunE:              runImageCheckBase,
-}
-var imageCopyCmd = &cobra.Command{
-	Use:     "copy <src_image_ref> <dst_image_ref>",
-	Aliases: []string{"cp"},
-	Short:   "copy or retag image",
-	Long: `Copy or retag an image. This works between registries and only pulls layers
-that do not exist at the target. In the same registry it attempts to mount
-the layers between repositories. And within the same repository it only
-sends the manifest with the new tag.`,
-	Args:              cobra.ExactArgs(2),
-	ValidArgsFunction: completeArgTag,
-	RunE:              runImageCopy,
-}
-var imageDeleteCmd = &cobra.Command{
-	Use:     "delete <image_ref>",
-	Aliases: []string{"del", "rm", "remove"},
-	Short:   "delete image, same as \"manifest delete\"",
-	Long: `Delete a manifest. This will delete the manifest, and all tags pointing to that
-manifest. You must specify a digest, not a tag on this command (e.g. 
-image_name@sha256:1234abc...). It is up to the registry whether the delete
-API is supported. Additionally, registries may garbage collect the filesystem
-layers (blobs) separately or not at all. See also the "tag delete" command.`,
-	Args:      cobra.ExactArgs(1),
-	ValidArgs: []string{}, // do not auto complete digests
-	RunE:      runManifestDelete,
-}
-var imageDigestCmd = &cobra.Command{
-	Use:               "digest <image_ref>",
-	Short:             "show digest for pinning, same as \"manifest digest\"",
-	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: completeArgTag,
-	RunE:              runManifestHead,
-}
-var imageExportCmd = &cobra.Command{
-	Use:   "export <image_ref> [filename]",
-	Short: "export image",
-	Long: `Exports an image into a tar file that can be later loaded into a docker
-engine with "docker load". The tar file is output to stdout by default.
-Compression is typically not useful since layers are already compressed.
-Example usage: regctl image export registry:5000/yourimg:v1 >yourimg-v1.tar`,
-	Args:              cobra.RangeArgs(1, 2),
-	ValidArgsFunction: completeArgTag,
-	RunE:              runImageExport,
-}
-var imageGetFileCmd = &cobra.Command{
-	Use:               "get-file <image_ref> <filename> [out-file]",
-	Aliases:           []string{"cat"},
-	Short:             "get a file from an image",
-	Long:              `Go through each of the image layers searching for the requested file.`,
-	Args:              cobra.RangeArgs(2, 3),
-	ValidArgsFunction: completeArgList([]completeFunc{completeArgTag, completeArgNone, completeArgNone}),
-	RunE:              runImageGetFile,
-}
-var imageImportCmd = &cobra.Command{
-	Use:   "import <image_ref> <filename>",
-	Short: "import image",
-	Long: `Imports an image from a tar file. This must be either a docker formatted tar
-from "docker save" or an OCI Layout compatible tar. The output from
-"regctl image export" can be used. Stdin is not permitted for the tar file.`,
-	Args:              cobra.ExactArgs(2),
-	ValidArgsFunction: completeArgList([]completeFunc{completeArgTag, completeArgDefault}),
-	RunE:              runImageImport,
-}
-var imageInspectCmd = &cobra.Command{
-	Use:     "inspect <image_ref>",
-	Aliases: []string{"config"},
-	Short:   "inspect image",
-	Long: `Shows the config json for an image and is equivalent to pulling the image
-in docker, and inspecting it, but without pulling any of the image layers.`,
-	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: completeArgTag,
-	RunE:              runImageInspect,
-}
-var imageManifestCmd = &cobra.Command{
-	Use:               "manifest <image_ref>",
-	Short:             "show manifest or manifest list, same as \"manifest get\"",
-	Long:              `Shows the manifest or manifest list of the specified image.`,
-	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: completeArgTag,
-	RunE:              runManifestGet,
-}
-var imageModCmd = &cobra.Command{
-	Use:   "mod <image_ref>",
-	Short: "modify an image",
-	// TODO: remove EXPERIMENTAL when stable
-	Long: `EXPERIMENTAL: Applies requested modifications to an image
-For time options, the value is a comma separated list of key/value pairs:
-  set=${time}: time to set in rfc3339 format, e.g. 2006-01-02T15:04:05Z
-  from-label=${label}: label used to extract time in rfc3339 format
-  after=${time_in_rfc3339}: adjust any time after this
-  base-ref=${image}: image to lookup base layers, which are skipped
-  base-layers=${count}: number of layers to skip changing (from the base image)
-  * set or from-label is required in the time options
-`,
-	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: completeArgTag,
-	RunE:              runImageMod,
-}
-var imageRateLimitCmd = &cobra.Command{
-	Use:   "ratelimit <image_ref>",
-	Short: "show the current rate limit",
-	Long: `Shows the rate limit using an http head request against the image manifest.
-If Set is false, the Remain value was not provided.
-The other values may be 0 if not provided by the registry.`,
-	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: completeArgTag,
-	RunE:              runImageRateLimit,
-}
-
-var imageOpts struct {
+type imageCmd struct {
+	rootOpts        *rootCmd
 	checkBaseRef    string
 	checkBaseDigest string
 	checkSkipConfig bool
@@ -177,7 +51,141 @@ var imageOpts struct {
 	requireList     bool
 }
 
-func init() {
+func NewImageCmd(rootOpts *rootCmd) *cobra.Command {
+	imageOpts := imageCmd{
+		rootOpts: rootOpts,
+	}
+	// TODO: is there a better way to define an alias across parent commands?
+	manifestOpts := manifestCmd{
+		rootOpts: rootOpts,
+	}
+	var imageTopCmd = &cobra.Command{
+		Use:   "image <cmd>",
+		Short: "manage images",
+	}
+	var imageCheckBaseCmd = &cobra.Command{
+		Use:     "check-base <image_ref>",
+		Aliases: []string{},
+		Short:   "check if the base image has changed",
+		Long: `Check the base image (found using annotations or an option).
+If the base name is not provided, annotations will be checked in the image.
+If the digest is available, this checks if that matches the base name.
+If the digest is not available, layers of each manifest are compared.
+If the layers match, the config (history and roots) are optionally compared.	
+If the base image does not match, the command exits with a non-zero status.
+Use "-v info" to see more details.`,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: rootOpts.completeArgTag,
+		RunE:              imageOpts.runImageCheckBase,
+	}
+	var imageCopyCmd = &cobra.Command{
+		Use:     "copy <src_image_ref> <dst_image_ref>",
+		Aliases: []string{"cp"},
+		Short:   "copy or retag image",
+		Long: `Copy or retag an image. This works between registries and only pulls layers
+that do not exist at the target. In the same registry it attempts to mount
+the layers between repositories. And within the same repository it only
+sends the manifest with the new tag.`,
+		Args:              cobra.ExactArgs(2),
+		ValidArgsFunction: rootOpts.completeArgTag,
+		RunE:              imageOpts.runImageCopy,
+	}
+	var imageDeleteCmd = &cobra.Command{
+		Use:     "delete <image_ref>",
+		Aliases: []string{"del", "rm", "remove"},
+		Short:   "delete image, same as \"manifest delete\"",
+		Long: `Delete a manifest. This will delete the manifest, and all tags pointing to that
+manifest. You must specify a digest, not a tag on this command (e.g. 
+image_name@sha256:1234abc...). It is up to the registry whether the delete
+API is supported. Additionally, registries may garbage collect the filesystem
+layers (blobs) separately or not at all. See also the "tag delete" command.`,
+		Args:      cobra.ExactArgs(1),
+		ValidArgs: []string{}, // do not auto complete digests
+		RunE:      manifestOpts.runManifestDelete,
+	}
+	var imageDigestCmd = &cobra.Command{
+		Use:               "digest <image_ref>",
+		Short:             "show digest for pinning, same as \"manifest digest\"",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: rootOpts.completeArgTag,
+		RunE:              manifestOpts.runManifestHead,
+	}
+	var imageExportCmd = &cobra.Command{
+		Use:   "export <image_ref> [filename]",
+		Short: "export image",
+		Long: `Exports an image into a tar file that can be later loaded into a docker
+engine with "docker load". The tar file is output to stdout by default.
+Compression is typically not useful since layers are already compressed.
+Example usage: regctl image export registry:5000/yourimg:v1 >yourimg-v1.tar`,
+		Args:              cobra.RangeArgs(1, 2),
+		ValidArgsFunction: rootOpts.completeArgTag,
+		RunE:              imageOpts.runImageExport,
+	}
+	var imageGetFileCmd = &cobra.Command{
+		Use:               "get-file <image_ref> <filename> [out-file]",
+		Aliases:           []string{"cat"},
+		Short:             "get a file from an image",
+		Long:              `Go through each of the image layers searching for the requested file.`,
+		Args:              cobra.RangeArgs(2, 3),
+		ValidArgsFunction: completeArgList([]completeFunc{rootOpts.completeArgTag, completeArgNone, completeArgNone}),
+		RunE:              imageOpts.runImageGetFile,
+	}
+	var imageImportCmd = &cobra.Command{
+		Use:   "import <image_ref> <filename>",
+		Short: "import image",
+		Long: `Imports an image from a tar file. This must be either a docker formatted tar
+from "docker save" or an OCI Layout compatible tar. The output from
+"regctl image export" can be used. Stdin is not permitted for the tar file.`,
+		Args:              cobra.ExactArgs(2),
+		ValidArgsFunction: completeArgList([]completeFunc{rootOpts.completeArgTag, completeArgDefault}),
+		RunE:              imageOpts.runImageImport,
+	}
+	var imageInspectCmd = &cobra.Command{
+		Use:     "inspect <image_ref>",
+		Aliases: []string{"config"},
+		Short:   "inspect image",
+		Long: `Shows the config json for an image and is equivalent to pulling the image
+in docker, and inspecting it, but without pulling any of the image layers.`,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: rootOpts.completeArgTag,
+		RunE:              imageOpts.runImageInspect,
+	}
+	var imageManifestCmd = &cobra.Command{
+		Use:               "manifest <image_ref>",
+		Short:             "show manifest or manifest list, same as \"manifest get\"",
+		Long:              `Shows the manifest or manifest list of the specified image.`,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: rootOpts.completeArgTag,
+		RunE:              manifestOpts.runManifestGet,
+	}
+	var imageModCmd = &cobra.Command{
+		Use:   "mod <image_ref>",
+		Short: "modify an image",
+		// TODO: remove EXPERIMENTAL when stable
+		Long: `EXPERIMENTAL: Applies requested modifications to an image
+For time options, the value is a comma separated list of key/value pairs:
+  set=${time}: time to set in rfc3339 format, e.g. 2006-01-02T15:04:05Z
+  from-label=${label}: label used to extract time in rfc3339 format
+  after=${time_in_rfc3339}: adjust any time after this
+  base-ref=${image}: image to lookup base layers, which are skipped
+  base-layers=${count}: number of layers to skip changing (from the base image)
+  * set or from-label is required in the time options
+`,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: rootOpts.completeArgTag,
+		RunE:              imageOpts.runImageMod,
+	}
+	var imageRateLimitCmd = &cobra.Command{
+		Use:   "ratelimit <image_ref>",
+		Short: "show the current rate limit",
+		Long: `Shows the rate limit using an http head request against the image manifest.
+If Set is false, the Remain value was not provided.
+The other values may be 0 if not provided by the registry.`,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: rootOpts.completeArgTag,
+		RunE:              imageOpts.runImageRateLimit,
+	}
+
 	imageOpts.modOpts = []mod.Opts{}
 
 	imageCheckBaseCmd.Flags().StringVarP(&imageOpts.checkBaseRef, "base", "", "", "Base image reference (including tag)")
@@ -666,18 +674,18 @@ func init() {
 	imageRateLimitCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	_ = imageRateLimitCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
-	imageCmd.AddCommand(imageCheckBaseCmd)
-	imageCmd.AddCommand(imageCopyCmd)
-	imageCmd.AddCommand(imageDeleteCmd)
-	imageCmd.AddCommand(imageDigestCmd)
-	imageCmd.AddCommand(imageExportCmd)
-	imageCmd.AddCommand(imageGetFileCmd)
-	imageCmd.AddCommand(imageImportCmd)
-	imageCmd.AddCommand(imageInspectCmd)
-	imageCmd.AddCommand(imageManifestCmd)
-	imageCmd.AddCommand(imageModCmd)
-	imageCmd.AddCommand(imageRateLimitCmd)
-	rootCmd.AddCommand(imageCmd)
+	imageTopCmd.AddCommand(imageCheckBaseCmd)
+	imageTopCmd.AddCommand(imageCopyCmd)
+	imageTopCmd.AddCommand(imageDeleteCmd)
+	imageTopCmd.AddCommand(imageDigestCmd)
+	imageTopCmd.AddCommand(imageExportCmd)
+	imageTopCmd.AddCommand(imageGetFileCmd)
+	imageTopCmd.AddCommand(imageImportCmd)
+	imageTopCmd.AddCommand(imageInspectCmd)
+	imageTopCmd.AddCommand(imageManifestCmd)
+	imageTopCmd.AddCommand(imageModCmd)
+	imageTopCmd.AddCommand(imageRateLimitCmd)
+	return imageTopCmd
 }
 
 func imageParseOptTime(s string) (mod.OptTime, map[string]string, error) {
@@ -722,13 +730,13 @@ func imageParseOptTime(s string) (mod.OptTime, map[string]string, error) {
 	return ot, otherFields, nil
 }
 
-func runImageCheckBase(cmd *cobra.Command, args []string) error {
+func (imageOpts *imageCmd) runImageCheckBase(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
-	rc := newRegClient()
+	rc := imageOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
 	opts := []regclient.ImageOpts{}
@@ -760,7 +768,7 @@ func runImageCheckBase(cmd *cobra.Command, args []string) error {
 	}
 }
 
-func runImageCopy(cmd *cobra.Command, args []string) error {
+func (imageOpts *imageCmd) runImageCopy(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	rSrc, err := ref.New(args[0])
 	if err != nil {
@@ -770,7 +778,7 @@ func runImageCopy(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	rc := newRegClient()
+	rc := imageOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, rSrc)
 	defer rc.Close(ctx, rTgt)
 	if imageOpts.platform != "" {
@@ -985,7 +993,7 @@ func (ip *imageProgress) display(w io.Writer, final bool) {
 	}
 }
 
-func runImageExport(cmd *cobra.Command, args []string) error {
+func (imageOpts *imageCmd) runImageExport(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
@@ -1000,7 +1008,7 @@ func runImageExport(cmd *cobra.Command, args []string) error {
 	} else {
 		w = cmd.OutOrStdout()
 	}
-	rc := newRegClient()
+	rc := imageOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 	opts := []regclient.ImageOpts{}
 	if imageOpts.platform != "" {
@@ -1036,7 +1044,7 @@ func runImageExport(cmd *cobra.Command, args []string) error {
 	return rc.ImageExport(ctx, r, w, opts...)
 }
 
-func runImageGetFile(cmd *cobra.Command, args []string) error {
+func (imageOpts *imageCmd) runImageGetFile(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
@@ -1044,7 +1052,7 @@ func runImageGetFile(cmd *cobra.Command, args []string) error {
 	}
 	filename := args[1]
 	filename = strings.TrimPrefix(filename, "/")
-	rc := newRegClient()
+	rc := imageOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
 	log.WithFields(logrus.Fields{
@@ -1154,7 +1162,7 @@ func runImageGetFile(cmd *cobra.Command, args []string) error {
 	return types.ErrNotFound
 }
 
-func runImageImport(cmd *cobra.Command, args []string) error {
+func (imageOpts *imageCmd) runImageImport(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
@@ -1169,7 +1177,7 @@ func runImageImport(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	defer rs.Close()
-	rc := newRegClient()
+	rc := imageOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 	log.WithFields(logrus.Fields{
 		"ref":  r.CommonName(),
@@ -1179,13 +1187,13 @@ func runImageImport(cmd *cobra.Command, args []string) error {
 	return rc.ImageImport(ctx, r, rs, opts...)
 }
 
-func runImageInspect(cmd *cobra.Command, args []string) error {
+func (imageOpts *imageCmd) runImageInspect(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
-	rc := newRegClient()
+	rc := imageOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
 	log.WithFields(logrus.Fields{
@@ -1195,12 +1203,7 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 		"platform": imageOpts.platform,
 	}).Debug("Image inspect")
 
-	manifestOpts.platform = imageOpts.platform
-	if !flagChanged(cmd, "list") {
-		manifestOpts.list = false
-	}
-
-	m, err := getManifest(ctx, rc, r)
+	m, err := getManifest(ctx, rc, r, imageOpts.platform, imageOpts.list, imageOpts.requireList)
 	if err != nil {
 		return err
 	}
@@ -1228,7 +1231,7 @@ func runImageInspect(cmd *cobra.Command, args []string) error {
 	return template.Writer(cmd.OutOrStdout(), imageOpts.format, blobConfig)
 }
 
-func runImageMod(cmd *cobra.Command, args []string) error {
+func (imageOpts *imageCmd) runImageMod(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	rSrc, err := ref.New(args[0])
 	if err != nil {
@@ -1253,7 +1256,7 @@ func runImageMod(cmd *cobra.Command, args []string) error {
 		rTgt.Tag = ""
 	}
 	imageOpts.modOpts = append(imageOpts.modOpts, mod.WithRefTgt(rTgt))
-	rc := newRegClient()
+	rc := imageOpts.rootOpts.newRegClient()
 
 	log.WithFields(logrus.Fields{
 		"ref": rSrc.CommonName(),
@@ -1272,13 +1275,13 @@ func runImageMod(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runImageRateLimit(cmd *cobra.Command, args []string) error {
+func (imageOpts *imageCmd) runImageRateLimit(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
-	rc := newRegClient()
+	rc := imageOpts.rootOpts.newRegClient()
 
 	log.WithFields(logrus.Fields{
 		"host": r.Registry,

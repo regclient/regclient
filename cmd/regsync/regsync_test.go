@@ -632,8 +632,9 @@ func TestProcess(t *testing.T) {
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			// run each test
+			rootOpts := rootCmd{}
 			syncSetDefaults(&tc.sync, conf.Defaults)
-			err = tc.sync.process(ctx, tc.action)
+			err = rootOpts.process(ctx, tc.sync, tc.action)
 			// validate err
 			if tc.expErr != nil {
 				if err == nil {
@@ -732,6 +733,7 @@ func TestProcessRef(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
+			rootOpts := rootCmd{}
 			src, err := ref.New(cs.Source)
 			if err != nil {
 				t.Errorf("failed to create src ref: %v", err)
@@ -744,7 +746,7 @@ func TestProcessRef(t *testing.T) {
 			}
 			src.Tag = tc.src
 			tgt.Tag = tc.tgt
-			err = cs.processRef(ctx, src, tgt, tc.action)
+			err = rootOpts.processRef(ctx, cs, src, tgt, tc.action)
 			// validate err
 			if tc.expErr != nil {
 				if err == nil {

@@ -22,42 +22,8 @@ var indexKnownTypes = []string{
 	types.MediaTypeDocker2ManifestList,
 }
 
-var indexCmd = &cobra.Command{
-	Use:   "index <cmd>",
-	Short: "manage manifest lists and OCI index",
-}
-
-var indexAddCmd = &cobra.Command{
-	Use:       "add <image_ref>",
-	Aliases:   []string{"append", "insert"},
-	Short:     "add an index entry",
-	Long:      `Add an entry to a manifest list or OCI Index.`,
-	Args:      cobra.ExactArgs(1),
-	ValidArgs: []string{}, // do not auto complete digests
-	RunE:      runIndexAdd,
-}
-
-var indexCreateCmd = &cobra.Command{
-	Use:       "create <image_ref>",
-	Aliases:   []string{"init", "new"},
-	Short:     "create an index",
-	Long:      `Create a manifest list or OCI Index.`,
-	Args:      cobra.ExactArgs(1),
-	ValidArgs: []string{}, // do not auto complete digests
-	RunE:      runIndexCreate,
-}
-
-var indexDeleteCmd = &cobra.Command{
-	Use:       "delete <image_ref>",
-	Aliases:   []string{"del", "rm", "remove"},
-	Short:     "delete an index entry",
-	Long:      `Delete an entry from a manifest list or OCI Index.`,
-	Args:      cobra.ExactArgs(1),
-	ValidArgs: []string{}, // do not auto complete digests
-	RunE:      runIndexDelete,
-}
-
-var indexOpts struct {
+type indexCmd struct {
+	rootOpts        *rootCmd
 	annotations     []string
 	artifactType    string
 	byDigest        bool
@@ -73,7 +39,45 @@ var indexOpts struct {
 	subject         string
 }
 
-func init() {
+func NewIndexCmd(rootOpts *rootCmd) *cobra.Command {
+	indexOpts := indexCmd{
+		rootOpts: rootOpts,
+	}
+	var indexTopCmd = &cobra.Command{
+		Use:   "index <cmd>",
+		Short: "manage manifest lists and OCI index",
+	}
+
+	var indexAddCmd = &cobra.Command{
+		Use:       "add <image_ref>",
+		Aliases:   []string{"append", "insert"},
+		Short:     "add an index entry",
+		Long:      `Add an entry to a manifest list or OCI Index.`,
+		Args:      cobra.ExactArgs(1),
+		ValidArgs: []string{}, // do not auto complete digests
+		RunE:      indexOpts.runIndexAdd,
+	}
+
+	var indexCreateCmd = &cobra.Command{
+		Use:       "create <image_ref>",
+		Aliases:   []string{"init", "new"},
+		Short:     "create an index",
+		Long:      `Create a manifest list or OCI Index.`,
+		Args:      cobra.ExactArgs(1),
+		ValidArgs: []string{}, // do not auto complete digests
+		RunE:      indexOpts.runIndexCreate,
+	}
+
+	var indexDeleteCmd = &cobra.Command{
+		Use:       "delete <image_ref>",
+		Aliases:   []string{"del", "rm", "remove"},
+		Short:     "delete an index entry",
+		Long:      `Delete an entry from a manifest list or OCI Index.`,
+		Args:      cobra.ExactArgs(1),
+		ValidArgs: []string{}, // do not auto complete digests
+		RunE:      indexOpts.runIndexDelete,
+	}
+
 	indexAddCmd.Flags().StringArrayVar(&indexOpts.descAnnotations, "desc-annotation", []string{}, "Annotation to add to descriptors of new entries")
 	indexAddCmd.Flags().StringVar(&indexOpts.descPlatform, "desc-platform", "", "Platform to set in descriptors of new entries")
 	indexAddCmd.Flags().StringArrayVar(&indexOpts.digests, "digest", []string{}, "Digest to add")
@@ -102,13 +106,13 @@ func init() {
 	indexDeleteCmd.Flags().StringArrayVar(&indexOpts.digests, "digest", []string{}, "Digest to delete")
 	indexDeleteCmd.Flags().StringArrayVar(&indexOpts.platforms, "platform", []string{}, "Platform to delete")
 
-	indexCmd.AddCommand(indexAddCmd)
-	indexCmd.AddCommand(indexCreateCmd)
-	indexCmd.AddCommand(indexDeleteCmd)
-	rootCmd.AddCommand(indexCmd)
+	indexTopCmd.AddCommand(indexAddCmd)
+	indexTopCmd.AddCommand(indexCreateCmd)
+	indexTopCmd.AddCommand(indexDeleteCmd)
+	return indexTopCmd
 }
 
-func runIndexAdd(cmd *cobra.Command, args []string) error {
+func (indexOpts *indexCmd) runIndexAdd(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 
 	// parse ref
@@ -118,7 +122,7 @@ func runIndexAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	// setup regclient
-	rc := newRegClient()
+	rc := indexOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
 	// pull existing index
@@ -136,7 +140,7 @@ func runIndexAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	// generate a list of descriptors from CLI args
-	descList, err := indexBuildDescList(ctx, rc, r)
+	descList, err := indexOpts.indexBuildDescList(ctx, rc, r)
 	if err != nil {
 		return err
 	}
@@ -170,7 +174,7 @@ func runIndexAdd(cmd *cobra.Command, args []string) error {
 	return template.Writer(cmd.OutOrStdout(), indexOpts.format, result)
 }
 
-func runIndexCreate(cmd *cobra.Command, args []string) error {
+func (indexOpts *indexCmd) runIndexCreate(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 
 	// validate media type
@@ -185,7 +189,7 @@ func runIndexCreate(cmd *cobra.Command, args []string) error {
 	}
 
 	// setup regclient
-	rc := newRegClient()
+	rc := indexOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
 	// parse annotations
@@ -200,7 +204,7 @@ func runIndexCreate(cmd *cobra.Command, args []string) error {
 	}
 
 	// generate a list of descriptors from CLI args
-	descList, err := indexBuildDescList(ctx, rc, r)
+	descList, err := indexOpts.indexBuildDescList(ctx, rc, r)
 	if err != nil {
 		return err
 	}
@@ -278,7 +282,7 @@ func runIndexCreate(cmd *cobra.Command, args []string) error {
 	return template.Writer(cmd.OutOrStdout(), indexOpts.format, result)
 }
 
-func runIndexDelete(cmd *cobra.Command, args []string) error {
+func (indexOpts *indexCmd) runIndexDelete(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 
 	// parse ref
@@ -288,7 +292,7 @@ func runIndexDelete(cmd *cobra.Command, args []string) error {
 	}
 
 	// setup regclient
-	rc := newRegClient()
+	rc := indexOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
 	// pull existing index
@@ -364,7 +368,7 @@ func runIndexDelete(cmd *cobra.Command, args []string) error {
 	return template.Writer(cmd.OutOrStdout(), indexOpts.format, result)
 }
 
-func indexBuildDescList(ctx context.Context, rc *regclient.RegClient, r ref.Ref) ([]types.Descriptor, error) {
+func (indexOpts *indexCmd) indexBuildDescList(ctx context.Context, rc *regclient.RegClient, r ref.Ref) ([]types.Descriptor, error) {
 	imgCopyOpts := []regclient.ImageOpts{
 		regclient.ImageWithChild(),
 	}
