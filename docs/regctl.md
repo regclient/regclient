@@ -510,7 +510,7 @@ regctl image inspect --format '{{jsonPretty .}}' alpine:latest
 
 regctl image inspect --format '{{range $k, $v := .Config.Labels}}{{$k}} = {{$v}}{{println}}{{end}}' ... # loop through labels
 
-regctl image inspect --format '{{range $k, $v := .Config.Labels}}{{if eq $k "org.label-schema.build-date"}}{{$v}}{{end}}{{end}}' ... # output a specific label
+regctl image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' regclient/regctl:latest # output a specific label
 
 regctl image manifest --format raw-body alpine:latest # returns the raw manifest
 ```
