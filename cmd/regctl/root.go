@@ -25,30 +25,32 @@ var (
 	log *logrus.Logger
 )
 
-var rootCmd = &cobra.Command{
-	Use:           "regctl <cmd>",
-	Short:         "Utility for accessing docker registries",
-	Long:          usageDesc,
-	SilenceUsage:  true,
-	SilenceErrors: true,
-}
-
-var versionCmd = &cobra.Command{
-	Use:   "version",
-	Short: "Show the version",
-	Long:  `Show the version`,
-	Args:  cobra.ExactArgs(0),
-	RunE:  runVersion,
-}
-
-var rootOpts struct {
+type rootCmd struct {
+	name      string
 	verbosity string
 	logopts   []string
 	format    string // for Go template formatting of various commands
 	userAgent string
 }
 
-func init() {
+func NewRootCmd() *cobra.Command {
+	rootOpts := rootCmd{}
+	var rootTopCmd = &cobra.Command{
+		Use:           "regctl <cmd>",
+		Short:         "Utility for accessing docker registries",
+		Long:          usageDesc,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	rootOpts.name = rootTopCmd.Name()
+	var versionCmd = &cobra.Command{
+		Use:   "version",
+		Short: "Show the version",
+		Long:  `Show the version`,
+		Args:  cobra.ExactArgs(0),
+		RunE:  rootOpts.runVersion,
+	}
+
 	log = &logrus.Logger{
 		Out:       os.Stderr,
 		Formatter: new(logrus.TextFormatter),
@@ -56,23 +58,37 @@ func init() {
 		Level:     logrus.WarnLevel,
 	}
 
-	rootCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.WarnLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
-	rootCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
-	rootCmd.PersistentFlags().StringVarP(&rootOpts.userAgent, "user-agent", "", "", "Override user agent")
+	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.WarnLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
+	rootTopCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
+	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.userAgent, "user-agent", "", "", "Override user agent")
 
-	_ = rootCmd.RegisterFlagCompletionFunc("verbosity", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	_ = rootTopCmd.RegisterFlagCompletionFunc("verbosity", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"debug", "info", "warn", "error", "fatal", "panic"}, cobra.ShellCompDirectiveNoFileComp
 	})
-	_ = rootCmd.RegisterFlagCompletionFunc("logopt", completeArgNone)
+	_ = rootTopCmd.RegisterFlagCompletionFunc("logopt", completeArgNone)
 
 	versionCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	_ = versionCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
-	rootCmd.PersistentPreRunE = rootPreRun
-	rootCmd.AddCommand(versionCmd)
+	rootTopCmd.PersistentPreRunE = rootOpts.rootPreRun
+	rootTopCmd.AddCommand(versionCmd)
+	rootTopCmd.AddCommand(
+		NewArtifactCmd(&rootOpts),
+		NewBlobCmd(&rootOpts),
+		NewCompletionCmd(&rootOpts),
+		NewConfigCmd(&rootOpts),
+		NewDigestCmd(&rootOpts),
+		NewImageCmd(&rootOpts),
+		NewIndexCmd(&rootOpts),
+		NewManifestCmd(&rootOpts),
+		NewRegistryCmd(&rootOpts),
+		NewRepoCmd(&rootOpts),
+		NewTagCmd(&rootOpts),
+	)
+	return rootTopCmd
 }
 
-func rootPreRun(cmd *cobra.Command, args []string) error {
+func (rootOpts *rootCmd) rootPreRun(cmd *cobra.Command, args []string) error {
 	lvl, err := logrus.ParseLevel(rootOpts.verbosity)
 	if err != nil {
 		return err
@@ -86,12 +102,12 @@ func rootPreRun(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runVersion(cmd *cobra.Command, args []string) error {
+func (rootOpts *rootCmd) runVersion(cmd *cobra.Command, args []string) error {
 	info := version.GetInfo()
 	return template.Writer(cmd.OutOrStdout(), rootOpts.format, info)
 }
 
-func newRegClient() *regclient.RegClient {
+func (rootOpts *rootCmd) newRegClient() *regclient.RegClient {
 	conf, err := ConfigLoadDefault()
 	if err != nil {
 		log.WithFields(logrus.Fields{

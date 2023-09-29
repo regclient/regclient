@@ -10,7 +10,6 @@ import (
 )
 
 func TestManifestHead(t *testing.T) {
-	saveManifestOpts := manifestOpts
 	tt := []struct {
 		name        string
 		args        []string
@@ -53,8 +52,7 @@ func TestManifestHead(t *testing.T) {
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			out, err := cobraTest(t, tc.args...)
-			manifestOpts = saveManifestOpts
+			out, err := cobraTest(t, nil, tc.args...)
 			if tc.expectErr != nil {
 				if err == nil {
 					t.Errorf("did not receive expected error: %v", tc.expectErr)

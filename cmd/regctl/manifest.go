@@ -19,64 +19,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var manifestCmd = &cobra.Command{
-	Use:   "manifest <cmd>",
-	Short: "manage manifests",
-}
-
-var manifestDeleteCmd = &cobra.Command{
-	Use:     "delete <image_ref>",
-	Aliases: []string{"del", "rm", "remove"},
-	Short:   "delete a manifest",
-	Long: `Delete a manifest. This will delete the manifest, and all tags pointing to that
-manifest. You must specify a digest, not a tag on this command (e.g. 
-image_name@sha256:1234abc...). It is up to the registry whether the delete
-API is supported. Additionally, registries may garbage collect the filesystem
-layers (blobs) separately or not at all. See also the "tag delete" command.`,
-	Args:      cobra.ExactArgs(1),
-	ValidArgs: []string{}, // do not auto complete digests
-	RunE:      runManifestDelete,
-}
-
-var manifestDiffCmd = &cobra.Command{
-	Use:               "diff <image_ref> <image_ref>",
-	Short:             "compare manifests",
-	Args:              cobra.ExactArgs(2),
-	ValidArgsFunction: completeArgTag,
-	RunE:              runManifestDiff,
-}
-
-var manifestGetCmd = &cobra.Command{
-	Use:               "get <image_ref>",
-	Aliases:           []string{"pull"},
-	Short:             "retrieve manifest or manifest list",
-	Long:              `Shows the manifest or manifest list of the specified image.`,
-	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: completeArgTag,
-	RunE:              runManifestGet,
-}
-
-var manifestHeadCmd = &cobra.Command{
-	Use:               "head <image_ref>",
-	Aliases:           []string{"digest"},
-	Short:             "http head request for manifest",
-	Long:              `Shows the digest or headers from an http manifest head request.`,
-	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: completeArgTag,
-	RunE:              runManifestHead,
-}
-
-var manifestPutCmd = &cobra.Command{
-	Use:               "put <image_ref>",
-	Aliases:           []string{"push"},
-	Short:             "push manifest or manifest list",
-	Long:              `Pushes a manifest or manifest list to a repository.`,
-	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: completeArgTag,
-	RunE:              runManifestPut,
-}
-
-var manifestOpts struct {
+type manifestCmd struct {
+	rootOpts      *rootCmd
 	byDigest      bool
 	contentType   string
 	diffCtx       int
@@ -92,7 +36,67 @@ var manifestOpts struct {
 	requireList   bool
 }
 
-func init() {
+func NewManifestCmd(rootOpts *rootCmd) *cobra.Command {
+	manifestOpts := manifestCmd{
+		rootOpts: rootOpts,
+	}
+	var manifestTopCmd = &cobra.Command{
+		Use:   "manifest <cmd>",
+		Short: "manage manifests",
+	}
+
+	var manifestDeleteCmd = &cobra.Command{
+		Use:     "delete <image_ref>",
+		Aliases: []string{"del", "rm", "remove"},
+		Short:   "delete a manifest",
+		Long: `Delete a manifest. This will delete the manifest, and all tags pointing to that
+manifest. You must specify a digest, not a tag on this command (e.g. 
+image_name@sha256:1234abc...). It is up to the registry whether the delete
+API is supported. Additionally, registries may garbage collect the filesystem
+layers (blobs) separately or not at all. See also the "tag delete" command.`,
+		Args:      cobra.ExactArgs(1),
+		ValidArgs: []string{}, // do not auto complete digests
+		RunE:      manifestOpts.runManifestDelete,
+	}
+
+	var manifestDiffCmd = &cobra.Command{
+		Use:               "diff <image_ref> <image_ref>",
+		Short:             "compare manifests",
+		Args:              cobra.ExactArgs(2),
+		ValidArgsFunction: rootOpts.completeArgTag,
+		RunE:              manifestOpts.runManifestDiff,
+	}
+
+	var manifestGetCmd = &cobra.Command{
+		Use:               "get <image_ref>",
+		Aliases:           []string{"pull"},
+		Short:             "retrieve manifest or manifest list",
+		Long:              `Shows the manifest or manifest list of the specified image.`,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: rootOpts.completeArgTag,
+		RunE:              manifestOpts.runManifestGet,
+	}
+
+	var manifestHeadCmd = &cobra.Command{
+		Use:               "head <image_ref>",
+		Aliases:           []string{"digest"},
+		Short:             "http head request for manifest",
+		Long:              `Shows the digest or headers from an http manifest head request.`,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: rootOpts.completeArgTag,
+		RunE:              manifestOpts.runManifestHead,
+	}
+
+	var manifestPutCmd = &cobra.Command{
+		Use:               "put <image_ref>",
+		Aliases:           []string{"push"},
+		Short:             "push manifest or manifest list",
+		Long:              `Pushes a manifest or manifest list to a repository.`,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: rootOpts.completeArgTag,
+		RunE:              manifestOpts.runManifestPut,
+	}
+
 	manifestDeleteCmd.Flags().BoolVarP(&manifestOpts.forceTagDeref, "force-tag-dereference", "", false, "Dereference the a tag to a digest, this is unsafe")
 	manifestDeleteCmd.Flags().BoolVarP(&manifestOpts.referrers, "referrers", "", false, "Check for referrers, recommended when deleting artifacts")
 
@@ -120,97 +124,21 @@ func init() {
 	_ = manifestPutCmd.RegisterFlagCompletionFunc("content-type", completeArgMediaTypeManifest)
 	manifestPutCmd.Flags().StringVarP(&manifestOpts.formatPut, "format", "", "", "Format output with go template syntax")
 
-	manifestCmd.AddCommand(manifestDeleteCmd)
-	manifestCmd.AddCommand(manifestDiffCmd)
-	manifestCmd.AddCommand(manifestHeadCmd)
-	manifestCmd.AddCommand(manifestGetCmd)
-	manifestCmd.AddCommand(manifestPutCmd)
-	rootCmd.AddCommand(manifestCmd)
+	manifestTopCmd.AddCommand(manifestDeleteCmd)
+	manifestTopCmd.AddCommand(manifestDiffCmd)
+	manifestTopCmd.AddCommand(manifestHeadCmd)
+	manifestTopCmd.AddCommand(manifestGetCmd)
+	manifestTopCmd.AddCommand(manifestPutCmd)
+	return manifestTopCmd
 }
 
-func getManifest(ctx context.Context, rc *regclient.RegClient, r ref.Ref) (manifest.Manifest, error) {
-	m, err := rc.ManifestGet(context.Background(), r)
-	if err != nil {
-		return m, err
-	}
-
-	// add warning if not list and list required or platform requested
-	if !m.IsList() && manifestOpts.requireList {
-		log.Warn("Manifest list unavailable")
-		return m, ErrNotFound
-	}
-	if !m.IsList() && manifestOpts.platform != "" {
-		log.Info("Manifest list unavailable, ignoring platform flag")
-	}
-
-	// retrieve the specified platform from the manifest list
-	if m.IsList() && !manifestOpts.list && !manifestOpts.requireList {
-		desc, err := getPlatformDesc(ctx, rc, m)
-		if err != nil {
-			return m, fmt.Errorf("failed to lookup platform specific digest: %w", err)
-		}
-		m, err = rc.ManifestGet(ctx, r, regclient.WithManifestDesc(*desc))
-		if err != nil {
-			return m, fmt.Errorf("failed to pull platform specific digest: %w", err)
-		}
-	}
-	return m, nil
-}
-
-func getPlatformDesc(ctx context.Context, rc *regclient.RegClient, m manifest.Manifest) (*types.Descriptor, error) {
-	var desc *types.Descriptor
-	var err error
-	if !m.IsList() {
-		return desc, fmt.Errorf("%w: manifest is not a list", ErrInvalidInput)
-	}
-	if !m.IsSet() {
-		m, err = rc.ManifestGet(ctx, m.GetRef())
-		if err != nil {
-			return desc, fmt.Errorf("unable to retrieve manifest list: %w", err)
-		}
-	}
-
-	var plat platform.Platform
-	if manifestOpts.platform != "" && manifestOpts.platform != "local" {
-		plat, err = platform.Parse(manifestOpts.platform)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"platform": manifestOpts.platform,
-				"err":      err,
-			}).Warn("Could not parse platform")
-		}
-	}
-	if plat.OS == "" {
-		plat = platform.Local()
-	}
-	desc, err = manifest.GetPlatformDesc(m, &plat)
-	if err != nil {
-		pl, _ := manifest.GetPlatformList(m)
-		var ps []string
-		for _, p := range pl {
-			ps = append(ps, p.String())
-		}
-		log.WithFields(logrus.Fields{
-			"platform":  plat,
-			"err":       err,
-			"platforms": strings.Join(ps, ", "),
-		}).Warn("Platform could not be found in manifest list")
-		return desc, ErrNotFound
-	}
-	log.WithFields(logrus.Fields{
-		"platform": plat,
-		"digest":   desc.Digest.String(),
-	}).Debug("Found platform specific digest in manifest list")
-	return desc, nil
-}
-
-func runManifestDelete(cmd *cobra.Command, args []string) error {
+func (manifestOpts *manifestCmd) runManifestDelete(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
-	rc := newRegClient()
+	rc := manifestOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
 	if r.Digest == "" && manifestOpts.forceTagDeref {
@@ -242,7 +170,7 @@ func runManifestDelete(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runManifestDiff(cmd *cobra.Command, args []string) error {
+func (manifestOpts *manifestCmd) runManifestDiff(cmd *cobra.Command, args []string) error {
 	diffOpts := []diff.Opt{}
 	if manifestOpts.diffCtx > 0 {
 		diffOpts = append(diffOpts, diff.WithContext(manifestOpts.diffCtx, manifestOpts.diffCtx))
@@ -260,7 +188,7 @@ func runManifestDiff(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	rc := newRegClient()
+	rc := manifestOpts.rootOpts.newRegClient()
 
 	log.WithFields(logrus.Fields{
 		"ref1": r1.CommonName(),
@@ -293,7 +221,7 @@ func runManifestDiff(cmd *cobra.Command, args []string) error {
 	// return template.Writer(cmd.OutOrStdout(), manifestOpts.format, mDiff)
 }
 
-func runManifestHead(cmd *cobra.Command, args []string) error {
+func (manifestOpts *manifestCmd) runManifestHead(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	if manifestOpts.platform != "" && !flagChanged(cmd, "list") {
 		manifestOpts.list = false
@@ -305,7 +233,7 @@ func runManifestHead(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	rc := newRegClient()
+	rc := manifestOpts.rootOpts.newRegClient()
 
 	log.WithFields(logrus.Fields{
 		"host": r.Registry,
@@ -335,7 +263,7 @@ func runManifestHead(cmd *cobra.Command, args []string) error {
 
 	// retrieve the specified platform from the manifest list
 	for m.IsList() && !manifestOpts.list && !manifestOpts.requireList {
-		desc, err := getPlatformDesc(ctx, rc, m)
+		desc, err := getPlatformDesc(ctx, rc, m, manifestOpts.platform)
 		if err != nil {
 			return fmt.Errorf("failed retrieving platform specific digest: %w", err)
 		}
@@ -355,7 +283,7 @@ func runManifestHead(cmd *cobra.Command, args []string) error {
 	return template.Writer(cmd.OutOrStdout(), manifestOpts.formatHead, m)
 }
 
-func runManifestGet(cmd *cobra.Command, args []string) error {
+func (manifestOpts *manifestCmd) runManifestGet(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	if manifestOpts.platform != "" && !flagChanged(cmd, "list") {
 		manifestOpts.list = false
@@ -367,10 +295,10 @@ func runManifestGet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	rc := newRegClient()
+	rc := manifestOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
-	m, err := getManifest(ctx, rc, r)
+	m, err := getManifest(ctx, rc, r, manifestOpts.platform, manifestOpts.list, manifestOpts.requireList)
 	if err != nil {
 		return err
 	}
@@ -386,13 +314,13 @@ func runManifestGet(cmd *cobra.Command, args []string) error {
 	return template.Writer(cmd.OutOrStdout(), manifestOpts.formatGet, m)
 }
 
-func runManifestPut(cmd *cobra.Command, args []string) error {
+func (manifestOpts *manifestCmd) runManifestPut(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
-	rc := newRegClient()
+	rc := manifestOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
 	raw, err := io.ReadAll(os.Stdin)
@@ -431,4 +359,80 @@ func runManifestPut(cmd *cobra.Command, args []string) error {
 		manifestOpts.formatPut = "{{ printf \"%s\\n\" .Manifest.GetDescriptor.Digest }}"
 	}
 	return template.Writer(cmd.OutOrStdout(), manifestOpts.formatPut, result)
+}
+
+func getManifest(ctx context.Context, rc *regclient.RegClient, r ref.Ref, pStr string, list, reqList bool) (manifest.Manifest, error) {
+	m, err := rc.ManifestGet(context.Background(), r)
+	if err != nil {
+		return m, err
+	}
+
+	// add warning if not list and list required or platform requested
+	if !m.IsList() && reqList {
+		log.Warn("Manifest list unavailable")
+		return m, ErrNotFound
+	}
+	if !m.IsList() && pStr != "" {
+		log.Info("Manifest list unavailable, ignoring platform flag")
+	}
+
+	// retrieve the specified platform from the manifest list
+	if m.IsList() && !list && !reqList {
+		desc, err := getPlatformDesc(ctx, rc, m, pStr)
+		if err != nil {
+			return m, fmt.Errorf("failed to lookup platform specific digest: %w", err)
+		}
+		m, err = rc.ManifestGet(ctx, r, regclient.WithManifestDesc(*desc))
+		if err != nil {
+			return m, fmt.Errorf("failed to pull platform specific digest: %w", err)
+		}
+	}
+	return m, nil
+}
+
+func getPlatformDesc(ctx context.Context, rc *regclient.RegClient, m manifest.Manifest, pStr string) (*types.Descriptor, error) {
+	var desc *types.Descriptor
+	var err error
+	if !m.IsList() {
+		return desc, fmt.Errorf("%w: manifest is not a list", ErrInvalidInput)
+	}
+	if !m.IsSet() {
+		m, err = rc.ManifestGet(ctx, m.GetRef())
+		if err != nil {
+			return desc, fmt.Errorf("unable to retrieve manifest list: %w", err)
+		}
+	}
+
+	var plat platform.Platform
+	if pStr != "" && pStr != "local" {
+		plat, err = platform.Parse(pStr)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"platform": pStr,
+				"err":      err,
+			}).Warn("Could not parse platform")
+		}
+	}
+	if plat.OS == "" {
+		plat = platform.Local()
+	}
+	desc, err = manifest.GetPlatformDesc(m, &plat)
+	if err != nil {
+		pl, _ := manifest.GetPlatformList(m)
+		var ps []string
+		for _, p := range pl {
+			ps = append(ps, p.String())
+		}
+		log.WithFields(logrus.Fields{
+			"platform":  plat,
+			"err":       err,
+			"platforms": strings.Join(ps, ", "),
+		}).Warn("Platform could not be found in manifest list")
+		return desc, ErrNotFound
+	}
+	log.WithFields(logrus.Fields{
+		"platform": plat,
+		"digest":   desc.Digest.String(),
+	}).Debug("Found platform specific digest in manifest list")
+	return desc, nil
 }

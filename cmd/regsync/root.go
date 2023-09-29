@@ -46,7 +46,7 @@ const (
 	actionMissing
 )
 
-var cliOpts struct {
+type rootCmd struct {
 	confFile  string
 	verbosity string
 	logopts   []string
@@ -54,62 +54,13 @@ var cliOpts struct {
 	missing   bool
 }
 
+// TODO: remove globals
 var (
 	conf      *Config
 	log       *logrus.Logger
 	rc        *regclient.RegClient
 	throttleC *throttle.Throttle
 )
-
-var rootCmd = &cobra.Command{
-	Use:           "regsync <cmd>",
-	Short:         "Utility for mirroring docker repositories",
-	Long:          usageDesc,
-	SilenceUsage:  true,
-	SilenceErrors: true,
-}
-var serverCmd = &cobra.Command{
-	Use:   "server",
-	Short: "run the regsync server",
-	Long:  `Sync registries according to the configuration.`,
-	Args:  cobra.RangeArgs(0, 0),
-	RunE:  runServer,
-}
-var checkCmd = &cobra.Command{
-	Use:   "check",
-	Short: "processes each sync command once but skip actual copy",
-	Long: `Processes each sync command in the configuration file in order.
-Manifests are checked to see if a copy is needed, but only log, skip copying.
-No jobs are run in parallel, and the command returns after any error or last
-sync step is finished.`,
-	Args: cobra.RangeArgs(0, 0),
-	RunE: runCheck,
-}
-var onceCmd = &cobra.Command{
-	Use:   "once",
-	Short: "processes each sync command once, ignoring cron schedule",
-	Long: `Processes each sync command in the configuration file in order.
-No jobs are run in parallel, and the command returns after any error or last
-sync step is finished.`,
-	Args: cobra.RangeArgs(0, 0),
-	RunE: runOnce,
-}
-
-var configCmd = &cobra.Command{
-	Use:   "config",
-	Short: "Show the config",
-	Long:  `Show the config`,
-	Args:  cobra.RangeArgs(0, 0),
-	RunE:  runConfig,
-}
-
-var versionCmd = &cobra.Command{
-	Use:   "version",
-	Short: "Show the version",
-	Long:  `Show the version`,
-	Args:  cobra.RangeArgs(0, 0),
-	RunE:  runVersion,
-}
 
 func init() {
 	log = &logrus.Logger{
@@ -118,35 +69,90 @@ func init() {
 		Hooks:     make(logrus.LevelHooks),
 		Level:     logrus.InfoLevel,
 	}
-	rootCmd.PersistentFlags().StringVarP(&cliOpts.confFile, "config", "c", "", "Config file")
-	rootCmd.PersistentFlags().StringVarP(&cliOpts.verbosity, "verbosity", "v", logrus.InfoLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
-	rootCmd.PersistentFlags().StringArrayVar(&cliOpts.logopts, "logopt", []string{}, "Log options")
-	versionCmd.Flags().StringVar(&cliOpts.format, "format", "{{printPretty .}}", "Format output with go template syntax")
-	onceCmd.Flags().BoolVar(&cliOpts.missing, "missing", false, "Only copy tags that are missing on target")
+}
 
-	_ = rootCmd.MarkPersistentFlagFilename("config")
+func NewRootCmd() *cobra.Command {
+	rootOpts := rootCmd{}
+	var rootTopCmd = &cobra.Command{
+		Use:           "regsync <cmd>",
+		Short:         "Utility for mirroring docker repositories",
+		Long:          usageDesc,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	var serverCmd = &cobra.Command{
+		Use:   "server",
+		Short: "run the regsync server",
+		Long:  `Sync registries according to the configuration.`,
+		Args:  cobra.RangeArgs(0, 0),
+		RunE:  rootOpts.runServer,
+	}
+	var checkCmd = &cobra.Command{
+		Use:   "check",
+		Short: "processes each sync command once but skip actual copy",
+		Long: `Processes each sync command in the configuration file in order.
+Manifests are checked to see if a copy is needed, but only log, skip copying.
+No jobs are run in parallel, and the command returns after any error or last
+sync step is finished.`,
+		Args: cobra.RangeArgs(0, 0),
+		RunE: rootOpts.runCheck,
+	}
+	var onceCmd = &cobra.Command{
+		Use:   "once",
+		Short: "processes each sync command once, ignoring cron schedule",
+		Long: `Processes each sync command in the configuration file in order.
+No jobs are run in parallel, and the command returns after any error or last
+sync step is finished.`,
+		Args: cobra.RangeArgs(0, 0),
+		RunE: rootOpts.runOnce,
+	}
+
+	var configCmd = &cobra.Command{
+		Use:   "config",
+		Short: "Show the config",
+		Long:  `Show the config`,
+		Args:  cobra.RangeArgs(0, 0),
+		RunE:  rootOpts.runConfig,
+	}
+
+	var versionCmd = &cobra.Command{
+		Use:   "version",
+		Short: "Show the version",
+		Long:  `Show the version`,
+		Args:  cobra.RangeArgs(0, 0),
+		RunE:  rootOpts.runVersion,
+	}
+
+	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.confFile, "config", "c", "", "Config file")
+	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.InfoLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
+	rootTopCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
+	versionCmd.Flags().StringVar(&rootOpts.format, "format", "{{printPretty .}}", "Format output with go template syntax")
+	onceCmd.Flags().BoolVar(&rootOpts.missing, "missing", false, "Only copy tags that are missing on target")
+
+	_ = rootTopCmd.MarkPersistentFlagFilename("config")
 	_ = serverCmd.MarkPersistentFlagRequired("config")
 	_ = checkCmd.MarkPersistentFlagRequired("config")
 	_ = onceCmd.MarkPersistentFlagRequired("config")
 	_ = configCmd.MarkPersistentFlagRequired("config")
 
-	rootCmd.AddCommand(serverCmd)
-	rootCmd.AddCommand(checkCmd)
-	rootCmd.AddCommand(onceCmd)
-	rootCmd.AddCommand(configCmd)
-	rootCmd.AddCommand(versionCmd)
+	rootTopCmd.AddCommand(serverCmd)
+	rootTopCmd.AddCommand(checkCmd)
+	rootTopCmd.AddCommand(onceCmd)
+	rootTopCmd.AddCommand(configCmd)
+	rootTopCmd.AddCommand(versionCmd)
 
-	rootCmd.PersistentPreRunE = rootPreRun
+	rootTopCmd.PersistentPreRunE = rootOpts.rootPreRun
+	return rootTopCmd
 }
 
-func rootPreRun(cmd *cobra.Command, args []string) error {
-	lvl, err := logrus.ParseLevel(cliOpts.verbosity)
+func (rootOpts *rootCmd) rootPreRun(cmd *cobra.Command, args []string) error {
+	lvl, err := logrus.ParseLevel(rootOpts.verbosity)
 	if err != nil {
 		return err
 	}
 	log.SetLevel(lvl)
 	log.Formatter = &logrus.TextFormatter{FullTimestamp: true}
-	for _, opt := range cliOpts.logopts {
+	for _, opt := range rootOpts.logopts {
 		if opt == "json" {
 			log.Formatter = new(logrus.JSONFormatter)
 		}
@@ -154,14 +160,14 @@ func rootPreRun(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runVersion(cmd *cobra.Command, args []string) error {
+func (rootOpts *rootCmd) runVersion(cmd *cobra.Command, args []string) error {
 	info := version.GetInfo()
-	return template.Writer(os.Stdout, cliOpts.format, info)
+	return template.Writer(os.Stdout, rootOpts.format, info)
 }
 
 // runConfig processes the file in one pass, ignoring cron
-func runConfig(cmd *cobra.Command, args []string) error {
-	err := loadConf()
+func (rootOpts *rootCmd) runConfig(cmd *cobra.Command, args []string) error {
+	err := rootOpts.loadConf()
 	if err != nil {
 		return err
 	}
@@ -170,13 +176,13 @@ func runConfig(cmd *cobra.Command, args []string) error {
 }
 
 // runOnce processes the file in one pass, ignoring cron
-func runOnce(cmd *cobra.Command, args []string) error {
-	err := loadConf()
+func (rootOpts *rootCmd) runOnce(cmd *cobra.Command, args []string) error {
+	err := rootOpts.loadConf()
 	if err != nil {
 		return err
 	}
 	action := actionCopy
-	if cliOpts.missing {
+	if rootOpts.missing {
 		action = actionMissing
 	}
 	ctx := cmd.Context()
@@ -188,7 +194,7 @@ func runOnce(cmd *cobra.Command, args []string) error {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				err := s.process(ctx, action)
+				err := rootOpts.process(ctx, s, action)
 				if err != nil {
 					if mainErr == nil {
 						mainErr = err
@@ -197,7 +203,7 @@ func runOnce(cmd *cobra.Command, args []string) error {
 				}
 			}()
 		} else {
-			err := s.process(ctx, action)
+			err := rootOpts.process(ctx, s, action)
 			if err != nil {
 				if mainErr == nil {
 					mainErr = err
@@ -210,8 +216,8 @@ func runOnce(cmd *cobra.Command, args []string) error {
 }
 
 // runServer stays running with cron scheduled tasks
-func runServer(cmd *cobra.Command, args []string) error {
-	err := loadConf()
+func (rootOpts *rootCmd) runServer(cmd *cobra.Command, args []string) error {
+	err := rootOpts.loadConf()
 	if err != nil {
 		return err
 	}
@@ -243,7 +249,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 				}).Debug("Running task")
 				wg.Add(1)
 				defer wg.Done()
-				err := s.process(ctx, actionCopy)
+				err := rootOpts.process(ctx, s, actionCopy)
 				if mainErr == nil {
 					mainErr = err
 				}
@@ -264,7 +270,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					err := s.process(ctx, actionMissing)
+					err := rootOpts.process(ctx, s, actionMissing)
 					if err != nil {
 						if mainErr == nil {
 							mainErr = err
@@ -273,7 +279,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 					}
 				}()
 			} else {
-				err := s.process(ctx, actionMissing)
+				err := rootOpts.process(ctx, s, actionMissing)
 				if err != nil {
 					if mainErr == nil {
 						mainErr = err
@@ -305,15 +311,15 @@ func runServer(cmd *cobra.Command, args []string) error {
 }
 
 // run check is used for a dry-run
-func runCheck(cmd *cobra.Command, args []string) error {
-	err := loadConf()
+func (rootOpts *rootCmd) runCheck(cmd *cobra.Command, args []string) error {
+	err := rootOpts.loadConf()
 	if err != nil {
 		return err
 	}
 	var mainErr error
 	ctx := cmd.Context()
 	for _, s := range conf.Sync {
-		err := s.process(ctx, actionCheck)
+		err := rootOpts.process(ctx, s, actionCheck)
 		if err != nil {
 			if mainErr == nil {
 				mainErr = err
@@ -323,15 +329,15 @@ func runCheck(cmd *cobra.Command, args []string) error {
 	return mainErr
 }
 
-func loadConf() error {
+func (rootOpts *rootCmd) loadConf() error {
 	var err error
-	if cliOpts.confFile == "-" {
+	if rootOpts.confFile == "-" {
 		conf, err = ConfigLoadReader(os.Stdin)
 		if err != nil {
 			return err
 		}
-	} else if cliOpts.confFile != "" {
-		r, err := os.Open(cliOpts.confFile)
+	} else if rootOpts.confFile != "" {
+		r, err := os.Open(rootOpts.confFile)
 		if err != nil {
 			return err
 		}
@@ -392,18 +398,18 @@ func loadConf() error {
 }
 
 // process a sync step
-func (s ConfigSync) process(ctx context.Context, action actionType) error {
+func (rootOpts *rootCmd) process(ctx context.Context, s ConfigSync, action actionType) error {
 	switch s.Type {
 	case "registry":
-		if err := s.processRegistry(ctx, s.Source, s.Target, action); err != nil {
+		if err := rootOpts.processRegistry(ctx, s, s.Source, s.Target, action); err != nil {
 			return err
 		}
 	case "repository":
-		if err := s.processRepo(ctx, s.Source, s.Target, action); err != nil {
+		if err := rootOpts.processRepo(ctx, s, s.Source, s.Target, action); err != nil {
 			return err
 		}
 	case "image":
-		if err := s.processImage(ctx, s.Source, s.Target, action); err != nil {
+		if err := rootOpts.processImage(ctx, s, s.Source, s.Target, action); err != nil {
 			return err
 		}
 	default:
@@ -416,7 +422,7 @@ func (s ConfigSync) process(ctx context.Context, action actionType) error {
 	return nil
 }
 
-func (s ConfigSync) processRegistry(ctx context.Context, src, tgt string, action actionType) error {
+func (rootOpts *rootCmd) processRegistry(ctx context.Context, s ConfigSync, src, tgt string, action actionType) error {
 	last := ""
 	var retErr error
 	for {
@@ -456,7 +462,7 @@ func (s ConfigSync) processRegistry(ctx context.Context, src, tgt string, action
 			return err
 		}
 		for _, repo := range sRepoList {
-			if err := s.processRepo(ctx, fmt.Sprintf("%s/%s", src, repo), fmt.Sprintf("%s/%s", tgt, repo), action); err != nil {
+			if err := rootOpts.processRepo(ctx, s, fmt.Sprintf("%s/%s", src, repo), fmt.Sprintf("%s/%s", tgt, repo), action); err != nil {
 				retErr = err
 			}
 		}
@@ -464,7 +470,7 @@ func (s ConfigSync) processRegistry(ctx context.Context, src, tgt string, action
 	return retErr
 }
 
-func (s ConfigSync) processRepo(ctx context.Context, src, tgt string, action actionType) error {
+func (rootOpts *rootCmd) processRepo(ctx context.Context, s ConfigSync, src, tgt string, action actionType) error {
 	sRepoRef, err := ref.New(src)
 	if err != nil {
 		log.WithFields(logrus.Fields{
@@ -560,14 +566,14 @@ func (s ConfigSync) processRepo(ctx context.Context, src, tgt string, action act
 	}
 	var retErr error
 	for _, tag := range sTagList {
-		if err := s.processImage(ctx, fmt.Sprintf("%s:%s", src, tag), fmt.Sprintf("%s:%s", tgt, tag), action); err != nil {
+		if err := rootOpts.processImage(ctx, s, fmt.Sprintf("%s:%s", src, tag), fmt.Sprintf("%s:%s", tgt, tag), action); err != nil {
 			retErr = err
 		}
 	}
 	return retErr
 }
 
-func (s ConfigSync) processImage(ctx context.Context, src, tgt string, action actionType) error {
+func (rootOpts *rootCmd) processImage(ctx context.Context, s ConfigSync, src, tgt string, action actionType) error {
 	sRef, err := ref.New(src)
 	if err != nil {
 		log.WithFields(logrus.Fields{
@@ -584,7 +590,7 @@ func (s ConfigSync) processImage(ctx context.Context, src, tgt string, action ac
 		}).Error("Failed parsing target")
 		return err
 	}
-	err = s.processRef(ctx, sRef, tRef, action)
+	err = rootOpts.processRef(ctx, s, sRef, tRef, action)
 	if err != nil {
 		log.WithFields(logrus.Fields{
 			"target": tRef.CommonName(),
@@ -602,7 +608,7 @@ func (s ConfigSync) processImage(ctx context.Context, src, tgt string, action ac
 }
 
 // process a sync step
-func (s ConfigSync) processRef(ctx context.Context, src, tgt ref.Ref, action actionType) error {
+func (rootOpts *rootCmd) processRef(ctx context.Context, s ConfigSync, src, tgt ref.Ref, action actionType) error {
 	mSrc, err := rc.ManifestHead(ctx, src, regclient.WithManifestRequireDigest())
 	if err != nil && errors.Is(err, types.ErrUnsupportedAPI) {
 		mSrc, err = rc.ManifestGet(ctx, src)

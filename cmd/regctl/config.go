@@ -33,44 +33,49 @@ type Config struct {
 	IncDockerCred *bool                   `json:"incDockerCred,omitempty"`
 }
 
-var configOpts struct {
+type configCmd struct {
+	rootOpts   *rootCmd
 	blobLimit  int64
 	dockerCert bool
 	dockerCred bool
 	format     string
 }
-var configCmd = &cobra.Command{
-	Use:   "config <cmd>",
-	Short: "read/set configuration options",
-}
-var configGetCmd = &cobra.Command{
-	Use:   "get",
-	Short: "show the config",
-	Long:  `Displays the configuration. Passwords are not included in the output.`,
-	Args:  cobra.ExactArgs(0),
-	RunE:  runConfigGet,
-}
-var configSetCmd = &cobra.Command{
-	Use:   "set",
-	Short: "set a configuration option",
-	Long:  `Modifies an option used in future executions.`,
-	Args:  cobra.ExactArgs(0),
-	RunE:  runConfigSet,
-}
 
-func init() {
+func NewConfigCmd(rootOpts *rootCmd) *cobra.Command {
+	configOpts := configCmd{
+		rootOpts: rootOpts,
+	}
+	var configTopCmd = &cobra.Command{
+		Use:   "config <cmd>",
+		Short: "read/set configuration options",
+	}
+	var configGetCmd = &cobra.Command{
+		Use:   "get",
+		Short: "show the config",
+		Long:  `Displays the configuration. Passwords are not included in the output.`,
+		Args:  cobra.ExactArgs(0),
+		RunE:  configOpts.runConfigGet,
+	}
+	var configSetCmd = &cobra.Command{
+		Use:   "set",
+		Short: "set a configuration option",
+		Long:  `Modifies an option used in future executions.`,
+		Args:  cobra.ExactArgs(0),
+		RunE:  configOpts.runConfigSet,
+	}
+
 	configGetCmd.Flags().StringVar(&configOpts.format, "format", "{{ printPretty . }}", "format the output with Go template syntax")
 
 	configSetCmd.Flags().Int64Var(&configOpts.blobLimit, "blob-limit", 0, "limit for blob chunks, this is stored in memory")
 	configSetCmd.Flags().BoolVar(&configOpts.dockerCert, "docker-cert", false, "load certificates from docker")
 	configSetCmd.Flags().BoolVar(&configOpts.dockerCred, "docker-cred", false, "load credentials from docker")
 
-	configCmd.AddCommand(configGetCmd)
-	configCmd.AddCommand(configSetCmd)
-	rootCmd.AddCommand(configCmd)
+	configTopCmd.AddCommand(configGetCmd)
+	configTopCmd.AddCommand(configSetCmd)
+	return configTopCmd
 }
 
-func runConfigGet(cmd *cobra.Command, args []string) error {
+func (configOpts *configCmd) runConfigGet(cmd *cobra.Command, args []string) error {
 	c, err := ConfigLoadDefault()
 	if err != nil {
 		return err
@@ -83,7 +88,7 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 	return template.Writer(cmd.OutOrStdout(), configOpts.format, c)
 }
 
-func runConfigSet(cmd *cobra.Command, args []string) error {
+func (configOpts *configCmd) runConfigSet(cmd *cobra.Command, args []string) error {
 	c, err := ConfigLoadDefault()
 	if err != nil {
 		return err

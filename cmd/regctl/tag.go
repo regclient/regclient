@@ -11,46 +11,50 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var tagCmd = &cobra.Command{
-	Use:   "tag <cmd>",
-	Short: "manage tags",
+type tagCmd struct {
+	rootOpts *rootCmd
+	limit    int
+	last     string
+	include  []string
+	exclude  []string
+	format   string
 }
-var tagDeleteCmd = &cobra.Command{
-	Use:     "delete <image_ref>",
-	Aliases: []string{"del", "rm", "remove"},
-	Short:   "delete a tag in a repo",
-	Long: `Delete a tag in a repository.
+
+func NewTagCmd(rootOpts *rootCmd) *cobra.Command {
+	tagOpts := tagCmd{
+		rootOpts: rootOpts,
+	}
+	var tagTopCmd = &cobra.Command{
+		Use:   "tag <cmd>",
+		Short: "manage tags",
+	}
+	var tagDeleteCmd = &cobra.Command{
+		Use:     "delete <image_ref>",
+		Aliases: []string{"del", "rm", "remove"},
+		Short:   "delete a tag in a repo",
+		Long: `Delete a tag in a repository.
 This avoids deleting the manifest when multiple tags reference the same image.
 For registries that do not support the OCI tag delete API, this is implemented
 by pushing a unique dummy manifest and deleting that by digest.
 If the registry does not support the delete API, the dummy manifest will remain.
 `,
-	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: completeArgTag,
-	RunE:              runTagDelete,
-}
-var tagLsCmd = &cobra.Command{
-	Use:     "ls <repository>",
-	Aliases: []string{"list"},
-	Short:   "list tags in a repo",
-	Long: `List tags in a repository.
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: rootOpts.completeArgTag,
+		RunE:              tagOpts.runTagDelete,
+	}
+	var tagLsCmd = &cobra.Command{
+		Use:     "ls <repository>",
+		Aliases: []string{"list"},
+		Short:   "list tags in a repo",
+		Long: `List tags in a repository.
 Note: many registries ignore the pagination options.
 For an OCI Layout, the index is available as Index (--format "{{.Index}}").
 `,
-	Args:      cobra.ExactArgs(1),
-	ValidArgs: []string{},
-	RunE:      runTagLs,
-}
+		Args:      cobra.ExactArgs(1),
+		ValidArgs: []string{},
+		RunE:      tagOpts.runTagLs,
+	}
 
-var tagOpts struct {
-	limit   int
-	last    string
-	include []string
-	exclude []string
-	format  string
-}
-
-func init() {
 	tagLsCmd.Flags().StringVarP(&tagOpts.last, "last", "", "", "Specify the last tag from a previous request for pagination (depends on registry support)")
 	tagLsCmd.Flags().IntVarP(&tagOpts.limit, "limit", "", 0, "Specify the number of tags to retrieve (depends on registry support)")
 	tagLsCmd.Flags().StringArrayVar(&tagOpts.include, "include", []string{}, "Regexp of tags to include (expression is bound to beginning and ending of tag)")
@@ -61,18 +65,18 @@ func init() {
 	_ = tagLsCmd.RegisterFlagCompletionFunc("filter", completeArgNone)
 	_ = tagLsCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
-	tagCmd.AddCommand(tagDeleteCmd)
-	tagCmd.AddCommand(tagLsCmd)
-	rootCmd.AddCommand(tagCmd)
+	tagTopCmd.AddCommand(tagDeleteCmd)
+	tagTopCmd.AddCommand(tagLsCmd)
+	return tagTopCmd
 }
 
-func runTagDelete(cmd *cobra.Command, args []string) error {
+func (tagOpts *tagCmd) runTagDelete(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
-	rc := newRegClient()
+	rc := tagOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 	log.WithFields(logrus.Fields{
 		"host":       r.Registry,
@@ -86,7 +90,7 @@ func runTagDelete(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runTagLs(cmd *cobra.Command, args []string) error {
+func (tagOpts *tagCmd) runTagLs(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
@@ -108,7 +112,7 @@ func runTagLs(cmd *cobra.Command, args []string) error {
 		}
 		reExclude = append(reExclude, re)
 	}
-	rc := newRegClient()
+	rc := tagOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 	log.WithFields(logrus.Fields{
 		"host":       r.Registry,
