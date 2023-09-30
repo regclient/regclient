@@ -31,21 +31,21 @@ func (c *BCommon) GetDescriptor() types.Descriptor {
 
 // Digest returns the provided or calculated digest of the blob.
 //
-// Deprecated: Digest should be replaced by GetDescriptor().Digest.
+// Deprecated: Digest should be replaced by GetDescriptor().Digest, see [GetDescriptor].
 func (c *BCommon) Digest() digest.Digest {
 	return c.desc.Digest
 }
 
 // Length returns the provided or calculated length of the blob.
 //
-// Deprecated: Length should be replaced by GetDescriptor().Size.
+// Deprecated: Length should be replaced by GetDescriptor().Size, see [GetDescriptor].
 func (c *BCommon) Length() int64 {
 	return c.desc.Size
 }
 
 // MediaType returns the Content-Type header received from the registry.
 //
-// Deprecated: MediaType should be replaced by GetDescriptor().MediaType.
+// Deprecated: MediaType should be replaced by GetDescriptor().MediaType, see [GetDescriptor].
 func (c *BCommon) MediaType() string {
 	return c.desc.MediaType
 }
