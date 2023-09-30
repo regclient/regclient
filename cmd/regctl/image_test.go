@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -37,6 +38,53 @@ func TestImageExportImport(t *testing.T) {
 	}
 	if out != "" {
 		t.Errorf("unexpected output: %v", out)
+	}
+}
+
+func TestImageInspect(t *testing.T) {
+	srcRef := "ocidir://../../testdata/testrepo:v3"
+	tt := []struct {
+		name        string
+		cmd         []string
+		expectOut   string
+		outContains bool
+	}{
+		{
+			name:        "default",
+			cmd:         []string{"image", "inspect", srcRef},
+			expectOut:   "created",
+			outContains: true,
+		},
+		{
+			name:        "format body",
+			cmd:         []string{"image", "inspect", srcRef, "--format", `body`},
+			expectOut:   "created",
+			outContains: true,
+		},
+		{
+			name:        "format config",
+			cmd:         []string{"image", "inspect", srcRef, "--format", `{{ index .Config.Labels "version" }}`},
+			expectOut:   "3",
+			outContains: false,
+		},
+		{
+			name:        "format getconfig",
+			cmd:         []string{"image", "inspect", srcRef, "--format", `{{ .GetConfig.OS}}`},
+			expectOut:   "linux",
+			outContains: false,
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := cobraTest(t, nil, tc.cmd...)
+			if err != nil {
+				t.Errorf("error: %v", err)
+				return
+			}
+			if (!tc.outContains && out != tc.expectOut) || (tc.outContains && !strings.Contains(out, tc.expectOut)) {
+				t.Errorf("unexpected output, expected %s, received %s", tc.expectOut, out)
+			}
+		})
 	}
 }
 
