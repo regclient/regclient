@@ -20,6 +20,8 @@ jobs:
 
     env:
       RELEASE_GO_VER: "1.21"
+      # do not automatically upgrade go to a different version: https://go.dev/doc/toolchain
+      GOTOOLCHAIN: "local"
 
     permissions:
       # id-token is used by cosign's OIDC based signing
