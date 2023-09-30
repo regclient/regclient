@@ -17,9 +17,9 @@ import (
 )
 
 const (
-	// MediaTypeDocker1Manifest deprecated media type for docker schema1 manifests
+	// MediaTypeDocker1Manifest deprecated media type for docker schema1 manifests.
 	MediaTypeDocker1Manifest = "application/vnd.docker.distribution.manifest.v1+json"
-	// MediaTypeDocker1ManifestSigned is a deprecated schema1 manifest with jws signing
+	// MediaTypeDocker1ManifestSigned is a deprecated schema1 manifest with jws signing.
 	MediaTypeDocker1ManifestSigned = "application/vnd.docker.distribution.manifest.v1+prettyjws"
 )
 

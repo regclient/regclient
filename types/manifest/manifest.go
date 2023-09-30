@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	// crypto libraries included for go-digest
+	// Crypto libraries are included for go-digest.
 	_ "crypto/sha256"
 	_ "crypto/sha512"
 
@@ -36,40 +36,44 @@ type Manifest interface {
 	RawHeaders() (http.Header, error)
 	SetOrig(interface{}) error
 
-	// Deprecated: GetConfig should be accessed using Imager interface
+	// Deprecated: GetConfig should be accessed using [Imager] interface.
 	GetConfig() (types.Descriptor, error)
-	// Deprecated: GetLayers should be accessed using Imager interface
+	// Deprecated: GetLayers should be accessed using [Imager] interface.
 	GetLayers() ([]types.Descriptor, error)
 
-	// Deprecated: GetManifestList should be accessed using Indexer interface
+	// Deprecated: GetManifestList should be accessed using [Indexer] interface.
 	GetManifestList() ([]types.Descriptor, error)
 
-	// Deprecated: GetConfigDigest should be replaced with GetConfig
+	// Deprecated: GetConfigDigest should be replaced with [GetConfig].
 	GetConfigDigest() (digest.Digest, error)
-	// Deprecated: GetDigest should be replaced with GetDescriptor().Digest
+	// Deprecated: GetDigest should be replaced with GetDescriptor().Digest, see [GetDescriptor].
 	GetDigest() digest.Digest
-	// Deprecated: GetMediaType should be replaced with GetDescriptor().MediaType
+	// Deprecated: GetMediaType should be replaced with GetDescriptor().MediaType, see [GetDescriptor].
 	GetMediaType() string
-	// Deprecated: GetPlatformDesc method should be replaced with manifest.GetPlatformDesc function
+	// Deprecated: GetPlatformDesc method should be replaced with [manifest.GetPlatformDesc].
 	GetPlatformDesc(p *platform.Platform) (*types.Descriptor, error)
-	// Deprecated: GetPlatformList method should be replaced with manifest.GetPlatformList function
+	// Deprecated: GetPlatformList method should be replaced with [manifest.GetPlatformList].
 	GetPlatformList() ([]*platform.Platform, error)
-	// Deprecated: GetRateLimit method should be replaced with manifest.GetRateLimit function
+	// Deprecated: GetRateLimit method should be replaced with [manifest.GetRateLimit].
 	GetRateLimit() types.RateLimit
-	// Deprecated: HasRateLimit method should be replaced with manifest.HasRateLimit function
+	// Deprecated: HasRateLimit method should be replaced with [manifest.HasRateLimit].
 	HasRateLimit() bool
 }
 
+// Annotator is used by manifests that support annotations.
+// Note this will work for Docker manifests despite the spec not officially supporting it.
 type Annotator interface {
 	GetAnnotations() (map[string]string, error)
 	SetAnnotation(key, val string) error
 }
 
+// Indexer is used by manifests that contain a manifest list.
 type Indexer interface {
 	GetManifestList() ([]types.Descriptor, error)
 	SetManifestList(dl []types.Descriptor) error
 }
 
+// Imager is used by manifests packaging an image.
 type Imager interface {
 	GetConfig() (types.Descriptor, error)
 	GetLayers() ([]types.Descriptor, error)
@@ -77,6 +81,7 @@ type Imager interface {
 	SetLayers(dl []types.Descriptor) error
 }
 
+// Subjecter is used by manifests that may have a subject field.
 type Subjecter interface {
 	GetSubject() (*types.Descriptor, error)
 	SetSubject(d *types.Descriptor) error
@@ -91,7 +96,7 @@ type manifestConfig struct {
 }
 type Opts func(*manifestConfig)
 
-// New creates a new manifest based on provided options
+// New creates a new manifest based on provided options.
 func New(opts ...Opts) (Manifest, error) {
 	mc := manifestConfig{}
 	for _, opt := range opts {
@@ -123,54 +128,54 @@ func New(opts ...Opts) (Manifest, error) {
 	return fromCommon(c)
 }
 
-// WithDesc specifies the descriptor for the manifest
+// WithDesc specifies the descriptor for the manifest.
 func WithDesc(desc types.Descriptor) Opts {
 	return func(mc *manifestConfig) {
 		mc.desc = desc
 	}
 }
 
-// WithHeader provides the headers from the response when pulling the manifest
+// WithHeader provides the headers from the response when pulling the manifest.
 func WithHeader(header http.Header) Opts {
 	return func(mc *manifestConfig) {
 		mc.header = header
 	}
 }
 
-// WithOrig provides the original manifest variable
+// WithOrig provides the original manifest variable.
 func WithOrig(orig interface{}) Opts {
 	return func(mc *manifestConfig) {
 		mc.orig = orig
 	}
 }
 
-// WithRaw provides the manifest bytes or HTTP response body
+// WithRaw provides the manifest bytes or HTTP response body.
 func WithRaw(raw []byte) Opts {
 	return func(mc *manifestConfig) {
 		mc.raw = raw
 	}
 }
 
-// WithRef provides the reference used to get the manifest
+// WithRef provides the reference used to get the manifest.
 func WithRef(r ref.Ref) Opts {
 	return func(mc *manifestConfig) {
 		mc.r = r
 	}
 }
 
-// GetDigest returns the digest from the manifest descriptor
+// GetDigest returns the digest from the manifest descriptor.
 func GetDigest(m Manifest) digest.Digest {
 	d := m.GetDescriptor()
 	return d.Digest
 }
 
-// GetMediaType returns the media type from the manifest descriptor
+// GetMediaType returns the media type from the manifest descriptor.
 func GetMediaType(m Manifest) string {
 	d := m.GetDescriptor()
 	return d.MediaType
 }
 
-// GetPlatformDesc returns the descriptor for a specific platform from an index
+// GetPlatformDesc returns the descriptor for a specific platform from an index.
 func GetPlatformDesc(m Manifest, p *platform.Platform) (*types.Descriptor, error) {
 	dl, err := m.GetManifestList()
 	if err != nil {
@@ -186,7 +191,7 @@ func GetPlatformDesc(m Manifest, p *platform.Platform) (*types.Descriptor, error
 	return &d, nil
 }
 
-// GetPlatformList returns the list of platforms from an index
+// GetPlatformList returns the list of platforms from an index.
 func GetPlatformList(m Manifest) ([]*platform.Platform, error) {
 	dl, err := m.GetManifestList()
 	if err != nil {
@@ -201,7 +206,7 @@ func GetPlatformList(m Manifest) ([]*platform.Platform, error) {
 	return l, nil
 }
 
-// GetRateLimit returns the current rate limit seen in headers
+// GetRateLimit returns the current rate limit seen in headers.
 func GetRateLimit(m Manifest) types.RateLimit {
 	rl := types.RateLimit{}
 	header, err := m.RawHeaders()
@@ -248,12 +253,13 @@ func GetRateLimit(m Manifest) types.RateLimit {
 	return rl
 }
 
-// HasRateLimit indicates whether the rate limit is set and available
+// HasRateLimit indicates whether the rate limit is set and available.
 func HasRateLimit(m Manifest) bool {
 	rl := GetRateLimit(m)
 	return rl.Set
 }
 
+// OCIIndexFromAny converts manifest lists to an OCI index.
 func OCIIndexFromAny(orig interface{}) (v1.Index, error) {
 	ociI := v1.Index{
 		Versioned: v1.IndexSchemaVersion,
@@ -271,6 +277,7 @@ func OCIIndexFromAny(orig interface{}) (v1.Index, error) {
 	return ociI, nil
 }
 
+// OCIIndexToAny converts from an OCI index back to the manifest list.
 func OCIIndexToAny(ociI v1.Index, origP interface{}) error {
 	// reflect is used to handle both *interface{} and *Manifest
 	rv := reflect.ValueOf(origP)
@@ -298,6 +305,7 @@ func OCIIndexToAny(ociI v1.Index, origP interface{}) error {
 	return nil
 }
 
+// OCIManifestFromAny converts an image manifest to an OCI manifest.
 func OCIManifestFromAny(orig interface{}) (v1.Manifest, error) {
 	ociM := v1.Manifest{
 		Versioned: v1.ManifestSchemaVersion,
@@ -317,6 +325,7 @@ func OCIManifestFromAny(orig interface{}) (v1.Manifest, error) {
 	return ociM, nil
 }
 
+// OCIManifestToAny converts an OCI manifest back to the image manifest.
 func OCIManifestToAny(ociM v1.Manifest, origP interface{}) error {
 	// reflect is used to handle both *interface{} and *Manifest
 	rv := reflect.ValueOf(origP)
@@ -435,6 +444,7 @@ func fromOrig(c common, orig interface{}) (Manifest, error) {
 	return m, nil
 }
 
+// fromCommon is used to create a manifest when the underlying manifest struct is not provided.
 func fromCommon(c common) (Manifest, error) {
 	var err error
 	var m Manifest
