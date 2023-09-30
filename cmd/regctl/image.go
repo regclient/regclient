@@ -20,7 +20,9 @@ import (
 	"github.com/regclient/regclient/mod"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/blob"
 	"github.com/regclient/regclient/types/manifest"
+	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/sirupsen/logrus"
@@ -1220,6 +1222,13 @@ func (imageOpts *imageCmd) runImageInspect(cmd *cobra.Command, args []string) er
 	if err != nil {
 		return err
 	}
+	result := struct {
+		*blob.BOCIConfig
+		v1.Image
+	}{
+		BOCIConfig: blobConfig,
+		Image:      blobConfig.GetConfig(),
+	}
 	switch imageOpts.format {
 	case "raw":
 		imageOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .RawBody}}"
@@ -1228,7 +1237,7 @@ func (imageOpts *imageCmd) runImageInspect(cmd *cobra.Command, args []string) er
 	case "rawHeaders", "raw-headers", "headers":
 		imageOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
-	return template.Writer(cmd.OutOrStdout(), imageOpts.format, blobConfig)
+	return template.Writer(cmd.OutOrStdout(), imageOpts.format, result)
 }
 
 func (imageOpts *imageCmd) runImageMod(cmd *cobra.Command, args []string) error {
