@@ -1,8 +1,9 @@
 package sandbox
 
 import (
-	"github.com/regclient/regclient/types/ref"
 	lua "github.com/yuin/gopher-lua"
+
+	"github.com/regclient/regclient/types/ref"
 )
 
 func setupReference(s *Sandbox) {

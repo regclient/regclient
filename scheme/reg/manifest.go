@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/regclient/regclient/internal/limitread"
 	"github.com/regclient/regclient/internal/reghttp"
 	"github.com/regclient/regclient/internal/wraperr"
@@ -15,7 +17,6 @@ import (
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
-	"github.com/sirupsen/logrus"
 )
 
 // ManifestDelete removes a manifest by reference (digest) from a registry.

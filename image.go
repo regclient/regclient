@@ -19,6 +19,8 @@ import (
 	_ "crypto/sha512"
 
 	digest "github.com/opencontainers/go-digest"
+	"github.com/sirupsen/logrus"
+
 	"github.com/regclient/regclient/pkg/archive"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
@@ -28,7 +30,6 @@ import (
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/regclient/regclient/types/warning"
-	"github.com/sirupsen/logrus"
 )
 
 const (

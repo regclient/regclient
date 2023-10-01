@@ -5,6 +5,10 @@ import (
 	"os"
 	"sync"
 
+	"github.com/robfig/cron/v3"
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/cmd/regbot/sandbox"
 	"github.com/regclient/regclient/config"
@@ -12,9 +16,6 @@ import (
 	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/scheme/reg"
-	"github.com/robfig/cron/v3"
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
 )
 
 const (

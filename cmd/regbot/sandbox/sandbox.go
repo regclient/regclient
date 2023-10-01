@@ -4,11 +4,12 @@ package sandbox
 import (
 	"context"
 
+	"github.com/sirupsen/logrus"
+	lua "github.com/yuin/gopher-lua"
+
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/cmd/regbot/internal/go2lua"
 	"github.com/regclient/regclient/internal/throttle"
-	"github.com/sirupsen/logrus"
-	lua "github.com/yuin/gopher-lua"
 )
 
 const (

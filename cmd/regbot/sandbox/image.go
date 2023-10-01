@@ -6,14 +6,15 @@ import (
 	"os"
 	"time"
 
+	"github.com/sirupsen/logrus"
+	lua "github.com/yuin/gopher-lua"
+
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/cmd/regbot/internal/go2lua"
 	"github.com/regclient/regclient/types/blob"
 	"github.com/regclient/regclient/types/manifest"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/ref"
-	"github.com/sirupsen/logrus"
-	lua "github.com/yuin/gopher-lua"
 )
 
 type config struct {

@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/cache"
 	"github.com/regclient/regclient/internal/reghttp"
@@ -13,7 +15,6 @@ import (
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/regclient/regclient/types/referrer"
-	"github.com/sirupsen/logrus"
 )
 
 const (

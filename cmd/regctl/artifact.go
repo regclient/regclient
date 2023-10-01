@@ -15,6 +15,8 @@ import (
 	_ "crypto/sha512"
 
 	"github.com/opencontainers/go-digest"
+	"github.com/spf13/cobra"
+
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/pkg/archive"
 	"github.com/regclient/regclient/pkg/template"
@@ -25,7 +27,6 @@ import (
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/regclient/regclient/types/referrer"
-	"github.com/spf13/cobra"
 )
 
 const (

@@ -13,11 +13,12 @@ import (
 	_ "crypto/sha512"
 
 	"github.com/opencontainers/go-digest"
+	"github.com/sirupsen/logrus"
+
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
 	"github.com/regclient/regclient/types/ref"
-	"github.com/sirupsen/logrus"
 )
 
 // BlobDelete removes a blob from the repository

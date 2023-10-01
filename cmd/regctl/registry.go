@@ -9,11 +9,12 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/config"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
+
+	"github.com/regclient/regclient"
+	"github.com/regclient/regclient/config"
 )
 
 type registryCmd struct {

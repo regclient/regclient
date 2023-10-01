@@ -3,10 +3,11 @@ package main
 import (
 	"strings"
 
-	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/scheme"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+
+	"github.com/regclient/regclient/pkg/template"
+	"github.com/regclient/regclient/scheme"
 )
 
 type repoCmd struct {

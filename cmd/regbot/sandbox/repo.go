@@ -3,10 +3,11 @@ package sandbox
 import (
 	"fmt"
 
-	"github.com/regclient/regclient/cmd/regbot/internal/go2lua"
-	"github.com/regclient/regclient/scheme"
 	"github.com/sirupsen/logrus"
 	lua "github.com/yuin/gopher-lua"
+
+	"github.com/regclient/regclient/cmd/regbot/internal/go2lua"
+	"github.com/regclient/regclient/scheme"
 )
 
 func setupRepo(s *Sandbox) {

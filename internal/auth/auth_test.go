@@ -9,8 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/regclient/regclient/internal/reqresp"
 	"github.com/sirupsen/logrus"
+
+	"github.com/regclient/regclient/internal/reqresp"
 )
 
 func TestParseAuthHeader(t *testing.T) {

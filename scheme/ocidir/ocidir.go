@@ -11,12 +11,13 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/internal/throttle"
 	"github.com/regclient/regclient/types"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/ref"
-	"github.com/sirupsen/logrus"
 )
 
 const (
