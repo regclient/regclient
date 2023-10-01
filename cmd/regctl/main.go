@@ -8,8 +8,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/regclient/regclient/internal/godbg"
 	"github.com/sirupsen/logrus"
+
+	"github.com/regclient/regclient/internal/godbg"
 )
 
 func main() {

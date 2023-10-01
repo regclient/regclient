@@ -7,13 +7,14 @@ import (
 
 	"fmt"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/scheme/ocidir"
 	"github.com/regclient/regclient/scheme/reg"
-	"github.com/sirupsen/logrus"
 )
 
 const (

@@ -14,6 +14,9 @@ import (
 	"time"
 
 	"github.com/opencontainers/go-digest"
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/internal/ascii"
 	"github.com/regclient/regclient/internal/units"
@@ -25,8 +28,6 @@ import (
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
 )
 
 type imageCmd struct {

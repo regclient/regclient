@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/opencontainers/go-digest"
+
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"

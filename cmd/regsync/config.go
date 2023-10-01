@@ -6,10 +6,11 @@ import (
 	"os"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/types"
-	"gopkg.in/yaml.v3"
 )
 
 // delay checking for at least 5 minutes when rate limit is exceeded

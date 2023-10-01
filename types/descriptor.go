@@ -11,6 +11,7 @@ import (
 	_ "crypto/sha512"
 
 	"github.com/opencontainers/go-digest"
+
 	"github.com/regclient/regclient/internal/units"
 	"github.com/regclient/regclient/types/platform"
 )

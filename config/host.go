@@ -9,9 +9,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/regclient/regclient/internal/throttle"
 	"github.com/regclient/regclient/internal/timejson"
-	"github.com/sirupsen/logrus"
 )
 
 // TLSConf specifies whether TLS is enabled for a host

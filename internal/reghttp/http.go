@@ -26,12 +26,13 @@ import (
 	_ "crypto/sha512"
 
 	"github.com/opencontainers/go-digest"
+	"github.com/sirupsen/logrus"
+
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/auth"
 	"github.com/regclient/regclient/internal/throttle"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/warning"
-	"github.com/sirupsen/logrus"
 )
 
 var defaultDelayInit, _ = time.ParseDuration("1s")

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/opencontainers/go-digest"
+
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/types/ref"
 )

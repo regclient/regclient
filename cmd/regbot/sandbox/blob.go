@@ -11,11 +11,12 @@ import (
 	_ "crypto/sha512"
 
 	"github.com/opencontainers/go-digest"
+	"github.com/sirupsen/logrus"
+	lua "github.com/yuin/gopher-lua"
+
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
 	"github.com/regclient/regclient/types/ref"
-	"github.com/sirupsen/logrus"
-	lua "github.com/yuin/gopher-lua"
 )
 
 type sbBlob struct {

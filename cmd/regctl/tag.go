@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types/ref"
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
 )
 
 type tagCmd struct {

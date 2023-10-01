@@ -6,9 +6,10 @@ import (
 	"os"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/ref"
-	"github.com/spf13/cobra"
 )
 
 func NewCompletionCmd(rootOpts *rootCmd) *cobra.Command {

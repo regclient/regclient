@@ -8,10 +8,11 @@ import (
 	"io"
 	"io/fs"
 
+	"github.com/spf13/cobra"
+
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/conffile"
 	"github.com/regclient/regclient/pkg/template"
-	"github.com/spf13/cobra"
 )
 
 var (
