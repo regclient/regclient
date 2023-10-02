@@ -108,7 +108,7 @@ jobs:
         target: release-${{ matrix.type }}
         outputs: type=oci,dest=output/${{matrix.image}}-${{matrix.type}}.tar
         build-args: |
-          SOURCE_DATE_EPOC=${{ steps.prep.outputs.vcs_sec }}
+          SOURCE_DATE_EPOCH=${{ steps.prep.outputs.vcs_sec }}
         labels: |
           org.opencontainers.image.created=${{ steps.prep.outputs.created }}
           org.opencontainers.image.source=${{ steps.prep.outputs.repo_url }}

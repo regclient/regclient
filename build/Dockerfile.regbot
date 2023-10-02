@@ -57,7 +57,8 @@ RUN apk add curl \
  && curl -fL https://raw.githubusercontent.com/kikito/semver.lua/${SEMVER_COMMIT}/semver.lua > /lua/semver.lua \
  && cd /lua \
  && ln -s lunajson.lua json.lua \
- && SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH}:-$(date +%s)}" find . -exec touch --date="@${SOURCE_DATE_EPOCH}" '{}' \;
+ && SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(date +%s)}" sh -c 'find . -exec touch --date="@${SOURCE_DATE_EPOCH}" {} \;'
+
 
 FROM ${REGISTRY}/library/alpine:${ALPINE_VER} as release-alpine
 COPY --from=build /etc/passwd /etc/group /etc/
