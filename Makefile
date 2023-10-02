@@ -116,8 +116,8 @@ docker-%: .FORCE
 oci-image: $(addprefix oci-image-,$(COMMANDS)) ## Build reproducible images to an OCI Layout
 
 oci-image-%: bin/regctl .FORCE
-	build/oci-image.sh -r scratch -i "$*" -p "$(TEST_PLATFORMS)"
-	build/oci-image.sh -r alpine  -i "$*" -p "$(TEST_PLATFORMS)" -b "alpine:3"
+	PATH="$(PWD)/bin:$(PATH)" build/oci-image.sh -r scratch -i "$*" -p "$(TEST_PLATFORMS)"
+	PATH="$(PWD)/bin:$(PATH)" build/oci-image.sh -r alpine  -i "$*" -p "$(TEST_PLATFORMS)" -b "alpine:3"
 
 .PHONY: test-docker
 test-docker: $(addprefix test-docker-,$(COMMANDS)) ## Build multi-platform docker images (but do not tag)
