@@ -7,6 +7,7 @@ import (
 )
 
 func TestLinesWidthZero(t *testing.T) {
+	t.Parallel()
 	b := make([]byte, 0, 1024)
 	buf := bytes.NewBuffer(b)
 	l := NewLines(buf)
@@ -70,6 +71,7 @@ func TestLinesWidthZero(t *testing.T) {
 }
 
 func TestLinesWidthSet(t *testing.T) {
+	t.Parallel()
 	b := make([]byte, 0, 1024)
 	buf := bytes.NewBuffer(b)
 	l := NewLines(buf)

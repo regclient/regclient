@@ -3,6 +3,7 @@ package types
 import "testing"
 
 func TestMediaTypeBase(t *testing.T) {
+	t.Parallel()
 	tt := []struct {
 		name   string
 		orig   string
@@ -28,5 +29,4 @@ func TestMediaTypeBase(t *testing.T) {
 			}
 		})
 	}
-
 }

@@ -27,6 +27,7 @@ import (
 // TODO: test rate limits and concurrency
 
 func TestRegHttp(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	// setup req/resp
 	useragent := "regclient/test"

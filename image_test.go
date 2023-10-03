@@ -14,6 +14,7 @@ import (
 )
 
 func TestImageCheckBase(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	fsOS := rwfs.OSNew("")
 	fsMem := rwfs.MemNew()
@@ -62,7 +63,7 @@ func TestImageCheckBase(t *testing.T) {
 		return
 	}
 
-	tests := []struct {
+	tt := []struct {
 		name      string
 		opts      []ImageOpts
 		r         ref.Ref
@@ -112,14 +113,14 @@ func TestImageCheckBase(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := rc.ImageCheckBase(ctx, tt.r, tt.opts...)
-			if tt.expectErr != nil {
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			err := rc.ImageCheckBase(ctx, tc.r, tc.opts...)
+			if tc.expectErr != nil {
 				if err == nil {
 					t.Errorf("check base did not fail")
-				} else if err.Error() != tt.expectErr.Error() && !errors.Is(err, tt.expectErr) {
-					t.Errorf("error mismatch, expected %v, received %v", tt.expectErr, err)
+				} else if err.Error() != tc.expectErr.Error() && !errors.Is(err, tc.expectErr) {
+					t.Errorf("error mismatch, expected %v, received %v", tc.expectErr, err)
 				}
 			} else {
 				if err != nil {
@@ -131,6 +132,7 @@ func TestImageCheckBase(t *testing.T) {
 }
 
 func TestCopy(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	// create regclient
 	delayInit, _ := time.ParseDuration("0.05s")
@@ -212,6 +214,7 @@ func TestCopy(t *testing.T) {
 }
 
 func TestExportImport(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	// copy testdata images into memory
 	fsOS := rwfs.OSNew("")

@@ -34,6 +34,7 @@ func cmpSliceString(a, b []string) bool {
 }
 
 func TestIndex(t *testing.T) {
+	t.Parallel()
 	// ctx := context.Background()
 	fsMem := rwfs.MemNew()
 	o := New(WithFS(fsMem))

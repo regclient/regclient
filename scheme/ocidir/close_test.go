@@ -12,6 +12,7 @@ import (
 )
 
 func TestClose(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	fsOS := rwfs.OSNew("")
 	fsMem := rwfs.MemNew()
@@ -84,5 +85,4 @@ func TestClose(t *testing.T) {
 			fh.Close()
 		}
 	}
-
 }

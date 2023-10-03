@@ -25,6 +25,7 @@ import (
 )
 
 func TestBlobGet(t *testing.T) {
+	t.Parallel()
 	blobRepo := "/proj/repo"
 	externalRepo := "/proj/external"
 	privateRepo := "/proj/private"
@@ -359,10 +360,10 @@ func TestBlobGet(t *testing.T) {
 			t.Errorf("Error does not match \"ErrUnauthorized\": %v", err)
 		}
 	})
-
 }
 
 func TestBlobPut(t *testing.T) {
+	t.Parallel()
 	blobRepo := "/proj/repo"
 	// privateRepo := "/proj/private"
 	ctx := context.Background()

@@ -12,6 +12,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
+	t.Parallel()
 	emptyRaw := []byte("{}")
 	registryList := []string{"library/alpine", "library/debian", "library/golang"}
 	registryRaw := []byte(fmt.Sprintf(`{"repositories":["%s"]}`, strings.Join(registryList, `","`)))

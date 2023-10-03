@@ -8,6 +8,7 @@ import (
 )
 
 func TestParseErr(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		headers []string
@@ -60,6 +61,7 @@ func TestParseErr(t *testing.T) {
 }
 
 func TestParseGet(t *testing.T) {
+	t.Parallel()
 	headerComplex := []string{`</path1>; rel="next", </path2> ; rel="next", / ; rel=index `, `</print>; media=print`, `/link, /reader; media=reader; type=x`}
 	tests := []struct {
 		name          string
@@ -135,5 +137,4 @@ func TestParseGet(t *testing.T) {
 			}
 		})
 	}
-
 }

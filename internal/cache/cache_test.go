@@ -9,6 +9,7 @@ import (
 )
 
 func TestCache(t *testing.T) {
+	t.Parallel()
 	testData := []string{
 		"a", "b", "c", "d", "e", "f", "g", "h", "i", "j",
 		"k", "l", "m", "n", "o", "p", "q", "r", "s", "t",

@@ -9,6 +9,7 @@ import (
 )
 
 func TestDocker(t *testing.T) {
+	// cannot run cred helper in parallel because of OS working directory race conditions
 	curPath := os.Getenv("PATH")
 	pwd, err := os.Getwd()
 	if err != nil {
@@ -122,6 +123,7 @@ func TestDocker(t *testing.T) {
 }
 
 func TestLoadMissing(t *testing.T) {
+	// cannot run cred helper in parallel because of OS working directory race conditions
 	cf := conffile.New(conffile.WithFullname("testdata/missing.json"))
 	h, err := dockerParse(cf)
 	if err != nil {

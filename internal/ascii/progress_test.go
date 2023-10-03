@@ -6,6 +6,7 @@ import (
 )
 
 func TestProgress(t *testing.T) {
+	t.Parallel()
 	// TODO: test scenarios and compare output
 	b := make([]byte, 0, 1024)
 	buf := bytes.NewBuffer(b)

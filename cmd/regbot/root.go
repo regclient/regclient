@@ -33,7 +33,7 @@ type rootCmd struct {
 	format    string // for Go template formatting of various commands
 }
 
-// TODO: remove these globals
+// TODO: remove globals, configure tests with t.Parallel
 var (
 	conf      *Config
 	log       *logrus.Logger

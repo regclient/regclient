@@ -6,6 +6,7 @@ import (
 )
 
 func TestVersion(t *testing.T) {
+	t.Parallel()
 	i := GetInfo()
 	ij, err := json.MarshalIndent(i, "", "  ")
 	if err != nil {

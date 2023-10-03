@@ -9,6 +9,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
+	t.Parallel()
 	logPtr := logrus.New()
 	tt := []struct {
 		name   string
@@ -99,5 +100,4 @@ func TestNew(t *testing.T) {
 			}
 		})
 	}
-
 }
