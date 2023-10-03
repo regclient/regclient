@@ -431,6 +431,30 @@ func (m *oci1Artifact) SetLayers(dl []types.Descriptor) error {
 	return m.updateDesc()
 }
 
+// GetSize returns the size in bytes of all layers
+func (m *oci1Manifest) GetSize() (int64, error) {
+	if !m.manifSet {
+		return 0, types.ErrManifestNotSet
+	}
+	var total int64
+	for _, d := range m.Layers {
+		total += d.Size
+	}
+	return total, nil
+}
+
+// GetSize returns the size in bytes of all layers
+func (m *oci1Artifact) GetSize() (int64, error) {
+	if !m.manifSet {
+		return 0, types.ErrManifestNotSet
+	}
+	var total int64
+	for _, d := range m.Blobs {
+		total += d.Size
+	}
+	return total, nil
+}
+
 func (m *oci1Manifest) SetLayers(dl []types.Descriptor) error {
 	if !m.manifSet {
 		return types.ErrManifestNotSet

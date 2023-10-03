@@ -80,6 +80,7 @@ type Imager interface {
 	GetLayers() ([]types.Descriptor, error)
 	SetConfig(d types.Descriptor) error
 	SetLayers(dl []types.Descriptor) error
+	GetSize() (int64, error)
 }
 
 // Subjecter is used by manifests that may have a subject field.
