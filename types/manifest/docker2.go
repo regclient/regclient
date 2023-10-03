@@ -121,6 +121,18 @@ func (m *docker2ManifestList) GetPlatformList() ([]*platform.Platform, error) {
 	return getPlatformList(dl)
 }
 
+// GetSize returns the size in bytes of all layers
+func (m *docker2Manifest) GetSize() (int64, error) {
+	if !m.manifSet {
+		return 0, types.ErrManifestNotSet
+	}
+	var total int64
+	for _, d := range m.Layers {
+		total += d.Size
+	}
+	return total, nil
+}
+
 func (m *docker2Manifest) MarshalJSON() ([]byte, error) {
 	if !m.manifSet {
 		return []byte{}, types.ErrManifestNotSet

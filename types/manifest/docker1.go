@@ -101,6 +101,14 @@ func (m *docker1SignedManifest) GetPlatformList() ([]*platform.Platform, error) 
 	return nil, fmt.Errorf("platform list not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 
+func (m *docker1Manifest) GetSize() (int64, error) {
+	return 0, fmt.Errorf("GetSize is not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
+}
+
+func (m *docker1SignedManifest) GetSize() (int64, error) {
+	return 0, fmt.Errorf("GetSize is not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
+}
+
 func (m *docker1Manifest) MarshalJSON() ([]byte, error) {
 	if !m.manifSet {
 		return []byte{}, types.ErrManifestNotSet
