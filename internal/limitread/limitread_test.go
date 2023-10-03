@@ -10,6 +10,7 @@ import (
 )
 
 func TestLimitRead(t *testing.T) {
+	t.Parallel()
 	byte0 := []byte("")
 	byte5 := []byte("12345")
 	byte10 := []byte("1234567890")

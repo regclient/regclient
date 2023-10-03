@@ -9,6 +9,7 @@ import (
 )
 
 func TestNil(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	var tNil *Throttle
 	err := tNil.Acquire(ctx)
@@ -30,6 +31,7 @@ func TestNil(t *testing.T) {
 }
 
 func TestSingleThrottle(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	wg := sync.WaitGroup{}
@@ -125,6 +127,7 @@ func TestSingleThrottle(t *testing.T) {
 }
 
 func TestCapacity(t *testing.T) {
+	t.Parallel()
 	t3 := New(3)
 	wg := sync.WaitGroup{}
 	ctx := context.Background()
@@ -194,6 +197,7 @@ func TestCapacity(t *testing.T) {
 }
 
 func TestMulti(t *testing.T) {
+	t.Parallel()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	tList := make([]*Throttle, 4)

@@ -22,6 +22,7 @@ More details at https://github.com/regclient/regclient`
 	UserAgent = "regclient/regctl"
 )
 
+// TODO: remove global, configure tests with t.Parallel
 var (
 	log *logrus.Logger
 )

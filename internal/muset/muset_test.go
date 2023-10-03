@@ -7,6 +7,7 @@ import (
 )
 
 func TestMuset(t *testing.T) {
+	t.Parallel()
 	// test acquiring sets of locks, sleep between changes to force out race conditions
 	var muA, muB, muC sync.Mutex
 	// empty set

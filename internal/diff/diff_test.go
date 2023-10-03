@@ -3,6 +3,7 @@ package diff
 import "testing"
 
 func TestDiff(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		a, b, expect []string

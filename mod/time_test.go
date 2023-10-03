@@ -8,6 +8,7 @@ import (
 )
 
 func TestTimeNow(t *testing.T) {
+	t.Parallel()
 	curEnv, envIsSet := os.LookupEnv(epocEnv)
 	defer func() {
 		if envIsSet {

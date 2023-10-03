@@ -24,6 +24,7 @@ import (
 )
 
 func TestBlobGet(t *testing.T) {
+	t.Parallel()
 	blobRepo := "/proj/repo"
 	privateRepo := "/proj/private"
 	ctx := context.Background()
@@ -299,6 +300,7 @@ func TestBlobGet(t *testing.T) {
 }
 
 func TestBlobPut(t *testing.T) {
+	t.Parallel()
 	blobRepo := "/proj/repo"
 	// privateRepo := "/proj/private"
 	ctx := context.Background()
@@ -736,6 +738,7 @@ func TestBlobPut(t *testing.T) {
 }
 
 func TestBlobCopy(t *testing.T) {
+	t.Parallel()
 	blobRepoA := "/proj/repo-a"
 	blobRepoB := "/proj/repo-b"
 	ctx := context.Background()

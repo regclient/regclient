@@ -401,6 +401,7 @@ var (
 )
 
 func TestNew(t *testing.T) {
+	t.Parallel()
 	r, _ := ref.New("localhost:5000/test:latest")
 	var manifestDockerSchema2, manifestInvalid schema2.Manifest
 	var manifestDockerSchema1Signed schema1.SignedManifest
@@ -1059,6 +1060,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestModify(t *testing.T) {
+	t.Parallel()
 	addDigest := digest.FromString("new layer digest")
 	addDesc := types.Descriptor{
 		Digest: addDigest,
@@ -1288,6 +1290,7 @@ func TestModify(t *testing.T) {
 
 // test set methods for config, layers, and manifest list
 func TestSet(t *testing.T) {
+	t.Parallel()
 	addDigest := digest.FromString("new digest")
 	addDesc := types.Descriptor{
 		Digest: addDigest,
@@ -1478,7 +1481,6 @@ func TestSet(t *testing.T) {
 			} else if tt.expectAnnot {
 				t.Errorf("annotation methods not found")
 			}
-
 		})
 	}
 }

@@ -19,6 +19,7 @@ import (
 )
 
 func TestReferrer(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	fsOS := rwfs.OSNew("")
 	fsMem := rwfs.MemNew()
@@ -348,7 +349,6 @@ func TestReferrer(t *testing.T) {
 			return
 		}
 	})
-
 }
 
 func mapStringStringEq(a, b map[string]string) bool {

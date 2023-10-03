@@ -15,6 +15,7 @@ import (
 )
 
 func TestBlob(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	f := rwfs.OSNew("")
 	o := New(WithFS(f))
@@ -168,5 +169,4 @@ func TestBlob(t *testing.T) {
 	if !bytes.Equal(fBytes, bBytes) {
 		t.Errorf("blob put bytes, expected %s, saw %s", string(bBytes), string(fBytes))
 	}
-
 }

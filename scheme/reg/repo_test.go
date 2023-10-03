@@ -21,6 +21,7 @@ import (
 )
 
 func TestRepo(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	partialLen := 2
 	listRegistry := []string{

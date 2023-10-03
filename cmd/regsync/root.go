@@ -55,7 +55,7 @@ type rootCmd struct {
 	missing   bool
 }
 
-// TODO: remove globals
+// TODO: remove globals, configure tests with t.Parallel
 var (
 	conf      *Config
 	log       *logrus.Logger

@@ -19,6 +19,7 @@ import (
 )
 
 func TestMod(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	// copy testdata images into memory
 	fsOS := rwfs.OSNew("")
@@ -745,6 +746,7 @@ func TestMod(t *testing.T) {
 }
 
 func TestInList(t *testing.T) {
+	t.Parallel()
 	t.Run("match", func(t *testing.T) {
 		if !inListStr(types.MediaTypeDocker2LayerGzip, mtWLTar) {
 			t.Errorf("did not find docker layer in tar whitelist")

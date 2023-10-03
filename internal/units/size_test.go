@@ -3,6 +3,7 @@ package units
 import "testing"
 
 func TestHuman(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		size   float64

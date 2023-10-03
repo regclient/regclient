@@ -13,6 +13,7 @@ import (
 )
 
 func TestDescriptorData(t *testing.T) {
+	t.Parallel()
 	tt := []struct {
 		name     string
 		d        Descriptor
@@ -80,6 +81,7 @@ func TestDescriptorData(t *testing.T) {
 }
 
 func TestDescriptorEq(t *testing.T) {
+	t.Parallel()
 	digA := digest.FromString("test A")
 	digB := digest.FromString("test B")
 	tt := []struct {
@@ -447,6 +449,7 @@ func TestDescriptorEq(t *testing.T) {
 }
 
 func TestDataJSON(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		dJSON    []byte
@@ -534,6 +537,7 @@ func TestDataJSON(t *testing.T) {
 }
 
 func TestDescriptorSearch(t *testing.T) {
+	t.Parallel()
 	dAMD64 := Descriptor{
 		MediaType: MediaTypeOCI1Manifest,
 		Size:      12345,
@@ -781,5 +785,4 @@ func TestDescriptorSearch(t *testing.T) {
 			}
 		})
 	}
-
 }

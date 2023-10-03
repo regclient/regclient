@@ -25,6 +25,7 @@ import (
 )
 
 func TestTag(t *testing.T) {
+	t.Parallel()
 	repoPath := "/proj"
 	repoPath2 := "/proj2"
 	pageLen := 2

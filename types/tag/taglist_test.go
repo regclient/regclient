@@ -15,6 +15,7 @@ import (
 )
 
 func TestNew(t *testing.T) {
+	t.Parallel()
 	emptyRaw := []byte("{}")
 	registryTags := []string{"cache", "edge", "edge-alpine", "alpine", "latest"}
 	reqURL, err := url.Parse("http://localhost:5000/v2/regclient/test/tag/list")
@@ -245,6 +246,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestAppend(t *testing.T) {
+	t.Parallel()
 	expectTags := []string{"1", "2", "3", "4", "5", "6"}
 	tl1, err := New(
 		WithTags(expectTags[:3]),

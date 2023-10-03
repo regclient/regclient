@@ -26,6 +26,7 @@ import (
 )
 
 func TestReferrer(t *testing.T) {
+	t.Parallel()
 	// setup http server with and without API support
 	ctx := context.Background()
 	repoPath := "/proj"

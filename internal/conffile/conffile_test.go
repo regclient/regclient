@@ -12,6 +12,7 @@ import (
 
 // test New
 func TestNew(t *testing.T) {
+	t.Parallel()
 	testEnvFileVar, testEnvFileVal := "TEST_CONFFILE_NEW", "./test-filename.json"
 	os.Setenv(testEnvFileVar, testEnvFileVal)
 	testEnvDirVar, testEnvDirVal := "TEST_CONFDIR_NEW", "./test-dirname"
@@ -100,6 +101,7 @@ func TestNew(t *testing.T) {
 
 // TestWriteOpen test Write and Open using MemFS
 func TestWriteOpen(t *testing.T) {
+	t.Parallel()
 	memfs := rwfs.MemNew()
 	confContent := []byte("hello test")
 	cf := New(WithFS(memfs), WithFullname("test.json"))

@@ -25,6 +25,7 @@ import (
 )
 
 func TestManifest(t *testing.T) {
+	t.Parallel()
 	repoPath := "/proj"
 	getTag := "get"
 	headTag := "head"
@@ -378,5 +379,4 @@ func TestManifest(t *testing.T) {
 			return
 		}
 	})
-
 }
