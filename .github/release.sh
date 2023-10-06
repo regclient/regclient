@@ -41,6 +41,7 @@ generate_changelog() {
   echo "# Release ${1}\n\nChanges:\n"
   hashes="$(git log --reverse --merges --format="%h" "${prev_tag}..HEAD")"
   prs=""
+  users=""
   for hash in ${hashes}; do
     subj="$(git show --format=%s ${hash})"
     pr="${subj#Merge pull request #}"
@@ -52,8 +53,15 @@ generate_changelog() {
         echo "$msg"
         prs="${prs} ${pr}"
       fi
+      users="${users}\n$(get_pr_user "${pr}")"
       # msg="$(git show --format=%b ${hash})"
       # echo "- $msg ([PR ${pr}][pr-${pr}])"
+    fi
+  done
+  echo "\nContributors:\n"
+  for user in $(echo "$users" | sort -u); do
+    if [ -n "$user" ]; then
+      echo "- @${user}"
     fi
   done
   echo
@@ -76,6 +84,14 @@ get_pr_changelog() {
   | grep -B 99 '### Please verify' \
   | grep -v -e '^###' -e '<!--' -e '^\s*$' \
   | sed -e 's/^- //' -e 's/^/- /' -e 's/\r//' -e "s/\$/ ([PR ${1}][pr-${1}])/"
+}
+
+get_pr_user() {
+  curl -sL ${gh_auth:+-H "${gh_auth}"} \
+    -H "Accept: application/vnd.github+json" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    "https://api.github.com/repos/${gh_repo}/pulls/${1}" \
+  | jq -r .user.login
 }
 
 # prompt with last tag, asking for next tag, defaulting to patch update
