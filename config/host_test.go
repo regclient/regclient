@@ -12,6 +12,7 @@ import (
 )
 
 func TestConfig(t *testing.T) {
+	// cannot run cred helper in parallel because of OS working directory race conditions
 	cwd, err := os.Getwd()
 	if err != nil {
 		t.Errorf("failed checking current directory: %v", err)
@@ -439,5 +440,4 @@ func TestConfig(t *testing.T) {
 			}
 		})
 	}
-
 }

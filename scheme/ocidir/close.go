@@ -6,9 +6,10 @@ import (
 	"io/fs"
 	"path"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
-	"github.com/sirupsen/logrus"
 )
 
 // Close triggers a garbage collection if the underlying path has been modified

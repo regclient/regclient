@@ -5,6 +5,7 @@ import (
 )
 
 func TestOS(t *testing.T) {
+	t.Parallel()
 	tempDir := t.TempDir()
 	t.Logf("tempdir: %s", tempDir)
 	fs := OSNew(tempDir)

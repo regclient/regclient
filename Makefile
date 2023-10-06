@@ -27,7 +27,7 @@ endif
 MARKDOWN_LINT_VER?=v0.10.0
 GOSEC_VER?=v2.17.0
 GO_VULNCHECK_VER?=v1.0.1
-OSV_SCANNER_VER?=v1.4.0
+OSV_SCANNER_VER?=v1.4.1
 SYFT?=$(shell command -v syft 2>/dev/null)
 SYFT_CMD_VER:=$(shell [ -x "$(SYFT)" ] && echo "v$$($(SYFT) version | awk '/^Version: / {print $$2}')" || echo "0")
 SYFT_VERSION?=v0.92.0
@@ -44,11 +44,14 @@ STATICCHECK_VER?=v0.4.6
 .FORCE:
 
 .PHONY: all
-all: fmt vet test lint binaries ## Full build of Go binaries (including fmt, vet, test, and lint)
+all: fmt goimports vet test lint binaries ## Full build of Go binaries (including fmt, vet, test, and lint)
 
 .PHONY: fmt
 fmt: ## go fmt
 	go fmt ./...
+
+goimports: $(GOPATH)/bin/goimports
+	$(GOPATH)/bin/goimports -w -format-only -local github.com/regclient .
 
 .PHONY: vet
 vet: ## go vet
@@ -59,11 +62,18 @@ test: ## go test
 	go test -cover -race ./...
 
 .PHONY: lint
-lint: lint-go lint-md lint-gosec ## Run all linting
+lint: lint-go lint-goimports lint-md lint-gosec ## Run all linting
 
 .PHONY: lint-go
 lint-go: $(GOPATH)/bin/staticcheck .FORCE ## Run linting for Go
 	$(GOPATH)/bin/staticcheck -checks all ./...
+
+lint-goimports: $(GOPATH)/bin/goimports
+	@if [ -n "$$($(GOPATH)/bin/goimports -l -format-only -local github.com/regclient .)" ]; then \
+		echo $(GOPATH)/bin/goimports -d -format-only -local github.com/regclient .; \
+		$(GOPATH)/bin/goimports -d -format-only -local github.com/regclient .; \
+		exit 1; \
+	fi
 
 .PHONY: lint-gosec
 lint-gosec: $(GOPATH)/bin/gosec .FORCE ## Run gosec
@@ -106,8 +116,8 @@ docker-%: .FORCE
 oci-image: $(addprefix oci-image-,$(COMMANDS)) ## Build reproducible images to an OCI Layout
 
 oci-image-%: bin/regctl .FORCE
-	build/oci-image.sh -r scratch -i "$*" -p "$(TEST_PLATFORMS)"
-	build/oci-image.sh -r alpine  -i "$*" -p "$(TEST_PLATFORMS)" -b "alpine:3"
+	PATH="$(PWD)/bin:$(PATH)" build/oci-image.sh -r scratch -i "$*" -p "$(TEST_PLATFORMS)"
+	PATH="$(PWD)/bin:$(PATH)" build/oci-image.sh -r alpine  -i "$*" -p "$(TEST_PLATFORMS)" -b "alpine:3"
 
 .PHONY: test-docker
 test-docker: $(addprefix test-docker-,$(COMMANDS)) ## Build multi-platform docker images (but do not tag)
@@ -178,6 +188,12 @@ util-version-check: ## check all dependencies for updates
 .PHONY: util-version-update
 util-version-update: ## update versions on all dependencies
 	$(VER_BUMP) update
+
+$(GOPATH)/bin/goimports: .FORCE
+	@if [ ! -f "$(GOPATH)/bin/goimports" ] || ! go version -m "$(GOPATH)/bin/goimports" | grep -q "$$(go version | cut -f3 -d' ')"; then \
+		echo go install golang.org/x/tools/cmd/goimports@latest; \
+		go install golang.org/x/tools/cmd/goimports@latest; \
+	fi
 
 $(GOPATH)/bin/gosec: .FORCE
 	@[ -f $(GOPATH)/bin/gosec ] \

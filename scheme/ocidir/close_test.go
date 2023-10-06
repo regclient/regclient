@@ -6,11 +6,13 @@ import (
 	"testing"
 
 	"github.com/opencontainers/go-digest"
+
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/types/ref"
 )
 
 func TestClose(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	fsOS := rwfs.OSNew("")
 	fsMem := rwfs.MemNew()
@@ -83,5 +85,4 @@ func TestClose(t *testing.T) {
 			fh.Close()
 		}
 	}
-
 }

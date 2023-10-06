@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/opencontainers/go-digest"
+
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/pkg/archive"
 	"github.com/regclient/regclient/types"
@@ -20,7 +21,7 @@ import (
 // Opts defines options for Apply
 type Opts func(*dagConfig, *dagManifest) error
 
-// OptTime defines time settings for WithConfigTimestamp and WithLayerTimestamp
+// OptTime defines time settings for [WithConfigTimestamp] and [WithLayerTimestamp].
 type OptTime struct {
 	Set        time.Time // time to set, this or FromLabel are required
 	FromLabel  string    // label from which to extract set time
@@ -43,7 +44,7 @@ var (
 	}
 )
 
-// Apply applies a set of modifications to an image (manifest, configs, and layers)
+// Apply applies a set of modifications to an image (manifest, configs, and layers).
 func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...Opts) (ref.Ref, error) {
 	// check for the various types of mods (manifest, config, layer)
 	// some may span like copying layers from config to manifest

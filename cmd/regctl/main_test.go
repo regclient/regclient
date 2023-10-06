@@ -2,18 +2,27 @@ package main
 
 import (
 	"bytes"
+	"io"
 	"strings"
 	"testing"
 )
 
-func cobraTest(t *testing.T, args ...string) (string, error) {
+type cobraTestOpts struct {
+	stdin io.Reader
+}
+
+func cobraTest(t *testing.T, opts *cobraTestOpts, args ...string) (string, error) {
 	t.Helper()
 
 	buf := new(bytes.Buffer)
-	rootCmd.SetOut(buf)
-	rootCmd.SetErr(buf)
-	rootCmd.SetArgs(args)
+	rootTopCmd := NewRootCmd()
+	if opts != nil && opts.stdin != nil {
+		rootTopCmd.SetIn(opts.stdin)
+	}
+	rootTopCmd.SetOut(buf)
+	rootTopCmd.SetErr(buf)
+	rootTopCmd.SetArgs(args)
 
-	err := rootCmd.Execute()
+	err := rootTopCmd.Execute()
 	return strings.TrimSpace(buf.String()), err
 }

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/opencontainers/go-digest"
+
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/auth"
 	"github.com/regclient/regclient/internal/reqresp"
@@ -26,6 +27,7 @@ import (
 // TODO: test rate limits and concurrency
 
 func TestRegHttp(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	// setup req/resp
 	useragent := "regclient/test"

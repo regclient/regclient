@@ -9,6 +9,7 @@ import (
 )
 
 func TestMarshal(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		d      Duration
@@ -41,6 +42,7 @@ func TestMarshal(t *testing.T) {
 }
 
 func TestUnmarshal(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		str    string

@@ -14,16 +14,18 @@ import (
 	"time"
 
 	"github.com/opencontainers/go-digest"
+	"github.com/sirupsen/logrus"
+
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/reqresp"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/docker/schema2"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
-	"github.com/sirupsen/logrus"
 )
 
 func TestManifest(t *testing.T) {
+	t.Parallel()
 	repoPath := "/proj"
 	getTag := "get"
 	headTag := "head"
@@ -377,5 +379,4 @@ func TestManifest(t *testing.T) {
 			return
 		}
 	})
-
 }

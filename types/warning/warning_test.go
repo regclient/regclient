@@ -10,6 +10,7 @@ import (
 )
 
 func TestWarning(t *testing.T) {
+	t.Parallel()
 	msg1 := "test 1"
 	msg2 := "test 2"
 	ctxBase := context.Background()

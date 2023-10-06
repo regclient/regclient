@@ -11,15 +11,16 @@ import (
 	_ "crypto/sha512"
 
 	digest "github.com/opencontainers/go-digest"
+
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/docker/schema1"
 	"github.com/regclient/regclient/types/platform"
 )
 
 const (
-	// MediaTypeDocker1Manifest deprecated media type for docker schema1 manifests
+	// MediaTypeDocker1Manifest deprecated media type for docker schema1 manifests.
 	MediaTypeDocker1Manifest = "application/vnd.docker.distribution.manifest.v1+json"
-	// MediaTypeDocker1ManifestSigned is a deprecated schema1 manifest with jws signing
+	// MediaTypeDocker1ManifestSigned is a deprecated schema1 manifest with jws signing.
 	MediaTypeDocker1ManifestSigned = "application/vnd.docker.distribution.manifest.v1+prettyjws"
 )
 
@@ -98,6 +99,14 @@ func (m *docker1Manifest) GetPlatformList() ([]*platform.Platform, error) {
 }
 func (m *docker1SignedManifest) GetPlatformList() ([]*platform.Platform, error) {
 	return nil, fmt.Errorf("platform list not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
+}
+
+func (m *docker1Manifest) GetSize() (int64, error) {
+	return 0, fmt.Errorf("GetSize is not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
+}
+
+func (m *docker1SignedManifest) GetSize() (int64, error) {
+	return 0, fmt.Errorf("GetSize is not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
 }
 
 func (m *docker1Manifest) MarshalJSON() ([]byte, error) {

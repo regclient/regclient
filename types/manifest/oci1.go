@@ -12,6 +12,7 @@ import (
 	_ "crypto/sha512"
 
 	digest "github.com/opencontainers/go-digest"
+
 	"github.com/regclient/regclient/internal/units"
 	"github.com/regclient/regclient/types"
 	v1 "github.com/regclient/regclient/types/oci/v1"
@@ -428,6 +429,30 @@ func (m *oci1Artifact) SetLayers(dl []types.Descriptor) error {
 	}
 	m.Blobs = dl
 	return m.updateDesc()
+}
+
+// GetSize returns the size in bytes of all layers
+func (m *oci1Manifest) GetSize() (int64, error) {
+	if !m.manifSet {
+		return 0, types.ErrManifestNotSet
+	}
+	var total int64
+	for _, d := range m.Layers {
+		total += d.Size
+	}
+	return total, nil
+}
+
+// GetSize returns the size in bytes of all layers
+func (m *oci1Artifact) GetSize() (int64, error) {
+	if !m.manifSet {
+		return 0, types.ErrManifestNotSet
+	}
+	var total int64
+	for _, d := range m.Blobs {
+		total += d.Size
+	}
+	return total, nil
 }
 
 func (m *oci1Manifest) SetLayers(dl []types.Descriptor) error {

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/opencontainers/go-digest"
+
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
@@ -42,7 +43,7 @@ func WithLayerReproducible() Opts {
 }
 
 // WithLayerRmCreatedBy deletes a layer based on a regex of the created by field
-// in the config history for that layer
+// in the config history for that layer.
 func WithLayerRmCreatedBy(re regexp.Regexp) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
@@ -125,7 +126,7 @@ func WithLayerRmIndex(index int) Opts {
 	}
 }
 
-// WithLayerStripFile removes a file from within the layer tar
+// WithLayerStripFile removes a file from within the layer tar.
 func WithLayerStripFile(file string) Opts {
 	file = strings.Trim(file, "/")
 	fileRE := regexp.MustCompile("^/?" + regexp.QuoteMeta(file) + "(/.*)?$")
@@ -140,7 +141,7 @@ func WithLayerStripFile(file string) Opts {
 	}
 }
 
-// WithLayerTimestamp sets the timestamp on files in the layers based on options
+// WithLayerTimestamp sets the timestamp on files in the layers based on options.
 func WithLayerTimestamp(optTime OptTime) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		if optTime.Set.IsZero() && optTime.FromLabel == "" {
@@ -275,9 +276,9 @@ func layerGetBaseRef(c context.Context, rc *regclient.RegClient, r ref.Ref, m ma
 	return dl, nil
 }
 
-// WithLayerTimestampFromLabel sets the max layer timestamp based on a label in the image
+// WithLayerTimestampFromLabel sets the max layer timestamp based on a label in the image.
 //
-// Deprecated: replace with WithLayerTimestamp
+// Deprecated: replace with [WithLayerTimestamp].
 func WithLayerTimestampFromLabel(label string) Opts {
 	t := time.Time{}
 	return func(dc *dagConfig, dm *dagManifest) error {
@@ -329,9 +330,9 @@ func WithLayerTimestampFromLabel(label string) Opts {
 	}
 }
 
-// WithLayerTimestampMax ensures no file timestamps are after specified time
+// WithLayerTimestampMax ensures no file timestamps are after specified time.
 //
-// Deprecated: replace with WithLayerTimestamp
+// Deprecated: replace with [WithLayerTimestamp].
 func WithLayerTimestampMax(t time.Time) Opts {
 	return WithLayerTimestamp(OptTime{
 		Set:   t,
@@ -339,7 +340,7 @@ func WithLayerTimestampMax(t time.Time) Opts {
 	})
 }
 
-// WithFileTarTime processes a tar file within a layer and adjusts the timestamps according to optTime
+// WithFileTarTime processes a tar file within a layer and adjusts the timestamps according to optTime.
 func WithFileTarTime(name string, optTime OptTime) Opts {
 	name = strings.TrimPrefix(name, "/")
 	return func(dc *dagConfig, dm *dagManifest) error {
@@ -480,9 +481,9 @@ func WithFileTarTime(name string, optTime OptTime) Opts {
 	}
 }
 
-// WithFileTarTimeMax processes a tar file within a layer and rewrites the contents with a max timestamp
+// WithFileTarTimeMax processes a tar file within a layer and rewrites the contents with a max timestamp.
 //
-// Deprecated: replace with WithFileTarTime
+// Deprecated: replace with [WithFileTarTime].
 func WithFileTarTimeMax(name string, t time.Time) Opts {
 	return WithFileTarTime(name, OptTime{
 		Set:   t,
@@ -496,7 +497,7 @@ type tmpReader struct {
 	filename string
 }
 
-// Read for tmpReader passes through the read and deletes the tmp file when the read completes
+// Read for tmpReader passes through the read and deletes the tmp file when the read completes.
 func (t *tmpReader) Read(p []byte) (int, error) {
 	if t.file == nil {
 		return 0, io.EOF

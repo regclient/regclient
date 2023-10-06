@@ -12,14 +12,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/reqresp"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
-	"github.com/sirupsen/logrus"
 )
 
 func TestRepo(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	partialLen := 2
 	listRegistry := []string{

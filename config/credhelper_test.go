@@ -7,6 +7,7 @@ import (
 )
 
 func TestCredHelper(t *testing.T) {
+	// cannot run cred helper in parallel because of OS working directory race conditions
 	tests := []struct {
 		name        string
 		host        string

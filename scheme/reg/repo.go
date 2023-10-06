@@ -8,11 +8,12 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/regclient/regclient/internal/reghttp"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/repo"
-	"github.com/sirupsen/logrus"
 )
 
 // RepoList returns a list of repositories on a registry

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/opencontainers/go-digest"
+
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	v1 "github.com/regclient/regclient/types/oci/v1"
@@ -168,6 +169,7 @@ func init() {
 }
 
 func TestEmpty(t *testing.T) {
+	t.Parallel()
 	// create an empty list and full list, test is empty
 	rlEmpty := &ReferrerList{
 		Descriptors: []types.Descriptor{},
@@ -214,6 +216,7 @@ func TestEmpty(t *testing.T) {
 }
 
 func TestAdd(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name        string
 		m           manifest.Manifest
@@ -283,6 +286,7 @@ func TestAdd(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
+	t.Parallel()
 	rl := &ReferrerList{
 		Descriptors: []types.Descriptor{
 			dOCIImg,

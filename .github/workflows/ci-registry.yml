@@ -30,7 +30,7 @@ jobs:
       id: go
 
     - name: Build
-      run: make
+      run: make binaries
 
     - name: Registry - Distribution
       run: make ci-distribution

@@ -11,6 +11,7 @@ import (
 )
 
 func TestTag(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	fsOS := rwfs.OSNew("")
 	fsMem := rwfs.MemNew()

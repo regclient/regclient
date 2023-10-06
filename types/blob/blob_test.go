@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/opencontainers/go-digest"
+
 	"github.com/regclient/regclient/types"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/ref"

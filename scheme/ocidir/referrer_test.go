@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/opencontainers/go-digest"
+	"github.com/sirupsen/logrus"
+
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
@@ -14,10 +16,10 @@ import (
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
-	"github.com/sirupsen/logrus"
 )
 
 func TestReferrer(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	fsOS := rwfs.OSNew("")
 	fsMem := rwfs.MemNew()
@@ -347,7 +349,6 @@ func TestReferrer(t *testing.T) {
 			return
 		}
 	})
-
 }
 
 func mapStringStringEq(a, b map[string]string) bool {

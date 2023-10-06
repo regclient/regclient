@@ -15,7 +15,7 @@ import (
 	"github.com/regclient/regclient/types/ref"
 )
 
-// WithBuildArgRm removes a build arg from the config history
+// WithBuildArgRm removes a build arg from the config history.
 func WithBuildArgRm(arg string, value *regexp.Regexp) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
@@ -54,7 +54,7 @@ func WithBuildArgRm(arg string, value *regexp.Regexp) Opts {
 	}
 }
 
-// WithConfigTimestamp sets the timestamp on the config entries based on options
+// WithConfigTimestamp sets the timestamp on the config entries based on options.
 func WithConfigTimestamp(optTime OptTime) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		if optTime.Set.IsZero() && optTime.FromLabel == "" {
@@ -161,9 +161,9 @@ func WithConfigTimestamp(optTime OptTime) Opts {
 	}
 }
 
-// WithConfigTimestampFromLabel sets the max timestamp in the config to match a label value
+// WithConfigTimestampFromLabel sets the max timestamp in the config to match a label value.
 //
-// Deprecated: replace with WithConfigTimestamp
+// Deprecated: replace with [WithConfigTimestamp].
 func WithConfigTimestampFromLabel(label string) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
@@ -202,9 +202,9 @@ func WithConfigTimestampFromLabel(label string) Opts {
 	}
 }
 
-// WithConfigTimestampMax sets the max timestamp on any config objects
+// WithConfigTimestampMax sets the max timestamp on any config objects.
 //
-// Deprecated: replace with WithConfigTimestamp
+// Deprecated: replace with [WithConfigTimestamp].
 func WithConfigTimestampMax(t time.Time) Opts {
 	return WithConfigTimestamp(OptTime{
 		Set:   t,
@@ -212,7 +212,7 @@ func WithConfigTimestampMax(t time.Time) Opts {
 	})
 }
 
-// WithExposeAdd defines an exposed port in the image config
+// WithExposeAdd defines an exposed port in the image config.
 func WithExposeAdd(port string) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
@@ -236,7 +236,7 @@ func WithExposeAdd(port string) Opts {
 	}
 }
 
-// WithExposeRm deletes an exposed from the image config
+// WithExposeRm deletes an exposed from the image config.
 func WithExposeRm(port string) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
@@ -260,7 +260,7 @@ func WithExposeRm(port string) Opts {
 	}
 }
 
-// WithLabel sets or deletes a label from the image config
+// WithLabel sets or deletes a label from the image config.
 func WithLabel(name, value string) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		// extract the list for platforms to update from the name
@@ -321,7 +321,7 @@ func WithLabel(name, value string) Opts {
 	}
 }
 
-// WithVolumeAdd defines a volume in the image config
+// WithVolumeAdd defines a volume in the image config.
 func WithVolumeAdd(volume string) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
@@ -345,7 +345,7 @@ func WithVolumeAdd(volume string) Opts {
 	}
 }
 
-// WithVolumeRm deletes a volume from the image config
+// WithVolumeRm deletes a volume from the image config.
 func WithVolumeRm(volume string) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {

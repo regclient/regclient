@@ -16,14 +16,16 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/opencontainers/go-digest"
+	"github.com/sirupsen/logrus"
+
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/reqresp"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/ref"
-	"github.com/sirupsen/logrus"
 )
 
 func TestBlobGet(t *testing.T) {
+	t.Parallel()
 	blobRepo := "/proj/repo"
 	externalRepo := "/proj/external"
 	privateRepo := "/proj/private"
@@ -358,10 +360,10 @@ func TestBlobGet(t *testing.T) {
 			t.Errorf("Error does not match \"ErrUnauthorized\": %v", err)
 		}
 	})
-
 }
 
 func TestBlobPut(t *testing.T) {
+	t.Parallel()
 	blobRepo := "/proj/repo"
 	// privateRepo := "/proj/private"
 	ctx := context.Background()

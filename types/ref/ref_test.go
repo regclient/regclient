@@ -9,6 +9,7 @@ import (
 )
 
 func TestRef(t *testing.T) {
+	t.Parallel()
 	var tests = []struct {
 		name       string
 		ref        string
@@ -422,6 +423,7 @@ func TestRef(t *testing.T) {
 }
 
 func TestCommon(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		str  string
@@ -459,6 +461,7 @@ func TestCommon(t *testing.T) {
 }
 
 func TestEqual(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		a, b       Ref
@@ -596,6 +599,7 @@ func TestEqual(t *testing.T) {
 }
 
 func TestToReg(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		inRef  string
@@ -635,5 +639,4 @@ func TestToReg(t *testing.T) {
 			}
 		})
 	}
-
 }

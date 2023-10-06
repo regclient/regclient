@@ -3,11 +3,13 @@ package regclient
 import (
 	"testing"
 
-	"github.com/regclient/regclient/scheme/reg"
 	"github.com/sirupsen/logrus"
+
+	"github.com/regclient/regclient/scheme/reg"
 )
 
 func TestNew(t *testing.T) {
+	t.Parallel()
 	logPtr := logrus.New()
 	tt := []struct {
 		name   string
@@ -98,5 +100,4 @@ func TestNew(t *testing.T) {
 			}
 		})
 	}
-
 }

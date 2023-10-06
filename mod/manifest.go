@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/opencontainers/go-digest"
+
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/docker/schema2"
@@ -91,7 +92,7 @@ func WithAnnotation(name, value string) Opts {
 	}
 }
 
-// WithAnnotationOCIBase adds annotations for the base image
+// WithAnnotationOCIBase adds annotations for the base image.
 func WithAnnotationOCIBase(rBase ref.Ref, dBase digest.Digest) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsManifest = append(dc.stepsManifest, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
@@ -157,7 +158,7 @@ func WithAnnotationOCIBase(rBase ref.Ref, dBase digest.Digest) Opts {
 	}
 }
 
-// WithLabelToAnnotation copies image config labels to manifest annotations
+// WithLabelToAnnotation copies image config labels to manifest annotations.
 func WithLabelToAnnotation() Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
@@ -209,7 +210,7 @@ func WithLabelToAnnotation() Opts {
 	}
 }
 
-// WithManifestToDocker converts the manifest to Docker schema2 media types
+// WithManifestToDocker converts the manifest to Docker schema2 media types.
 func WithManifestToDocker() Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
@@ -281,7 +282,7 @@ func WithManifestToDocker() Opts {
 	}
 }
 
-// WithManifestToOCI converts the manifest to OCI media types
+// WithManifestToOCI converts the manifest to OCI media types.
 func WithManifestToOCI() Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
@@ -345,7 +346,7 @@ const (
 	dockerReferenceDigest = "vnd.docker.reference.digest"
 )
 
-// WithManifestToOCIReferrers converts other referrer types to OCI subject/referrers
+// WithManifestToOCIReferrers converts other referrer types to OCI subject/referrers.
 func WithManifestToOCIReferrers() Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsManifest = append(dc.stepsManifest, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
@@ -422,7 +423,7 @@ func WithManifestToOCIReferrers() Opts {
 	}
 }
 
-// WithExternalURLsRm strips external URLs from descriptors and adjusts media type to match
+// WithExternalURLsRm strips external URLs from descriptors and adjusts media type to match.
 func WithExternalURLsRm() Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsManifest = append(dc.stepsManifest, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
@@ -489,6 +490,7 @@ func WithExternalURLsRm() Opts {
 	}
 }
 
+// WithRebase attempts to rebase the image using OCI annotations identifying the base image.
 func WithRebase() Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		ma, ok := dm.m.(manifest.Annotator)
@@ -522,7 +524,7 @@ func WithRebase() Opts {
 	}
 }
 
-// WithRebaseRefs swaps the base image layers from the old to the new reference
+// WithRebaseRefs swaps the base image layers from the old to the new reference.
 func WithRebaseRefs(rOld, rNew ref.Ref) Opts {
 	// cache old and new manifests, variable is nil until first pulled
 	return func(dc *dagConfig, dm *dagManifest) error {

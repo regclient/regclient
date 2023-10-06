@@ -14,13 +14,14 @@ import (
 	_ "crypto/sha512"
 
 	"github.com/opencontainers/go-digest"
+	"github.com/sirupsen/logrus"
+
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/internal/wraperr"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
-	"github.com/sirupsen/logrus"
 )
 
 // ManifestDelete removes a manifest, including all tags that point to that manifest

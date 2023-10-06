@@ -6,12 +6,13 @@ import (
 	"io"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/regclient/regclient/internal/throttle"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
 	"github.com/regclient/regclient/types/ref"
-	"github.com/sirupsen/logrus"
 )
 
 const blobCBFreq = time.Millisecond * 100

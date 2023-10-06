@@ -7,8 +7,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/regclient/regclient/internal/godbg"
 	"github.com/sirupsen/logrus"
+
+	"github.com/regclient/regclient/internal/godbg"
 )
 
 func main() {
@@ -23,7 +24,8 @@ func main() {
 	}()
 	godbg.SignalTrace()
 
-	if err := rootCmd.ExecuteContext(ctx); err != nil {
+	rootTopCmd := NewRootCmd()
+	if err := rootTopCmd.ExecuteContext(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}

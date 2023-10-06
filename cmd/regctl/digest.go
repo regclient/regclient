@@ -13,20 +13,27 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// TODO: identify a more appropriate location for this command, leave it hidden until then
-var digestCmd = &cobra.Command{
-	Hidden: true,
-	Use:    "digest",
-	Short:  "compute digest on stdin",
-	Args:   cobra.RangeArgs(0, 0),
-	RunE:   runDigest,
+type digestCmd struct {
+	rootOpts *rootCmd
 }
 
-func init() {
-	rootCmd.AddCommand(digestCmd)
+func NewDigestCmd(rootOpts *rootCmd) *cobra.Command {
+	digestOpts := digestCmd{
+		rootOpts: rootOpts,
+	}
+	// TODO: identify a more appropriate location for this command, leave it hidden until then
+	var digestCmd = &cobra.Command{
+		Hidden: true,
+		Use:    "digest",
+		Short:  "compute digest on stdin",
+		Args:   cobra.RangeArgs(0, 0),
+		RunE:   digestOpts.runDigest,
+	}
+
+	return digestCmd
 }
 
-func runDigest(cmd *cobra.Command, args []string) error {
+func (digestOpts *digestCmd) runDigest(cmd *cobra.Command, args []string) error {
 	digester := digest.Canonical.Digester()
 
 	_, err := io.Copy(digester.Hash(), os.Stdin)

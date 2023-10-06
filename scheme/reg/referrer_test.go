@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/opencontainers/go-digest"
+	"github.com/sirupsen/logrus"
+
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/reqresp"
 	"github.com/regclient/regclient/scheme"
@@ -21,10 +23,10 @@ import (
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
-	"github.com/sirupsen/logrus"
 )
 
 func TestReferrer(t *testing.T) {
+	t.Parallel()
 	// setup http server with and without API support
 	ctx := context.Background()
 	repoPath := "/proj"

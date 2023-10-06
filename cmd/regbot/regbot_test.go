@@ -154,8 +154,10 @@ func TestRegbot(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rootOpts.dryRun = tt.dryrun
-			err = tt.script.process(ctx)
+			rootOpts := rootCmd{
+				dryRun: tt.dryrun,
+			}
+			err = rootOpts.process(ctx, tt.script)
 			if tt.expErr != nil {
 				if err == nil {
 					t.Errorf("process did not fail")

@@ -6,15 +6,17 @@ import (
 	"os"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/ref"
-	"github.com/spf13/cobra"
 )
 
-var completionCmd = &cobra.Command{
-	Use:   "completion [bash|zsh|fish|powershell]",
-	Short: "Generate completion script",
-	Long: fmt.Sprintf(`To load completions:
+func NewCompletionCmd(rootOpts *rootCmd) *cobra.Command {
+	var completionTopCmd = &cobra.Command{
+		Use:   "completion [bash|zsh|fish|powershell]",
+		Short: "Generate completion script",
+		Long: fmt.Sprintf(`To load completions:
 
 Bash:
 
@@ -52,29 +54,39 @@ PowerShell:
   # To load completions for every new session, run:
   PS> %[1]s completion powershell > %[1]s.ps1
   # and source this file from your PowerShell profile.
-`, rootCmd.Root().Name()),
-	DisableFlagsInUseLine: true,
-	ValidArgs:             []string{"bash", "zsh", "fish", "powershell"},
-	Args:                  cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
-	Run: func(cmd *cobra.Command, args []string) {
-		switch args[0] {
-		case "bash":
-			_ = cmd.Root().GenBashCompletionV2(os.Stdout, true)
-		case "zsh":
-			_ = cmd.Root().GenZshCompletion(os.Stdout)
-		case "fish":
-			_ = cmd.Root().GenFishCompletion(os.Stdout, true)
-		case "powershell":
-			_ = cmd.Root().GenPowerShellCompletionWithDesc(os.Stdout)
-		}
-	},
-}
+`, rootOpts.name),
+		DisableFlagsInUseLine: true,
+		ValidArgs:             []string{"bash", "zsh", "fish", "powershell"},
+		Args:                  cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
+		Run: func(cmd *cobra.Command, args []string) {
+			switch args[0] {
+			case "bash":
+				_ = cmd.Root().GenBashCompletionV2(os.Stdout, true)
+			case "zsh":
+				_ = cmd.Root().GenZshCompletion(os.Stdout)
+			case "fish":
+				_ = cmd.Root().GenFishCompletion(os.Stdout, true)
+			case "powershell":
+				_ = cmd.Root().GenPowerShellCompletionWithDesc(os.Stdout)
+			}
+		},
+	}
 
-func init() {
-	rootCmd.AddCommand(completionCmd)
+	return completionTopCmd
 }
 
 type completeFunc func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective)
+
+// completeArgList takes a list of completion functions and completes each arg separately
+func completeArgList(funcList []completeFunc) completeFunc {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		pos := len(args)
+		if pos >= len(funcList) {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		return funcList[pos](cmd, args, toComplete)
+	}
+}
 
 func completeArgNone(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	return nil, cobra.ShellCompDirectiveNoFileComp
@@ -104,18 +116,7 @@ func completeArgMediaTypeManifest(cmd *cobra.Command, args []string, toComplete 
 	}, cobra.ShellCompDirectiveNoFileComp
 }
 
-// completeArgList takes a list of completion functions and completes each arg separately
-func completeArgList(funcList []completeFunc) completeFunc {
-	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		pos := len(args)
-		if pos >= len(funcList) {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-		return funcList[pos](cmd, args, toComplete)
-	}
-}
-
-func completeArgTag(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func (rootOpts *rootCmd) completeArgTag(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	result := []string{}
 	// TODO: is it possible to expand registry, then repo, then tag?
 	input := strings.TrimRight(toComplete, ":")
@@ -123,7 +124,7 @@ func completeArgTag(cmd *cobra.Command, args []string, toComplete string) ([]str
 	if err != nil || r.Digest != "" {
 		return result, cobra.ShellCompDirectiveNoFileComp
 	}
-	rc := newRegClient()
+	rc := rootOpts.newRegClient()
 	tl, err := rc.TagList(context.Background(), r)
 	if err != nil {
 		return result, cobra.ShellCompDirectiveNoFileComp

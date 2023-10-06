@@ -9,53 +9,16 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/config"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
+
+	"github.com/regclient/regclient"
+	"github.com/regclient/regclient/config"
 )
 
-var registryCmd = &cobra.Command{
-	Use:   "registry <cmd>",
-	Short: "manage registries",
-}
-var registryConfigCmd = &cobra.Command{
-	Use:   "config [registry]",
-	Short: "show registry config",
-	Long: `Displays the configuration used for a registry. Secrets are not included
-in the output (e.g. passwords, tokens, and TLS keys).`,
-	Args:              cobra.RangeArgs(0, 1),
-	ValidArgsFunction: registryArgListReg,
-	RunE:              runRegistryConfig,
-}
-var registryLoginCmd = &cobra.Command{
-	Use:   "login <registry>",
-	Short: "login to a registry",
-	Long: `Provide login credentials for a registry. This may not be necessary if you
-have already logged in with docker.`,
-	Args:              cobra.RangeArgs(0, 1),
-	ValidArgsFunction: registryArgListReg,
-	RunE:              runRegistryLogin,
-}
-var registryLogoutCmd = &cobra.Command{
-	Use:               "logout <registry>",
-	Short:             "logout of a registry",
-	Long:              `Remove registry credentials from the configuration.`,
-	Args:              cobra.RangeArgs(0, 1),
-	ValidArgsFunction: registryArgListReg,
-	RunE:              runRegistryLogout,
-}
-var registrySetCmd = &cobra.Command{
-	Use:   "set <registry>",
-	Short: "set options on a registry",
-	Long: `Set or modify the configuration of a registry. To pass a certificate, include
-the contents of the file, e.g. --cacert "$(cat reg-ca.crt)"`,
-	Args:              cobra.RangeArgs(0, 1),
-	ValidArgsFunction: registryArgListReg,
-	RunE:              runRegistrySet,
-}
-var registryOpts struct {
+type registryCmd struct {
+	rootOpts             *rootCmd
 	user, pass           string // login opts
 	passStdin            bool
 	credHelper           string
@@ -74,7 +37,50 @@ var registryOpts struct {
 	dns                  []string // TODO: remove
 }
 
-func init() {
+func NewRegistryCmd(rootOpts *rootCmd) *cobra.Command {
+	registryOpts := registryCmd{
+		rootOpts: rootOpts,
+	}
+	var registryTopCmd = &cobra.Command{
+		Use:   "registry <cmd>",
+		Short: "manage registries",
+	}
+	var registryConfigCmd = &cobra.Command{
+		Use:   "config [registry]",
+		Short: "show registry config",
+		Long: `Displays the configuration used for a registry. Secrets are not included
+in the output (e.g. passwords, tokens, and TLS keys).`,
+		Args:              cobra.RangeArgs(0, 1),
+		ValidArgsFunction: registryArgListReg,
+		RunE:              registryOpts.runRegistryConfig,
+	}
+	var registryLoginCmd = &cobra.Command{
+		Use:   "login <registry>",
+		Short: "login to a registry",
+		Long: `Provide login credentials for a registry. This may not be necessary if you
+have already logged in with docker.`,
+		Args:              cobra.RangeArgs(0, 1),
+		ValidArgsFunction: registryArgListReg,
+		RunE:              registryOpts.runRegistryLogin,
+	}
+	var registryLogoutCmd = &cobra.Command{
+		Use:               "logout <registry>",
+		Short:             "logout of a registry",
+		Long:              `Remove registry credentials from the configuration.`,
+		Args:              cobra.RangeArgs(0, 1),
+		ValidArgsFunction: registryArgListReg,
+		RunE:              registryOpts.runRegistryLogout,
+	}
+	var registrySetCmd = &cobra.Command{
+		Use:   "set <registry>",
+		Short: "set options on a registry",
+		Long: `Set or modify the configuration of a registry. To pass a certificate, include
+the contents of the file, e.g. --cacert "$(cat reg-ca.crt)"`,
+		Args:              cobra.RangeArgs(0, 1),
+		ValidArgsFunction: registryArgListReg,
+		RunE:              registryOpts.runRegistrySet,
+	}
+
 	registryLoginCmd.Flags().StringVarP(&registryOpts.user, "user", "u", "", "Username")
 	registryLoginCmd.Flags().StringVarP(&registryOpts.pass, "pass", "p", "", "Password")
 	registryLoginCmd.Flags().BoolVarP(&registryOpts.passStdin, "pass-stdin", "", false, "Read password from stdin")
@@ -117,11 +123,11 @@ func init() {
 	_ = registrySetCmd.Flags().MarkHidden("scheme")
 	_ = registrySetCmd.Flags().MarkHidden("dns")
 
-	registryCmd.AddCommand(registryConfigCmd)
-	registryCmd.AddCommand(registryLoginCmd)
-	registryCmd.AddCommand(registryLogoutCmd)
-	registryCmd.AddCommand(registrySetCmd)
-	rootCmd.AddCommand(registryCmd)
+	registryTopCmd.AddCommand(registryConfigCmd)
+	registryTopCmd.AddCommand(registryLoginCmd)
+	registryTopCmd.AddCommand(registryLogoutCmd)
+	registryTopCmd.AddCommand(registrySetCmd)
+	return registryTopCmd
 }
 
 func registryArgListReg(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -138,7 +144,7 @@ func registryArgListReg(cmd *cobra.Command, args []string, toComplete string) ([
 	return result, cobra.ShellCompDirectiveNoFileComp
 }
 
-func runRegistryConfig(cmd *cobra.Command, args []string) error {
+func (registryOpts *registryCmd) runRegistryConfig(cmd *cobra.Command, args []string) error {
 	c, err := ConfigLoadDefault()
 	if err != nil {
 		return err
@@ -173,7 +179,7 @@ func runRegistryConfig(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runRegistryLogin(cmd *cobra.Command, args []string) error {
+func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []string) error {
 	c, err := ConfigLoadDefault()
 	if err != nil {
 		return err
@@ -257,7 +263,7 @@ func runRegistryLogin(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runRegistryLogout(cmd *cobra.Command, args []string) error {
+func (registryOpts *registryCmd) runRegistryLogout(cmd *cobra.Command, args []string) error {
 	c, err := ConfigLoadDefault()
 	if err != nil {
 		return err
@@ -289,7 +295,7 @@ func runRegistryLogout(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runRegistrySet(cmd *cobra.Command, args []string) error {
+func (registryOpts *registryCmd) runRegistrySet(cmd *cobra.Command, args []string) error {
 	c, err := ConfigLoadDefault()
 	if err != nil {
 		return err

@@ -3,34 +3,39 @@ package main
 import (
 	"strings"
 
-	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/scheme"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+
+	"github.com/regclient/regclient/pkg/template"
+	"github.com/regclient/regclient/scheme"
 )
 
-var repoCmd = &cobra.Command{
-	Use:   "repo <cmd>",
-	Short: "manage repositories",
+type repoCmd struct {
+	rootOpts *rootCmd
+	last     string
+	limit    int
+	format   string
 }
-var repoLsCmd = &cobra.Command{
-	Use:     "ls <registry>",
-	Aliases: []string{"list"},
-	Short:   "list repositories in a registry",
-	Long: `List repositories in a registry.
+
+func NewRepoCmd(rootOpts *rootCmd) *cobra.Command {
+	repoOpts := repoCmd{
+		rootOpts: rootOpts,
+	}
+	var repoTopCmd = &cobra.Command{
+		Use:   "repo <cmd>",
+		Short: "manage repositories",
+	}
+	var repoLsCmd = &cobra.Command{
+		Use:     "ls <registry>",
+		Aliases: []string{"list"},
+		Short:   "list repositories in a registry",
+		Long: `List repositories in a registry.
 Note: Docker Hub does not support this API request.`,
-	Args:              cobra.ExactArgs(1),
-	ValidArgsFunction: registryArgListReg,
-	RunE:              runRepoLs,
-}
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: registryArgListReg,
+		RunE:              repoOpts.runRepoLs,
+	}
 
-var repoOpts struct {
-	last   string
-	limit  int
-	format string
-}
-
-func init() {
 	repoLsCmd.Flags().StringVarP(&repoOpts.last, "last", "", "", "Specify the last repo from a previous request for pagination")
 	repoLsCmd.Flags().IntVarP(&repoOpts.limit, "limit", "", 0, "Specify the number of repos to retrieve")
 	repoLsCmd.Flags().StringVarP(&repoOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
@@ -38,11 +43,11 @@ func init() {
 	_ = repoLsCmd.RegisterFlagCompletionFunc("limit", completeArgNone)
 	_ = repoLsCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
-	repoCmd.AddCommand(repoLsCmd)
-	rootCmd.AddCommand(repoCmd)
+	repoTopCmd.AddCommand(repoLsCmd)
+	return repoTopCmd
 }
 
-func runRepoLs(cmd *cobra.Command, args []string) error {
+func (repoOpts *repoCmd) runRepoLs(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	host := args[0]
 	// TODO: use regex to validate hostname + port
@@ -53,7 +58,7 @@ func runRepoLs(cmd *cobra.Command, args []string) error {
 		}).Error("Hostname invalid")
 		return ErrInvalidInput
 	}
-	rc := newRegClient()
+	rc := repoOpts.rootOpts.newRegClient()
 	log.WithFields(logrus.Fields{
 		"host":  host,
 		"last":  repoOpts.last,

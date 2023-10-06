@@ -5,6 +5,10 @@ import (
 	"os"
 	"sync"
 
+	"github.com/robfig/cron/v3"
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/cmd/regbot/sandbox"
 	"github.com/regclient/regclient/config"
@@ -12,9 +16,6 @@ import (
 	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/scheme/reg"
-	"github.com/robfig/cron/v3"
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
 )
 
 const (
@@ -24,7 +25,7 @@ More details at https://github.com/regclient/regclient`
 	UserAgent = "regclient/regbot"
 )
 
-var rootOpts struct {
+type rootCmd struct {
 	confFile  string
 	dryRun    bool
 	verbosity string
@@ -32,43 +33,13 @@ var rootOpts struct {
 	format    string // for Go template formatting of various commands
 }
 
+// TODO: remove globals, configure tests with t.Parallel
 var (
 	conf      *Config
 	log       *logrus.Logger
 	rc        *regclient.RegClient
 	throttleC *throttle.Throttle
 )
-
-var rootCmd = &cobra.Command{
-	Use:           "regbot <cmd>",
-	Short:         "Utility for automating repository actions",
-	Long:          usageDesc,
-	SilenceUsage:  true,
-	SilenceErrors: true,
-}
-var serverCmd = &cobra.Command{
-	Use:   "server",
-	Short: "run the regbot server",
-	Long:  `Runs the various scripts according to their schedule.`,
-	Args:  cobra.RangeArgs(0, 0),
-	RunE:  runServer,
-}
-var onceCmd = &cobra.Command{
-	Use:   "once",
-	Short: "runs each script once",
-	Long: `Each script is executed once ignoring any scheduling. The command
-returns after the last script completes.`,
-	Args: cobra.RangeArgs(0, 0),
-	RunE: runOnce,
-}
-
-var versionCmd = &cobra.Command{
-	Use:   "version",
-	Short: "Show the version",
-	Long:  `Show the version`,
-	Args:  cobra.RangeArgs(0, 0),
-	RunE:  runVersion,
-}
 
 func init() {
 	log = &logrus.Logger{
@@ -77,24 +48,60 @@ func init() {
 		Hooks:     make(logrus.LevelHooks),
 		Level:     logrus.InfoLevel,
 	}
-	rootCmd.PersistentFlags().StringVarP(&rootOpts.confFile, "config", "c", "", "Config file")
-	rootCmd.PersistentFlags().BoolVarP(&rootOpts.dryRun, "dry-run", "", false, "Dry Run, skip all external actions")
-	rootCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.InfoLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
-	rootCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
+}
+
+func NewRootCmd() *cobra.Command {
+	rootOpts := rootCmd{}
+	var rootTopCmd = &cobra.Command{
+		Use:           "regbot <cmd>",
+		Short:         "Utility for automating repository actions",
+		Long:          usageDesc,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	var serverCmd = &cobra.Command{
+		Use:   "server",
+		Short: "run the regbot server",
+		Long:  `Runs the various scripts according to their schedule.`,
+		Args:  cobra.RangeArgs(0, 0),
+		RunE:  rootOpts.runServer,
+	}
+	var onceCmd = &cobra.Command{
+		Use:   "once",
+		Short: "runs each script once",
+		Long: `Each script is executed once ignoring any scheduling. The command
+returns after the last script completes.`,
+		Args: cobra.RangeArgs(0, 0),
+		RunE: rootOpts.runOnce,
+	}
+
+	var versionCmd = &cobra.Command{
+		Use:   "version",
+		Short: "Show the version",
+		Long:  `Show the version`,
+		Args:  cobra.RangeArgs(0, 0),
+		RunE:  rootOpts.runVersion,
+	}
+
+	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.confFile, "config", "c", "", "Config file")
+	rootTopCmd.PersistentFlags().BoolVarP(&rootOpts.dryRun, "dry-run", "", false, "Dry Run, skip all external actions")
+	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.InfoLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
+	rootTopCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
 	versionCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 
-	_ = rootCmd.MarkPersistentFlagFilename("config")
+	_ = rootTopCmd.MarkPersistentFlagFilename("config")
 	_ = serverCmd.MarkPersistentFlagRequired("config")
 	_ = onceCmd.MarkPersistentFlagRequired("config")
 
-	rootCmd.AddCommand(serverCmd)
-	rootCmd.AddCommand(onceCmd)
-	rootCmd.AddCommand(versionCmd)
+	rootTopCmd.AddCommand(serverCmd)
+	rootTopCmd.AddCommand(onceCmd)
+	rootTopCmd.AddCommand(versionCmd)
 
-	rootCmd.PersistentPreRunE = rootPreRun
+	rootTopCmd.PersistentPreRunE = rootOpts.rootPreRun
+	return rootTopCmd
 }
 
-func rootPreRun(cmd *cobra.Command, args []string) error {
+func (rootOpts *rootCmd) rootPreRun(cmd *cobra.Command, args []string) error {
 	lvl, err := logrus.ParseLevel(rootOpts.verbosity)
 	if err != nil {
 		return err
@@ -109,14 +116,14 @@ func rootPreRun(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runVersion(cmd *cobra.Command, args []string) error {
+func (rootOpts *rootCmd) runVersion(cmd *cobra.Command, args []string) error {
 	info := version.GetInfo()
 	return template.Writer(os.Stdout, rootOpts.format, info)
 }
 
 // runOnce processes the file in one pass, ignoring cron
-func runOnce(cmd *cobra.Command, args []string) error {
-	err := loadConf()
+func (rootOpts *rootCmd) runOnce(cmd *cobra.Command, args []string) error {
+	err := rootOpts.loadConf()
 	if err != nil {
 		return err
 	}
@@ -129,7 +136,7 @@ func runOnce(cmd *cobra.Command, args []string) error {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				err := s.process(ctx)
+				err := rootOpts.process(ctx, s)
 				if err != nil {
 					if mainErr == nil {
 						mainErr = err
@@ -138,7 +145,7 @@ func runOnce(cmd *cobra.Command, args []string) error {
 				}
 			}()
 		} else {
-			err := s.process(ctx)
+			err := rootOpts.process(ctx, s)
 			if err != nil {
 				if mainErr == nil {
 					mainErr = err
@@ -151,8 +158,8 @@ func runOnce(cmd *cobra.Command, args []string) error {
 }
 
 // runServer stays running with cron scheduled tasks
-func runServer(cmd *cobra.Command, args []string) error {
-	err := loadConf()
+func (rootOpts *rootCmd) runServer(cmd *cobra.Command, args []string) error {
+	err := rootOpts.loadConf()
 	if err != nil {
 		return err
 	}
@@ -179,7 +186,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 				}).Debug("Running task")
 				wg.Add(1)
 				defer wg.Done()
-				err := s.process(ctx)
+				err := rootOpts.process(ctx, s)
 				if mainErr == nil {
 					mainErr = err
 				}
@@ -214,7 +221,7 @@ func runServer(cmd *cobra.Command, args []string) error {
 	return mainErr
 }
 
-func loadConf() error {
+func (rootOpts *rootCmd) loadConf() error {
 	var err error
 	if rootOpts.confFile == "-" {
 		conf, err = ConfigLoadReader(os.Stdin)
@@ -280,7 +287,7 @@ func loadConf() error {
 }
 
 // process a sync step
-func (s ConfigScript) process(ctx context.Context) error {
+func (rootOpts *rootCmd) process(ctx context.Context, s ConfigScript) error {
 	log.WithFields(logrus.Fields{
 		"script": s.Name,
 	}).Debug("Starting script")

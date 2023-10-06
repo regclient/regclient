@@ -9,6 +9,7 @@ import (
 
 	"github.com/docker/libtrust"
 	"github.com/opencontainers/go-digest"
+
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/docker"
 )

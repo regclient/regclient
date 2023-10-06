@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"reflect"
 
+	"github.com/sirupsen/logrus"
+	lua "github.com/yuin/gopher-lua"
+
 	"github.com/regclient/regclient/cmd/regbot/internal/go2lua"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
-	"github.com/sirupsen/logrus"
-	lua "github.com/yuin/gopher-lua"
 )
 
 type sbManifest struct {

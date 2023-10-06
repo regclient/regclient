@@ -12,6 +12,7 @@ import (
 	_ "crypto/sha512"
 
 	digest "github.com/opencontainers/go-digest"
+
 	"github.com/regclient/regclient/internal/units"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/docker/schema2"
@@ -118,6 +119,18 @@ func (m *docker2ManifestList) GetPlatformList() ([]*platform.Platform, error) {
 		return nil, err
 	}
 	return getPlatformList(dl)
+}
+
+// GetSize returns the size in bytes of all layers
+func (m *docker2Manifest) GetSize() (int64, error) {
+	if !m.manifSet {
+		return 0, types.ErrManifestNotSet
+	}
+	var total int64
+	for _, d := range m.Layers {
+		total += d.Size
+	}
+	return total, nil
 }
 
 func (m *docker2Manifest) MarshalJSON() ([]byte, error) {

@@ -9,11 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/regclient/regclient/internal/reqresp"
 	"github.com/sirupsen/logrus"
+
+	"github.com/regclient/regclient/internal/reqresp"
 )
 
 func TestParseAuthHeader(t *testing.T) {
+	t.Parallel()
 	var tests = []struct {
 		name, in string
 		wantC    []Challenge
@@ -90,6 +92,7 @@ func TestParseAuthHeader(t *testing.T) {
 
 // TestAuth checks the auth interface using a mock http server
 func TestAuth(t *testing.T) {
+	t.Parallel()
 	clientID := "testClient"
 	token1Resp, _ := json.Marshal(BearerToken{
 		Token:     "token1",
@@ -307,6 +310,7 @@ func TestAuth(t *testing.T) {
 }
 
 func TestBearer(t *testing.T) {
+	t.Parallel()
 	useragent := "regclient/test"
 	user := "user"
 	pass := "testpass"

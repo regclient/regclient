@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/opencontainers/go-digest"
+
 	"github.com/regclient/regclient/internal/limitread"
 	"github.com/regclient/regclient/pkg/archive"
 	"github.com/regclient/regclient/types"

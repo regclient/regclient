@@ -15,87 +15,17 @@ import (
 	_ "crypto/sha512"
 
 	"github.com/opencontainers/go-digest"
+	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+
 	"github.com/regclient/regclient/internal/diff"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/ref"
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
 )
 
-var blobCmd = &cobra.Command{
-	Use:     "blob <cmd>",
-	Aliases: []string{"layer"},
-	Short:   "manage image blobs/layers",
-}
-var blobDiffConfigCmd = &cobra.Command{
-	Use:       "diff-config <repository> <digest> <repository> <digest>",
-	Short:     "diff two image configs",
-	Long:      `This returns the difference between two configs, comparing the contents of each config json.`,
-	Args:      cobra.ExactArgs(4),
-	ValidArgs: []string{}, // do not auto complete repository or digest
-	RunE:      runBlobDiffConfig,
-}
-var blobDiffLayerCmd = &cobra.Command{
-	Use:       "diff-layer <repository> <digest> <repository> <digest>",
-	Short:     "diff two tar layers",
-	Long:      `This returns the difference between two layers, comparing the contents of each tar.`,
-	Args:      cobra.ExactArgs(4),
-	ValidArgs: []string{}, // do not auto complete repository or digest
-	RunE:      runBlobDiffLayer,
-}
-var blobGetCmd = &cobra.Command{
-	Use:     "get <repository> <digest>",
-	Aliases: []string{"pull"},
-	Short:   "download a blob/layer",
-	Long: `Download a blob from the registry. The output is the blob itself which may
-be a compressed tar file, a json config, or any other blob supported by the
-registry. The blob or layer digest can be found in the image manifest.`,
-	Args:      cobra.ExactArgs(2),
-	ValidArgs: []string{}, // do not auto complete repository or digest
-	RunE:      runBlobGet,
-}
-var blobGetFileCmd = &cobra.Command{
-	Use:       "get-file <repository> <digest> <file> [out-file]",
-	Aliases:   []string{"cat"},
-	Short:     "get a file from a layer",
-	Long:      `This returns a requested file from a layer.`,
-	Args:      cobra.RangeArgs(3, 4),
-	ValidArgs: []string{}, // do not auto complete repository, digest, or filenames
-	RunE:      runBlobGetFile,
-}
-var blobHeadCmd = &cobra.Command{
-	Use:       "head <repository> <digest>",
-	Aliases:   []string{"digest"},
-	Short:     "http head request for a blob",
-	Long:      `Shows the headers for a blob head request.`,
-	Args:      cobra.ExactArgs(2),
-	ValidArgs: []string{}, // do not auto complete repository or digest
-	RunE:      runBlobHead,
-}
-var blobPutCmd = &cobra.Command{
-	Use:     "put <repository>",
-	Aliases: []string{"push"},
-	Short:   "upload a blob/layer",
-	Long: `Upload a blob to a repository. Stdin must be the blob contents. The output
-is the digest of the blob.`,
-	Args:      cobra.ExactArgs(1),
-	ValidArgs: []string{}, // do not auto complete repository
-	RunE:      runBlobPut,
-}
-var blobCopyCmd = &cobra.Command{
-	Use:     "copy <src_image_ref> <dst_image_ref> <digest>",
-	Aliases: []string{"cp"},
-	Short:   "copy blob",
-	Long: `Copy a blob between repositories. This works in the same registry only. It
-attempts to mount the layers between repositories. And within the same repository
-it only sends the manifest with the new tag.`,
-	Args:      cobra.ExactArgs(3),
-	ValidArgs: []string{}, // do not auto complete repository or digest
-	RunE:      runBlobCopy,
-}
-
-var blobOpts struct {
+type blobCmd struct {
+	rootOpts       *rootCmd
 	diffCtx        int
 	diffFullCtx    bool
 	diffIgnoreTime bool
@@ -107,7 +37,83 @@ var blobOpts struct {
 	digest         string
 }
 
-func init() {
+func NewBlobCmd(rootOpts *rootCmd) *cobra.Command {
+	blobOpts := blobCmd{
+		rootOpts: rootOpts,
+	}
+
+	var blobTopCmd = &cobra.Command{
+		Use:     "blob <cmd>",
+		Aliases: []string{"layer"},
+		Short:   "manage image blobs/layers",
+	}
+	var blobDiffConfigCmd = &cobra.Command{
+		Use:       "diff-config <repository> <digest> <repository> <digest>",
+		Short:     "diff two image configs",
+		Long:      `This returns the difference between two configs, comparing the contents of each config json.`,
+		Args:      cobra.ExactArgs(4),
+		ValidArgs: []string{}, // do not auto complete repository or digest
+		RunE:      blobOpts.runBlobDiffConfig,
+	}
+	var blobDiffLayerCmd = &cobra.Command{
+		Use:       "diff-layer <repository> <digest> <repository> <digest>",
+		Short:     "diff two tar layers",
+		Long:      `This returns the difference between two layers, comparing the contents of each tar.`,
+		Args:      cobra.ExactArgs(4),
+		ValidArgs: []string{}, // do not auto complete repository or digest
+		RunE:      blobOpts.runBlobDiffLayer,
+	}
+	var blobGetCmd = &cobra.Command{
+		Use:     "get <repository> <digest>",
+		Aliases: []string{"pull"},
+		Short:   "download a blob/layer",
+		Long: `Download a blob from the registry. The output is the blob itself which may
+be a compressed tar file, a json config, or any other blob supported by the
+registry. The blob or layer digest can be found in the image manifest.`,
+		Args:      cobra.ExactArgs(2),
+		ValidArgs: []string{}, // do not auto complete repository or digest
+		RunE:      blobOpts.runBlobGet,
+	}
+	var blobGetFileCmd = &cobra.Command{
+		Use:       "get-file <repository> <digest> <file> [out-file]",
+		Aliases:   []string{"cat"},
+		Short:     "get a file from a layer",
+		Long:      `This returns a requested file from a layer.`,
+		Args:      cobra.RangeArgs(3, 4),
+		ValidArgs: []string{}, // do not auto complete repository, digest, or filenames
+		RunE:      blobOpts.runBlobGetFile,
+	}
+	var blobHeadCmd = &cobra.Command{
+		Use:       "head <repository> <digest>",
+		Aliases:   []string{"digest"},
+		Short:     "http head request for a blob",
+		Long:      `Shows the headers for a blob head request.`,
+		Args:      cobra.ExactArgs(2),
+		ValidArgs: []string{}, // do not auto complete repository or digest
+		RunE:      blobOpts.runBlobHead,
+	}
+	var blobPutCmd = &cobra.Command{
+		Use:     "put <repository>",
+		Aliases: []string{"push"},
+		Short:   "upload a blob/layer",
+		Long: `Upload a blob to a repository. Stdin must be the blob contents. The output
+is the digest of the blob.`,
+		Args:      cobra.ExactArgs(1),
+		ValidArgs: []string{}, // do not auto complete repository
+		RunE:      blobOpts.runBlobPut,
+	}
+	var blobCopyCmd = &cobra.Command{
+		Use:     "copy <src_image_ref> <dst_image_ref> <digest>",
+		Aliases: []string{"cp"},
+		Short:   "copy blob",
+		Long: `Copy a blob between repositories. This works in the same registry only. It
+attempts to mount the layers between repositories. And within the same repository
+it only sends the manifest with the new tag.`,
+		Args:      cobra.ExactArgs(3),
+		ValidArgs: []string{}, // do not auto complete repository or digest
+		RunE:      blobOpts.runBlobCopy,
+	}
+
 	blobDiffConfigCmd.Flags().IntVarP(&blobOpts.diffCtx, "context", "", 3, "Lines of context")
 	blobDiffConfigCmd.Flags().BoolVarP(&blobOpts.diffFullCtx, "context-full", "", false, "Show all lines of context")
 
@@ -141,17 +147,18 @@ func init() {
 	_ = blobPutCmd.RegisterFlagCompletionFunc("digest", completeArgNone)
 	_ = blobPutCmd.Flags().MarkHidden("content-type")
 
-	blobCmd.AddCommand(blobDiffConfigCmd)
-	blobCmd.AddCommand(blobDiffLayerCmd)
-	blobCmd.AddCommand(blobGetCmd)
-	blobCmd.AddCommand(blobGetFileCmd)
-	blobCmd.AddCommand(blobHeadCmd)
-	blobCmd.AddCommand(blobPutCmd)
-	blobCmd.AddCommand(blobCopyCmd)
-	rootCmd.AddCommand(blobCmd)
+	blobTopCmd.AddCommand(blobDiffConfigCmd)
+	blobTopCmd.AddCommand(blobDiffLayerCmd)
+	blobTopCmd.AddCommand(blobGetCmd)
+	blobTopCmd.AddCommand(blobGetFileCmd)
+	blobTopCmd.AddCommand(blobHeadCmd)
+	blobTopCmd.AddCommand(blobPutCmd)
+	blobTopCmd.AddCommand(blobCopyCmd)
+
+	return blobTopCmd
 }
 
-func runBlobDiffConfig(cmd *cobra.Command, args []string) error {
+func (blobOpts *blobCmd) runBlobDiffConfig(cmd *cobra.Command, args []string) error {
 	diffOpts := []diff.Opt{}
 	if blobOpts.diffCtx > 0 {
 		diffOpts = append(diffOpts, diff.WithContext(blobOpts.diffCtx, blobOpts.diffCtx))
@@ -168,7 +175,7 @@ func runBlobDiffConfig(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	rc := newRegClient()
+	rc := blobOpts.rootOpts.newRegClient()
 
 	// open both configs, and output each as formatted json
 	d1, err := digest.Parse(args[1])
@@ -205,7 +212,7 @@ func runBlobDiffConfig(cmd *cobra.Command, args []string) error {
 	// return template.Writer(cmd.OutOrStdout(), blobOpts.format, cDiff)
 }
 
-func runBlobDiffLayer(cmd *cobra.Command, args []string) error {
+func (blobOpts *blobCmd) runBlobDiffLayer(cmd *cobra.Command, args []string) error {
 	diffOpts := []diff.Opt{}
 	if blobOpts.diffCtx > 0 {
 		diffOpts = append(diffOpts, diff.WithContext(blobOpts.diffCtx, blobOpts.diffCtx))
@@ -222,7 +229,7 @@ func runBlobDiffLayer(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	rc := newRegClient()
+	rc := blobOpts.rootOpts.newRegClient()
 
 	// open both blobs, and generate reports of each content
 	d1, err := digest.Parse(args[1])
@@ -242,7 +249,7 @@ func runBlobDiffLayer(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	rep1, err := blobReportLayer(tr1)
+	rep1, err := blobOpts.blobReportLayer(tr1)
 	if err != nil {
 		return err
 	}
@@ -268,7 +275,7 @@ func runBlobDiffLayer(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	rep2, err := blobReportLayer(tr2)
+	rep2, err := blobOpts.blobReportLayer(tr2)
 	if err != nil {
 		return err
 	}
@@ -283,7 +290,7 @@ func runBlobDiffLayer(cmd *cobra.Command, args []string) error {
 	return err
 }
 
-func runBlobGet(cmd *cobra.Command, args []string) error {
+func (blobOpts *blobCmd) runBlobGet(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
@@ -293,7 +300,7 @@ func runBlobGet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	rc := newRegClient()
+	rc := blobOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 	if blobOpts.mt != "" {
 		log.WithFields(logrus.Fields{
@@ -327,7 +334,7 @@ func runBlobGet(cmd *cobra.Command, args []string) error {
 	return template.Writer(cmd.OutOrStdout(), blobOpts.formatGet, blob)
 }
 
-func runBlobGetFile(cmd *cobra.Command, args []string) error {
+func (blobOpts *blobCmd) runBlobGetFile(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
@@ -339,7 +346,7 @@ func runBlobGetFile(cmd *cobra.Command, args []string) error {
 	}
 	filename := args[2]
 	filename = strings.TrimPrefix(filename, "/")
-	rc := newRegClient()
+	rc := blobOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
 	log.WithFields(logrus.Fields{
@@ -392,7 +399,7 @@ func runBlobGetFile(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runBlobHead(cmd *cobra.Command, args []string) error {
+func (blobOpts *blobCmd) runBlobHead(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
@@ -402,7 +409,7 @@ func runBlobHead(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	rc := newRegClient()
+	rc := blobOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
 	log.WithFields(logrus.Fields{
@@ -423,13 +430,13 @@ func runBlobHead(cmd *cobra.Command, args []string) error {
 	return template.Writer(cmd.OutOrStdout(), blobOpts.formatHead, blob)
 }
 
-func runBlobPut(cmd *cobra.Command, args []string) error {
+func (blobOpts *blobCmd) runBlobPut(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
-	rc := newRegClient()
+	rc := blobOpts.rootOpts.newRegClient()
 
 	if blobOpts.mt != "" {
 		log.WithFields(logrus.Fields{
@@ -458,7 +465,7 @@ func runBlobPut(cmd *cobra.Command, args []string) error {
 	return template.Writer(cmd.OutOrStdout(), blobOpts.formatPut, result)
 }
 
-func runBlobCopy(cmd *cobra.Command, args []string) error {
+func (blobOpts *blobCmd) runBlobCopy(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	rSrc, err := ref.New(args[0])
 	if err != nil {
@@ -472,7 +479,7 @@ func runBlobCopy(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	rc := newRegClient()
+	rc := blobOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, rSrc)
 
 	log.WithFields(logrus.Fields{
@@ -487,7 +494,7 @@ func runBlobCopy(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func blobReportLayer(tr *tar.Reader) ([]string, error) {
+func (blobOpts *blobCmd) blobReportLayer(tr *tar.Reader) ([]string, error) {
 	report := []string{}
 	if tr == nil {
 		return report, nil

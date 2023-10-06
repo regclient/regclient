@@ -29,6 +29,13 @@ chmod 755 regctl
 
 Merges into the main branch also have binaries available as artifacts within [GitHub Actions](https://github.com/regclient/regclient/actions/workflows/go.yml?query=branch%3Amain)
 
+Binaries downloaded on MacOS systems may have the quarantine attribute set.
+That [attribute can be removed](https://apple.stackexchange.com/questions/243687/allow-applications-downloaded-from-anywhere-in-macos-sierra) with the following command (replacing `regctl` with the path to the binary to modify):
+
+```shell
+xattr -d com.apple.quarantine regctl
+```
+
 ## Running as a Container
 
 You can run `regctl`, `regsync`, and `regbot` in a container.

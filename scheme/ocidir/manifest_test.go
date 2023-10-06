@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/opencontainers/go-digest"
+
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
@@ -18,6 +19,7 @@ import (
 )
 
 func TestManifest(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	// copy testdata images into memory
 	fsOS := rwfs.OSNew("")
@@ -225,5 +227,4 @@ func TestManifest(t *testing.T) {
 	if err != nil {
 		t.Errorf("could not query manifest after pushing dup tag")
 	}
-
 }

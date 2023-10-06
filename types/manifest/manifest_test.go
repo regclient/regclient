@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/opencontainers/go-digest"
+
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/docker/schema1"
 	"github.com/regclient/regclient/types/docker/schema2"
@@ -400,6 +401,7 @@ var (
 )
 
 func TestNew(t *testing.T) {
+	t.Parallel()
 	r, _ := ref.New("localhost:5000/test:latest")
 	var manifestDockerSchema2, manifestInvalid schema2.Manifest
 	var manifestDockerSchema1Signed schema1.SignedManifest
@@ -421,7 +423,7 @@ func TestNew(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to unmarshal docker schema1 signed json: %v", err)
 	}
-	var tests = []struct {
+	var tt = []struct {
 		name        string
 		opts        []Opts
 		wantR       ref.Ref
@@ -432,6 +434,7 @@ func TestNew(t *testing.T) {
 		hasAnnot    bool
 		testPlat    string
 		wantPlat    types.Descriptor
+		wantSize    int64
 		testSubject bool
 		hasSubject  bool
 	}{
@@ -454,6 +457,7 @@ func TestNew(t *testing.T) {
 			wantE:       nil,
 			isSet:       true,
 			testAnnot:   true,
+			wantSize:    3659443,
 			testSubject: true,
 			hasAnnot:    true,
 		},
@@ -473,6 +477,7 @@ func TestNew(t *testing.T) {
 				Digest:    digestDockerSchema2,
 			},
 			testAnnot:   true,
+			wantSize:    3659443,
 			testSubject: true,
 			wantE:       nil,
 			isSet:       true,
@@ -533,6 +538,7 @@ func TestNew(t *testing.T) {
 			testAnnot:   true,
 			testSubject: true,
 			hasAnnot:    true,
+			wantSize:    657823,
 			hasSubject:  true,
 		},
 		{
@@ -553,6 +559,7 @@ func TestNew(t *testing.T) {
 			testSubject: true,
 			hasAnnot:    true,
 			hasSubject:  true,
+			wantSize:    1794499,
 		},
 		{
 			name: "OCI 1 Manifest List",
@@ -893,14 +900,14 @@ func TestNew(t *testing.T) {
 		Size:      1234,
 		Digest:    digest.FromString("test referrer"),
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			m, err := New(tt.opts...)
-			if tt.wantE != nil {
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			m, err := New(tc.opts...)
+			if tc.wantE != nil {
 				if err == nil {
-					t.Errorf("did not receive expected error %v", tt.wantE)
-				} else if !errors.Is(err, tt.wantE) && err.Error() != tt.wantE.Error() {
-					t.Errorf("expected error not received, expected %v, received %v", tt.wantE, err)
+					t.Errorf("did not receive expected error %v", tc.wantE)
+				} else if !errors.Is(err, tc.wantE) && err.Error() != tc.wantE.Error() {
+					t.Errorf("expected error not received, expected %v, received %v", tc.wantE, err)
 				}
 				return
 			}
@@ -919,16 +926,16 @@ func TestNew(t *testing.T) {
 			} else {
 				t.Errorf("MarshalPretty not available")
 			}
-			if tt.wantR.Scheme != "" && m.GetRef().CommonName() != tt.wantR.CommonName() {
-				t.Errorf("ref mismatch, expected %s, received %s", tt.wantR.CommonName(), m.GetRef().CommonName())
+			if tc.wantR.Scheme != "" && m.GetRef().CommonName() != tc.wantR.CommonName() {
+				t.Errorf("ref mismatch, expected %s, received %s", tc.wantR.CommonName(), m.GetRef().CommonName())
 			}
-			if tt.wantDesc.Digest != "" && GetDigest(m) != tt.wantDesc.Digest {
-				t.Errorf("digest mismatch, expected %s, received %s", tt.wantDesc.Digest, GetDigest(m))
+			if tc.wantDesc.Digest != "" && GetDigest(m) != tc.wantDesc.Digest {
+				t.Errorf("digest mismatch, expected %s, received %s", tc.wantDesc.Digest, GetDigest(m))
 			}
-			if tt.wantDesc.MediaType != "" && GetMediaType(m) != tt.wantDesc.MediaType {
-				t.Errorf("media type mismatch, expected %s, received %s", tt.wantDesc.MediaType, GetMediaType(m))
+			if tc.wantDesc.MediaType != "" && GetMediaType(m) != tc.wantDesc.MediaType {
+				t.Errorf("media type mismatch, expected %s, received %s", tc.wantDesc.MediaType, GetMediaType(m))
 			}
-			if !tt.isSet {
+			if !tc.isSet {
 				// test methods on unset manifest
 				if m.IsSet() {
 					t.Errorf("manifest reports it is set")
@@ -997,9 +1004,9 @@ func TestNew(t *testing.T) {
 					}
 				}
 			}
-			if tt.testAnnot {
+			if tc.testAnnot {
 				mr, ok := m.(Annotator)
-				if tt.hasAnnot {
+				if tc.hasAnnot {
 					if !ok {
 						t.Errorf("manifest does not support annotations")
 					}
@@ -1018,9 +1025,21 @@ func TestNew(t *testing.T) {
 					t.Errorf("manifest supports annotations")
 				}
 			}
-			if tt.testSubject {
+			if tc.wantSize > 0 {
+				if mi, ok := m.(Imager); ok {
+					size, err := mi.GetSize()
+					if err != nil {
+						t.Errorf("get size failed: %v", err)
+					} else if size != tc.wantSize {
+						t.Errorf("unexpected size, expected %d, received %d", tc.wantSize, size)
+					}
+				} else {
+					t.Errorf("manifest is not an imager")
+				}
+			}
+			if tc.testSubject {
 				mr, ok := m.(Subjecter)
-				if tt.hasSubject {
+				if tc.hasSubject {
 					if !ok {
 						t.Errorf("manifest does not support subject")
 					} else {
@@ -1040,17 +1059,17 @@ func TestNew(t *testing.T) {
 					t.Errorf("manifest supports subject")
 				}
 			}
-			if tt.testPlat != "" {
-				p, err := platform.Parse(tt.testPlat)
+			if tc.testPlat != "" {
+				p, err := platform.Parse(tc.testPlat)
 				if err != nil {
-					t.Errorf("failed to parse platform %s: %v", tt.testPlat, err)
+					t.Errorf("failed to parse platform %s: %v", tc.testPlat, err)
 					return
 				}
 				d, err := GetPlatformDesc(m, &p)
 				if err != nil {
 					t.Errorf("failed to get descriptor: %v", err)
-				} else if !tt.wantPlat.Same(*d) {
-					t.Errorf("received platform mismatch, expected %v, received %v", tt.wantPlat, *d)
+				} else if !tc.wantPlat.Same(*d) {
+					t.Errorf("received platform mismatch, expected %v, received %v", tc.wantPlat, *d)
 				}
 			}
 		})
@@ -1058,6 +1077,7 @@ func TestNew(t *testing.T) {
 }
 
 func TestModify(t *testing.T) {
+	t.Parallel()
 	addDigest := digest.FromString("new layer digest")
 	addDesc := types.Descriptor{
 		Digest: addDigest,
@@ -1287,6 +1307,7 @@ func TestModify(t *testing.T) {
 
 // test set methods for config, layers, and manifest list
 func TestSet(t *testing.T) {
+	t.Parallel()
 	addDigest := digest.FromString("new digest")
 	addDesc := types.Descriptor{
 		Digest: addDigest,
@@ -1477,7 +1498,6 @@ func TestSet(t *testing.T) {
 			} else if tt.expectAnnot {
 				t.Errorf("annotation methods not found")
 			}
-
 		})
 	}
 }

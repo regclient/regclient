@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/opencontainers/go-digest"
+
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
@@ -33,6 +34,7 @@ func cmpSliceString(a, b []string) bool {
 }
 
 func TestIndex(t *testing.T) {
+	t.Parallel()
 	// ctx := context.Background()
 	fsMem := rwfs.MemNew()
 	o := New(WithFS(fsMem))
