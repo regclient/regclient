@@ -9,6 +9,7 @@ import (
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
+	"github.com/regclient/regclient/internal/strparse"
 	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/scheme/reg"
@@ -32,6 +33,7 @@ type rootCmd struct {
 	verbosity string
 	logopts   []string
 	format    string // for Go template formatting of various commands
+	hosts     []string
 	userAgent string
 }
 
@@ -62,12 +64,14 @@ func NewRootCmd() *cobra.Command {
 
 	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.WarnLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
 	rootTopCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
+	rootTopCmd.PersistentFlags().StringArrayVar(&rootOpts.hosts, "host", []string{}, "Registry hosts to add (reg=registry,user=username,pass=password,tls=enabled)")
 	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.userAgent, "user-agent", "", "", "Override user agent")
 
 	_ = rootTopCmd.RegisterFlagCompletionFunc("verbosity", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"debug", "info", "warn", "error", "fatal", "panic"}, cobra.ShellCompDirectiveNoFileComp
 	})
 	_ = rootTopCmd.RegisterFlagCompletionFunc("logopt", completeArgNone)
+	_ = rootTopCmd.RegisterFlagCompletionFunc("host", completeArgNone)
 
 	versionCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	_ = versionCmd.RegisterFlagCompletionFunc("format", completeArgNone)
@@ -145,6 +149,34 @@ func (rootOpts *rootCmd) newRegClient() *regclient.RegClient {
 	for name, host := range conf.Hosts {
 		host.Name = name
 		rcHosts = append(rcHosts, *host)
+	}
+	for _, h := range rootOpts.hosts {
+		hKV, err := strparse.SplitCSKV(h)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"host": h,
+				"err":  err,
+			}).Warn("unable to parse host string")
+		}
+		host := config.Host{
+			Name: hKV["reg"],
+			User: hKV["user"],
+			Pass: hKV["pass"],
+		}
+		if hKV["tls"] != "" {
+			var hostTLS config.TLSConf
+			err := hostTLS.UnmarshalText([]byte(hKV["tls"]))
+			if err != nil {
+				log.WithFields(logrus.Fields{
+					"host": h,
+					"tls":  hKV["tls"],
+					"err":  err,
+				}).Warn("unable to parse tls setting")
+			} else {
+				host.TLS = hostTLS
+			}
+		}
+		rcHosts = append(rcHosts, host)
 	}
 	if len(rcHosts) > 0 {
 		rcOpts = append(rcOpts, regclient.WithConfigHost(rcHosts...))
