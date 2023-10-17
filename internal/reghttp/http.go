@@ -707,6 +707,14 @@ func (c *Client) getHost(host string) *clientHost {
 		} else {
 			h.config = config.HostNewName(host)
 		}
+		// check for normalized hostname
+		if h.config.Name != host {
+			host = h.config.Name
+			hNormal, ok := c.host[host]
+			if ok && hNormal.initialized {
+				return hNormal
+			}
+		}
 	}
 	if h.auth == nil {
 		h.auth = map[string]auth.Auth{}

@@ -108,7 +108,15 @@ func (reg *Reg) hostGet(hostname string) *config.Host {
 	reg.muHost.Lock()
 	defer reg.muHost.Unlock()
 	if _, ok := reg.hosts[hostname]; !ok {
-		reg.hosts[hostname] = config.HostNewName(hostname)
+		newHost := config.HostNewName(hostname)
+		// check for normalized hostname
+		if newHost.Name != hostname {
+			hostname = newHost.Name
+			if h, ok := reg.hosts[hostname]; ok {
+				return h
+			}
+		}
+		reg.hosts[hostname] = newHost
 	}
 	return reg.hosts[hostname]
 }
