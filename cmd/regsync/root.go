@@ -547,7 +547,7 @@ func (rootOpts *rootCmd) processRepo(ctx context.Context, s ConfigSync, src, tgt
 		for sI >= 0 && tI >= 0 {
 			switch strings.Compare(sTagList[sI], tTagList[tI]) {
 			case 0:
-				sTagList = append(sTagList[:sI], sTagsList[sI+1:]...)
+				sTagList = append(sTagList[:sI], sTagList[sI+1:]...)
 				sI--
 				tI--
 			case -1:
