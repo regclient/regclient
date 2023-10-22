@@ -60,7 +60,7 @@ func WithLayerRmCreatedBy(re regexp.Regexp) Opts {
 				if ch.EmptyLayer {
 					continue
 				}
-				if re.Match([]byte(ch.CreatedBy)) {
+				if re.MatchString(ch.CreatedBy) {
 					delLayers = append(delLayers, i)
 				}
 				i++
@@ -132,7 +132,7 @@ func WithLayerStripFile(file string) Opts {
 	fileRE := regexp.MustCompile("^/?" + regexp.QuoteMeta(file) + "(/.*)?$")
 	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsLayerFile = append(dc.stepsLayerFile, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dl *dagLayer, th *tar.Header, tr io.Reader) (*tar.Header, io.Reader, changes, error) {
-			if fileRE.Match([]byte(th.Name)) {
+			if fileRE.MatchString(th.Name) {
 				return th, tr, deleted, nil
 			}
 			return th, tr, unchanged, nil
