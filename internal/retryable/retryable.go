@@ -7,6 +7,7 @@ package retryable
 import (
 	"bytes"
 	"context"
+	"net"
 	"os"
 	"sync"
 
@@ -74,7 +75,17 @@ var defaultLimit = 3
 // NewRetryable returns a retryable interface
 func NewRetryable(opts ...Opts) Retryable {
 	r := &retryable{
-		httpClient: &http.Client{},
+		httpClient: &http.Client{
+			Transport: &http.Transport{
+				Dial: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}).Dial,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ResponseHeaderTimeout: 10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+			},
+		},
 		limit:      defaultLimit,
 		delayInit:  defaultDelayInit,
 		delayMax:   defaultDelayMax,
