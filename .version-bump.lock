@@ -17,13 +17,13 @@
 {"name":"gha-uses-vx","key":"docker/setup-buildx-action","version":"v3"}
 {"name":"gha-uses-vx","key":"softprops/action-gh-release","version":"v1"}
 {"name":"git-commit","key":"https://github.com/GoogleCloudPlatform/docker-credential-gcr.git:master","version":"62afb2723512fd6572c6300024e0c94f734b0ae3"}
-{"name":"git-commit","key":"https://github.com/awslabs/amazon-ecr-credential-helper.git:main","version":"725682229e600b0e758975c58d142f1af11a0ce8"}
+{"name":"git-commit","key":"https://github.com/awslabs/amazon-ecr-credential-helper.git:main","version":"8841054dbdb857dab097dc72c1edfd3eedbfdc11"}
 {"name":"git-commit","key":"https://github.com/grafi-tt/lunajson.git:master","version":"e6063d37de97dfdfe2749e24de949472bfad0945"}
 {"name":"git-commit","key":"https://github.com/kikito/semver.lua.git:master","version":"af495adc857d51fd1507a112be18523828a1da0d"}
 {"name":"git-tag-semver","key":"github.com/GoogleCloudPlatform/docker-credential-gcr","version":"v2.1.19"}
 {"name":"git-tag-semver","key":"github.com/dominikh/go-tools","version":"v0.4.6"}
-{"name":"git-tag-semver","key":"github.com/google/osv-scanner","version":"v1.4.1"}
-{"name":"git-tag-semver","key":"github.com/securego/gosec","version":"v2.18.1"}
+{"name":"git-tag-semver","key":"github.com/google/osv-scanner","version":"v1.4.2"}
+{"name":"git-tag-semver","key":"github.com/securego/gosec","version":"v2.18.2"}
 {"name":"git-tag-semver","key":"github.com/sigstore/cosign","version":"v2.2.0"}
 {"name":"git-tag-semver","key":"go.googlesource.com/vuln","version":"v1.0.1"}
 {"name":"registry-digest-arg","key":"alpine:3","version":"sha256:eece025e432126ce23f223450a0326fbebde39cdf496a85d8c016293fc851978"}
