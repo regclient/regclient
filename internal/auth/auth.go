@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -94,12 +95,22 @@ type auth struct {
 // NewAuth creates a new Auth
 func NewAuth(opts ...Opts) Auth {
 	a := &auth{
-		httpClient: &http.Client{},
-		clientID:   defaultClientID,
-		credsFn:    DefaultCredsFn,
-		hbs:        map[string]HandlerBuild{},
-		hs:         map[string]map[string]Handler{},
-		authTypes:  []string{},
+		httpClient: &http.Client{
+			Transport: &http.Transport{
+				Dial: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}).Dial,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ResponseHeaderTimeout: 10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+			},
+		},
+		clientID:  defaultClientID,
+		credsFn:   DefaultCredsFn,
+		hbs:       map[string]HandlerBuild{},
+		hs:        map[string]map[string]Handler{},
+		authTypes: []string{},
 	}
 	a.log = &logrus.Logger{
 		Out:       os.Stderr,
