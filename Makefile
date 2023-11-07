@@ -100,9 +100,9 @@ vendor: ## Vendor Go modules
 	go mod vendor
 
 .PHONY: binaries
-binaries: vendor $(BINARIES) ## Build Go binaries
+binaries: $(BINARIES) ## Build Go binaries
 
-bin/%: .FORCE
+bin/%: .FORCE vendor
 	CGO_ENABLED=0 go build ${GO_BUILD_FLAGS} -o bin/$* ./cmd/$*
 
 .PHONY: docker
