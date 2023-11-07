@@ -85,9 +85,7 @@ func (o *OCIDir) closeProcManifest(ctx context.Context, r ref.Ref, m manifest.Ma
 			return err
 		}
 		for _, cur := range ml {
-			cr, _ := ref.New(r.CommonName())
-			cr.Tag = ""
-			cr.Digest = cur.Digest.String()
+			cr := r.SetDigest(cur.Digest.String())
 			(*dl)[cr.Digest] = true
 			cm, err := o.manifestGet(ctx, cr)
 			if err != nil {

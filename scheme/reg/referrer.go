@@ -65,9 +65,7 @@ func (reg *Reg) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Refe
 
 	found := false
 	// try cache
-	rCache := r
-	rCache.Tag = ""
-	rCache.Reference = rCache.CommonName()
+	rCache := r.SetDigest(r.Digest)
 	rl, err := reg.cacheRL.Get(rCache)
 	if err == nil {
 		found = true
@@ -266,12 +264,8 @@ func (reg *Reg) referrerDelete(ctx context.Context, r ref.Ref, m manifest.Manife
 		return fmt.Errorf("refers is not set%.0w", types.ErrNotFound)
 	}
 
-	rSubject := r
-	rSubject.Tag = ""
-	rSubject.Digest = subject.Digest.String()
-	rSubject.Reference = rSubject.CommonName()
-
 	// remove from cache
+	rSubject := r.SetDigest(subject.Digest.String())
 	reg.cacheRL.Delete(rSubject)
 
 	// if referrer API is available, nothing to do, return
@@ -319,15 +313,11 @@ func (reg *Reg) referrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest)
 		return fmt.Errorf("subject is not set%.0w", types.ErrNotFound)
 	}
 
-	rSubject := r
-	rSubject.Tag = ""
-	rSubject.Digest = subject.Digest.String()
-	rSubject.Reference = rSubject.CommonName()
-
 	// lock to avoid internal race conditions between pulling and pushing tag
 	reg.muRefTag.Lock()
 	defer reg.muRefTag.Unlock()
 	// fallback to using tag schema for refers
+	rSubject := r.SetDigest(subject.Digest.String())
 	rl, err := reg.referrerListByTag(ctx, rSubject)
 	if err != nil {
 		return err

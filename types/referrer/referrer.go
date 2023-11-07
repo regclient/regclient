@@ -145,13 +145,11 @@ func (rl ReferrerList) MarshalPretty() ([]byte, error) {
 
 // FallbackTag returns the ref that should be used when the registry does not support the referrers API
 func FallbackTag(r ref.Ref) (ref.Ref, error) {
-	rr := r
 	dig, err := digest.Parse(r.Digest)
 	if err != nil {
-		return rr, fmt.Errorf("failed to parse digest for referrers: %w", err)
+		return r, fmt.Errorf("failed to parse digest for referrers: %w", err)
 	}
-	rr.Digest = ""
-	rr.Tag = fmt.Sprintf("%s-%s", dig.Algorithm(), stringMax(dig.Hex(), 64))
+	rr := r.SetTag(fmt.Sprintf("%s-%s", dig.Algorithm(), stringMax(dig.Hex(), 64)))
 	return rr, nil
 }
 func stringMax(s string, max int) string {

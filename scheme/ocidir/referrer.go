@@ -110,9 +110,7 @@ func (o *OCIDir) referrerDelete(ctx context.Context, r ref.Ref, m manifest.Manif
 	}
 
 	// get descriptor for subject
-	rSubject := r
-	rSubject.Tag = ""
-	rSubject.Digest = subject.Digest.String()
+	rSubject := r.SetDigest(subject.Digest.String())
 
 	// pull existing referrer list
 	rl, err := o.referrerList(ctx, rSubject)
@@ -156,9 +154,7 @@ func (o *OCIDir) referrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 	}
 
 	// get descriptor for subject
-	rSubject := r
-	rSubject.Tag = ""
-	rSubject.Digest = subject.Digest.String()
+	rSubject := r.SetDigest(subject.Digest.String())
 
 	// pull existing referrer list
 	rl, err := o.referrerList(ctx, rSubject)

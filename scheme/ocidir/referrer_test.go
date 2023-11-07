@@ -164,9 +164,7 @@ func TestReferrer(t *testing.T) {
 
 	// attach to image
 	t.Run("Put", func(t *testing.T) {
-		r := mRef
-		r.Tag = ""
-		r.Digest = artifactAM.GetDescriptor().Digest.String()
+		r := mRef.SetDigest(artifactAM.GetDescriptor().Digest.String())
 		err = o.ManifestPut(ctx, r, artifactAM, scheme.WithManifestChild())
 		if err != nil {
 			t.Errorf("Failed running ManifestPut on Manifest: %v", err)
@@ -320,9 +318,7 @@ func TestReferrer(t *testing.T) {
 
 	// delete manifests with referrers
 	t.Run("Delete", func(t *testing.T) {
-		r := mRef
-		r.Tag = ""
-		r.Digest = artifactAM.GetDescriptor().Digest.String()
+		r := mRef.SetDigest(artifactAM.GetDescriptor().Digest.String())
 		err = o.ManifestDelete(ctx, r, scheme.WithManifest(artifactAM))
 		if err != nil {
 			t.Errorf("Failed running ManifestDelete on Manifest: %v", err)

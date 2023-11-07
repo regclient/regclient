@@ -203,9 +203,7 @@ func TestManifest(t *testing.T) {
 		t.Errorf("failed pushing manifest: %v", err)
 	}
 	// push by digest
-	rd := r
-	rd.Tag = ""
-	rd.Digest = ml.GetDescriptor().Digest.String()
+	rd := r.SetDigest(ml.GetDescriptor().Digest.String())
 	err = o.ManifestPut(ctx, rd, ml)
 	if err != nil {
 		t.Errorf("failed pushing manifest: %v", err)

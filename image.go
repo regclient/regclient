@@ -592,12 +592,8 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					"platform": dEntry.Platform,
 					"digest":   dEntry.Digest.String(),
 				}).Debug("Copy platform")
-				entrySrc := refSrc
-				entryTgt := refTgt
-				entrySrc.Tag = ""
-				entryTgt.Tag = ""
-				entrySrc.Digest = dEntry.Digest.String()
-				entryTgt.Digest = dEntry.Digest.String()
+				entrySrc := refSrc.SetDigest(dEntry.Digest.String())
+				entryTgt := refTgt.SetDigest(dEntry.Digest.String())
 				switch dEntry.MediaType {
 				case types.MediaTypeDocker1Manifest, types.MediaTypeDocker1ManifestSigned,
 					types.MediaTypeDocker2Manifest, types.MediaTypeDocker2ManifestList,
@@ -646,12 +642,8 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 			if seen != nil {
 				continue // skip referrers that have been seen
 			}
-			referrerSrc := refSrc
-			referrerSrc.Tag = ""
-			referrerSrc.Digest = rDesc.Digest.String()
-			referrerTgt := refTgt
-			referrerTgt.Tag = ""
-			referrerTgt.Digest = rDesc.Digest.String()
+			referrerSrc := refSrc.SetDigest(rDesc.Digest.String())
+			referrerTgt := refTgt.SetDigest(rDesc.Digest.String())
 			rDesc := rDesc
 			waitCount++
 			go func() {
@@ -721,12 +713,8 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 				if found {
 					continue
 				}
-				refTagSrc := refSrc
-				refTagSrc.Tag = tag
-				refTagSrc.Digest = ""
-				refTagTgt := refTgt
-				refTagTgt.Tag = tag
-				refTagTgt.Digest = ""
+				refTagSrc := refSrc.SetTag(tag)
+				refTagTgt := refTgt.SetTag(tag)
 				tag := tag
 				waitCount++
 				go func() {

@@ -267,9 +267,7 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 		} else if len(rl.Descriptors) > 1 && artifactOpts.sortAnnot == "" && !artifactOpts.latest {
 			log.Warnf("found %d matching referrers to %s, using first match, use --sort-annotation", len(rl.Descriptors), artifactOpts.subject)
 		}
-		r = rSubject
-		r.Tag = ""
-		r.Digest = rl.Descriptors[0].Digest.String()
+		r = rSubject.SetDigest(rl.Descriptors[0].Digest.String())
 	} else if len(args) > 0 {
 		var err error
 		r, err = ref.New(args[0])
@@ -533,9 +531,7 @@ func (artifactOpts *artifactCmd) runArtifactList(cmd *cobra.Command, args []stri
 		}
 		for _, t := range tl.Tags {
 			if strings.HasPrefix(t, prefix.Tag) && !sliceHasStr(rl.Tags, t) {
-				rTag := rl.Subject
-				rTag.Tag = t
-				rTag.Digest = ""
+				rTag := rl.Subject.SetTag(t)
 				mh, err := rc.ManifestHead(ctx, rTag, regclient.WithManifestRequireDigest())
 				if err != nil {
 					return fmt.Errorf("failed to query digest tag: %v", err)
@@ -603,9 +599,9 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 		}
 		r = rArt
 	}
-	if rArt.IsZero() && rSubject.IsZero() {
+	if !rArt.IsSet() && !rSubject.IsSet() {
 		return fmt.Errorf("either a reference or subject must be provided")
-	} else if !rArt.IsZero() && !rSubject.IsZero() && !ref.EqualRepository(rArt, rSubject) {
+	} else if rArt.IsSet() && rSubject.IsSet() && !ref.EqualRepository(rArt, rSubject) {
 		return fmt.Errorf("reference and subject must be in the same repository")
 	}
 
@@ -662,7 +658,7 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 	defer rc.Close(ctx, r)
 
 	var subjectDesc *types.Descriptor
-	if !rSubject.IsZero() {
+	if rSubject.IsSet() {
 		smh, err := rc.ManifestHead(ctx, rSubject, regclient.WithManifestRequireDigest())
 		if err != nil {
 			return fmt.Errorf("unable to find subject manifest: %w", err)
@@ -860,7 +856,7 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 	}
 
 	// create/append to index
-	if artifactOpts.index && !rArt.IsZero() {
+	if artifactOpts.index && rArt.IsSet() {
 		// create a descriptor to add
 		d := mm.GetDescriptor()
 		d.ArtifactType = artifactOpts.artifactType
@@ -1006,9 +1002,7 @@ func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclien
 			return &tr, fmt.Errorf("failed to get platforms for %s: %w", r.CommonName(), err)
 		}
 		for _, d := range dl {
-			rChild := r
-			rChild.Tag = ""
-			rChild.Digest = d.Digest.String()
+			rChild := r.SetDigest(d.Digest.String())
 			tChild, err := artifactOpts.treeAddResult(ctx, rc, rChild, seen, rOpts, tags)
 			if tChild != nil {
 				tChild.ArtifactType = d.ArtifactType
@@ -1032,9 +1026,7 @@ func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclien
 	if len(rl.Descriptors) > 0 {
 		tr.Referrer = []*treeResult{}
 		for _, d := range rl.Descriptors {
-			rReferrer := r
-			rReferrer.Tag = ""
-			rReferrer.Digest = d.Digest.String()
+			rReferrer := r.SetDigest(d.Digest.String())
 			tReferrer, err := artifactOpts.treeAddResult(ctx, rc, rReferrer, seen, rOpts, tags)
 			if tReferrer != nil {
 				tReferrer.ArtifactType = d.ArtifactType
@@ -1058,13 +1050,10 @@ func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclien
 		}
 		for _, t := range tags {
 			if strings.HasPrefix(t, prefix.Tag) && !sliceHasStr(rl.Tags, t) {
-				rTag := r
-				rTag.Tag = t
-				rTag.Digest = ""
+				rTag := r.SetTag(t)
 				tReferrer, err := artifactOpts.treeAddResult(ctx, rc, rTag, seen, rOpts, tags)
 				if tReferrer != nil {
-					tReferrer.Ref.Tag = t
-					tReferrer.Ref.Digest = ""
+					tReferrer.Ref = tReferrer.Ref.SetTag(t)
 					tr.Referrer = append(tr.Referrer, tReferrer)
 				}
 				if err != nil {

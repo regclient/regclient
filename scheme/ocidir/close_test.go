@@ -32,15 +32,13 @@ func TestClose(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to parse ref %s: %v", tRef, err)
 	}
-	rCp := r
-	rCp.Tag = ""
 	// delete some manifests
 	for _, d := range []string{
 		"sha256:e57d957b974fb4d852aee59b9b2e9dcd7cb0f04622e9356324864a270afd18a0", // armv6
 		"sha256:c5cb89db732b2cd2a21f986cabd094e2fad7870e0176476cf2c566149b50c4e5", // ppc
 		"sha256:396f37ccf99628a7a59d5884390a6f07a4aa082595f6ccf0f407ef916a27ef10", // s390x
 	} {
-		rCp.Digest = d
+		rCp := r.SetDigest(d)
 		err = oMem.ManifestDelete(ctx, rCp)
 		if err != nil {
 			t.Errorf("failed to delete %s: %v", rCp.CommonName(), err)
