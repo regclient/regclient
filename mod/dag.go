@@ -78,9 +78,7 @@ func dagGet(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, d types.
 			return nil, err
 		}
 		for _, desc := range dl {
-			rGet := rSrc
-			rGet.Tag = ""
-			rGet.Digest = desc.Digest.String()
+			rGet := rSrc.SetDigest(desc.Digest.String())
 			curMM, err := dagGet(ctx, rc, rGet, desc)
 			if err != nil {
 				return nil, err
@@ -125,9 +123,7 @@ func dagGet(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, d types.
 		if len(desc.Annotations) > 0 {
 			desc.Annotations = nil
 		}
-		rGet := rSrc
-		rGet.Tag = ""
-		rGet.Digest = desc.Digest.String()
+		rGet := rSrc.SetDigest(desc.Digest.String())
 		curMM, err := dagGet(ctx, rc, rGet, desc)
 		if err != nil {
 			return nil, err

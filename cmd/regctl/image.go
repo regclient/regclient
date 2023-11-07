@@ -1255,9 +1255,7 @@ func (imageOpts *imageCmd) runImageMod(cmd *cobra.Command, args []string) error 
 				return fmt.Errorf("failed to parse new image name %s: %w", imageOpts.create, err)
 			}
 		} else {
-			rTgt = rSrc
-			rTgt.Digest = ""
-			rTgt.Tag = imageOpts.create
+			rTgt = rSrc.SetTag(imageOpts.create)
 		}
 	} else if imageOpts.replace {
 		rTgt = rSrc

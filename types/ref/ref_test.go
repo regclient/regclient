@@ -8,9 +8,11 @@ import (
 	"github.com/regclient/regclient/types"
 )
 
-func TestRef(t *testing.T) {
+var testDigest = "sha256:15f840677a5e245d9ea199eb9b026b1539208a5183621dced7b469f6aa678115"
+
+func TestNew(t *testing.T) {
 	t.Parallel()
-	var tests = []struct {
+	var tt = []struct {
 		name       string
 		ref        string
 		scheme     string
@@ -221,12 +223,12 @@ func TestRef(t *testing.T) {
 		},
 		{
 			name:       "Port registry digest",
-			ref:        "registry:5000/group/image@sha256:15f840677a5e245d9ea199eb9b026b1539208a5183621dced7b469f6aa678115",
+			ref:        "registry:5000/group/image@" + testDigest,
 			scheme:     "reg",
 			registry:   "registry:5000",
 			repository: "group/image",
 			tag:        "",
-			digest:     "sha256:15f840677a5e245d9ea199eb9b026b1539208a5183621dced7b469f6aa678115",
+			digest:     testDigest,
 			path:       "",
 			wantE:      nil,
 		},
@@ -254,12 +256,12 @@ func TestRef(t *testing.T) {
 		},
 		{
 			name:       "OCI file with digest",
-			ref:        "ocifile://path/to/file.tgz@sha256:15f840677a5e245d9ea199eb9b026b1539208a5183621dced7b469f6aa678115",
+			ref:        "ocifile://path/to/file.tgz@" + testDigest,
 			scheme:     "ocifile",
 			registry:   "",
 			repository: "",
 			tag:        "",
-			digest:     "sha256:15f840677a5e245d9ea199eb9b026b1539208a5183621dced7b469f6aa678115",
+			digest:     testDigest,
 			path:       "path/to/file.tgz",
 			wantE:      nil,
 		},
@@ -292,12 +294,12 @@ func TestRef(t *testing.T) {
 		},
 		{
 			name:       "OCI dir with digest",
-			ref:        "ocidir://path/2/dir@sha256:15f840677a5e245d9ea199eb9b026b1539208a5183621dced7b469f6aa678115",
+			ref:        "ocidir://path/2/dir@" + testDigest,
 			scheme:     "ocidir",
 			registry:   "",
 			repository: "",
 			tag:        "",
-			digest:     "sha256:15f840677a5e245d9ea199eb9b026b1539208a5183621dced7b469f6aa678115",
+			digest:     testDigest,
 			path:       "path/2/dir",
 			wantE:      nil,
 		},
@@ -383,40 +385,227 @@ func TestRef(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ref, err := New(tt.ref)
-			if tt.wantE != nil {
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			ref, err := New(tc.ref)
+			if tc.wantE != nil {
 				if err == nil {
-					t.Errorf("error not received, expected %v", tt.wantE)
-				} else if !errors.Is(err, tt.wantE) && err.Error() != tt.wantE.Error() {
-					t.Errorf("expected error not received, expected %v, received %v", tt.wantE, err)
+					t.Errorf("error not received, expected %v", tc.wantE)
+				} else if !errors.Is(err, tc.wantE) && err.Error() != tc.wantE.Error() {
+					t.Errorf("expected error not received, expected %v, received %v", tc.wantE, err)
 				}
 				return
 			} else if err != nil {
 				t.Errorf("failed creating reference, err: %v", err)
 				return
 			}
-			if tt.ref != ref.Reference {
-				t.Errorf("reference mismatch for %s, received %s", tt.ref, ref.Reference)
+			if tc.ref != ref.Reference {
+				t.Errorf("reference mismatch for %s, received %s", tc.ref, ref.Reference)
 			}
-			if tt.scheme != ref.Scheme {
-				t.Errorf("scheme mismatch for %s, expected %s, received %s", tt.ref, tt.scheme, ref.Scheme)
+			if tc.scheme != ref.Scheme {
+				t.Errorf("scheme mismatch for %s, expected %s, received %s", tc.ref, tc.scheme, ref.Scheme)
 			}
-			if tt.registry != ref.Registry {
-				t.Errorf("registry mismatch for %s, expected %s, received %s", tt.ref, tt.registry, ref.Registry)
+			if tc.registry != ref.Registry {
+				t.Errorf("registry mismatch for %s, expected %s, received %s", tc.ref, tc.registry, ref.Registry)
 			}
-			if tt.repository != ref.Repository {
-				t.Errorf("repository mismatch for %s, expected %s, received %s", tt.ref, tt.repository, ref.Repository)
+			if tc.repository != ref.Repository {
+				t.Errorf("repository mismatch for %s, expected %s, received %s", tc.ref, tc.repository, ref.Repository)
 			}
-			if tt.tag != ref.Tag {
-				t.Errorf("tag mismatch for %s, expected %s, received %s", tt.ref, tt.tag, ref.Tag)
+			if tc.tag != ref.Tag {
+				t.Errorf("tag mismatch for %s, expected %s, received %s", tc.ref, tc.tag, ref.Tag)
 			}
-			if tt.digest != ref.Digest {
-				t.Errorf("digest mismatch for %s, expected %s, received %s", tt.ref, tt.digest, ref.Digest)
+			if tc.digest != ref.Digest {
+				t.Errorf("digest mismatch for %s, expected %s, received %s", tc.ref, tc.digest, ref.Digest)
 			}
-			if tt.path != ref.Path {
-				t.Errorf("path mismatch for %s, expected %s, received %s", tt.ref, tt.path, ref.Path)
+			if tc.path != ref.Path {
+				t.Errorf("path mismatch for %s, expected %s, received %s", tc.ref, tc.path, ref.Path)
+			}
+		})
+	}
+}
+
+func TestNewHost(t *testing.T) {
+	t.Parallel()
+	var tt = []struct {
+		name     string
+		host     string
+		scheme   string
+		registry string
+		path     string
+		wantE    error
+	}{
+		{
+			name:  "empty string",
+			host:  "",
+			wantE: types.ErrParsingFailed,
+		},
+		{
+			name:     "Docker Hub",
+			host:     "docker.io",
+			scheme:   "reg",
+			registry: "docker.io",
+			path:     "",
+			wantE:    nil,
+		},
+		{
+			name:     "example.com",
+			host:     "example.com",
+			scheme:   "reg",
+			registry: "example.com",
+			path:     "",
+			wantE:    nil,
+		},
+		{
+			name:     "Uppercase registry",
+			host:     "EXAMPLE",
+			scheme:   "reg",
+			registry: "EXAMPLE",
+			path:     "",
+			wantE:    nil,
+		},
+		{
+			name:     "explicit short name",
+			host:     "example.",
+			scheme:   "reg",
+			registry: "example.",
+			path:     "",
+			wantE:    nil,
+		},
+		{
+			name:     "short name with port",
+			host:     "example:5000",
+			scheme:   "reg",
+			registry: "example:5000",
+			path:     "",
+			wantE:    nil,
+		},
+		{
+			name:     "fqdn with port",
+			host:     "example.com:5000",
+			scheme:   "reg",
+			registry: "example.com:5000",
+			path:     "",
+			wantE:    nil,
+		},
+		{
+			name:     "Localhost",
+			host:     "localhost",
+			scheme:   "reg",
+			registry: "localhost",
+			path:     "",
+			wantE:    nil,
+		},
+		{
+			name:     "Localhost with port",
+			host:     "localhost:5000",
+			scheme:   "reg",
+			registry: "localhost:5000",
+			path:     "",
+			wantE:    nil,
+		},
+		{
+			name:     "ip address registry",
+			host:     "127.0.0.1:5000",
+			scheme:   "reg",
+			registry: "127.0.0.1:5000",
+			path:     "",
+			wantE:    nil,
+		},
+		{
+			name:     "OCI file",
+			host:     "ocifile://path",
+			scheme:   "ocifile",
+			registry: "",
+			path:     "path",
+			wantE:    nil,
+		},
+		{
+			name:     "OCI file with tag",
+			host:     "ocifile://path/to/file.tgz:v1.2.3",
+			scheme:   "ocifile",
+			registry: "",
+			path:     "path/to/file.tgz",
+			wantE:    nil,
+		},
+		{
+			name:     "OCI file with digest",
+			host:     "ocifile://path/to/file.tgz@" + testDigest,
+			scheme:   "ocifile",
+			registry: "",
+			path:     "path/to/file.tgz",
+			wantE:    nil,
+		},
+		{
+			name:  "OCI file with invalid digest",
+			host:  "ocifile://path/to/file.tgz@sha256:ZZ15f840677a5e245d9ea199eb9b026b1539208a5183621dced7b469f6aa678115ZZ",
+			wantE: types.ErrParsingFailed,
+		},
+		{
+			name:     "OCI dir",
+			host:     "ocidir://path/to/dir",
+			scheme:   "ocidir",
+			registry: "",
+			path:     "path/to/dir",
+			wantE:    nil,
+		},
+		{
+			name:     "OCI dir with tag",
+			host:     "ocidir://path/to/DIR:v1.2.3",
+			scheme:   "ocidir",
+			registry: "",
+			path:     "path/to/DIR",
+			wantE:    nil,
+		},
+		{
+			name:     "OCI dir with digest",
+			host:     "ocidir://path/2/dir@" + testDigest,
+			scheme:   "ocidir",
+			registry: "",
+			path:     "path/2/dir",
+			wantE:    nil,
+		},
+		{
+			name:  "invalid scheme",
+			host:  "unknown://repo:tag",
+			wantE: types.ErrParsingFailed,
+		},
+		{
+			name:  "invalid host leading dash",
+			host:  "-docker.io",
+			wantE: types.ErrParsingFailed,
+		},
+		{
+			name:  "invalid host trailing dash",
+			host:  "docker-.io",
+			wantE: types.ErrParsingFailed,
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			ref, err := NewHost(tc.host)
+			if tc.wantE != nil {
+				if err == nil {
+					t.Errorf("error not received, expected %v", tc.wantE)
+				} else if !errors.Is(err, tc.wantE) && err.Error() != tc.wantE.Error() {
+					t.Errorf("expected error not received, expected %v, received %v", tc.wantE, err)
+				}
+				return
+			} else if err != nil {
+				t.Errorf("failed creating reference, err: %v", err)
+				return
+			}
+			if ref.IsSet() {
+				t.Errorf("isSet unexpected for %s, expected %t, received %t", tc.host, false, ref.IsSet())
+			}
+			if tc.scheme != ref.Scheme {
+				t.Errorf("scheme mismatch for %s, expected %s, received %s", tc.host, tc.scheme, ref.Scheme)
+			}
+			if tc.registry != ref.Registry {
+				t.Errorf("registry mismatch for %s, expected %s, received %s", tc.host, tc.registry, ref.Registry)
+			}
+			if tc.path != ref.Path {
+				t.Errorf("path mismatch for %s, expected %s, received %s", tc.host, tc.path, ref.Path)
 			}
 		})
 	}
@@ -424,7 +613,7 @@ func TestRef(t *testing.T) {
 
 func TestCommon(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
+	tt := []struct {
 		name string
 		str  string
 	}{
@@ -434,7 +623,7 @@ func TestCommon(t *testing.T) {
 		},
 		{
 			name: "ref with digest",
-			str:  "docker.io/group/image@sha256:15f840677a5e245d9ea199eb9b026b1539208a5183621dced7b469f6aa678115",
+			str:  "docker.io/group/image@" + testDigest,
 		},
 		{
 			name: "ocidir with tag",
@@ -442,19 +631,19 @@ func TestCommon(t *testing.T) {
 		},
 		{
 			name: "ocidir with digest",
-			str:  "ocidir://image@sha256:15f840677a5e245d9ea199eb9b026b1539208a5183621dced7b469f6aa678115",
+			str:  "ocidir://image@" + testDigest,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r, err := New(tt.str)
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			r, err := New(tc.str)
 			if err != nil {
-				t.Errorf("failed to parse %s: %v", tt.str, err)
+				t.Errorf("failed to parse %s: %v", tc.str, err)
 				return
 			}
 			cn := r.CommonName()
-			if tt.str != cn {
-				t.Errorf("common name mismatch, input %s, output %s", tt.str, cn)
+			if tc.str != cn {
+				t.Errorf("common name mismatch, input %s, output %s", tc.str, cn)
 			}
 		})
 	}
@@ -462,7 +651,7 @@ func TestCommon(t *testing.T) {
 
 func TestEqual(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
+	tt := []struct {
 		name       string
 		a, b       Ref
 		expectReg  bool
@@ -586,21 +775,143 @@ func TestEqual(t *testing.T) {
 			expectRepo: false,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if EqualRegistry(tt.a, tt.b) != tt.expectReg {
-				t.Errorf("equal registry was not %v for %s and %s", tt.expectReg, tt.a.CommonName(), tt.b.CommonName())
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			if EqualRegistry(tc.a, tc.b) != tc.expectReg {
+				t.Errorf("equal registry was not %v for %s and %s", tc.expectReg, tc.a.CommonName(), tc.b.CommonName())
 			}
-			if EqualRepository(tt.a, tt.b) != tt.expectRepo {
-				t.Errorf("equal repository was not %v for %s and %s", tt.expectRepo, tt.a.CommonName(), tt.b.CommonName())
+			if EqualRepository(tc.a, tc.b) != tc.expectRepo {
+				t.Errorf("equal repository was not %v for %s and %s", tc.expectRepo, tc.a.CommonName(), tc.b.CommonName())
 			}
 		})
 	}
 }
 
+func TestIsSet(t *testing.T) {
+	t.Parallel()
+	tt := []struct {
+		name   string
+		ref    Ref
+		isSet  bool
+		isZero bool
+	}{
+		{
+			name:   "zero",
+			isZero: true,
+		},
+		{
+			name: "no scheme",
+			ref: Ref{
+				Tag: "latest",
+			},
+		},
+		{
+			name: "unknown scheme",
+			ref: Ref{
+				Scheme: "unknown",
+				Tag:    "latest",
+			},
+		},
+		{
+			name: "no repo",
+			ref: Ref{
+				Scheme:   "reg",
+				Registry: "docker.io",
+				Tag:      "latest",
+			},
+		},
+		{
+			name: "no tag",
+			ref: Ref{
+				Scheme:     "reg",
+				Registry:   "docker.io",
+				Repository: "library/alpine",
+			},
+		},
+		{
+			name: "no path",
+			ref: Ref{
+				Scheme: "ocidir",
+				Tag:    "latest",
+			},
+		},
+		{
+			name: "reg with digest",
+			ref: Ref{
+				Scheme:     "reg",
+				Registry:   "docker.io",
+				Repository: "library/alpine",
+				Digest:     testDigest,
+			},
+			isSet: true,
+		},
+		{
+			name: "reg with tag",
+			ref: Ref{
+				Scheme:     "reg",
+				Registry:   "docker.io",
+				Repository: "library/alpine",
+				Tag:        "latest",
+			},
+			isSet: true,
+		},
+		{
+			name: "ocidir",
+			ref: Ref{
+				Scheme: "ocidir",
+				Path:   ".",
+				Tag:    "latest",
+			},
+			isSet: true,
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.ref.IsSet() != tc.isSet {
+				t.Errorf("isSet is not %t", tc.isSet)
+			}
+			if tc.ref.IsZero() != tc.isZero {
+				t.Errorf("isZero is not %t", tc.isSet)
+			}
+		})
+	}
+}
+
+func TestSet(t *testing.T) {
+	t.Parallel()
+	rStr := "example.com/repo:v1"
+	rDigStr := "example.com/repo@" + testDigest
+	rTagStr := "example.com/repo:v2"
+	r, err := New(rStr)
+	if err != nil {
+		t.Errorf("unexpected parse failure: %v", err)
+		return
+	}
+	r = r.SetDigest(testDigest)
+	if r.Tag != "" {
+		t.Errorf("SetDigest tag mismatch, expected empty string, received %s", r.Tag)
+	}
+	if r.Digest != testDigest {
+		t.Errorf("SetDigest digest mismatch, expected %s, received %s", testDigest, r.Digest)
+	}
+	if r.Reference != rDigStr {
+		t.Errorf("SetDigest reference mismatch, expected %s, received %s", rDigStr, r.Reference)
+	}
+	r = r.SetTag("v2")
+	if r.Tag != "v2" {
+		t.Errorf("SetTag tag mismatch, expected v2, received %s", r.Tag)
+	}
+	if r.Digest != "" {
+		t.Errorf("SetTag digest mismatch, expected empty string, received %s", r.Digest)
+	}
+	if r.Reference != rTagStr {
+		t.Errorf("SetTag reference mismatch, expected %s, received %s", rTagStr, r.Reference)
+	}
+}
+
 func TestToReg(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
+	tt := []struct {
 		name   string
 		inRef  string
 		expect string
@@ -626,16 +937,16 @@ func TestToReg(t *testing.T) {
 			expect: "localhost/test-hello-world",
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r, err := New(tt.inRef)
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			r, err := New(tc.inRef)
 			if err != nil {
 				t.Errorf("failed parsing input ref: %v", err)
 				return
 			}
 			outRef := r.ToReg()
-			if outRef.CommonName() != tt.expect {
-				t.Errorf("convert expected %s, received %s", tt.expect, outRef.CommonName())
+			if outRef.CommonName() != tc.expect {
+				t.Errorf("convert expected %s, received %s", tc.expect, outRef.CommonName())
 			}
 		})
 	}

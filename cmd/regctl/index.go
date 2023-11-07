@@ -213,14 +213,12 @@ func (indexOpts *indexCmd) runIndexCreate(cmd *cobra.Command, args []string) err
 
 	var subj *types.Descriptor
 	if indexOpts.subject != "" && indexOpts.mediaType == types.MediaTypeOCI1ManifestList {
-		rSubj := r
-		rSubj.Tag = ""
-		rSubj.Digest = ""
+		var rSubj ref.Ref
 		dig, err := digest.Parse(indexOpts.subject)
 		if err == nil {
-			rSubj.Digest = dig.String()
+			rSubj = r.SetDigest(dig.String())
 		} else {
-			rSubj.Tag = indexOpts.subject
+			rSubj = r.SetTag(indexOpts.subject)
 		}
 		mSubj, err := rc.ManifestHead(ctx, rSubj, regclient.WithManifestRequireDigest())
 		if err != nil {
@@ -414,9 +412,7 @@ func (indexOpts *indexCmd) indexBuildDescList(ctx context.Context, rc *regclient
 		if !mCopy.IsList() || len(platforms) == 0 {
 			// single manifest
 			desc := mCopy.GetDescriptor()
-			tgtRef := r
-			tgtRef.Tag = ""
-			tgtRef.Digest = desc.Digest.String()
+			tgtRef := r.SetDigest(desc.Digest.String())
 			err = rc.ImageCopy(ctx, srcRef, tgtRef, imgCopyOpts...)
 			if err != nil {
 				return nil, err
@@ -438,12 +434,8 @@ func (indexOpts *indexCmd) indexBuildDescList(ctx context.Context, rc *regclient
 			}
 			for _, d := range dl {
 				if d.Platform != nil && indexPlatformInList(*d.Platform, platforms) {
-					dRef := srcRef
-					dRef.Tag = ""
-					dRef.Digest = d.Digest.String()
-					tgtRef := r
-					tgtRef.Tag = ""
-					tgtRef.Digest = d.Digest.String()
+					dRef := srcRef.SetDigest(d.Digest.String())
+					tgtRef := r.SetDigest(d.Digest.String())
 					err = rc.ImageCopy(ctx, dRef, tgtRef, imgCopyOpts...)
 					if err != nil {
 						return nil, err
@@ -457,10 +449,7 @@ func (indexOpts *indexCmd) indexBuildDescList(ctx context.Context, rc *regclient
 	// parse each digest, pull manifest, get config, append to list of descriptors
 	descList := []types.Descriptor{}
 	for _, dig := range indexOpts.digests {
-		rDig := r
-		rDig.Tag = ""
-		rDig.Digest = dig
-
+		rDig := r.SetDigest(dig)
 		mDig, err := rc.ManifestHead(ctx, rDig, regclient.WithManifestRequireDigest())
 		if err != nil {
 			return nil, err
