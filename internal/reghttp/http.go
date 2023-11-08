@@ -412,7 +412,11 @@ func (resp *clientResp) Next() error {
 				// add auth headers
 				err = hAuth.UpdateRequest(httpReq)
 				if err != nil {
-					backoff = true
+					if errors.Is(err, types.ErrHTTPUnauthorized) {
+						dropHost = true
+					} else {
+						backoff = true
+					}
 					return err
 				}
 			}
