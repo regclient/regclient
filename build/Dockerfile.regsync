@@ -18,7 +18,7 @@ FROM golang as build
 COPY go.* /src/
 RUN go mod download
 COPY . /src/
-RUN make vendor bin/regsync
+RUN make bin/regsync
 USER appuser
 CMD [ "bin/regsync" ]
 

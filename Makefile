@@ -95,14 +95,10 @@ osv-scanner: $(GOPATH)/bin/osv-scanner .FORCE ## Run OSV Scanner
 vulncheck-go: $(GOPATH)/bin/govulncheck .FORCE ## Run govulncheck
 	$(GOPATH)/bin/govulncheck ./...
 
-.PHONY: vendor
-vendor: ## Vendor Go modules
-	go mod vendor
-
 .PHONY: binaries
 binaries: $(BINARIES) ## Build Go binaries
 
-bin/%: .FORCE vendor
+bin/%:
 	CGO_ENABLED=0 go build ${GO_BUILD_FLAGS} -o bin/$* ./cmd/$*
 
 .PHONY: docker
@@ -179,8 +175,7 @@ plugin-host:
 util-golang-update: ## update go module versions
 	go get -u -t ./...
 	go mod tidy
-	go mod vendor
-	
+
 .PHONY: util-version-check
 util-version-check: ## check all dependencies for updates
 	$(VER_BUMP) check
