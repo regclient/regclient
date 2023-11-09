@@ -1,35 +1,34 @@
-# Release v0.5.3
-
-Fixes:
-
-- Fix formatting variables in `regctl image inspect`. ([PR 554][pr-554])
+# Release v0.5.4
 
 New Features:
 
-- Add a `GetSize` method to image manifests (OCI and Docker2 manifests). ([PR 565][pr-565])
+- Add `regctl --host` flag to configure registries for a single command. ([PR 572][pr-572])
+- Configure HTTP client timeouts. ([PR 584][pr-584])
+- Add `regclient.Ping` method. ([PR 590][pr-590])
+- regctl: warn on failed logins or bad registry configuration changes. ([PR 590][pr-590])
+
+Fixes:
+
+- Fix handling of invalid hostname in `regclient.RepoList`. ([PR 577][pr-577])
+- Fix bug in regsync tag filtering when running as a server. ([PR 579][pr-579])
+- Enable parallel builds of the make "binaries" target. ([PR 588][pr-588])
 
 Chores:
 
-- Refactoring CLIs to remove global state. ([PR 550][pr-550])
-- Set GOTOOLCHAIN=local in CI ([PR 556][pr-556])
-- Reorder Go imports to move local packages last. ([PR 557][pr-557])
-- Remove duplicated tests from ci-registry action. ([PR 559][pr-559])
-- Run tests using t.Parallel where possible. ([PR 564][pr-564])
-- Update install guidance for quarantined binaries on MacOS. ([PR 569][pr-569])
-- Release notes now include contributors. ([PR 570][pr-570])
+- Update Go docs on blob APIs and the config. ([PR 573][pr-573])
+- Refactor the Ref package. ([PR 587][pr-587])
 
 Contributors:
 
-- @felipecrs
-- @sorenisanerd
+- @andyli
+- @Juneezee
 - @sudo-bmitch
 
-[pr-550]: https://github.com/regclient/regclient/pull/550
-[pr-554]: https://github.com/regclient/regclient/pull/554
-[pr-556]: https://github.com/regclient/regclient/pull/556
-[pr-557]: https://github.com/regclient/regclient/pull/557
-[pr-559]: https://github.com/regclient/regclient/pull/559
-[pr-564]: https://github.com/regclient/regclient/pull/564
-[pr-565]: https://github.com/regclient/regclient/pull/565
-[pr-569]: https://github.com/regclient/regclient/pull/569
-[pr-570]: https://github.com/regclient/regclient/pull/570
+[pr-572]: https://github.com/regclient/regclient/pull/572
+[pr-573]: https://github.com/regclient/regclient/pull/573
+[pr-577]: https://github.com/regclient/regclient/pull/577
+[pr-579]: https://github.com/regclient/regclient/pull/579
+[pr-584]: https://github.com/regclient/regclient/pull/584
+[pr-587]: https://github.com/regclient/regclient/pull/587
+[pr-588]: https://github.com/regclient/regclient/pull/588
+[pr-590]: https://github.com/regclient/regclient/pull/590
