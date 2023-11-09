@@ -15,6 +15,7 @@ import (
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
+	"github.com/regclient/regclient/types/ref"
 )
 
 type registryCmd struct {
@@ -180,6 +181,7 @@ func (registryOpts *registryCmd) runRegistryConfig(cmd *cobra.Command, args []st
 }
 
 func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 	c, err := ConfigLoadDefault()
 	if err != nil {
 		return err
@@ -257,6 +259,18 @@ func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []str
 		return err
 	}
 
+	r, err := ref.NewHost(args[0])
+	if err != nil {
+		return err
+	}
+	rc := registryOpts.rootOpts.newRegClient()
+	_, err = rc.Ping(ctx, r)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"err": err,
+		}).Warn("Failed to ping registry with credentials")
+	}
+
 	log.WithFields(logrus.Fields{
 		"registry": args[0],
 	}).Info("Credentials set")
@@ -296,6 +310,7 @@ func (registryOpts *registryCmd) runRegistryLogout(cmd *cobra.Command, args []st
 }
 
 func (registryOpts *registryCmd) runRegistrySet(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 	c, err := ConfigLoadDefault()
 	if err != nil {
 		return err
@@ -384,6 +399,18 @@ func (registryOpts *registryCmd) runRegistrySet(cmd *cobra.Command, args []strin
 	err = c.ConfigSave()
 	if err != nil {
 		return err
+	}
+
+	r, err := ref.NewHost(args[0])
+	if err != nil {
+		return err
+	}
+	rc := registryOpts.rootOpts.newRegClient()
+	_, err = rc.Ping(ctx, r)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"err": err,
+		}).Warn("Failed to ping registry with settings")
 	}
 
 	log.WithFields(logrus.Fields{

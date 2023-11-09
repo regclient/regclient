@@ -9,6 +9,7 @@ import (
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/ping"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/regclient/regclient/types/referrer"
 	"github.com/regclient/regclient/types/tag"
@@ -35,6 +36,9 @@ type API interface {
 	ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest, error)
 	// ManifestPut sends a manifest to the repository.
 	ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest, opts ...ManifestOpts) error
+
+	// Ping verifies access to a registry or equivalent.
+	Ping(ctx context.Context, r ref.Ref) (ping.Result, error)
 
 	// ReferrerList returns a list of referrers to a given reference.
 	ReferrerList(ctx context.Context, r ref.Ref, opts ...ReferrerOpts) (referrer.ReferrerList, error)
