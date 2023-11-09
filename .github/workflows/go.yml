@@ -63,7 +63,7 @@ jobs:
       uses: anchore/sbom-action/download-syft@v0.14.3
       id: syft
       with:
-        syft-version: "v0.94.0"
+        syft-version: "v0.95.0"
 
     - name: Build artifacts
       if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main'
@@ -71,9 +71,9 @@ jobs:
 
     - name: Install cosign
       if: ( startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main' ) && matrix.gover == env.RELEASE_GO_VER
-      uses: sigstore/cosign-installer@v3.1.2
+      uses: sigstore/cosign-installer@v3.2.0
       with:
-        cosign-release: "v2.2.0"
+        cosign-release: "v2.2.1"
 
     - name: Package artifacts
       if: ( startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main' ) && matrix.gover == env.RELEASE_GO_VER
