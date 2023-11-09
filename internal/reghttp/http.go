@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -120,7 +121,17 @@ type Opts func(*Client)
 // NewClient returns a client for handling requests
 func NewClient(opts ...Opts) *Client {
 	c := Client{
-		httpClient: &http.Client{},
+		httpClient: &http.Client{
+			Transport: &http.Transport{
+				Dial: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}).Dial,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ResponseHeaderTimeout: 10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+			},
+		},
 		host:       map[string]*clientHost{},
 		retryLimit: DefaultRetryLimit,
 		delayInit:  defaultDelayInit,
@@ -401,7 +412,11 @@ func (resp *clientResp) Next() error {
 				// add auth headers
 				err = hAuth.UpdateRequest(httpReq)
 				if err != nil {
-					backoff = true
+					if errors.Is(err, types.ErrHTTPUnauthorized) {
+						dropHost = true
+					} else {
+						backoff = true
+					}
 					return err
 				}
 			}
@@ -706,6 +721,14 @@ func (c *Client) getHost(host string) *clientHost {
 			h.config = c.getConfigHost(host)
 		} else {
 			h.config = config.HostNewName(host)
+		}
+		// check for normalized hostname
+		if h.config.Name != host {
+			host = h.config.Name
+			hNormal, ok := c.host[host]
+			if ok && hNormal.initialized {
+				return hNormal
+			}
 		}
 	}
 	if h.auth == nil {

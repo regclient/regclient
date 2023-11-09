@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,6 +16,8 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/regclient/regclient/types"
 )
 
 type charLU byte
@@ -94,12 +97,22 @@ type auth struct {
 // NewAuth creates a new Auth
 func NewAuth(opts ...Opts) Auth {
 	a := &auth{
-		httpClient: &http.Client{},
-		clientID:   defaultClientID,
-		credsFn:    DefaultCredsFn,
-		hbs:        map[string]HandlerBuild{},
-		hs:         map[string]map[string]Handler{},
-		authTypes:  []string{},
+		httpClient: &http.Client{
+			Transport: &http.Transport{
+				Dial: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}).Dial,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ResponseHeaderTimeout: 10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+			},
+		},
+		clientID:  defaultClientID,
+		credsFn:   DefaultCredsFn,
+		hbs:       map[string]HandlerBuild{},
+		hs:        map[string]map[string]Handler{},
+		authTypes: []string{},
 	}
 	a.log = &logrus.Logger{
 		Out:       os.Stderr,
@@ -488,7 +501,7 @@ func (b *BasicHandler) ProcessChallenge(c Challenge) error {
 func (b *BasicHandler) GenerateAuth() (string, error) {
 	cred := b.credsFn(b.host)
 	if cred.User == "" || cred.Password == "" {
-		return "", ErrNotFound
+		return "", fmt.Errorf("no credentials available: %w", types.ErrHTTPUnauthorized)
 	}
 	auth := base64.StdEncoding.EncodeToString([]byte(cred.User + ":" + cred.Password))
 	return fmt.Sprintf("Basic %s", auth), nil
@@ -606,14 +619,14 @@ func (b *BearerHandler) GenerateAuth() (string, error) {
 	if err := b.tryPost(); err == nil {
 		return fmt.Sprintf("Bearer %s", b.token.Token), nil
 	} else if err != ErrUnauthorized {
-		return "", err
+		return "", fmt.Errorf("failed to request auth token (post): %v%.0w", err, types.ErrHTTPUnauthorized)
 	}
 
 	// attempt a get (with basic auth if user/pass available)
 	if err := b.tryGet(); err == nil {
 		return fmt.Sprintf("Bearer %s", b.token.Token), nil
 	} else if err != ErrUnauthorized {
-		return "", err
+		return "", fmt.Errorf("failed to request auth token (get): %v%.0w", err, types.ErrHTTPUnauthorized)
 	}
 
 	return "", ErrUnauthorized

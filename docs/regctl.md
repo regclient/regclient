@@ -34,11 +34,19 @@ Available Commands:
 
 Flags:
   -h, --help                 help for regctl
+      --host stringArray     Registry hosts to add (reg=registry,user=username,pass=password,tls=enabled)
       --logopt stringArray   Log options
   -v, --verbosity string     Log level (debug, info, warn, error, fatal, panic) (default "warning")
 
 Use "regctl [command] --help" for more information about a command.
 ```
+
+`--host` allows registry access to be configured for the current command.
+The arguments are a comma separated list of key/value pairs.
+`reg` specifies the registry, using `docker.io` for Docker Hub.
+`user` specifies the username and `pass` specifies the password.
+`tls` is used to configure TLS with the values `enabled` (default), `disabled` (http), or `insecure` to trust unknown certificates.
+The option `--host reg=localhost:5000,tls=disabled` would adjust the command to access `localhost:5000` using http.
 
 `--logopt` currently accepts `json` to format all logs as json instead of text.
 This is useful for parsing in external tools like Elastic/Splunk.

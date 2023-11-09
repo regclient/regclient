@@ -2,6 +2,8 @@ package regclient
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
@@ -15,6 +17,10 @@ type repoLister interface {
 // RepoList returns a list of repositories on a registry.
 // Note the underlying "_catalog" API is not supported on many cloud registries.
 func (rc *RegClient) RepoList(ctx context.Context, hostname string, opts ...scheme.RepoOpts) (*repo.RepoList, error) {
+	i := strings.Index(hostname, "/")
+	if i > 0 {
+		return nil, fmt.Errorf("invalid hostname: %s%.0w", hostname, types.ErrParsingFailed)
+	}
 	schemeAPI, err := rc.schemeGet("reg")
 	if err != nil {
 		return nil, err
@@ -24,5 +30,4 @@ func (rc *RegClient) RepoList(ctx context.Context, hostname string, opts ...sche
 		return nil, types.ErrNotImplemented
 	}
 	return rl.RepoList(ctx, hostname, opts...)
-
 }

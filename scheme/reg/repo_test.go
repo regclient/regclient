@@ -256,4 +256,20 @@ func TestRepo(t *testing.T) {
 		}
 		// error is a json error, no custom error type was made for this yet
 	})
+	t.Run("Normalize host", func(t *testing.T) {
+		u, _ := url.Parse(tss["registry"].URL)
+		host := u.Host
+		rl, err := reg.RepoList(ctx, host+"/path")
+		if err != nil {
+			t.Errorf("error listing repos: %v", err)
+			return
+		}
+		rlRepos, err := rl.GetRepos()
+		if err != nil {
+			t.Errorf("error retrieving repos: %v", err)
+		} else if stringSliceCmp(listRegistry, rlRepos) == false {
+			t.Errorf("repositories do not match: expected %v, received %v", listRegistry, rlRepos)
+		}
+	})
+
 }

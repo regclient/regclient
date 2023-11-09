@@ -50,9 +50,7 @@ func (reg *Reg) ManifestDelete(ctx context.Context, r ref.Ref, opts ...scheme.Ma
 			}
 		}
 	}
-	rCache := r
-	rCache.Tag = ""
-	rCache.Reference = rCache.CommonName()
+	rCache := r.SetDigest(r.Digest)
 	reg.cacheMan.Delete(rCache)
 
 	// build/send request
@@ -83,9 +81,7 @@ func (reg *Reg) ManifestDelete(ctx context.Context, r ref.Ref, opts ...scheme.Ma
 func (reg *Reg) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest, error) {
 	var tagOrDigest string
 	if r.Digest != "" {
-		rCache := r
-		rCache.Tag = ""
-		rCache.Reference = rCache.CommonName()
+		rCache := r.SetDigest(r.Digest)
 		if m, err := reg.cacheMan.Get(rCache); err == nil {
 			return m, nil
 		}
@@ -152,10 +148,7 @@ func (reg *Reg) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest, 
 	if err != nil {
 		return nil, err
 	}
-	rCache := r
-	rCache.Tag = ""
-	rCache.Digest = m.GetDescriptor().Digest.String()
-	rCache.Reference = rCache.CommonName()
+	rCache := r.SetDigest(m.GetDescriptor().Digest.String())
 	reg.cacheMan.Set(rCache, m)
 	return m, nil
 }
@@ -165,9 +158,7 @@ func (reg *Reg) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest,
 	// build the request
 	var tagOrDigest string
 	if r.Digest != "" {
-		rCache := r
-		rCache.Tag = ""
-		rCache.Reference = rCache.CommonName()
+		rCache := r.SetDigest(r.Digest)
 		if m, err := reg.cacheMan.Get(rCache); err == nil {
 			return m, nil
 		}
@@ -275,10 +266,7 @@ func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest,
 		return fmt.Errorf("failed to put manifest %s: %w", r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 	}
 
-	rCache := r
-	rCache.Tag = ""
-	rCache.Digest = m.GetDescriptor().Digest.String()
-	rCache.Reference = rCache.CommonName()
+	rCache := r.SetDigest(m.GetDescriptor().Digest.String())
 	reg.cacheMan.Set(rCache, m)
 
 	// update referrers if defined on this manifest
@@ -288,10 +276,7 @@ func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest,
 			return err
 		}
 		if mDesc != nil && mDesc.MediaType != "" && mDesc.Size > 0 && mDesc.Digest.String() != "" {
-			rSubj := r
-			rSubj.Tag = ""
-			rSubj.Digest = mDesc.Digest.String()
-			rSubj.Reference = rSubj.CommonName()
+			rSubj := r.SetDigest(mDesc.Digest.String())
 			reg.cacheRL.Delete(rSubj)
 			if mDesc.Digest.String() != resp.HTTPResponse().Header.Get(OCISubjectHeader) {
 				err = reg.referrerPut(ctx, r, m)

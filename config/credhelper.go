@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// cred helper wraps a command
+// credHelper wraps a command that manages user credentials.
 type credHelper struct {
 	prog string
 	env  map[string]string
@@ -40,6 +40,7 @@ type credStore struct {
 	Secret    string `json:"Secret"`
 }
 
+// get requests a credential from the helper for a given host.
 func (ch *credHelper) get(host *Host) error {
 	hostname := host.Hostname
 	if host.CredHost != "" {
@@ -71,6 +72,7 @@ func (ch *credHelper) get(host *Host) error {
 	return nil
 }
 
+// list returns a list of hosts supported by the credential helper.
 func (ch *credHelper) list() ([]Host, error) {
 	credList := map[string]string{}
 	outB, err := ch.run("list", bytes.NewReader([]byte{}))
@@ -92,4 +94,4 @@ func (ch *credHelper) list() ([]Host, error) {
 	return hostList, nil
 }
 
-// store method not implemented
+// TODO: store method not implemented
