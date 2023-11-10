@@ -460,8 +460,8 @@ func TestDataJSON(t *testing.T) {
 			name: "No Data",
 			dJSON: []byte(`{
 				"mediaType": "application/vnd.docker.image.rootfs.diff.tar.gzip",
-				"size":      941,
-				"digest":    "sha256:f6e2d7fa40092cf3d9817bf6ff54183d68d108a47fdf5a5e476c612626c80e14"
+				"digest":    "sha256:f6e2d7fa40092cf3d9817bf6ff54183d68d108a47fdf5a5e476c612626c80e14",
+				"size":      941
 			}`),
 			wantErr: ErrParsingFailed,
 		},
@@ -469,8 +469,8 @@ func TestDataJSON(t *testing.T) {
 			name: "Bad Data",
 			dJSON: []byte(`{
 				"mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-				"size":      1234,
 				"digest":    "sha256:f6e2d7fa40092cf3d9817bf6ff54183d68d108a47fdf5a5e476c612626c80e14",
+				"size":      1234,
 				"data":      "Invalid data string"
 			}`),
 			wantErr: fmt.Errorf("illegal base64 data at input byte 7"),
@@ -479,8 +479,8 @@ func TestDataJSON(t *testing.T) {
 			name: "Bad Digest",
 			dJSON: []byte(`{
 				"mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-				"size":      10,
 				"digest":    "sha256:e4a380728755139f156563e8b795581d5915dcc947fe937c524c6d52fd604b99",
+				"size":      10,
 				"data":      "ZXhhbXBsZSBkYXRh"
 			}`),
 			wantErr: ErrParsingFailed,
@@ -489,8 +489,8 @@ func TestDataJSON(t *testing.T) {
 			name: "Bad Size",
 			dJSON: []byte(`{
 				"mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-				"size":      1000,
 				"digest":    "sha256:44752f37272e944fd2c913a35342eaccdd1aaf189bae50676b301ab213fc5061",
+				"size":      1000,
 				"data":      "ZXhhbXBsZSBkYXRh"
 			}`),
 			wantErr: ErrParsingFailed,
@@ -499,8 +499,8 @@ func TestDataJSON(t *testing.T) {
 			name: "Good data",
 			dJSON: []byte(`{
 				"mediaType": "application/vnd.oci.image.layer.v1.tar+gzip",
-				"size":      12,
 				"digest":    "sha256:44752f37272e944fd2c913a35342eaccdd1aaf189bae50676b301ab213fc5061",
+				"size":      12,
 				"data":      "ZXhhbXBsZSBkYXRh"
 			}`),
 			wantData: []byte("example data"),
