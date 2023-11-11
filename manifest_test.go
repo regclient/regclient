@@ -379,4 +379,18 @@ func TestManifest(t *testing.T) {
 			return
 		}
 	})
+	t.Run("Invalid ref", func(t *testing.T) {
+		r, err := ref.NewHost("registry.example.org")
+		if err != nil {
+			t.Errorf("Failed creating ref: %v", err)
+		}
+		_, err = rc.ManifestGet(ctx, r)
+		if !errors.Is(err, types.ErrInvalidReference) {
+			t.Errorf("ManifestGet did not respond with invalid ref: %v", err)
+		}
+		_, err = rc.ManifestHead(ctx, r)
+		if !errors.Is(err, types.ErrInvalidReference) {
+			t.Errorf("ManifestGet did not respond with invalid ref: %v", err)
+		}
+	})
 }
