@@ -2,6 +2,7 @@ package regclient
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
@@ -60,6 +61,9 @@ func WithManifestRequireDigest() ManifestOpts {
 // The reference must include the digest to delete (see TagDelete for deleting a tag).
 // All tags pointing to the manifest will be deleted.
 func (rc *RegClient) ManifestDelete(ctx context.Context, r ref.Ref, opts ...ManifestOpts) error {
+	if !r.IsSet() {
+		return fmt.Errorf("ref is not set: %s%.0w", r.CommonName(), types.ErrInvalidReference)
+	}
 	opt := manifestOpt{schemeOpts: []scheme.ManifestOpts{}}
 	for _, fn := range opts {
 		fn(&opt)
@@ -73,6 +77,9 @@ func (rc *RegClient) ManifestDelete(ctx context.Context, r ref.Ref, opts ...Mani
 
 // ManifestGet retrieves a manifest.
 func (rc *RegClient) ManifestGet(ctx context.Context, r ref.Ref, opts ...ManifestOpts) (manifest.Manifest, error) {
+	if !r.IsSet() {
+		return nil, fmt.Errorf("ref is not set: %s%.0w", r.CommonName(), types.ErrInvalidReference)
+	}
 	opt := manifestOpt{schemeOpts: []scheme.ManifestOpts{}}
 	for _, fn := range opts {
 		fn(&opt)
@@ -97,6 +104,9 @@ func (rc *RegClient) ManifestGet(ctx context.Context, r ref.Ref, opts ...Manifes
 
 // ManifestHead queries for the existence of a manifest and returns metadata (digest, media-type, size).
 func (rc *RegClient) ManifestHead(ctx context.Context, r ref.Ref, opts ...ManifestOpts) (manifest.Manifest, error) {
+	if !r.IsSet() {
+		return nil, fmt.Errorf("ref is not set: %s%.0w", r.CommonName(), types.ErrInvalidReference)
+	}
 	opt := manifestOpt{schemeOpts: []scheme.ManifestOpts{}}
 	for _, fn := range opts {
 		fn(&opt)
@@ -118,6 +128,9 @@ func (rc *RegClient) ManifestHead(ctx context.Context, r ref.Ref, opts ...Manife
 // ManifestPut pushes a manifest.
 // Any descriptors referenced by the manifest typically need to be pushed first.
 func (rc *RegClient) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest, opts ...ManifestOpts) error {
+	if !r.IsSetRepo() {
+		return fmt.Errorf("ref is not set: %s%.0w", r.CommonName(), types.ErrInvalidReference)
+	}
 	opt := manifestOpt{schemeOpts: []scheme.ManifestOpts{}}
 	for _, fn := range opts {
 		fn(&opt)

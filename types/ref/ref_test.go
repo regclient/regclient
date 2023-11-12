@@ -387,7 +387,7 @@ func TestNew(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			ref, err := New(tc.ref)
+			r, err := New(tc.ref)
 			if tc.wantE != nil {
 				if err == nil {
 					t.Errorf("error not received, expected %v", tc.wantE)
@@ -399,26 +399,26 @@ func TestNew(t *testing.T) {
 				t.Errorf("failed creating reference, err: %v", err)
 				return
 			}
-			if tc.ref != ref.Reference {
-				t.Errorf("reference mismatch for %s, received %s", tc.ref, ref.Reference)
+			if tc.ref != r.Reference {
+				t.Errorf("reference mismatch for %s, received %s", tc.ref, r.Reference)
 			}
-			if tc.scheme != ref.Scheme {
-				t.Errorf("scheme mismatch for %s, expected %s, received %s", tc.ref, tc.scheme, ref.Scheme)
+			if tc.scheme != r.Scheme {
+				t.Errorf("scheme mismatch for %s, expected %s, received %s", tc.ref, tc.scheme, r.Scheme)
 			}
-			if tc.registry != ref.Registry {
-				t.Errorf("registry mismatch for %s, expected %s, received %s", tc.ref, tc.registry, ref.Registry)
+			if tc.registry != r.Registry {
+				t.Errorf("registry mismatch for %s, expected %s, received %s", tc.ref, tc.registry, r.Registry)
 			}
-			if tc.repository != ref.Repository {
-				t.Errorf("repository mismatch for %s, expected %s, received %s", tc.ref, tc.repository, ref.Repository)
+			if tc.repository != r.Repository {
+				t.Errorf("repository mismatch for %s, expected %s, received %s", tc.ref, tc.repository, r.Repository)
 			}
-			if tc.tag != ref.Tag {
-				t.Errorf("tag mismatch for %s, expected %s, received %s", tc.ref, tc.tag, ref.Tag)
+			if tc.tag != r.Tag {
+				t.Errorf("tag mismatch for %s, expected %s, received %s", tc.ref, tc.tag, r.Tag)
 			}
-			if tc.digest != ref.Digest {
-				t.Errorf("digest mismatch for %s, expected %s, received %s", tc.ref, tc.digest, ref.Digest)
+			if tc.digest != r.Digest {
+				t.Errorf("digest mismatch for %s, expected %s, received %s", tc.ref, tc.digest, r.Digest)
 			}
-			if tc.path != ref.Path {
-				t.Errorf("path mismatch for %s, expected %s, received %s", tc.ref, tc.path, ref.Path)
+			if tc.path != r.Path {
+				t.Errorf("path mismatch for %s, expected %s, received %s", tc.ref, tc.path, r.Path)
 			}
 		})
 	}
@@ -583,7 +583,7 @@ func TestNewHost(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			ref, err := NewHost(tc.host)
+			r, err := NewHost(tc.host)
 			if tc.wantE != nil {
 				if err == nil {
 					t.Errorf("error not received, expected %v", tc.wantE)
@@ -595,17 +595,17 @@ func TestNewHost(t *testing.T) {
 				t.Errorf("failed creating reference, err: %v", err)
 				return
 			}
-			if ref.IsSet() {
-				t.Errorf("isSet unexpected for %s, expected %t, received %t", tc.host, false, ref.IsSet())
+			if r.Scheme == "reg" && r.IsSet() {
+				t.Errorf("isSet unexpected for %s, expected %t, received %t", tc.host, false, r.IsSet())
 			}
-			if tc.scheme != ref.Scheme {
-				t.Errorf("scheme mismatch for %s, expected %s, received %s", tc.host, tc.scheme, ref.Scheme)
+			if tc.scheme != r.Scheme {
+				t.Errorf("scheme mismatch for %s, expected %s, received %s", tc.host, tc.scheme, r.Scheme)
 			}
-			if tc.registry != ref.Registry {
-				t.Errorf("registry mismatch for %s, expected %s, received %s", tc.host, tc.registry, ref.Registry)
+			if tc.registry != r.Registry {
+				t.Errorf("registry mismatch for %s, expected %s, received %s", tc.host, tc.registry, r.Registry)
 			}
-			if tc.path != ref.Path {
-				t.Errorf("path mismatch for %s, expected %s, received %s", tc.host, tc.path, ref.Path)
+			if tc.path != r.Path {
+				t.Errorf("path mismatch for %s, expected %s, received %s", tc.host, tc.path, r.Path)
 			}
 		})
 	}
@@ -790,10 +790,11 @@ func TestEqual(t *testing.T) {
 func TestIsSet(t *testing.T) {
 	t.Parallel()
 	tt := []struct {
-		name   string
-		ref    Ref
-		isSet  bool
-		isZero bool
+		name      string
+		ref       Ref
+		isSet     bool
+		isSetRepo bool
+		isZero    bool
 	}{
 		{
 			name:   "zero",
@@ -821,12 +822,13 @@ func TestIsSet(t *testing.T) {
 			},
 		},
 		{
-			name: "no tag",
+			name: "reg no tag",
 			ref: Ref{
 				Scheme:     "reg",
 				Registry:   "docker.io",
 				Repository: "library/alpine",
 			},
+			isSetRepo: true,
 		},
 		{
 			name: "no path",
@@ -836,6 +838,15 @@ func TestIsSet(t *testing.T) {
 			},
 		},
 		{
+			name: "ocidir no tag",
+			ref: Ref{
+				Scheme: "ocidir",
+				Path:   ".",
+			},
+			isSetRepo: true,
+			isSet:     true,
+		},
+		{
 			name: "reg with digest",
 			ref: Ref{
 				Scheme:     "reg",
@@ -843,7 +854,8 @@ func TestIsSet(t *testing.T) {
 				Repository: "library/alpine",
 				Digest:     testDigest,
 			},
-			isSet: true,
+			isSetRepo: true,
+			isSet:     true,
 		},
 		{
 			name: "reg with tag",
@@ -853,7 +865,8 @@ func TestIsSet(t *testing.T) {
 				Repository: "library/alpine",
 				Tag:        "latest",
 			},
-			isSet: true,
+			isSetRepo: true,
+			isSet:     true,
 		},
 		{
 			name: "ocidir",
@@ -862,11 +875,15 @@ func TestIsSet(t *testing.T) {
 				Path:   ".",
 				Tag:    "latest",
 			},
-			isSet: true,
+			isSetRepo: true,
+			isSet:     true,
 		},
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.ref.IsSetRepo() != tc.isSetRepo {
+				t.Errorf("hasRepo is not %t", tc.isSetRepo)
+			}
 			if tc.ref.IsSet() != tc.isSet {
 				t.Errorf("isSet is not %t", tc.isSet)
 			}

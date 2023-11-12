@@ -27,7 +27,7 @@ var (
 	ErrHTTPStatus = errors.New("unexpected http status code")
 	// ErrInvalidChallenge indicates an issue with the received challenge in the WWW-Authenticate header
 	ErrInvalidChallenge = errors.New("invalid challenge header")
-	// ErrInvalidReference indicates the reference to an image is has an invalid synax
+	// ErrInvalidReference indicates the reference to an image is has an invalid syntax
 	ErrInvalidReference = errors.New("invalid reference")
 	// ErrLoopDetected indicates a child node points back to the parent
 	ErrLoopDetected = errors.New("loop detected")

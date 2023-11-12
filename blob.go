@@ -3,6 +3,7 @@ package regclient
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"time"
 
@@ -35,6 +36,12 @@ func BlobWithCallback(callback func(kind types.CallbackKind, instance string, st
 // If the blob already exists in the target, the copy is skipped.
 // A server side cross repository blob mount is attempted.
 func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor, opts ...BlobOpts) error {
+	if !refSrc.IsSetRepo() {
+		return fmt.Errorf("refSrc is not set: %s%.0w", refSrc.CommonName(), types.ErrInvalidReference)
+	}
+	if !refTgt.IsSetRepo() {
+		return fmt.Errorf("refTgt is not set: %s%.0w", refTgt.CommonName(), types.ErrInvalidReference)
+	}
 	var opt blobOpt
 	for _, optFn := range opts {
 		optFn(&opt)
@@ -162,6 +169,9 @@ func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Re
 // This method should only be used to repair a damaged registry.
 // Typically a server side garbage collection should be used to purge unused blobs.
 func (rc *RegClient) BlobDelete(ctx context.Context, r ref.Ref, d types.Descriptor) error {
+	if !r.IsSetRepo() {
+		return fmt.Errorf("ref is not set: %s%.0w", r.CommonName(), types.ErrInvalidReference)
+	}
 	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
 		return err
@@ -176,6 +186,9 @@ func (rc *RegClient) BlobGet(ctx context.Context, r ref.Ref, d types.Descriptor)
 	if err == nil {
 		return blob.NewReader(blob.WithDesc(d), blob.WithRef(r), blob.WithReader(bytes.NewReader(data))), nil
 	}
+	if !r.IsSetRepo() {
+		return nil, fmt.Errorf("ref is not set: %s%.0w", r.CommonName(), types.ErrInvalidReference)
+	}
 	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
 		return nil, err
@@ -184,8 +197,11 @@ func (rc *RegClient) BlobGet(ctx context.Context, r ref.Ref, d types.Descriptor)
 }
 
 // BlobGetOCIConfig retrieves an OCI config from a blob, automatically extracting the JSON.
-func (rc *RegClient) BlobGetOCIConfig(ctx context.Context, ref ref.Ref, d types.Descriptor) (blob.OCIConfig, error) {
-	b, err := rc.BlobGet(ctx, ref, d)
+func (rc *RegClient) BlobGetOCIConfig(ctx context.Context, r ref.Ref, d types.Descriptor) (blob.OCIConfig, error) {
+	if !r.IsSetRepo() {
+		return nil, fmt.Errorf("ref is not set: %s%.0w", r.CommonName(), types.ErrInvalidReference)
+	}
+	b, err := rc.BlobGet(ctx, r, d)
 	if err != nil {
 		return nil, err
 	}
@@ -194,6 +210,9 @@ func (rc *RegClient) BlobGetOCIConfig(ctx context.Context, ref ref.Ref, d types.
 
 // BlobHead is used to verify if a blob exists and is accessible.
 func (rc *RegClient) BlobHead(ctx context.Context, r ref.Ref, d types.Descriptor) (blob.Reader, error) {
+	if !r.IsSetRepo() {
+		return nil, fmt.Errorf("ref is not set: %s%.0w", r.CommonName(), types.ErrInvalidReference)
+	}
 	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
 		return nil, err
@@ -203,6 +222,12 @@ func (rc *RegClient) BlobHead(ctx context.Context, r ref.Ref, d types.Descriptor
 
 // BlobMount attempts to perform a server side copy/mount of the blob between repositories.
 func (rc *RegClient) BlobMount(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor) error {
+	if !refSrc.IsSetRepo() {
+		return fmt.Errorf("ref is not set: %s%.0w", refSrc.CommonName(), types.ErrInvalidReference)
+	}
+	if !refTgt.IsSetRepo() {
+		return fmt.Errorf("ref is not set: %s%.0w", refTgt.CommonName(), types.ErrInvalidReference)
+	}
 	schemeAPI, err := rc.schemeGet(refSrc.Scheme)
 	if err != nil {
 		return err
@@ -214,10 +239,13 @@ func (rc *RegClient) BlobMount(ctx context.Context, refSrc ref.Ref, refTgt ref.R
 // This will attempt an anonymous blob mount first which some registries may support.
 // It will then try doing a full put of the blob without chunking (most widely supported).
 // If the full put fails, it will fall back to a chunked upload (useful for flaky networks) if the reader is also an [io.Seeker].
-func (rc *RegClient) BlobPut(ctx context.Context, ref ref.Ref, d types.Descriptor, rdr io.Reader) (types.Descriptor, error) {
-	schemeAPI, err := rc.schemeGet(ref.Scheme)
+func (rc *RegClient) BlobPut(ctx context.Context, r ref.Ref, d types.Descriptor, rdr io.Reader) (types.Descriptor, error) {
+	if !r.IsSetRepo() {
+		return types.Descriptor{}, fmt.Errorf("ref is not set: %s%.0w", r.CommonName(), types.ErrInvalidReference)
+	}
+	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
 		return types.Descriptor{}, err
 	}
-	return schemeAPI.BlobPut(ctx, ref, d, rdr)
+	return schemeAPI.BlobPut(ctx, r, d, rdr)
 }

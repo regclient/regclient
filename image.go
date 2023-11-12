@@ -958,6 +958,9 @@ func imageSeenOrWait(ctx context.Context, opt *imageOpt, tag string, dig digest.
 //
 // [OCI Layout]: https://github.com/opencontainers/image-spec/blob/master/image-layout.md
 func (rc *RegClient) ImageExport(ctx context.Context, r ref.Ref, outStream io.Writer, opts ...ImageOpts) error {
+	if !r.IsSet() {
+		return fmt.Errorf("ref is not set: %s%.0w", r.CommonName(), types.ErrInvalidReference)
+	}
 	var ociIndex v1.Index
 
 	var opt imageOpt
@@ -1062,7 +1065,7 @@ func (rc *RegClient) ImageExport(ctx context.Context, r ref.Ref, outStream io.Wr
 }
 
 // imageExportDescriptor pulls a manifest or blob, outputs to a tar file, and recursively processes any nested manifests or blobs
-func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, desc types.Descriptor, twd *tarWriteData) error {
+func (rc *RegClient) imageExportDescriptor(ctx context.Context, r ref.Ref, desc types.Descriptor, twd *tarWriteData) error {
 	tarFilename := tarOCILayoutDescPath(desc)
 	if twd.files[tarFilename] {
 		// blob has already been imported into tar, skip
@@ -1072,7 +1075,7 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 	case types.MediaTypeDocker1Manifest, types.MediaTypeDocker1ManifestSigned, types.MediaTypeDocker2Manifest, types.MediaTypeOCI1Manifest:
 		// Handle single platform manifests
 		// retrieve manifest
-		m, err := rc.ManifestGet(ctx, ref, WithManifestDesc(desc))
+		m, err := rc.ManifestGet(ctx, r, WithManifestDesc(desc))
 		if err != nil {
 			return err
 		}
@@ -1101,7 +1104,7 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 			return err
 		}
 		if err == nil {
-			err = rc.imageExportDescriptor(ctx, ref, confD, twd)
+			err = rc.imageExportDescriptor(ctx, r, confD, twd)
 			if err != nil {
 				return err
 			}
@@ -1115,7 +1118,7 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 		}
 		if err == nil {
 			for _, layerD := range layerDL {
-				err = rc.imageExportDescriptor(ctx, ref, layerD, twd)
+				err = rc.imageExportDescriptor(ctx, r, layerD, twd)
 				if err != nil {
 					return err
 				}
@@ -1125,7 +1128,7 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 	case types.MediaTypeDocker2ManifestList, types.MediaTypeOCI1ManifestList:
 		// handle OCI index and Docker manifest list
 		// retrieve manifest
-		m, err := rc.ManifestGet(ctx, ref, WithManifestDesc(desc))
+		m, err := rc.ManifestGet(ctx, r, WithManifestDesc(desc))
 		if err != nil {
 			return err
 		}
@@ -1152,7 +1155,7 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 			return err
 		}
 		for _, md := range mdl {
-			err = rc.imageExportDescriptor(ctx, ref, md, twd)
+			err = rc.imageExportDescriptor(ctx, r, md, twd)
 			if err != nil {
 				return err
 			}
@@ -1160,7 +1163,7 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 
 	default:
 		// get blob
-		blobR, err := rc.BlobGet(ctx, ref, desc)
+		blobR, err := rc.BlobGet(ctx, r, desc)
 		if err != nil {
 			return err
 		}
@@ -1183,7 +1186,10 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, ref ref.Ref, des
 }
 
 // ImageImport pushes an image from a tar file (ImageExport) to a registry.
-func (rc *RegClient) ImageImport(ctx context.Context, ref ref.Ref, rs io.ReadSeeker, opts ...ImageOpts) error {
+func (rc *RegClient) ImageImport(ctx context.Context, r ref.Ref, rs io.ReadSeeker, opts ...ImageOpts) error {
+	if !r.IsSetRepo() {
+		return fmt.Errorf("ref is not set: %s%.0w", r.CommonName(), types.ErrInvalidReference)
+	}
 	var opt imageOpt
 	for _, optFn := range opts {
 		optFn(&opt)
@@ -1199,7 +1205,7 @@ func (rc *RegClient) ImageImport(ctx context.Context, ref ref.Ref, rs io.ReadSee
 	}
 
 	// add handler for oci-layout, index.json, and manifest.json
-	rc.imageImportOCIAddHandler(ctx, ref, trd)
+	rc.imageImportOCIAddHandler(ctx, r, trd)
 	rc.imageImportDockerAddHandler(trd)
 
 	// process tar file looking for oci-layout and index.json, load manifests/blobs on success
@@ -1208,7 +1214,7 @@ func (rc *RegClient) ImageImport(ctx context.Context, ref ref.Ref, rs io.ReadSee
 	if err != nil && errors.Is(err, types.ErrNotFound) && trd.dockerManifestFound {
 		// import failed but manifest.json found, fall back to manifest.json processing
 		// add handlers for the docker manifest layers
-		rc.imageImportDockerAddLayerHandlers(ctx, ref, trd)
+		rc.imageImportDockerAddLayerHandlers(ctx, r, trd)
 		// reprocess the tar looking for manifest.json files
 		err = trd.tarReadAll(rs)
 		if err != nil {
@@ -1219,7 +1225,7 @@ func (rc *RegClient) ImageImport(ctx context.Context, ref ref.Ref, rs io.ReadSee
 		if err != nil {
 			return err
 		}
-		err = rc.ManifestPut(ctx, ref, m)
+		err = rc.ManifestPut(ctx, r, m)
 		if err != nil {
 			return err
 		}
@@ -1228,7 +1234,7 @@ func (rc *RegClient) ImageImport(ctx context.Context, ref ref.Ref, rs io.ReadSee
 		return err
 	} else {
 		// successful load of OCI blobs, now push manifest and tag
-		err = rc.imageImportOCIPushManifests(ctx, ref, trd)
+		err = rc.imageImportOCIPushManifests(ctx, r, trd)
 		if err != nil {
 			return err
 		}
@@ -1236,14 +1242,14 @@ func (rc *RegClient) ImageImport(ctx context.Context, ref ref.Ref, rs io.ReadSee
 	return nil
 }
 
-func (rc *RegClient) imageImportBlob(ctx context.Context, ref ref.Ref, desc types.Descriptor, trd *tarReadData) error {
+func (rc *RegClient) imageImportBlob(ctx context.Context, r ref.Ref, desc types.Descriptor, trd *tarReadData) error {
 	// skip if blob already exists
-	_, err := rc.BlobHead(ctx, ref, desc)
+	_, err := rc.BlobHead(ctx, r, desc)
 	if err == nil {
 		return nil
 	}
 	// upload blob
-	_, err = rc.BlobPut(ctx, ref, desc, trd.tr)
+	_, err = rc.BlobPut(ctx, r, desc, trd.tr)
 	if err != nil {
 		return err
 	}
@@ -1263,7 +1269,7 @@ func (rc *RegClient) imageImportDockerAddHandler(trd *tarReadData) {
 }
 
 // imageImportDockerAddLayerHandlers imports the docker layers when OCI import fails and docker manifest found.
-func (rc *RegClient) imageImportDockerAddLayerHandlers(ctx context.Context, ref ref.Ref, trd *tarReadData) {
+func (rc *RegClient) imageImportDockerAddLayerHandlers(ctx context.Context, r ref.Ref, trd *tarReadData) {
 	// remove handlers for OCI
 	delete(trd.handlers, ociLayoutFilename)
 	delete(trd.handlers, ociIndexFilename)
@@ -1302,7 +1308,7 @@ func (rc *RegClient) imageImportDockerAddLayerHandlers(ctx context.Context, ref 
 	// add handler for config
 	trd.handlers[filepath.Clean(trd.dockerManifestList[index].Config)] = func(header *tar.Header, trd *tarReadData) error {
 		// upload blob, digest is unknown
-		d, err := rc.BlobPut(ctx, ref, types.Descriptor{Size: header.Size}, trd.tr)
+		d, err := rc.BlobPut(ctx, r, types.Descriptor{Size: header.Size}, trd.tr)
 		if err != nil {
 			return err
 		}
@@ -1325,7 +1331,7 @@ func (rc *RegClient) imageImportDockerAddLayerHandlers(ctx context.Context, ref 
 					return err
 				}
 				// upload blob, digest and size is unknown
-				d, err := rc.BlobPut(ctx, ref, types.Descriptor{}, gzipR)
+				d, err := rc.BlobPut(ctx, r, types.Descriptor{}, gzipR)
 				if err != nil {
 					return err
 				}
@@ -1344,7 +1350,7 @@ func (rc *RegClient) imageImportDockerAddLayerHandlers(ctx context.Context, ref 
 }
 
 // imageImportOCIAddHandler adds handlers for oci-layout and index.json found in OCI layout tar files.
-func (rc *RegClient) imageImportOCIAddHandler(ctx context.Context, ref ref.Ref, trd *tarReadData) {
+func (rc *RegClient) imageImportOCIAddHandler(ctx context.Context, r ref.Ref, trd *tarReadData) {
 	// add handler for oci-layout, index.json, and manifest.json
 	var err error
 	var foundLayout, foundIndex bool
@@ -1360,7 +1366,7 @@ func (rc *RegClient) imageImportOCIAddHandler(ctx context.Context, ref ref.Ref, 
 		}
 		// start recursively processing manifests starting with the index
 		// there's no need to push the index.json by digest, it will be pushed by tag if needed
-		err = rc.imageImportOCIHandleManifest(ctx, ref, trd.ociManifest, trd, false, false)
+		err = rc.imageImportOCIHandleManifest(ctx, r, trd.ociManifest, trd, false, false)
 		if err != nil {
 			return err
 		}
@@ -1405,7 +1411,7 @@ func (rc *RegClient) imageImportOCIAddHandler(ctx context.Context, ref ref.Ref, 
 }
 
 // imageImportOCIHandleManifest recursively processes index and manifest entries from an OCI layout tar.
-func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.Ref, m manifest.Manifest, trd *tarReadData, push bool, child bool) error {
+func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, r ref.Ref, m manifest.Manifest, trd *tarReadData, push bool, child bool) error {
 	// cache the manifest to avoid needing to pull again later, this is used if index.json is a wrapper around some other manifest
 	trd.manifests[m.GetDescriptor().Digest] = m
 
@@ -1426,19 +1432,19 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 					if err != nil {
 						return err
 					}
-					return rc.imageImportOCIHandleManifest(ctx, ref, md, trd, true, child)
+					return rc.imageImportOCIHandleManifest(ctx, r, md, trd, true, child)
 				case types.MediaTypeDocker2ImageConfig, types.MediaTypeOCI1ImageConfig,
 					types.MediaTypeDocker2LayerGzip, types.MediaTypeOCI1Layer, types.MediaTypeOCI1LayerGzip,
 					types.MediaTypeBuildkitCacheConfig:
 					// known blob media types
-					return rc.imageImportBlob(ctx, ref, d, trd)
+					return rc.imageImportBlob(ctx, r, d, trd)
 				default:
 					// attempt manifest import, fall back to blob import
 					md, err := manifest.New(manifest.WithDesc(d), manifest.WithRaw(b))
 					if err == nil {
-						return rc.imageImportOCIHandleManifest(ctx, ref, md, trd, true, child)
+						return rc.imageImportOCIHandleManifest(ctx, r, md, trd, true, child)
 					}
-					return rc.imageImportBlob(ctx, ref, d, trd)
+					return rc.imageImportBlob(ctx, r, d, trd)
 				}
 			}
 		}
@@ -1458,8 +1464,8 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 		var d types.Descriptor
 		if len(dl) == 1 {
 			d = dl[0]
-		} else if ref.Digest != "" {
-			d.Digest = digest.Digest(ref.Digest)
+		} else if r.Digest != "" {
+			d.Digest = digest.Digest(r.Digest)
 		} else if trd.name != "" {
 			for _, cur := range dl {
 				if cur.Annotations[annotationRefName] == trd.name {
@@ -1471,18 +1477,18 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 				return fmt.Errorf("could not find requested tag in index.json, %s", trd.name)
 			}
 		} else {
-			if ref.Tag == "" {
-				ref.Tag = "latest"
+			if r.Tag == "" {
+				r.Tag = "latest"
 			}
 			// if more than one digest is in the index, use the first matching tag
 			for _, cur := range dl {
-				if cur.Annotations[annotationRefName] == ref.Tag {
+				if cur.Annotations[annotationRefName] == r.Tag {
 					d = cur
 					break
 				}
 			}
 			if d.Digest.String() == "" {
-				return fmt.Errorf("could not find requested tag in index.json, %s", ref.Tag)
+				return fmt.Errorf("could not find requested tag in index.json, %s", r.Tag)
 			}
 		}
 		handleManifest(d, false)
@@ -1490,9 +1496,9 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 		trd.finish = append(trd.finish, func() error {
 			mRef, ok := trd.manifests[d.Digest]
 			if !ok {
-				return fmt.Errorf("could not find manifest to tag, ref: %s, digest: %s", ref.CommonName(), d.Digest)
+				return fmt.Errorf("could not find manifest to tag, ref: %s, digest: %s", r.CommonName(), d.Digest)
 			}
-			return rc.ManifestPut(ctx, ref, mRef)
+			return rc.ManifestPut(ctx, r, mRef)
 		})
 	} else if m.IsList() {
 		// for index/manifest lists, add handlers for each embedded manifest
@@ -1520,7 +1526,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 			if !trd.processed[filename] && trd.handlers[filename] == nil {
 				func(cd types.Descriptor) {
 					trd.handlers[filename] = func(header *tar.Header, trd *tarReadData) error {
-						return rc.imageImportBlob(ctx, ref, cd, trd)
+						return rc.imageImportBlob(ctx, r, cd, trd)
 					}
 				}(cd)
 			}
@@ -1535,7 +1541,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 			if !trd.processed[filename] && trd.handlers[filename] == nil {
 				func(d types.Descriptor) {
 					trd.handlers[filename] = func(header *tar.Header, trd *tarReadData) error {
-						return rc.imageImportBlob(ctx, ref, d, trd)
+						return rc.imageImportBlob(ctx, r, d, trd)
 					}
 				}(d)
 			}
@@ -1544,7 +1550,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 	// add a finish func to push the manifest, this gets skipped for the index.json
 	if push {
 		trd.finish = append(trd.finish, func() error {
-			mRef := ref
+			mRef := r
 			mRef.Digest = string(m.GetDescriptor().Digest)
 			_, err := rc.ManifestHead(ctx, mRef)
 			if err == nil {
@@ -1562,7 +1568,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, ref ref.R
 }
 
 // imageImportOCIPushManifests uploads manifests after OCI blobs were successfully loaded.
-func (rc *RegClient) imageImportOCIPushManifests(ctx context.Context, ref ref.Ref, trd *tarReadData) error {
+func (rc *RegClient) imageImportOCIPushManifests(ctx context.Context, r ref.Ref, trd *tarReadData) error {
 	// run finish handlers in reverse order to upload nested manifests
 	for i := len(trd.finish) - 1; i >= 0; i-- {
 		err := trd.finish[i]()
