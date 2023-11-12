@@ -1018,26 +1018,35 @@ func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclien
 		}
 	}
 
-	// get referrers
-	rl, err := rc.ReferrerList(ctx, r, rOpts...)
-	if err != nil {
-		return &tr, fmt.Errorf("failed to check referrers for %s: %w", r.CommonName(), err)
+	// skip referrer check if source indicates there are none
+	referrerAbsent := false
+	mHeader, err := m.RawHeaders()
+	if err == nil && mHeader != nil && strings.ToLower(mHeader.Get(types.HeaderOCIReferrer)) == "absent" {
+		referrerAbsent = true
 	}
-	if len(rl.Descriptors) > 0 {
-		tr.Referrer = []*treeResult{}
-		for _, d := range rl.Descriptors {
-			rReferrer := r.SetDigest(d.Digest.String())
-			tReferrer, err := artifactOpts.treeAddResult(ctx, rc, rReferrer, seen, rOpts, tags)
-			if tReferrer != nil {
-				tReferrer.ArtifactType = d.ArtifactType
-				if d.Platform != nil {
-					pCopy := *d.Platform
-					tReferrer.Platform = &pCopy
+	rl := referrer.ReferrerList{Tags: []string{}}
+	if !referrerAbsent {
+		// get referrers
+		rl, err = rc.ReferrerList(ctx, r, rOpts...)
+		if err != nil {
+			return &tr, fmt.Errorf("failed to check referrers for %s: %w", r.CommonName(), err)
+		}
+		if len(rl.Descriptors) > 0 {
+			tr.Referrer = []*treeResult{}
+			for _, d := range rl.Descriptors {
+				rReferrer := r.SetDigest(d.Digest.String())
+				tReferrer, err := artifactOpts.treeAddResult(ctx, rc, rReferrer, seen, rOpts, tags)
+				if tReferrer != nil {
+					tReferrer.ArtifactType = d.ArtifactType
+					if d.Platform != nil {
+						pCopy := *d.Platform
+						tReferrer.Platform = &pCopy
+					}
+					tr.Referrer = append(tr.Referrer, tReferrer)
 				}
-				tr.Referrer = append(tr.Referrer, tReferrer)
-			}
-			if err != nil {
-				return &tr, err
+				if err != nil {
+					return &tr, err
+				}
 			}
 		}
 	}

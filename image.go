@@ -618,9 +618,17 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 		}
 	}
 
+	// skip referrer check if source indicates there are none
+	referrerAbsent := false
+	if mSrc != nil {
+		headerSrc, err := mSrc.RawHeaders()
+		if err == nil && headerSrc != nil && strings.ToLower(headerSrc.Get(types.HeaderOCIReferrer)) == "absent" {
+			referrerAbsent = true
+		}
+	}
 	// copy referrers
 	referrerTags := []string{}
-	if opt.referrerConfs != nil {
+	if opt.referrerConfs != nil && !referrerAbsent {
 		rl, err := rc.ReferrerList(ctx, refSrc)
 		if err != nil {
 			return err
