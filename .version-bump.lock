@@ -17,7 +17,7 @@
 {"name":"gha-uses-vx","key":"docker/setup-buildx-action","version":"v3"}
 {"name":"gha-uses-vx","key":"softprops/action-gh-release","version":"v1"}
 {"name":"git-commit","key":"https://github.com/GoogleCloudPlatform/docker-credential-gcr.git:master","version":"62afb2723512fd6572c6300024e0c94f734b0ae3"}
-{"name":"git-commit","key":"https://github.com/awslabs/amazon-ecr-credential-helper.git:main","version":"8841054dbdb857dab097dc72c1edfd3eedbfdc11"}
+{"name":"git-commit","key":"https://github.com/awslabs/amazon-ecr-credential-helper.git:main","version":"eb10ac4f1f271798e77855e66b741072871158f9"}
 {"name":"git-commit","key":"https://github.com/grafi-tt/lunajson.git:master","version":"e6063d37de97dfdfe2749e24de949472bfad0945"}
 {"name":"git-commit","key":"https://github.com/kikito/semver.lua.git:master","version":"af495adc857d51fd1507a112be18523828a1da0d"}
 {"name":"git-tag-semver","key":"github.com/GoogleCloudPlatform/docker-credential-gcr","version":"v2.1.20"}
@@ -49,9 +49,10 @@
 {"name":"registry-digest-match","key":"anchore/syft:v0.93.0","version":"sha256:2e6a3664447e496e3c9774514ebc9637a294bbd8502ad42ca3510db414e27548"}
 {"name":"registry-digest-match","key":"anchore/syft:v0.94.0","version":"sha256:fc6fc91abc1d974f2e73041f375c1737d9fbb829594684ac4d72fc04dbd012ed"}
 {"name":"registry-digest-match","key":"anchore/syft:v0.95.0","version":"sha256:1b01bd140e0e72090a3707397b0d6db582b72697b79a167e5bc405845c561ae0"}
+{"name":"registry-digest-match","key":"anchore/syft:v0.96.0","version":"sha256:64dcff82a5bc1a0363d16c5cc45f01dcfa63e7ac25b9ebac2caef32e18827a06"}
 {"name":"registry-golang-latest","key":"golang-latest","version":"1.21"}
 {"name":"registry-golang-matrix","key":"golang-matrix","version":"[\"1.19\", \"1.20\", \"1.21\"]"}
-{"name":"registry-tag-arg-semver","key":"anchore/syft","version":"v0.95.0"}
+{"name":"registry-tag-arg-semver","key":"anchore/syft","version":"v0.96.0"}
 {"name":"registry-tag-arg-semver","key":"davidanson/markdownlint-cli2","version":"v0.10.0"}
 {"name":"registry-tag-arg-semver","key":"ghcr.io/igorshubovych/markdownlint-cli","version":"v0.35.0"}
-{"name":"registry-tag-match-semver","key":"anchore/syft","version":"v0.95.0"}
+{"name":"registry-tag-match-semver","key":"anchore/syft","version":"v0.96.0"}
