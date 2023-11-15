@@ -1687,5 +1687,39 @@ func TestRegHttp(t *testing.T) {
 			t.Errorf("error closing request: %v", err)
 		}
 	})
+	t.Run("Concurrent errors", func(t *testing.T) {
+		count := 3
+		ctxTimeout, cancel := context.WithTimeout(ctx, delayInit*4)
+		defer cancel()
+		apiGet := map[string]ReqAPI{
+			"": {
+				Method:     "GET",
+				Repository: "project",
+				Path:       "manifests/tag-get",
+				Headers:    headers,
+				Digest:     getDigest,
+			},
+		}
+		getReq := &Req{
+			Host: "rate-limit." + tsHost,
+			APIs: apiGet,
+		}
+		chResults := make(chan error)
+		for i := 0; i < count; i++ {
+			go func() {
+				resp, err := hc.Do(ctxTimeout, getReq)
+				if err == nil {
+					resp.Close()
+				}
+				chResults <- err
+			}()
+		}
+		for i := 0; i < count; i++ {
+			err := <-chResults
+			if err == nil {
+				t.Errorf("unexpected success on get for missing manifest")
+			}
+		}
+	})
 	// TODO: test various TLS configs (custom root for all hosts, custom root for one host, insecure)
 }
