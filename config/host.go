@@ -480,12 +480,10 @@ func (host *Host) Throttle() *throttle.Throttle {
 	if host.ReqConcurrent <= 0 {
 		return nil
 	}
+	mu.Lock()
+	defer mu.Unlock()
 	if host.throttle == nil {
-		mu.Lock()
-		defer mu.Unlock()
-		if host.throttle == nil {
-			host.throttle = throttle.New(int(host.ReqConcurrent))
-		}
+		host.throttle = throttle.New(int(host.ReqConcurrent))
 	}
 	return host.throttle
 }
