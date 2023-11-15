@@ -351,8 +351,9 @@ func (resp *clientResp) Next() error {
 				_ = resp.resp.Body.Close()
 			}
 			// delay for backoff if needed
-			if !h.backoffUntil.IsZero() && h.backoffUntil.After(time.Now()) {
-				sleepTime := time.Until(h.backoffUntil)
+			bu := resp.backoffUntil()
+			if !bu.IsZero() && bu.After(time.Now()) {
+				sleepTime := time.Until(bu)
 				c.log.WithFields(logrus.Fields{
 					"Host":    h.config.Name,
 					"Seconds": sleepTime.Seconds(),
@@ -704,6 +705,14 @@ func (resp *clientResp) backoffSet() error {
 	}
 
 	return nil
+}
+
+func (resp *clientResp) backoffUntil() time.Time {
+	c := resp.client
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	ch := c.host[resp.mirror]
+	return ch.backoffUntil
 }
 
 func (c *Client) getHost(host string) *clientHost {
