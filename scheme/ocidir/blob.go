@@ -82,9 +82,7 @@ func (o *OCIDir) BlobMount(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, 
 
 // BlobPut sends a blob to the repository, returns the digest and size when successful
 func (o *OCIDir) BlobPut(ctx context.Context, r ref.Ref, d types.Descriptor, rdr io.Reader) (types.Descriptor, error) {
-	o.mu.Lock()
-	t := o.throttleGet(r)
-	o.mu.Unlock()
+	t := o.throttleGet(r, false)
 	err := t.Acquire(ctx)
 	if err != nil {
 		return d, err
