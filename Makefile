@@ -25,6 +25,7 @@ ifeq "$(strip $(VER_BUMP))" ''
 		$(VER_BUMP_CONTAINER)
 endif
 MARKDOWN_LINT_VER?=v0.10.0
+GOMAJOR_VER?=v0.10.0
 GOSEC_VER?=v2.18.2
 GO_VULNCHECK_VER?=v1.0.1
 OSV_SCANNER_VER?=v1.4.3
@@ -175,12 +176,16 @@ plugin-user:
 plugin-host:
 	sudo cp docker-plugin/docker-regclient /usr/libexec/docker/cli-plugins/docker-regctl
 
+.PHONY: util-golang-major
+util-golang-major: $(GOPATH)/bin/gomajor ## check for major dependency updates
+	$(GOPATH)/bin/gomajor list
+
 .PHONY: util-golang-update
 util-golang-update: ## update go module versions
 	go get -u -t ./...
 	go mod tidy
 	go mod vendor
-	
+
 .PHONY: util-version-check
 util-version-check: ## check all dependencies for updates
 	$(VER_BUMP) check
@@ -188,6 +193,11 @@ util-version-check: ## check all dependencies for updates
 .PHONY: util-version-update
 util-version-update: ## update versions on all dependencies
 	$(VER_BUMP) update
+
+$(GOPATH)/bin/gomajor: .FORCE
+	@[ -f "$(GOPATH)/bin/gomajor" ] \
+	&& [ "$$($(GOPATH)/bin/gomajor version | grep '^version' | cut -f 2 -d ' ')" = "$(GOMAJOR_VER)" ] \
+	|| go install github.com/icholy/gomajor@$(GOMAJOR_VER); \
 
 $(GOPATH)/bin/goimports: .FORCE
 	@if [ ! -f "$(GOPATH)/bin/goimports" ] || ! go version -m "$(GOPATH)/bin/goimports" | grep -q "$$(go version | cut -f3 -d' ')"; then \

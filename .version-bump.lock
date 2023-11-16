@@ -23,6 +23,7 @@
 {"name":"git-tag-semver","key":"github.com/GoogleCloudPlatform/docker-credential-gcr","version":"v2.1.20"}
 {"name":"git-tag-semver","key":"github.com/dominikh/go-tools","version":"v0.4.6"}
 {"name":"git-tag-semver","key":"github.com/google/osv-scanner","version":"v1.4.3"}
+{"name":"git-tag-semver","key":"github.com/icholy/gomajor","version":"v0.10.0"}
 {"name":"git-tag-semver","key":"github.com/securego/gosec","version":"v2.18.2"}
 {"name":"git-tag-semver","key":"github.com/sigstore/cosign","version":"v2.2.1"}
 {"name":"git-tag-semver","key":"go.googlesource.com/vuln","version":"v1.0.1"}
