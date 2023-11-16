@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/regclient/regclient/internal/rwfs"
@@ -144,20 +145,34 @@ func TestBlob(t *testing.T) {
 		t.Errorf("blob put bytes, expected %s, saw %s", string(bBytes), string(fBytes))
 	}
 
-	// put the blob again, but without the descriptor
-	bRdr = bytes.NewReader(bBytes)
-	bpd, err = om.BlobPut(ctx, r, types.Descriptor{}, bRdr)
+	// concurrent blob put, without the descriptor to test for races
+	rPut, err := ref.New(fmt.Sprintf("%s@%s", "ocidir://testdata/put:latest", dl[0].Digest))
 	if err != nil {
-		t.Errorf("blob put: %v", err)
+		t.Errorf("failed to parse ref: %v", err)
 		return
 	}
-	if bpd.Size != int64(len(bBytes)) {
-		t.Errorf("blob put length, expected %d, received %d", len(bBytes), bpd.Size)
+	count := 5
+	var wg sync.WaitGroup
+	wg.Add(count)
+	for i := 0; i < 5; i++ {
+		go func() {
+			defer wg.Done()
+			bRdr := bytes.NewReader(bBytes)
+			bpd, err := om.BlobPut(ctx, rPut, types.Descriptor{}, bRdr)
+			if err != nil {
+				t.Errorf("blob put: %v", err)
+				return
+			}
+			if bpd.Size != int64(len(bBytes)) {
+				t.Errorf("blob put length, expected %d, received %d", len(bBytes), bpd.Size)
+			}
+			if bpd.Digest != cd.Digest {
+				t.Errorf("blob put digest, expected %s, received %s", cd.Digest, bpd.Digest)
+			}
+		}()
 	}
-	if bpd.Digest != cd.Digest {
-		t.Errorf("blob put digest, expected %s, received %s", cd.Digest, bpd.Digest)
-	}
-	fd, err = fm.Open(fmt.Sprintf("testdata/regctl/blobs/%s/%s", cd.Digest.Algorithm().String(), cd.Digest.Encoded()))
+	wg.Wait()
+	fd, err = fm.Open(fmt.Sprintf("testdata/put/blobs/%s/%s", cd.Digest.Algorithm().String(), cd.Digest.Encoded()))
 	if err != nil {
 		t.Errorf("blob put open file: %v", err)
 	}

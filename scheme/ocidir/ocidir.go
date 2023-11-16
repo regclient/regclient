@@ -132,19 +132,19 @@ func (o *OCIDir) Throttle(r ref.Ref, put bool) []*throttle.Throttle {
 	if !put || o.throttleDef <= 0 {
 		return tList
 	}
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	return []*throttle.Throttle{o.throttleGet(r)}
+	return []*throttle.Throttle{o.throttleGet(r, false)}
 }
 
-func (o *OCIDir) throttleGet(r ref.Ref) *throttle.Throttle {
+func (o *OCIDir) throttleGet(r ref.Ref, locked bool) *throttle.Throttle {
+	if !locked {
+		o.mu.Lock()
+		defer o.mu.Unlock()
+	}
 	if t, ok := o.throttle[r.Path]; ok {
 		return t
 	}
-	if _, ok := o.throttle[r.Path]; !ok {
-		// set a default throttle
-		o.throttle[r.Path] = throttle.New(o.throttleDef)
-	}
+	// init a new throttle
+	o.throttle[r.Path] = throttle.New(o.throttleDef)
 	return o.throttle[r.Path]
 }
 
