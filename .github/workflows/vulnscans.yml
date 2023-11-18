@@ -5,6 +5,9 @@ on:
     - cron: '0 06 * * 0' # 6am UTC on Sundays
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   govunlcheck:
     name: Go Vuln Check
