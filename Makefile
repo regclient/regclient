@@ -186,6 +186,17 @@ util-golang-update: ## update go module versions
 	go mod tidy
 	go mod vendor
 
+.PHONY: util-release-preview
+util-release-preview: $(GOPATH)/bin/gorelease ## preview changes for next release
+	git checkout main
+	./.github/release.sh -d
+	gorelease
+
+.PHONY: util-release-run
+util-release-run: ## generate a new release
+	git checkout main
+	./.github/release.sh
+
 .PHONY: util-version-check
 util-version-check: ## check all dependencies for updates
 	$(VER_BUMP) check
@@ -197,13 +208,15 @@ util-version-update: ## update versions on all dependencies
 $(GOPATH)/bin/gomajor: .FORCE
 	@[ -f "$(GOPATH)/bin/gomajor" ] \
 	&& [ "$$($(GOPATH)/bin/gomajor version | grep '^version' | cut -f 2 -d ' ')" = "$(GOMAJOR_VER)" ] \
-	|| go install github.com/icholy/gomajor@$(GOMAJOR_VER); \
+	|| go install github.com/icholy/gomajor@$(GOMAJOR_VER)
 
 $(GOPATH)/bin/goimports: .FORCE
-	@if [ ! -f "$(GOPATH)/bin/goimports" ] || ! go version -m "$(GOPATH)/bin/goimports" | grep -q "$$(go version | cut -f3 -d' ')"; then \
-		echo go install golang.org/x/tools/cmd/goimports@latest; \
-		go install golang.org/x/tools/cmd/goimports@latest; \
-	fi
+	@[ -f "$(GOPATH)/bin/goimports" ] \
+	||	go install golang.org/x/tools/cmd/goimports@latest
+
+$(GOPATH)/bin/gorelease: .FORCE
+	@[ -f "$(GOPATH)/bin/gorelease" ] \
+	|| go install golang.org/x/exp/cmd/gorelease@latest
 
 $(GOPATH)/bin/gosec: .FORCE
 	@[ -f $(GOPATH)/bin/gosec ] \
