@@ -10,17 +10,17 @@ on:
   schedule:
     - cron: '0 06 * * *'
 
+permissions:
+  contents: read
+
 jobs:
 
   docker:
     name: Docker
     runs-on: ubuntu-latest
     permissions:
-      # id-token is used by cosign's OIDC based signing
-      # https://blog.chainguard.dev/zero-friction-keyless-signing-with-github-actions/
-      id-token: 'write'
-      contents: 'write'
-      packages: 'write'
+      id-token: write # needed for OIDC Token signing with cosign
+      packages: write # needed for pushing packages
 
     strategy:
       matrix:
