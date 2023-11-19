@@ -6,6 +6,8 @@
 {"name":"gha-uses-semver","key":"docker/build-push-action","version":"v5.1.0"}
 {"name":"gha-uses-semver","key":"docker/login-action","version":"v3.0.0"}
 {"name":"gha-uses-semver","key":"docker/setup-buildx-action","version":"v3.0.0"}
+{"name":"gha-uses-semver","key":"github/codeql-action","version":"v2.22.7"}
+{"name":"gha-uses-semver","key":"ossf/scorecard-action","version":"v2.3.1"}
 {"name":"gha-uses-semver","key":"sigstore/cosign-installer","version":"v3.2.0"}
 {"name":"gha-uses-semver","key":"softprops/action-gh-release","version":"v0.1.15"}
 {"name":"git-commit","key":"https://github.com/GoogleCloudPlatform/docker-credential-gcr.git:master","version":"62afb2723512fd6572c6300024e0c94f734b0ae3"}
@@ -27,6 +29,8 @@
 {"name":"github-commit-match","key":"docker/build-push-action:v5.1.0","version":"4a13e500e55cf31b7a5d59a38ab2040ab0f42f56"}
 {"name":"github-commit-match","key":"docker/login-action:v3.0.0","version":"343f7c4344506bcbf9b4de18042ae17996df046d"}
 {"name":"github-commit-match","key":"docker/setup-buildx-action:v3.0.0","version":"f95db51fddba0c2d1ec667646a06c2ce06100226"}
+{"name":"github-commit-match","key":"github/codeql-action:v2.22.7","version":"66b90a5db151a8042fa97405c6cf843bbe433f7b"}
+{"name":"github-commit-match","key":"ossf/scorecard-action:v2.3.1","version":"0864cf19026789058feabb7e87baa5f140aac736"}
 {"name":"github-commit-match","key":"regclient/actions:main","version":"ebfd2d81d1f65d29511b7f578a9b17500f405d2b"}
 {"name":"github-commit-match","key":"sigstore/cosign-installer:v3.2.0","version":"1fc5bd396d372bee37d608f955b336615edf79c8"}
 {"name":"github-commit-match","key":"softprops/action-gh-release:v0.1.15","version":"de2c0eb89ae2a093876385947365aca7b0e5f844"}
