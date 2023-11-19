@@ -7,6 +7,7 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/regclient/regclient.svg)](https://pkg.go.dev/github.com/regclient/regclient)
 ![License](https://img.shields.io/github/license/regclient/regclient)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/regclient/regclient/badge)](https://securityscorecards.dev/viewer/?uri=github.com/regclient/regclient)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/8088/badge)](https://www.bestpractices.dev/projects/8088)
 
 Client interface for the registry API.
