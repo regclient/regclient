@@ -229,7 +229,7 @@ func (reg *Reg) BlobPut(ctx context.Context, r ref.Ref, d types.Descriptor, rdr 
 	}
 
 	// send a chunked upload if full upload not possible or too large
-	return reg.blobPutUploadChunked(ctx, r, putURL, rdr)
+	return reg.blobPutUploadChunked(ctx, r, putURL, d, rdr)
 }
 
 func (reg *Reg) blobGetUploadURL(ctx context.Context, r ref.Ref) (*url.URL, error) {
@@ -433,7 +433,7 @@ func (reg *Reg) blobPutUploadFull(ctx context.Context, r ref.Ref, d types.Descri
 	return nil
 }
 
-func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url.URL, rdr io.Reader) (types.Descriptor, error) {
+func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url.URL, d types.Descriptor, rdr io.Reader) (types.Descriptor, error) {
 	host := reg.hostGet(r.Registry)
 	bufSize := host.BlobChunk
 	if bufSize <= 0 {
@@ -582,14 +582,14 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url
 	}
 
 	// compute digest
-	d := digester.Digest()
+	digest := digester.Digest()
 
 	// send the final put
 	// append digest to request to use the monolithic upload option
 	if chunkURL.RawQuery != "" {
-		chunkURL.RawQuery = chunkURL.RawQuery + "&digest=" + url.QueryEscape(d.String())
+		chunkURL.RawQuery = chunkURL.RawQuery + "&digest=" + url.QueryEscape(digest.String())
 	} else {
-		chunkURL.RawQuery = "digest=" + url.QueryEscape(d.String())
+		chunkURL.RawQuery = "digest=" + url.QueryEscape(digest.String())
 	}
 
 	header := http.Header{
@@ -610,15 +610,15 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
-		return types.Descriptor{}, fmt.Errorf("failed to send blob (chunk digest), digest %s, ref %s: %w", d, r.CommonName(), err)
+		return types.Descriptor{}, fmt.Errorf("failed to send blob (chunk digest), digest %s, ref %s: %w", digest, r.CommonName(), err)
 	}
 	defer resp.Close()
 	// 201 follows distribution-spec, 204 is listed as possible in the Docker registry spec
 	if resp.HTTPResponse().StatusCode != 201 && resp.HTTPResponse().StatusCode != 204 {
-		return types.Descriptor{}, fmt.Errorf("failed to send blob (chunk digest), digest %s, ref %s: %w", d, r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
+		return types.Descriptor{}, fmt.Errorf("failed to send blob (chunk digest), digest %s, ref %s: %w", digest, r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 	}
 
-	return types.Descriptor{Digest: d, Size: chunkStart}, nil
+	return d, nil
 }
 
 // TODO: just take a putURL rather than the uuid and call a delete on that url
