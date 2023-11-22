@@ -197,7 +197,7 @@ func (reg *Reg) BlobPut(ctx context.Context, r ref.Ref, d types.Descriptor, rdr 
 	}
 
 	// send upload as one-chunk
-	tryPut := bool(d.Digest != "" && d.Size > 0)
+	tryPut := d.Digest != "" && d.Size > 0
 	if tryPut {
 		host := reg.hostGet(r.Registry)
 		maxPut := host.BlobMax
