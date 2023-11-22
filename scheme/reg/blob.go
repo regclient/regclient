@@ -171,6 +171,9 @@ func (reg *Reg) BlobMount(ctx context.Context, rSrc ref.Ref, rTgt ref.Ref, d typ
 }
 
 // BlobPut uploads a blob to a repository.
+// Descriptor is optional, leave size and digest to zero value if unknown.
+// Reader must also be an [io.Seeker] to support chunked upload fallback.
+//
 // This will attempt an anonymous blob mount first which some registries may support.
 // It will then try doing a full put of the blob without chunking (most widely supported).
 // If the full put fails, it will fall back to a chunked upload (useful for flaky networks).
