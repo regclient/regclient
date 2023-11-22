@@ -177,10 +177,6 @@ func (reg *Reg) BlobMount(ctx context.Context, rSrc ref.Ref, rTgt ref.Ref, d typ
 func (reg *Reg) BlobPut(ctx context.Context, r ref.Ref, d types.Descriptor, rdr io.Reader) (types.Descriptor, error) {
 	var putURL *url.URL
 	var err error
-	// defaults for content-type and length
-	if d.Size == 0 {
-		d.Size = -1
-	}
 
 	// attempt an anonymous blob mount
 	if d.Digest != "" && d.Size > 0 {
