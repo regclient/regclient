@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -121,17 +120,7 @@ type Opts func(*Client)
 // NewClient returns a client for handling requests
 func NewClient(opts ...Opts) *Client {
 	c := Client{
-		httpClient: &http.Client{
-			Transport: &http.Transport{
-				Dial: (&net.Dialer{
-					Timeout:   30 * time.Second,
-					KeepAlive: 30 * time.Second,
-				}).Dial,
-				TLSHandshakeTimeout:   10 * time.Second,
-				ResponseHeaderTimeout: 10 * time.Second,
-				ExpectContinueTimeout: 1 * time.Second,
-			},
-		},
+		httpClient: &http.Client{},
 		host:       map[string]*clientHost{},
 		retryLimit: DefaultRetryLimit,
 		delayInit:  defaultDelayInit,
