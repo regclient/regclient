@@ -1,9 +1,14 @@
 # regclient
 
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/regclient/regclient/go.yml?branch=main&label=Go%20build)
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/regclient/regclient/docker.yml?branch=main&label=Docker%20build)
-![GitHub](https://img.shields.io/github/license/regclient/regclient)
+![Go Workflow Status](https://img.shields.io/github/actions/workflow/status/regclient/regclient/go.yml?branch=main&label=Go%20build)
+![Docker Workflow Status](https://img.shields.io/github/actions/workflow/status/regclient/regclient/docker.yml?branch=main&label=Docker%20build)
+![Dependency Workflow Status](https://img.shields.io/github/actions/workflow/status/regclient/regclient/version-check.yml?branch=main&label=Dependency%20check)
+![Vulnerability Workflow Status](https://img.shields.io/github/actions/workflow/status/regclient/regclient/vulnscans.yml?branch=main&label=Vulnerability%20check)
+
 [![Go Reference](https://pkg.go.dev/badge/github.com/regclient/regclient.svg)](https://pkg.go.dev/github.com/regclient/regclient)
+![License](https://img.shields.io/github/license/regclient/regclient)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/regclient/regclient/badge)](https://securityscorecards.dev/viewer/?uri=github.com/regclient/regclient)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/8088/badge)](https://www.bestpractices.dev/projects/8088)
 
 Client interface for the registry API.
 This includes `regctl` for a command line interface to manage registries.

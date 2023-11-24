@@ -193,9 +193,18 @@ func (r Ref) CommonName() string {
 
 // IsSet returns true if needed values are defined for a specific reference.
 func (r Ref) IsSet() bool {
-	if r.Scheme == "" || (r.Tag == "" && r.Digest == "") {
+	if !r.IsSetRepo() {
 		return false
 	}
+	// Registry requires a tag or digest, OCI Layout doesn't require these.
+	if r.Scheme == "reg" && r.Tag == "" && r.Digest == "" {
+		return false
+	}
+	return true
+}
+
+// IsSetRepo returns true when the ref includes values for a specific repository.
+func (r Ref) IsSetRepo() bool {
 	switch r.Scheme {
 	case "reg":
 		if r.Registry != "" && r.Repository != "" {

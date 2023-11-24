@@ -25,13 +25,14 @@ ifeq "$(strip $(VER_BUMP))" ''
 		$(VER_BUMP_CONTAINER)
 endif
 MARKDOWN_LINT_VER?=v0.10.0
+GOMAJOR_VER?=v0.10.0
 GOSEC_VER?=v2.18.2
 GO_VULNCHECK_VER?=v1.0.1
 OSV_SCANNER_VER?=v1.4.3
 SYFT?=$(shell command -v syft 2>/dev/null)
 SYFT_CMD_VER:=$(shell [ -x "$(SYFT)" ] && echo "v$$($(SYFT) version | awk '/^Version: / {print $$2}')" || echo "0")
-SYFT_VERSION?=v0.95.0
-SYFT_CONTAINER?=anchore/syft:v0.95.0@sha256:1b01bd140e0e72090a3707397b0d6db582b72697b79a167e5bc405845c561ae0
+SYFT_VERSION?=v0.97.1
+SYFT_CONTAINER?=anchore/syft:v0.97.1@sha256:abc8d4310c54b56dd1e789d5f60b8ebc43f472652b34971d4b0d0dbed7f4ebda
 ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 	SYFT=docker run --rm \
 		-v "$(shell pwd)/:$(shell pwd)/" -w "$(shell pwd)" \
@@ -175,12 +176,27 @@ plugin-user:
 plugin-host:
 	sudo cp docker-plugin/docker-regclient /usr/libexec/docker/cli-plugins/docker-regctl
 
+.PHONY: util-golang-major
+util-golang-major: $(GOPATH)/bin/gomajor ## check for major dependency updates
+	$(GOPATH)/bin/gomajor list
+
 .PHONY: util-golang-update
 util-golang-update: ## update go module versions
 	go get -u -t ./...
 	go mod tidy
 	go mod vendor
-	
+
+.PHONY: util-release-preview
+util-release-preview: $(GOPATH)/bin/gorelease ## preview changes for next release
+	git checkout main
+	./.github/release.sh -d
+	gorelease
+
+.PHONY: util-release-run
+util-release-run: ## generate a new release
+	git checkout main
+	./.github/release.sh
+
 .PHONY: util-version-check
 util-version-check: ## check all dependencies for updates
 	$(VER_BUMP) check
@@ -189,11 +205,18 @@ util-version-check: ## check all dependencies for updates
 util-version-update: ## update versions on all dependencies
 	$(VER_BUMP) update
 
+$(GOPATH)/bin/gomajor: .FORCE
+	@[ -f "$(GOPATH)/bin/gomajor" ] \
+	&& [ "$$($(GOPATH)/bin/gomajor version | grep '^version' | cut -f 2 -d ' ')" = "$(GOMAJOR_VER)" ] \
+	|| go install github.com/icholy/gomajor@$(GOMAJOR_VER)
+
 $(GOPATH)/bin/goimports: .FORCE
-	@if [ ! -f "$(GOPATH)/bin/goimports" ] || ! go version -m "$(GOPATH)/bin/goimports" | grep -q "$$(go version | cut -f3 -d' ')"; then \
-		echo go install golang.org/x/tools/cmd/goimports@latest; \
-		go install golang.org/x/tools/cmd/goimports@latest; \
-	fi
+	@[ -f "$(GOPATH)/bin/goimports" ] \
+	||	go install golang.org/x/tools/cmd/goimports@latest
+
+$(GOPATH)/bin/gorelease: .FORCE
+	@[ -f "$(GOPATH)/bin/gorelease" ] \
+	|| go install golang.org/x/exp/cmd/gorelease@latest
 
 $(GOPATH)/bin/gosec: .FORCE
 	@[ -f $(GOPATH)/bin/gosec ] \

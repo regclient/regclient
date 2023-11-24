@@ -365,6 +365,8 @@ func TestBlobGet(t *testing.T) {
 func TestBlobPut(t *testing.T) {
 	t.Parallel()
 	blobRepo := "/proj/repo"
+	blobRepo5 := "/proj/repo5"
+	blobRepo6 := "/proj/repo6"
 	// privateRepo := "/proj/private"
 	ctx := context.Background()
 	// include a random blob
@@ -374,6 +376,7 @@ func TestBlobPut(t *testing.T) {
 	blobLen := 1024  // must be blobChunk < blobLen <= blobChunk * 2
 	blobLen3 := 1000 // blob without a full final chunk
 	blobLen4 := 2048 // must be blobChunk < blobLen <= blobChunk * 2
+	blobLen5 := 500  // single chunk
 	d1, blob1 := reqresp.NewRandomBlob(blobLen, seed)
 	uuid1 := uuid.New()
 	d2, blob2 := reqresp.NewRandomBlob(blobLen, seed+1)
@@ -382,6 +385,11 @@ func TestBlobPut(t *testing.T) {
 	uuid3 := uuid.New()
 	d4, blob4 := reqresp.NewRandomBlob(blobLen4, seed+3)
 	uuid4 := uuid.New()
+	d5, blob5 := reqresp.NewRandomBlob(blobLen5, seed+4)
+	uuid5 := uuid.New()
+	blob6 := []byte{}
+	d6 := digest.Canonical.FromBytes(blob6)
+	uuid6 := uuid.New()
 	// dMissing := digest.FromBytes([]byte("missing"))
 	user := "testing"
 	pass := "password"
@@ -874,6 +882,108 @@ func TestBlobPut(t *testing.T) {
 				},
 			},
 		},
+		// get upload5 location
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "POST for d5",
+				Method: "POST",
+				Path:   "/v2" + blobRepo5 + "/blobs/uploads/",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusAccepted,
+				Headers: http.Header{
+					"Content-Length": {"0"},
+					"Location":       {uuid5.String()},
+				},
+			},
+		},
+		// upload put for d5
+		{
+			ReqEntry: reqresp.ReqEntry{
+				DelOnUse: false,
+				Name:     "PUT for chunked d5",
+				Method:   "PUT",
+				Path:     "/v2" + blobRepo5 + "/blobs/uploads/" + uuid5.String(),
+				Query: map[string][]string{
+					"digest": {d5.String()},
+					"chunk":  {"1"},
+				},
+				Headers: http.Header{
+					"Content-Length": {"0"},
+					"Content-Type":   {"application/octet-stream"},
+				},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusCreated,
+				Headers: http.Header{
+					"Content-Length":        {"0"},
+					"Location":              {"/v2" + blobRepo5 + "/blobs/" + d5.String()},
+					"Docker-Content-Digest": {d5.String()},
+				},
+			},
+		},
+		// upload patch d5
+		{
+			ReqEntry: reqresp.ReqEntry{
+				DelOnUse: false,
+				Name:     "PATCH for d5",
+				Method:   "PATCH",
+				Path:     "/v2" + blobRepo5 + "/blobs/uploads/" + uuid5.String(),
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", blobLen5)},
+					"Content-Range":  {fmt.Sprintf("%d-%d", 0, blobLen5-1)},
+					"Content-Type":   {"application/octet-stream"},
+				},
+				Body: blob5,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusAccepted,
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", 0)},
+					"Range":          {fmt.Sprintf("bytes=0-%d", blobLen5-1)},
+					"Location":       {uuid5.String() + "?chunk=1"},
+				},
+			},
+		},
+		// get upload6 location
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "POST for d6",
+				Method: "POST",
+				Path:   "/v2" + blobRepo6 + "/blobs/uploads/",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusAccepted,
+				Headers: http.Header{
+					"Content-Length": {"0"},
+					"Location":       {uuid6.String()},
+				},
+			},
+		},
+		// upload put for d6
+		{
+			ReqEntry: reqresp.ReqEntry{
+				DelOnUse: false,
+				Name:     "PUT for d6",
+				Method:   "PUT",
+				Path:     "/v2" + blobRepo6 + "/blobs/uploads/" + uuid6.String(),
+				Query: map[string][]string{
+					"digest": {d6.String()},
+				},
+				Headers: http.Header{
+					"Content-Length": {"0"},
+					"Content-Type":   {"application/octet-stream"},
+				},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusCreated,
+				Headers: http.Header{
+					"Content-Length":        {"0"},
+					"Location":              {"/v2" + blobRepo6 + "/blobs/" + d6.String()},
+					"Docker-Content-Digest": {d6.String()},
+				},
+			},
+		},
 	}
 	rrs = append(rrs, reqresp.BaseEntries...)
 	// create a server
@@ -941,7 +1051,6 @@ func TestBlobPut(t *testing.T) {
 		if dp.Size != int64(len(blob1)) {
 			t.Errorf("Content length mismatch, expected %d, received %d", len(blob1), dp.Size)
 		}
-
 	})
 
 	t.Run("Retry", func(t *testing.T) {
@@ -961,7 +1070,6 @@ func TestBlobPut(t *testing.T) {
 		if dp.Size != int64(len(blob2)) {
 			t.Errorf("Content length mismatch, expected %d, received %d", len(blob2), dp.Size)
 		}
-
 	})
 
 	t.Run("PartialChunk", func(t *testing.T) {
@@ -981,7 +1089,6 @@ func TestBlobPut(t *testing.T) {
 		if dp.Size != int64(len(blob3)) {
 			t.Errorf("Content length mismatch, expected %d, received %d", len(blob3), dp.Size)
 		}
-
 	})
 
 	t.Run("Chunk resized", func(t *testing.T) {
@@ -1000,6 +1107,46 @@ func TestBlobPut(t *testing.T) {
 		}
 		if dp.Size != int64(len(blob4)) {
 			t.Errorf("Content length mismatch, expected %d, received %d", len(blob4), dp.Size)
+		}
+	})
+
+	// test put without a descriptor
+	t.Run("No descriptor", func(t *testing.T) {
+		r, err := ref.New(tsURL.Host + blobRepo5)
+		if err != nil {
+			t.Errorf("Failed creating ref: %v", err)
+		}
+		br := bytes.NewReader(blob5)
+		dp, err := reg.BlobPut(ctx, r, types.Descriptor{}, br)
+		if err != nil {
+			t.Errorf("Failed running BlobPut: %v", err)
+			return
+		}
+		if dp.Digest.String() != d5.String() {
+			t.Errorf("Digest mismatch, expected %s, received %s", d5.String(), dp.Digest.String())
+		}
+		if dp.Size != int64(len(blob5)) {
+			t.Errorf("Content length mismatch, expected %d, received %d", len(blob5), dp.Size)
+		}
+	})
+
+	// test put of a zero length blob
+	t.Run("Empty blob", func(t *testing.T) {
+		r, err := ref.New(tsURL.Host + blobRepo6)
+		if err != nil {
+			t.Errorf("Failed creating ref: %v", err)
+		}
+		br := bytes.NewReader(blob6)
+		dp, err := reg.BlobPut(ctx, r, types.Descriptor{Digest: d6, Size: int64(len(blob6))}, br)
+		if err != nil {
+			t.Errorf("Failed running BlobPut: %v", err)
+			return
+		}
+		if dp.Digest.String() != d6.String() {
+			t.Errorf("Digest mismatch, expected %s, received %s", d6.String(), dp.Digest.String())
+		}
+		if dp.Size != int64(len(blob6)) {
+			t.Errorf("Content length mismatch, expected %d, received %d", len(blob6), dp.Size)
 		}
 	})
 

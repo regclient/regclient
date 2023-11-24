@@ -9,6 +9,9 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+
 jobs:
 
   build:
@@ -24,18 +27,15 @@ jobs:
       GOTOOLCHAIN: "local"
 
     permissions:
-      # id-token is used by cosign's OIDC based signing
-      # https://blog.chainguard.dev/zero-friction-keyless-signing-with-github-actions/
-      id-token: 'write'
-      contents: 'write'
-      packages: 'write'
+      contents: write # needed for pushing release with softprops/actions-gh-release
+      id-token: write # needed for OIDC Token signing with cosign
 
     steps:
     - name: Check out code
-      uses: actions/checkout@v4
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
     - name: "Set up Go ${{ matrix.gover }}"
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4.1.0
       with:
         go-version: "${{ matrix.gover }}"
         check-latest: true
@@ -60,10 +60,10 @@ jobs:
 
     - name: Install syft
       if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main'
-      uses: anchore/sbom-action/download-syft@v0.14.3
+      uses: anchore/sbom-action/download-syft@78fc58e266e87a38d4194b2137a3d4e9bcaf7ca1 # v0.14.3
       id: syft
       with:
-        syft-version: "v0.95.0"
+        syft-version: "v0.97.1"
 
     - name: Build artifacts
       if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main'
@@ -71,15 +71,12 @@ jobs:
 
     - name: Install cosign
       if: ( startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main' ) && matrix.gover == env.RELEASE_GO_VER
-      uses: sigstore/cosign-installer@v3.2.0
+      uses: sigstore/cosign-installer@1fc5bd396d372bee37d608f955b336615edf79c8 # v3.2.0
       with:
         cosign-release: "v2.2.1"
 
     - name: Package artifacts
       if: ( startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main' ) && matrix.gover == env.RELEASE_GO_VER
-      env:
-        # experimental support needed for GitHub OIDC signing
-        COSIGN_EXPERIMENTAL: "true"
       run: |
         cd artifacts
         for artifact in \
@@ -130,7 +127,7 @@ jobs:
     - name: Create release
       if: steps.release_details.outputs.valid == 'true' && matrix.gover == env.RELEASE_GO_VER
       id: release_create
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v0.1.15
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
@@ -164,7 +161,7 @@ jobs:
 
     - name: Save artifacts
       if: github.ref == 'refs/heads/main' && matrix.gover == env.RELEASE_GO_VER
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # v3.1.3
       with:
         name: binaries
         path: ./artifacts/

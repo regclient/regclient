@@ -21,11 +21,11 @@ type Descriptor struct {
 	// MediaType describe the type of the content.
 	MediaType string `json:"mediaType"`
 
-	// Size in bytes of content.
-	Size int64 `json:"size"`
-
 	// Digest uniquely identifies the content.
 	Digest digest.Digest `json:"digest"`
+
+	// Size in bytes of content.
+	Size int64 `json:"size"`
 
 	// URLs contains the source URLs of this content.
 	URLs []string `json:"urls,omitempty"`

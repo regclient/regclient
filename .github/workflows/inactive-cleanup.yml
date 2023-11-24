@@ -3,11 +3,17 @@ on:
   schedule:
     - cron: "15 5 * * 1"
 
+permissions:
+  contents: read
+
 jobs:
   close-issues:
     runs-on: ubuntu-latest
+    permissions:
+      issues: write  # for actions/stale to close stale issues
+      pull-requests: write  # for actions/stale to close stale PRs
     steps:
-      - uses: actions/stale@v8
+      - uses: actions/stale@1160a2240286f5da8ec72b1c0816ce2481aabf84 # v8.0.0
         with:
           days-before-stale: 60
           days-before-close: 28

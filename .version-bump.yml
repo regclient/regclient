@@ -1,9 +1,10 @@
 files:
   "build/Dockerfile*":
     scans:
-      - docker-arg-alpine
+      - docker-arg-alpine-tag
+      - docker-arg-alpine-digest
       - docker-arg-go-tag
-      - docker-arg-go
+      - docker-arg-go-digest
       - git-commit-ecr
       - git-tag-gcr
       - git-commit-lunajson
@@ -14,10 +15,12 @@ files:
       - gha-golang-release
       - gha-uses-vx
       - gha-uses-semver
+      - gha-uses-commit
       - gha-syft-version
       - gha-cosign-version
   "Makefile":
     scans:
+      - makefile-gomajor
       - makefile-go-vulncheck
       - makefile-markdown-lint
       - makefile-gosec
@@ -31,23 +34,30 @@ files:
       - go-mod-golang-release
 
 scans:
-  docker-arg-alpine:
+  docker-arg-alpine-tag:
+    type: "regexp"
+    source: "registry-tag-arg-semver"
+    args:
+      regexp: '^ARG ALPINE_VER=(?P<Version>[\d+\.\d+\.\d+]+)@(?P<SHA>sha256:[0-9a-f]+)\s*$'
+      repo: "docker.io/library/alpine"
+  docker-arg-alpine-digest:
     type: "regexp"
     source: "registry-digest-arg"
     args:
-      regexp: '^ARG ALPINE_VER=(?P<Tag>[a-z0-9\-\.]+)@(?P<Version>sha256:[0-9a-f]+)\s*$'
-      image: "alpine"
+      regexp: '^ARG ALPINE_VER=(?P<Tag>[\d+\.\d+\.\d+]+)@(?P<Version>sha256:[0-9a-f]+)\s*$'
+      image: "docker.io/library/alpine"
   docker-arg-go-tag:
     type: "regexp"
-    source: "registry-golang-latest"
+    source: "registry-tag-arg-semver"
     args:
       regexp: '^ARG GO_VER=(?P<Version>[a-z0-9\-\.]+)-alpine@(?P<SHA>sha256:[0-9a-f]+)\s*$'
-  docker-arg-go:
+      repo: "docker.io/library/golang"
+  docker-arg-go-digest:
     type: "regexp"
     source: "registry-digest-arg"
     args:
       regexp: '^ARG GO_VER=(?P<Tag>[a-z0-9\-\.]+)@(?P<Version>sha256:[0-9a-f]+)\s*$'
-      image: "golang"
+      image: "docker.io/library/golang"
   git-commit-ecr:
     type: "regexp"
     source: "git-commit"
@@ -80,12 +90,17 @@ scans:
     type: "regexp"
     source: "gha-uses-vx"
     args:
-      regexp: '^\s+-?\s+uses: (?P<Repo>[^@]+)@(?P<Version>v\d+)\s*$'
+      regexp: '^\s+-?\s+uses: (?P<Repo>[^@/]+/[^@/]+)[^@]*@(?P<Commit>[0-9a-f]+)\s+#\s+(?P<Version>v\d+)\s*$'
   gha-uses-semver:
     type: "regexp"
     source: "gha-uses-semver"
     args:
-      regexp: '^\s+-?\s+uses: (?P<Repo>[^@/]+/[^@/]+)[^@]*@(?P<Version>v\d+\.\d+\.\d+)\s*$'
+      regexp: '^\s+-?\s+uses: (?P<Repo>[^@/]+/[^@/]+)[^@]*@(?P<Commit>[0-9a-f]+)\s+#\s+(?P<Version>v\d+\.\d+\.\d+)\s*$'
+  gha-uses-commit:
+    type: "regexp"
+    source: "github-commit-match"
+    args:
+      regexp: '^\s+-?\s+uses: (?P<Repo>[^@/]+/[^@/]+)[^@]*@(?P<Version>[0-9a-f]+)\s+#\s+(?P<Ref>[\w\d\.]+)\s*$'
   gha-golang-matrix:
     type: "regexp"
     source: "registry-golang-matrix"
@@ -113,6 +128,12 @@ scans:
     source: "registry-golang-latest"
     args:
       regexp: '^go (?P<Version>[0-9\.]+)\s*$'
+  makefile-gomajor:
+    type: "regexp"
+    source: "git-tag-semver"
+    args:
+      regexp: '^GOMAJOR_VER\?=(?P<Version>v[0-9\.]+)\s*$'
+      repo: "github.com/icholy/gomajor"
   makefile-go-vulncheck:
     type: "regexp"
     source: "git-tag-semver"
@@ -168,7 +189,7 @@ sources:
       type: "tag"
       repo: "{{ .ScanArgs.repo }}"
     filter:
-      expr: '^v[0-9]+\.[0-9]+\.[0-9]+$'
+      expr: '^v?[0-9]+\.[0-9]+\.[0-9]+$'
     sort:
       method: "semver"
   registry-tag-match-semver:
@@ -178,7 +199,7 @@ sources:
       type: "tag"
       repo: "{{ .ScanMatch.Repo }}"
     filter:
-      expr: '^v[0-9]+\.[0-9]+\.[0-9]+$'
+      expr: '^v?[0-9]+\.[0-9]+\.[0-9]+$'
     sort:
       method: "semver"
   registry-digest-arg:
@@ -250,3 +271,12 @@ sources:
       expr: '^v[0-9]+\.[0-9]+\.[0-9]+$'
     sort:
       method: "semver"
+  github-commit-match:
+    type: "git"
+    key: "{{ .ScanMatch.Repo }}:{{ .ScanMatch.Ref }}"
+    args:
+      type: "commit"
+      url: "https://github.com/{{ .ScanMatch.Repo }}.git"
+      ref: "{{ .ScanMatch.Ref }}"
+    filter:
+      expr: "^{{ .ScanMatch.Ref }}$"
