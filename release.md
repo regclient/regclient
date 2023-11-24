@@ -1,34 +1,45 @@
-# Release v0.5.4
+# Release v0.5.5
 
 New Features:
 
-- Add `regctl --host` flag to configure registries for a single command. ([PR 572][pr-572])
-- Configure HTTP client timeouts. ([PR 584][pr-584])
-- Add `regclient.Ping` method. ([PR 590][pr-590])
-- regctl: warn on failed logins or bad registry configuration changes. ([PR 590][pr-590])
+- Add OpenSSF Best Practices Badge. ([PR 607][pr-607])
+- Adding OpenSSF Scorecard badge and GHA workflow. ([PR 609][pr-609])
 
 Fixes:
 
-- Fix handling of invalid hostname in `regclient.RepoList`. ([PR 577][pr-577])
-- Fix bug in regsync tag filtering when running as a server. ([PR 579][pr-579])
-- Enable parallel builds of the make "binaries" target. ([PR 588][pr-588])
+- Validate references in regclient methods. ([PR 595][pr-595])
+- Data race in the reghttp fallback timeout handling. ([PR 599][pr-599])
+- HTTP proxy using environment variables. ([PR 615][pr-615])
 
 Chores:
 
-- Update Go docs on blob APIs and the config. ([PR 573][pr-573])
-- Refactor the Ref package. ([PR 587][pr-587])
+- Reorder descriptor fields. ([PR 594][pr-594])
+- Add test for ocidir throttle race. ([PR 601][pr-601])
+- Add gomajor utility to Makefile. ([PR 602][pr-602])
+- Add commands to Makefile for managing releases. ([PR 604][pr-604])
+- Pin GitHub actions. ([PR 605][pr-605])
+- Use full semver on dependencies where available. ([PR 605][pr-605])
+- Adjust token permissions on GitHub actions. ([PR 606][pr-606])
+- Include disclosure timeline in security policy. ([PR 608][pr-608])
+- Improve contributor guidelines. ([PR 612][pr-612])
+- Improve BlobPut tests. ([PR 613][pr-613])
 
 Contributors:
 
-- @andyli
-- @Juneezee
+- @peusebiu
 - @sudo-bmitch
 
-[pr-572]: https://github.com/regclient/regclient/pull/572
-[pr-573]: https://github.com/regclient/regclient/pull/573
-[pr-577]: https://github.com/regclient/regclient/pull/577
-[pr-579]: https://github.com/regclient/regclient/pull/579
-[pr-584]: https://github.com/regclient/regclient/pull/584
-[pr-587]: https://github.com/regclient/regclient/pull/587
-[pr-588]: https://github.com/regclient/regclient/pull/588
-[pr-590]: https://github.com/regclient/regclient/pull/590
+[pr-594]: https://github.com/regclient/regclient/pull/594
+[pr-595]: https://github.com/regclient/regclient/pull/595
+[pr-599]: https://github.com/regclient/regclient/pull/599
+[pr-601]: https://github.com/regclient/regclient/pull/601
+[pr-602]: https://github.com/regclient/regclient/pull/602
+[pr-604]: https://github.com/regclient/regclient/pull/604
+[pr-605]: https://github.com/regclient/regclient/pull/605
+[pr-606]: https://github.com/regclient/regclient/pull/606
+[pr-607]: https://github.com/regclient/regclient/pull/607
+[pr-608]: https://github.com/regclient/regclient/pull/608
+[pr-609]: https://github.com/regclient/regclient/pull/609
+[pr-612]: https://github.com/regclient/regclient/pull/612
+[pr-613]: https://github.com/regclient/regclient/pull/613
+[pr-615]: https://github.com/regclient/regclient/pull/615
