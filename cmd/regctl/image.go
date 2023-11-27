@@ -119,7 +119,7 @@ layers (blobs) separately or not at all. See also the "tag delete" command.`,
 		Long: `Exports an image into a tar file that can be later loaded into a docker
 engine with "docker load". The tar file is output to stdout by default.
 Compression is typically not useful since layers are already compressed.
-Example usage: regctl image export registry:5000/yourimg:v1 >yourimg-v1.tar`,
+Example usage: regctl image export registry:5000/yourimg:v1,registry:5000/yourimg:v2 >yourimg-v1v2.tar`,
 		Args:              cobra.RangeArgs(1, 2),
 		ValidArgsFunction: rootOpts.completeArgTag,
 		RunE:              imageOpts.runImageExport,
@@ -138,7 +138,8 @@ Example usage: regctl image export registry:5000/yourimg:v1 >yourimg-v1.tar`,
 		Short: "import image",
 		Long: `Imports an image from a tar file. This must be either a docker formatted tar
 from "docker save" or an OCI Layout compatible tar. The output from
-"regctl image export" can be used. Stdin is not permitted for the tar file.`,
+"regctl image export" can be used. Stdin is not permitted for the tar file.
+Example usage: regctl image import registry-import:5000/yourimg:v1,registry-import:5000/yourimg:v2  yourimg-v1v2.tar`,
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: completeArgList([]completeFunc{rootOpts.completeArgTag, completeArgDefault}),
 		RunE:              imageOpts.runImageImport,
@@ -222,7 +223,7 @@ The other values may be 0 if not provided by the registry.`,
 	imageExportCmd.Flags().StringVar(&imageOpts.exportRef, "name", "", "Name of image to embed for docker load")
 	imageExportCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 
-	imageImportCmd.Flags().StringVar(&imageOpts.importName, "name", "", "Name of image or tag to import when multiple images are packaged in the tar")
+	imageImportCmd.Flags().StringVar(&imageOpts.importName, "name", "", "When multiple images are packaged in tar, the name of the image or label to be imported. If multiple images are written before the import, the specified image is imported first")
 
 	imageInspectCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageInspectCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
@@ -996,9 +997,9 @@ func (ip *imageProgress) display(w io.Writer, final bool) {
 	}
 }
 
-func (imageOpts *imageCmd) runImageExport(cmd *cobra.Command, args []string) error {
+func (imageOpts *imageCmd) runImageExport(cmd *cobra.Command, args []string) (err error) {
 	ctx := cmd.Context()
-	r, err := ref.New(args[0])
+	rs, err := NewRefs(args[0])
 	if err != nil {
 		return err
 	}
@@ -1012,25 +1013,16 @@ func (imageOpts *imageCmd) runImageExport(cmd *cobra.Command, args []string) err
 		w = cmd.OutOrStdout()
 	}
 	rc := imageOpts.rootOpts.newRegClient()
-	defer rc.Close(ctx, r)
-	opts := []regclient.ImageOpts{}
-	if imageOpts.platform != "" {
-		p, err := platform.Parse(imageOpts.platform)
-		if err != nil {
-			return err
-		}
-		m, err := rc.ManifestGet(ctx, r)
-		if err != nil {
-			return err
-		}
-		if m.IsList() {
-			d, err := manifest.GetPlatformDesc(m, &p)
+	defer func() {
+		for _, r := range rs {
+			err = rc.Close(ctx, r)
 			if err != nil {
-				return err
+				return
 			}
-			r.Digest = d.Digest.String()
 		}
-	}
+	}()
+	opts := []regclient.ImageOpts{}
+
 	if imageOpts.exportCompress {
 		opts = append(opts, regclient.ImageWithExportCompress())
 	}
@@ -1041,10 +1033,7 @@ func (imageOpts *imageCmd) runImageExport(cmd *cobra.Command, args []string) err
 		}
 		opts = append(opts, regclient.ImageWithExportRef(eRef))
 	}
-	log.WithFields(logrus.Fields{
-		"ref": r.CommonName(),
-	}).Debug("Image export")
-	return rc.ImageExport(ctx, r, w, opts...)
+	return rc.ImageExport(ctx, rs, imageOpts.platform, w, opts...)
 }
 
 func (imageOpts *imageCmd) runImageGetFile(cmd *cobra.Command, args []string) error {
@@ -1055,6 +1044,7 @@ func (imageOpts *imageCmd) runImageGetFile(cmd *cobra.Command, args []string) er
 	}
 	filename := args[1]
 	filename = strings.TrimPrefix(filename, "/")
+
 	rc := imageOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
@@ -1165,9 +1155,9 @@ func (imageOpts *imageCmd) runImageGetFile(cmd *cobra.Command, args []string) er
 	return types.ErrNotFound
 }
 
-func (imageOpts *imageCmd) runImageImport(cmd *cobra.Command, args []string) error {
+func (imageOpts *imageCmd) runImageImport(cmd *cobra.Command, args []string) (err error) {
 	ctx := cmd.Context()
-	r, err := ref.New(args[0])
+	rss, err := NewRefs(args[0])
 	if err != nil {
 		return err
 	}
@@ -1175,19 +1165,22 @@ func (imageOpts *imageCmd) runImageImport(cmd *cobra.Command, args []string) err
 	if imageOpts.importName != "" {
 		opts = append(opts, regclient.ImageWithImportName(imageOpts.importName))
 	}
-	rs, err := os.Open(args[1])
+	tarFileObj, err := os.Open(args[1])
 	if err != nil {
 		return err
 	}
-	defer rs.Close()
 	rc := imageOpts.rootOpts.newRegClient()
-	defer rc.Close(ctx, r)
-	log.WithFields(logrus.Fields{
-		"ref":  r.CommonName(),
-		"file": args[1],
-	}).Debug("Image import")
+	defer func() {
+		tarFileObj.Close()
+		for _, r := range rss {
+			err = rc.Close(ctx, r)
+			if err != nil {
+				return
+			}
+		}
+	}()
+	return rc.ImageImport(ctx, rss, args[1], tarFileObj, opts...)
 
-	return rc.ImageImport(ctx, r, rs, opts...)
 }
 
 func (imageOpts *imageCmd) runImageInspect(cmd *cobra.Command, args []string) error {
@@ -1325,4 +1318,16 @@ func (m *modFlagFunc) Set(val string) error {
 
 func (m *modFlagFunc) Type() string {
 	return m.t
+}
+
+func NewRefs(parse string) (Refs []ref.Ref, error error) {
+	parses := strings.Split(parse, ",")
+	for _, parse := range parses {
+		r, err := ref.New(parse)
+		if err != nil {
+			continue
+		}
+		Refs = append(Refs, r)
+	}
+	return
 }

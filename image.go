@@ -957,20 +957,15 @@ func imageSeenOrWait(ctx context.Context, opt *imageOpt, tag string, dig digest.
 //   - blobs/$algo/$hash: each content addressable object (manifest, config, or layer), created recursively
 //
 // [OCI Layout]: https://github.com/opencontainers/image-spec/blob/master/image-layout.md
-func (rc *RegClient) ImageExport(ctx context.Context, r ref.Ref, outStream io.Writer, opts ...ImageOpts) error {
-	if !r.IsSet() {
-		return fmt.Errorf("ref is not set: %s%.0w", r.CommonName(), types.ErrInvalidReference)
-	}
-	var ociIndex v1.Index
-
-	var opt imageOpt
+func (rc *RegClient) ImageExport(ctx context.Context, rs []ref.Ref, platformType string, outStream io.Writer, opts ...ImageOpts) (err error) {
+	var (
+		ociIndex           v1.Index
+		opt                imageOpt
+		dockerTarManifests []dockerTarManifest
+	)
 	for _, optFn := range opts {
 		optFn(&opt)
 	}
-	if opt.exportRef.IsZero() {
-		opt.exportRef = r
-	}
-
 	// create tar writer object
 	out := outStream
 	if opt.exportCompress {
@@ -987,15 +982,7 @@ func (rc *RegClient) ImageExport(ctx context.Context, r ref.Ref, outStream io.Wr
 		mode:  0644,
 	}
 
-	// retrieve image manifest
-	m, err := rc.ManifestGet(ctx, r)
-	if err != nil {
-		rc.log.WithFields(logrus.Fields{
-			"ref": r.CommonName(),
-			"err": err,
-		}).Warn("Failed to get manifest")
-		return err
-	}
+	ociIndex.Versioned = v1.IndexSchemaVersion
 
 	// build/write oci-layout
 	ociLayout := v1.ImageLayout{Version: ociLayoutVersion}
@@ -1004,64 +991,109 @@ func (rc *RegClient) ImageExport(ctx context.Context, r ref.Ref, outStream io.Wr
 		return err
 	}
 
-	// create a manifest descriptor
-	mDesc := m.GetDescriptor()
-	if mDesc.Annotations == nil {
-		mDesc.Annotations = map[string]string{}
-	}
-	mDesc.Annotations[annotationImageName] = opt.exportRef.CommonName()
-	mDesc.Annotations[annotationRefName] = opt.exportRef.Tag
+	for _, r := range rs {
+		rc.log.WithFields(logrus.Fields{
+			"ref": r.CommonName(),
+		}).Debug("Image export")
 
+		if platformType != "" {
+			p, err := platform.Parse(platformType)
+			if err != nil {
+				return err
+			}
+
+			m, err := rc.ManifestGet(ctx, r)
+			if err != nil {
+				return err
+			}
+			if m.IsList() {
+				d, err := manifest.GetPlatformDesc(m, &p)
+				if err != nil {
+					return err
+				}
+				r.Digest = d.Digest.String()
+			}
+
+		}
+
+		if !r.IsSet() {
+			return fmt.Errorf("ref is not set: %s%.0w", r.CommonName(), types.ErrInvalidReference)
+		}
+
+		//if opt.exportRef.IsZero() {
+		opt.exportRef = r
+		//}
+
+		// retrieve image manifest
+		m, err := rc.ManifestGet(ctx, r)
+		if err != nil {
+			rc.log.WithFields(logrus.Fields{
+				"ref": r.CommonName(),
+				"err": err,
+			}).Warn("Failed to get manifest")
+			return err
+		}
+
+		// create a manifest descriptor
+		mDesc := m.GetDescriptor()
+		if mDesc.Annotations == nil {
+			mDesc.Annotations = map[string]string{}
+		}
+		mDesc.Annotations[annotationImageName] = opt.exportRef.CommonName()
+		mDesc.Annotations[annotationRefName] = opt.exportRef.Tag
+
+		// generate/write an OCI index
+		ociIndex.Manifests = append(ociIndex.Manifests, mDesc) // initialize with the descriptor to the manifest list
+
+		// append to docker manifest with tag, config filename, each layer filename, and layer descriptors
+		if mi, ok := m.(manifest.Imager); ok {
+			conf, err := mi.GetConfig()
+			if err != nil {
+				return err
+			}
+			refTag := opt.exportRef.ToReg()
+			if refTag.Digest != "" {
+				refTag.Digest = ""
+			}
+			if refTag.Tag == "" {
+				refTag.Tag = "latest"
+			}
+			dockerManifest := dockerTarManifest{
+				RepoTags:     []string{refTag.CommonName()},
+				Config:       tarOCILayoutDescPath(conf),
+				Layers:       []string{},
+				LayerSources: map[digest.Digest]types.Descriptor{},
+			}
+			dl, err := mi.GetLayers()
+			if err != nil {
+				return err
+			}
+			for _, d := range dl {
+				dockerManifest.Layers = append(dockerManifest.Layers, tarOCILayoutDescPath(d))
+				dockerManifest.LayerSources[d.Digest] = d
+			}
+			dockerTarManifests = append(dockerTarManifests, dockerManifest)
+		}
+
+		// recursively include manifests and nested blobs
+		err = rc.imageExportDescriptor(ctx, r, mDesc, twd)
+		if err != nil {
+			return err
+		}
+
+	}
 	// generate/write an OCI index
-	ociIndex.Versioned = v1.IndexSchemaVersion
-	ociIndex.Manifests = []types.Descriptor{mDesc} // initialize with the descriptor to the manifest list
 	err = twd.tarWriteFileJSON(ociIndexFilename, ociIndex)
 	if err != nil {
 		return err
 	}
 
-	// append to docker manifest with tag, config filename, each layer filename, and layer descriptors
-	if mi, ok := m.(manifest.Imager); ok {
-		conf, err := mi.GetConfig()
-		if err != nil {
-			return err
-		}
-		refTag := opt.exportRef.ToReg()
-		if refTag.Digest != "" {
-			refTag.Digest = ""
-		}
-		if refTag.Tag == "" {
-			refTag.Tag = "latest"
-		}
-		dockerManifest := dockerTarManifest{
-			RepoTags:     []string{refTag.CommonName()},
-			Config:       tarOCILayoutDescPath(conf),
-			Layers:       []string{},
-			LayerSources: map[digest.Digest]types.Descriptor{},
-		}
-		dl, err := mi.GetLayers()
-		if err != nil {
-			return err
-		}
-		for _, d := range dl {
-			dockerManifest.Layers = append(dockerManifest.Layers, tarOCILayoutDescPath(d))
-			dockerManifest.LayerSources[d.Digest] = d
-		}
-
-		// marshal manifest and write manifest.json
-		err = twd.tarWriteFileJSON(dockerManifestFilename, []dockerTarManifest{dockerManifest})
-		if err != nil {
-			return err
-		}
-	}
-
-	// recursively include manifests and nested blobs
-	err = rc.imageExportDescriptor(ctx, r, mDesc, twd)
+	// marshal manifest and write manifest.json
+	err = twd.tarWriteFileJSON(dockerManifestFilename, dockerTarManifests)
 	if err != nil {
 		return err
 	}
-
-	return nil
+	return
 }
 
 // imageExportDescriptor pulls a manifest or blob, outputs to a tar file, and recursively processes any nested manifests or blobs
@@ -1185,58 +1217,65 @@ func (rc *RegClient) imageExportDescriptor(ctx context.Context, r ref.Ref, desc 
 	return nil
 }
 
-// ImageImport pushes an image from a tar file (ImageExport) to a registry.
-func (rc *RegClient) ImageImport(ctx context.Context, r ref.Ref, rs io.ReadSeeker, opts ...ImageOpts) error {
-	if !r.IsSetRepo() {
-		return fmt.Errorf("ref is not set: %s%.0w", r.CommonName(), types.ErrInvalidReference)
-	}
-	var opt imageOpt
-	for _, optFn := range opts {
-		optFn(&opt)
-	}
-
-	trd := &tarReadData{
-		name:      opt.importName,
-		handlers:  map[string]tarFileHandler{},
-		links:     map[string][]string{},
-		processed: map[string]bool{},
-		finish:    []func() error{},
-		manifests: map[digest.Digest]manifest.Manifest{},
-	}
-
-	// add handler for oci-layout, index.json, and manifest.json
-	rc.imageImportOCIAddHandler(ctx, r, trd)
-	rc.imageImportDockerAddHandler(trd)
-
-	// process tar file looking for oci-layout and index.json, load manifests/blobs on success
-	err := trd.tarReadAll(rs)
-
-	if err != nil && errors.Is(err, types.ErrNotFound) && trd.dockerManifestFound {
-		// import failed but manifest.json found, fall back to manifest.json processing
-		// add handlers for the docker manifest layers
-		rc.imageImportDockerAddLayerHandlers(ctx, r, trd)
-		// reprocess the tar looking for manifest.json files
-		err = trd.tarReadAll(rs)
-		if err != nil {
-			return fmt.Errorf("failed to import layers from docker tar: %w", err)
+// ImageImport pushes an image from a tar file (ImageExportS) to a registry.
+func (rc *RegClient) ImageImport(ctx context.Context, rss []ref.Ref, fileName string, tarFileIO io.ReadSeeker, opts ...ImageOpts) error {
+	for _, r := range rss {
+		rc.log.WithFields(logrus.Fields{
+			"ref":  r.CommonName(),
+			"file": fileName,
+		}).Debug("Image import")
+		if !r.IsSetRepo() {
+			return fmt.Errorf("ref is not set: %s%.0w", r.CommonName(), types.ErrInvalidReference)
 		}
-		// push docker manifest
-		m, err := manifest.New(manifest.WithOrig(trd.dockerManifest))
-		if err != nil {
-			return err
+
+		var opt imageOpt
+		for _, optFn := range opts {
+			optFn(&opt)
 		}
-		err = rc.ManifestPut(ctx, r, m)
-		if err != nil {
-			return err
+		trd := &tarReadData{
+			name:      opt.importName,
+			handlers:  map[string]tarFileHandler{},
+			links:     map[string][]string{},
+			processed: map[string]bool{},
+			finish:    []func() error{},
+			manifests: map[digest.Digest]manifest.Manifest{},
 		}
-	} else if err != nil {
-		// unhandled error from tar read
-		return err
-	} else {
-		// successful load of OCI blobs, now push manifest and tag
-		err = rc.imageImportOCIPushManifests(ctx, r, trd)
-		if err != nil {
+
+		// add handler for oci-layout, index.json, and manifest.json
+		rc.imageImportOCIAddHandler(ctx, r, trd)
+
+		rc.imageImportDockerAddHandler(trd)
+
+		// process tar file looking for oci-layout and index.json, load manifests/blobs on success
+		err := trd.tarReadAll(tarFileIO)
+
+		if err != nil && errors.Is(err, types.ErrNotFound) && trd.dockerManifestFound {
+			// import failed but manifest.json found, fall back to manifest.json processing
+			// add handlers for the docker manifest layers
+			rc.imageImportDockerAddLayerHandlers(ctx, r, trd)
+			// reprocess the tar looking for manifest.json files
+			err = trd.tarReadAll(tarFileIO)
+			if err != nil {
+				return fmt.Errorf("failed to import layers from docker tar: %w", err)
+			}
+			// push docker manifest
+			m, err := manifest.New(manifest.WithOrig(trd.dockerManifest))
+			if err != nil {
+				return err
+			}
+			err = rc.ManifestPut(ctx, r, m)
+			if err != nil {
+				return err
+			}
+		} else if err != nil {
+			// unhandled error from tar read
 			return err
+		} else {
+			// successful load of OCI blobs, now push manifest and tag
+			err = rc.imageImportOCIPushManifests(ctx, r, trd)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -1399,6 +1438,30 @@ func (rc *RegClient) imageImportOCIAddHandler(ctx context.Context, r ref.Ref, tr
 		if err != nil {
 			return err
 		}
+
+		lastIndex := strings.LastIndex(r.CommonName(), "/")
+		man := types.Descriptor{}
+		found := true
+		for _, obj := range trd.ociIndex.Manifests {
+			imageName := obj.Annotations[annotationImageName]
+			substring := r.CommonName()[lastIndex+1:]
+			if strings.Contains(imageName, "@") {
+				substring = fmt.Sprintf("%s@", substring)
+			}
+			if strings.Contains(imageName, substring) {
+				man = obj
+				found = false
+			}
+		}
+		if found {
+			rc.log.WithFields(logrus.Fields{
+				"ref": r.CommonName(),
+			}).Errorf("image name does not found")
+			return nil
+		}
+
+		trd.ociIndex.Manifests = []types.Descriptor{man}
+
 		foundIndex = true
 		if foundLayout {
 			err = ociHandler(trd)

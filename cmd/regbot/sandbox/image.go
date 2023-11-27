@@ -251,7 +251,7 @@ func (s *Sandbox) imageExportTar(ls *lua.LState) int {
 	if err != nil {
 		ls.RaiseError("Failed to open \"%s\": %v", file, err)
 	}
-	err = s.rc.ImageExport(s.ctx, src.r, fh)
+	err = s.rc.ImageExport(s.ctx, []ref.Ref{src.r}, "", fh)
 	if err != nil {
 		ls.RaiseError("Failed to export image \"%s\" to \"%s\": %v", src.r.CommonName(), file, err)
 	}
@@ -277,7 +277,7 @@ func (s *Sandbox) imageImportTar(ls *lua.LState) int {
 	if err != nil {
 		ls.RaiseError("Failed to read from \"%s\": %v", file, err)
 	}
-	err = s.rc.ImageImport(s.ctx, tgt.r, rs)
+	err = s.rc.ImageImport(s.ctx, []ref.Ref{tgt.r}, rs.Name(), rs)
 	if err != nil {
 		ls.RaiseError("Failed to import image \"%s\" from \"%s\": %v", tgt.r.CommonName(), file, err)
 	}
