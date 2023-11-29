@@ -10,7 +10,7 @@ Please search for similar issues and if none are seen, report an issue at [githu
 
 ## Code style
 
-This project attempts to following principles:
+This project attempts to follow these principles:
 
 - Code is canonical Go, following styles and patterns commonly used by the Go community.
 - Dependencies outside of the Go standard library should be minimized.
@@ -20,11 +20,11 @@ This project attempts to following principles:
 
 ## Pull requests
 
-PR's are welcome following the below guides:
+PRs are welcome following the below guides:
 
 - For anything beyond a minor fix, opening an issue is suggested to discuss possible solutions.
 - Changes should be rebased on the main branch.
-- Changes should be squashed to a single commit.
+- Changes should be squashed to a single commit per logical change.
 
 All changes must be signed (`git commit -s`) to indicate you agree to the [Developer Certificate or Origin](https://developercertificate.org/):
 
