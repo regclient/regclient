@@ -37,13 +37,15 @@
 {"name":"github-commit-match","key":"sigstore/cosign-installer:v3.2.0","version":"1fc5bd396d372bee37d608f955b336615edf79c8"}
 {"name":"github-commit-match","key":"softprops/action-gh-release:v0.1.15","version":"de2c0eb89ae2a093876385947365aca7b0e5f844"}
 {"name":"registry-digest-arg","key":"docker.io/library/alpine:3.18.4","version":"sha256:eece025e432126ce23f223450a0326fbebde39cdf496a85d8c016293fc851978"}
-{"name":"registry-digest-arg","key":"docker.io/library/golang:1.21.4-alpine","version":"sha256:110b07af87238fbdc5f1df52b00927cf58ce3de358eeeb1854f10a8b5e5e1411"}
+{"name":"registry-digest-arg","key":"docker.io/library/alpine:3.18.5","version":"sha256:34871e7290500828b39e22294660bee86d966bc0017544e848dd9a255cdf59e0"}
+{"name":"registry-digest-arg","key":"docker.io/library/golang:1.21.4-alpine","version":"sha256:70afe55365a265f0762257550bc38440e0d6d6b97020d3f8c85328f00200dd8e"}
 {"name":"registry-digest-match","key":"anchore/syft:v0.97.1","version":"sha256:abc8d4310c54b56dd1e789d5f60b8ebc43f472652b34971d4b0d0dbed7f4ebda"}
+{"name":"registry-digest-match","key":"anchore/syft:v0.98.0","version":"sha256:b353bf516310fcbc86676bb20849929298034e80f15873e63da18acdf7080b4e"}
 {"name":"registry-golang-latest","key":"golang-latest","version":"1.21"}
 {"name":"registry-golang-matrix","key":"golang-matrix","version":"[\"1.19\", \"1.20\", \"1.21\"]"}
-{"name":"registry-tag-arg-semver","key":"anchore/syft","version":"v0.97.1"}
+{"name":"registry-tag-arg-semver","key":"anchore/syft","version":"v0.98.0"}
 {"name":"registry-tag-arg-semver","key":"davidanson/markdownlint-cli2","version":"v0.11.0"}
-{"name":"registry-tag-arg-semver","key":"docker.io/library/alpine","version":"3.18.4"}
+{"name":"registry-tag-arg-semver","key":"docker.io/library/alpine","version":"3.18.5"}
 {"name":"registry-tag-arg-semver","key":"docker.io/library/golang","version":"1.21.4"}
 {"name":"registry-tag-arg-semver","key":"ghcr.io/igorshubovych/markdownlint-cli","version":"v0.35.0"}
-{"name":"registry-tag-match-semver","key":"anchore/syft","version":"v0.97.1"}
+{"name":"registry-tag-match-semver","key":"anchore/syft","version":"v0.98.0"}
