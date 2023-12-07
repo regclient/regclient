@@ -1,6 +1,6 @@
 module github.com/regclient/regclient
 
-go 1.21
+go 1.19
 
 require (
 	github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7

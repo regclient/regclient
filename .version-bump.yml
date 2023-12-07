@@ -125,7 +125,7 @@ scans:
       repo: "github.com/sigstore/cosign"
   go-mod-golang-release:
     type: "regexp"
-    source: "registry-golang-latest"
+    source: "registry-golang-oldest"
     args:
       regexp: '^go (?P<Version>[0-9\.]+)\s*$'
   makefile-gomajor:
@@ -222,6 +222,17 @@ sources:
       expr: '^\d+\.\d+$'
     sort:
       method: "semver"
+  registry-golang-oldest:
+    type: "registry"
+    key: "golang-oldest"
+    args:
+      repo: "golang"
+      type: "tag"
+    filter:
+      expr: '^\d+\.\d+$'
+    sort:
+      method: "semver"
+    template: '{{ index .VerMap ( index .VerList 2 ) }}'
   registry-golang-matrix:
     type: "registry"
     key: "golang-matrix"
