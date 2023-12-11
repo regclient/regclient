@@ -37,7 +37,7 @@
 {"name":"github-commit-match","key":"github/codeql-action:v2.22.8","version":"407ffafae6a767df3e0230c3df91b6443ae8df75"}
 {"name":"github-commit-match","key":"github/codeql-action:v2.22.9","version":"c0d1daa7f7e14667747d73a7dbbe8c074bc8bfe2"}
 {"name":"github-commit-match","key":"ossf/scorecard-action:v2.3.1","version":"0864cf19026789058feabb7e87baa5f140aac736"}
-{"name":"github-commit-match","key":"regclient/actions:main","version":"ebfd2d81d1f65d29511b7f578a9b17500f405d2b"}
+{"name":"github-commit-match","key":"regclient/actions:main","version":"e0551cc9ff6c9ec72acb8c657876863a5d567f8e"}
 {"name":"github-commit-match","key":"sigstore/cosign-installer:v3.2.0","version":"1fc5bd396d372bee37d608f955b336615edf79c8"}
 {"name":"github-commit-match","key":"softprops/action-gh-release:v0.1.15","version":"de2c0eb89ae2a093876385947365aca7b0e5f844"}
 {"name":"registry-digest-arg","key":"docker.io/library/alpine:3.18.4","version":"sha256:eece025e432126ce23f223450a0326fbebde39cdf496a85d8c016293fc851978"}
