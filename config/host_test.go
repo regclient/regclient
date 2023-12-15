@@ -110,7 +110,8 @@ func TestConfig(t *testing.T) {
 		"priority": 42,
 		"apiOpts": {"disableHead": "true"},
 		"blobChunk": 123456,
-		"blobMax": 999999
+		"blobMax": 999999,
+		"proxy": "socks5://127.0.0.1"
 	}
 	`
 	exJSON2 := `
@@ -127,7 +128,8 @@ func TestConfig(t *testing.T) {
 		"priority": 42,
 		"apiOpts": {"disableHead": "false", "unknownOpt": "3"},
 		"blobChunk": 333333,
-		"blobMax": 333333
+		"blobMax": 333333,
+		"proxy": "socks5://127.0.0.1"
 	}
 	`
 	exJSONCredHelper := `
@@ -135,7 +137,8 @@ func TestConfig(t *testing.T) {
 	  "tls": "insecure",
 		"hostname": "testhost.example.com",
 		"credHelper": "docker-credential-test",
-		"credExpire": "1h0m0s"
+		"credExpire": "1h0m0s",
+		"proxy": "socks5://127.0.0.1"
 	}
 	`
 	var exHost, exHost2, exHostCredHelper Host
@@ -192,6 +195,7 @@ func TestConfig(t *testing.T) {
 			hostExpect: Host{
 				TLS:     TLSEnabled,
 				APIOpts: map[string]string{},
+				Proxy:   "socks5://127.0.0.1",
 			},
 			credExpect: Cred{},
 		},
@@ -202,6 +206,7 @@ func TestConfig(t *testing.T) {
 				TLS:      TLSEnabled,
 				Hostname: "host.example.org",
 				APIOpts:  map[string]string{},
+				Proxy:    "socks5://127.0.0.1",
 			},
 			credExpect: Cred{},
 		},
@@ -219,6 +224,7 @@ func TestConfig(t *testing.T) {
 				APIOpts:    map[string]string{"disableHead": "true"},
 				PathPrefix: "hub",
 				Mirrors:    []string{"host1.example.com", "host2.example.com"},
+				Proxy:      "socks5://127.0.0.1",
 			},
 			credExpect: Cred{
 				User:     "user-ex",
@@ -242,6 +248,7 @@ func TestConfig(t *testing.T) {
 				APIOpts:    map[string]string{"disableHead": "false", "unknownOpt": "3"},
 				BlobChunk:  333333,
 				BlobMax:    333333,
+				Proxy:      "socks5://127.0.0.1",
 			},
 			credExpect: Cred{
 				User:     "user-ex3",
@@ -257,6 +264,7 @@ func TestConfig(t *testing.T) {
 				CredHelper: "docker-credential-test",
 				CredExpire: timejson.Duration(time.Hour),
 				APIOpts:    map[string]string{},
+				Proxy:      "socks5://127.0.0.1",
 			},
 			credExpect: Cred{
 				User:     "hello",
@@ -277,6 +285,7 @@ func TestConfig(t *testing.T) {
 				APIOpts:    map[string]string{"disableHead": "true"},
 				PathPrefix: "hub",
 				Mirrors:    []string{"host1.example.com", "host2.example.com"},
+				Proxy:      "socks5://127.0.0.1",
 			},
 			credExpect: Cred{
 				User:     "user-ex",
@@ -300,6 +309,7 @@ func TestConfig(t *testing.T) {
 				APIOpts:    map[string]string{"disableHead": "false", "unknownOpt": "3"},
 				BlobChunk:  333333,
 				BlobMax:    333333,
+				Proxy:      "socks5://127.0.0.1",
 			},
 			credExpect: Cred{
 				User:     "user-ex3",
@@ -315,6 +325,7 @@ func TestConfig(t *testing.T) {
 				CredHelper: "docker-credential-test",
 				CredExpire: timejson.Duration(time.Hour),
 				APIOpts:    map[string]string{},
+				Proxy:      "socks5://127.0.0.1",
 			},
 			credExpect: Cred{
 				User:     "hello",
@@ -335,6 +346,7 @@ func TestConfig(t *testing.T) {
 				APIOpts:    map[string]string{"disableHead": "true"},
 				PathPrefix: "hub",
 				Mirrors:    []string{"host1.example.com", "host2.example.com"},
+				Proxy:      "socks5://127.0.0.1",
 			},
 			credExpect: Cred{
 				User:     "hello",
@@ -355,6 +367,7 @@ func TestConfig(t *testing.T) {
 				APIOpts:    map[string]string{"disableHead": "true"},
 				PathPrefix: "hub",
 				Mirrors:    []string{"host1.example.com", "host2.example.com"},
+				Proxy:      "socks5://127.0.0.1",
 			},
 			credExpect: Cred{
 				User:     "user-ex",
@@ -437,6 +450,9 @@ func TestConfig(t *testing.T) {
 			}
 			if tc.credExpect.Token != cred.Token {
 				t.Errorf("cred token field mismatch, expected %s, found %s", tc.credExpect.Token, cred.Token)
+			}
+			if tc.host.Proxy != tc.hostExpect.Proxy {
+				t.Errorf("host proxy field mismatch, expected %s, found %s", tc.hostExpect.Token, tc.host.Proxy)
 			}
 		})
 	}

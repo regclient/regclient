@@ -781,6 +781,29 @@ func (c *Client) getHost(host string) *clientHost {
 			}
 			h.httpClient = &httpClient
 		}
+
+	}
+
+	if h.config.Proxy != "" && h.httpClient != nil {
+		t, ok := h.httpClient.Transport.(*http.Transport)
+		if ok {
+			u, err := url.Parse(h.config.Proxy)
+			if nil == err {
+				t.Proxy = http.ProxyURL(u)
+				c.log.WithFields(logrus.Fields{
+					"host":  host,
+					"proxy": h.config.Proxy,
+				}).Info("Using proxy")
+			} else {
+				c.log.WithFields(logrus.Fields{
+					"err": err,
+				}).Warn("failed to configure proxy")
+			}
+		} else {
+			c.log.WithFields(logrus.Fields{
+				"err": "not of type http.Transport",
+			}).Warn("failed to configure proxy")
+		}
 	}
 
 	if h.newAuth == nil {

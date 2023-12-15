@@ -128,6 +128,7 @@ type Host struct {
 	ReqPerSec     float64            `json:"reqPerSec,omitempty" yaml:"reqPerSec"`         // requests per second, default is defaultReqPerSec(10)
 	ReqConcurrent int64              `json:"reqConcurrent,omitempty" yaml:"reqConcurrent"` // concurrent requests, default is defaultConcurrent(3)
 	Scheme        string             `json:"scheme,omitempty" yaml:"scheme"`               // Deprecated: use TLS instead
+	Proxy         string             `json:"proxy,omitempty" yaml:"proxy"`                 // Proxy by host
 	credRefresh   time.Time          `json:"-" yaml:"-"`                                   // internal use, when to refresh credentials
 	throttle      *throttle.Throttle `json:"-" yaml:"-"`                                   // internal use, limit for concurrent requests
 }
@@ -471,6 +472,10 @@ func (host *Host) Merge(newHost Host, log *logrus.Logger) error {
 			}).Warn("Changing reqPerSec settings for registry")
 		}
 		host.ReqConcurrent = newHost.ReqConcurrent
+	}
+
+	if newHost.Proxy != "" {
+		host.Proxy = newHost.Proxy
 	}
 
 	return nil
