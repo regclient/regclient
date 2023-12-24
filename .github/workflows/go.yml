@@ -63,7 +63,7 @@ jobs:
       uses: anchore/sbom-action/download-syft@5ecf649a417b8ae17dc8383dc32d46c03f2312df # v0.15.1
       id: syft
       with:
-        syft-version: "v0.98.0"
+        syft-version: "v0.99.0"
 
     - name: Build artifacts
       if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main'
