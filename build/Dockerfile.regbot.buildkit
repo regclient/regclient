@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1
 
 ARG REGISTRY=docker.io
-ARG ALPINE_VER=3.18.4@sha256:eece025e432126ce23f223450a0326fbebde39cdf496a85d8c016293fc851978
-ARG GO_VER=1.21.4-alpine@sha256:110b07af87238fbdc5f1df52b00927cf58ce3de358eeeb1854f10a8b5e5e1411
-ARG ECR_HELPER_VER=0d252d8e27c0bbe039a21c2ca177c51dd931bcf9
-ARG GCR_HELPER_VER=v2.1.20
+ARG ALPINE_VER=3.19.0@sha256:51b67269f354137895d43f3b3d810bfacd3945438e94dc5ac55fdac340352f48
+ARG GO_VER=1.21.5-alpine@sha256:4db4aac30880b978cae5445dd4a706215249ad4f43d28bd7cdf7906e9be8dd6b
+ARG ECR_HELPER_VER=b0fcec718dc6de8f90d6ca1cdfd9a2b35520733f
+ARG GCR_HELPER_VER=v2.1.21
 ARG LUNAJSON_COMMIT=e6063d37de97dfdfe2749e24de949472bfad0945
 ARG SEMVER_COMMIT=af495adc857d51fd1507a112be18523828a1da0d
 
@@ -31,7 +31,7 @@ COPY . /src/
 RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
     --mount=type=cache,id=goroot,target=/root/.cache/go-build \
     GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    make vendor bin/regbot
+    make bin/regbot
 USER appuser
 CMD [ "bin/regbot" ]
 

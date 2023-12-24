@@ -24,15 +24,15 @@ ifeq "$(strip $(VER_BUMP))" ''
 		-u "$(shell id -u):$(shell id -g)" \
 		$(VER_BUMP_CONTAINER)
 endif
-MARKDOWN_LINT_VER?=v0.10.0
+MARKDOWN_LINT_VER?=v0.11.0
 GOMAJOR_VER?=v0.10.0
 GOSEC_VER?=v2.18.2
 GO_VULNCHECK_VER?=v1.0.1
-OSV_SCANNER_VER?=v1.4.3
+OSV_SCANNER_VER?=v1.5.0
 SYFT?=$(shell command -v syft 2>/dev/null)
 SYFT_CMD_VER:=$(shell [ -x "$(SYFT)" ] && echo "v$$($(SYFT) version | awk '/^Version: / {print $$2}')" || echo "0")
-SYFT_VERSION?=v0.97.1
-SYFT_CONTAINER?=anchore/syft:v0.97.1@sha256:abc8d4310c54b56dd1e789d5f60b8ebc43f472652b34971d4b0d0dbed7f4ebda
+SYFT_VERSION?=v0.99.0
+SYFT_CONTAINER?=anchore/syft:v0.99.0@sha256:07d598b6a95280ed6ecc128685192173a00f370b5326cf50c62500d559075e1d
 ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 	SYFT=docker run --rm \
 		-v "$(shell pwd)/:$(shell pwd)/" -w "$(shell pwd)" \
@@ -103,7 +103,7 @@ vendor: ## Vendor Go modules
 .PHONY: binaries
 binaries: $(BINARIES) ## Build Go binaries
 
-bin/%: .FORCE vendor
+bin/%: .FORCE
 	CGO_ENABLED=0 go build ${GO_BUILD_FLAGS} -o bin/$* ./cmd/$*
 
 .PHONY: docker
@@ -184,7 +184,7 @@ util-golang-major: $(GOPATH)/bin/gomajor ## check for major dependency updates
 util-golang-update: ## update go module versions
 	go get -u -t ./...
 	go mod tidy
-	go mod vendor
+	[ ! -d vendor ] || go mod vendor
 
 .PHONY: util-release-preview
 util-release-preview: $(GOPATH)/bin/gorelease ## preview changes for next release
