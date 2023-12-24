@@ -103,7 +103,7 @@ vendor: ## Vendor Go modules
 .PHONY: binaries
 binaries: $(BINARIES) ## Build Go binaries
 
-bin/%: .FORCE vendor
+bin/%: .FORCE
 	CGO_ENABLED=0 go build ${GO_BUILD_FLAGS} -o bin/$* ./cmd/$*
 
 .PHONY: docker
@@ -184,7 +184,7 @@ util-golang-major: $(GOPATH)/bin/gomajor ## check for major dependency updates
 util-golang-update: ## update go module versions
 	go get -u -t ./...
 	go mod tidy
-	go mod vendor
+	[ ! -d vendor ] || go mod vendor
 
 .PHONY: util-release-preview
 util-release-preview: $(GOPATH)/bin/gorelease ## preview changes for next release
