@@ -20,7 +20,7 @@ FROM golang as build
 COPY go.* /src/
 RUN go mod download
 COPY . /src/
-RUN make vendor bin/regbot
+RUN make bin/regbot
 USER appuser
 CMD [ "/src/bin/regbot" ]
 

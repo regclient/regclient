@@ -29,7 +29,7 @@ COPY . /src/
 RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
     --mount=type=cache,id=goroot,target=/root/.cache/go-build \
     GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    make vendor bin/regctl
+    make bin/regctl
 USER appuser
 CMD [ "bin/regctl" ]
 
