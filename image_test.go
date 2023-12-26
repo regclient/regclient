@@ -5,9 +5,18 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/http/httptest"
+	"net/url"
+	"os"
 	"testing"
 	"time"
 
+	"github.com/olareg/olareg"
+	oConfig "github.com/olareg/olareg/config"
+	"github.com/sirupsen/logrus"
+
+	"github.com/regclient/regclient/config"
+	"github.com/regclient/regclient/internal/godbg"
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/ref"
@@ -133,83 +142,164 @@ func TestImageCheckBase(t *testing.T) {
 
 func TestCopy(t *testing.T) {
 	t.Parallel()
+	godbg.SignalTrace()
 	ctx := context.Background()
-	// create regclient
+	// TODO: if/when olareg supports initializing memory from disk, add that instead of the setup loop below
+	regHandler := olareg.New(oConfig.Config{
+		Storage: oConfig.ConfigStorage{StoreType: oConfig.StoreMem},
+	})
+	ts := httptest.NewServer(regHandler)
+	t.Cleanup(func() { ts.Close() })
+	tsURL, _ := url.Parse(ts.URL)
+	tsHost := tsURL.Host
+	rcHosts := []config.Host{
+		{
+			Name:      tsHost,
+			Hostname:  tsHost,
+			TLS:       config.TLSDisabled,
+			ReqPerSec: 1000,
+		},
+	}
+	log := &logrus.Logger{
+		Out:       os.Stderr,
+		Formatter: new(logrus.TextFormatter),
+		Hooks:     make(logrus.LevelHooks),
+		Level:     logrus.WarnLevel,
+	}
 	delayInit, _ := time.ParseDuration("0.05s")
 	delayMax, _ := time.ParseDuration("0.10s")
-	rc := New(WithRetryDelay(delayInit, delayMax))
+	rc := New(
+		WithConfigHost(rcHosts...),
+		WithLog(log),
+		WithRetryDelay(delayInit, delayMax),
+	)
+	for _, tag := range []string{"v1", "v2", "v3", "child"} {
+		rTestData1, err := ref.New("ocidir://./testdata/testrepo:" + tag)
+		if err != nil {
+			t.Errorf("failed to parse ref %s: %v", "ocidir://./testdata/testrepo:"+tag, err)
+			return
+		}
+		rReg1v1, err := ref.New(tsHost + "/testrepo:" + tag)
+		if err != nil {
+			t.Errorf("failed to parse ref %s: %v", tsHost+"/testrepo:"+tag, err)
+			return
+		}
+		err = rc.ImageCopy(ctx, rTestData1, rReg1v1, ImageWithDigestTags(), ImageWithReferrers())
+		if err != nil {
+			t.Errorf("failed to run setup copy: %v", err)
+			return
+		}
+	}
 	tempDir := t.TempDir()
-	rSrc, err := ref.New("ocidir://./testdata/testrepo:v1")
-	if err != nil {
-		t.Errorf("failed to parse src ref: %v", err)
+	tt := []struct {
+		name      string
+		src, tgt  string
+		opts      []ImageOpts
+		expectErr error
+	}{
+		{
+			name: "ocidir to registry",
+			src:  "ocidir://./testdata/testrepo:v1",
+			tgt:  tsHost + "/dest-ocidir:v1",
+		},
+		{
+			name: "ocidir to ocidir",
+			src:  "ocidir://./testdata/testrepo:v1",
+			tgt:  "ocidir://" + tempDir + "/testrepo:v1",
+		},
+		{
+			name: "registry to registry",
+			src:  tsHost + "/testrepo:v1",
+			tgt:  tsHost + "/dest-reg:v1",
+		},
+		{
+			name: "registry to registry same repo",
+			src:  tsHost + "/testrepo:v1",
+			tgt:  tsHost + "/testrepo:v1-copy",
+		},
+		{
+			name: "ocidir to registry with referrers and digest tags",
+			src:  "ocidir://./testdata/testrepo:v2",
+			tgt:  tsHost + "/dest-ocidir:v2",
+			opts: []ImageOpts{ImageWithReferrers(), ImageWithDigestTags()},
+		},
+		{
+			name: "ocidir to ocidir with referrers and digest tags",
+			src:  "ocidir://./testdata/testrepo:v2",
+			tgt:  "ocidir://" + tempDir + "/testrepo:v2",
+			opts: []ImageOpts{ImageWithReferrers(), ImageWithDigestTags()},
+		},
+		{
+			name: "registry to registry with referrers and digest tags",
+			src:  tsHost + "/testrepo:v2",
+			tgt:  tsHost + "/dest-reg:v2",
+			opts: []ImageOpts{ImageWithReferrers(), ImageWithDigestTags()},
+		},
+		{
+			name: "ocidir to registry with fast check",
+			src:  "ocidir://./testdata/testrepo:v3",
+			tgt:  tsHost + "/testrepo:v3-copy",
+			opts: []ImageOpts{ImageWithReferrers(), ImageWithDigestTags(), ImageWithFastCheck()},
+		},
+		{
+			name: "ocidir to registry child/loop",
+			src:  "ocidir://./testdata/testrepo:child",
+			tgt:  tsHost + "/dest-ocidir:child",
+			opts: []ImageOpts{ImageWithReferrers(), ImageWithDigestTags()},
+		},
+		{
+			name: "ocidir to ocidir child/loop",
+			src:  "ocidir://./testdata/testrepo:child",
+			tgt:  "ocidir://" + tempDir + "/testrepo:child",
+			opts: []ImageOpts{ImageWithReferrers(), ImageWithDigestTags()},
+		},
+		{
+			name: "registry to registry child/loop",
+			src:  tsHost + "/testrepo:child",
+			tgt:  tsHost + "/dest-reg:child",
+			opts: []ImageOpts{ImageWithReferrers(), ImageWithDigestTags()},
+		},
+		{
+			name: "ocidir to registry mirror digest tag",
+			src:  "ocidir://./testdata/testrepo:mirror",
+			tgt:  tsHost + "/dest-ocidir:mirror",
+			opts: []ImageOpts{ImageWithDigestTags()},
+		},
+		{
+			name: "ocidir to ocidir mirror digest tag",
+			src:  "ocidir://./testdata/testrepo:mirror",
+			tgt:  "ocidir://" + tempDir + "/testrepo:mirror",
+			opts: []ImageOpts{ImageWithDigestTags()},
+		},
 	}
-	rTgt, err := ref.New("ocidir://" + tempDir + ":v1")
-	if err != nil {
-		t.Errorf("failed to parse tgt ref: %v", err)
-	}
-	err = rc.ImageCopy(ctx, rSrc, rTgt)
-	if err != nil {
-		t.Errorf("failed to copy: %v", err)
-	}
-	rSrc, err = ref.New("ocidir://./testdata/testrepo:v2")
-	if err != nil {
-		t.Errorf("failed to parse src ref: %v", err)
-	}
-	rTgt, err = ref.New("ocidir://" + tempDir + ":v2")
-	if err != nil {
-		t.Errorf("failed to parse tgt ref: %v", err)
-	}
-	err = rc.ImageCopy(ctx, rSrc, rTgt, ImageWithReferrers(), ImageWithDigestTags())
-	if err != nil {
-		t.Errorf("failed to copy: %v", err)
-	}
-	rSrc, err = ref.New("ocidir://./testdata/testrepo:v3")
-	if err != nil {
-		t.Errorf("failed to parse src ref: %v", err)
-	}
-	rTgt, err = ref.New("ocidir://" + tempDir + ":v3")
-	if err != nil {
-		t.Errorf("failed to parse tgt ref: %v", err)
-	}
-	err = rc.ImageCopy(ctx, rSrc, rTgt)
-	if err != nil {
-		t.Errorf("failed to copy: %v", err)
-	}
-	rSrc, err = ref.New("ocidir://./testdata/testrepo:v3")
-	if err != nil {
-		t.Errorf("failed to parse src ref: %v", err)
-	}
-	rTgt, err = ref.New("ocidir://" + tempDir + ":v3")
-	if err != nil {
-		t.Errorf("failed to parse tgt ref: %v", err)
-	}
-	err = rc.ImageCopy(ctx, rSrc, rTgt, ImageWithReferrers(), ImageWithDigestTags(), ImageWithFastCheck())
-	if err != nil {
-		t.Errorf("failed to copy: %v", err)
-	}
-	rSrc, err = ref.New("ocidir://./testdata/testrepo:child")
-	if err != nil {
-		t.Errorf("failed to parse src ref: %v", err)
-	}
-	rTgt, err = ref.New("ocidir://" + tempDir + ":child")
-	if err != nil {
-		t.Errorf("failed to parse tgt ref: %v", err)
-	}
-	err = rc.ImageCopy(ctx, rSrc, rTgt, ImageWithReferrers(), ImageWithDigestTags())
-	if err != nil {
-		t.Errorf("failed to copy: %v", err)
-	}
-	rSrc, err = ref.New("ocidir://./testdata/testrepo:mirror")
-	if err != nil {
-		t.Errorf("failed to parse src ref: %v", err)
-	}
-	rTgt, err = ref.New("ocidir://" + tempDir + ":mirror")
-	if err != nil {
-		t.Errorf("failed to parse tgt ref: %v", err)
-	}
-	err = rc.ImageCopy(ctx, rSrc, rTgt, ImageWithDigestTags())
-	if err != nil {
-		t.Errorf("failed to copy: %v", err)
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			rSrc, err := ref.New(tc.src)
+			if err != nil {
+				t.Errorf("failed to parse ref %s: %v", tc.src, err)
+				return
+			}
+			rTgt, err := ref.New(tc.tgt)
+			if err != nil {
+				t.Errorf("failed to parse ref %s: %v", tc.tgt, err)
+				return
+			}
+			err = rc.ImageCopy(ctx, rSrc, rTgt, tc.opts...)
+			if tc.expectErr != nil {
+				if err == nil {
+					t.Errorf("copy did not fail, expected %v", tc.expectErr)
+				} else if !errors.Is(err, tc.expectErr) && err.Error() != tc.expectErr.Error() {
+					t.Errorf("unexpected error, expected %v, received %v", tc.expectErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("copy failed: %v", err)
+				return
+			}
+		})
 	}
 }
 
