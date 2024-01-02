@@ -12,14 +12,15 @@ import (
 
 // test New
 func TestNew(t *testing.T) {
-	t.Parallel()
 	testEnvFileVar, testEnvFileVal := "TEST_CONFFILE_NEW", "./test-filename.json"
-	os.Setenv(testEnvFileVar, testEnvFileVal)
+	t.Setenv(testEnvFileVar, testEnvFileVal)
 	testEnvDirVar, testEnvDirVal := "TEST_CONFDIR_NEW", "./test-dirname"
-	os.Setenv(testEnvFileVar, testEnvFileVal)
-	os.Setenv(testEnvDirVar, testEnvDirVal)
+	t.Setenv(testEnvFileVar, testEnvFileVal)
+	t.Setenv(testEnvDirVar, testEnvDirVal)
 	testEnvUnset := "TEST_CONFFILE_NEW_UNSET"
-	os.Unsetenv(testEnvUnset)
+	if _, ok := os.LookupEnv(testEnvUnset); ok {
+		t.Errorf("environment variable should not be set for tests: %s", testEnvUnset)
+	}
 	hd := homedir()
 	tests := []struct {
 		name       string
