@@ -144,9 +144,11 @@ func TestCopy(t *testing.T) {
 	t.Parallel()
 	godbg.SignalTrace()
 	ctx := context.Background()
-	// TODO: if/when olareg supports initializing memory from disk, add that instead of the setup loop below
 	regHandler := olareg.New(oConfig.Config{
-		Storage: oConfig.ConfigStorage{StoreType: oConfig.StoreMem},
+		Storage: oConfig.ConfigStorage{
+			StoreType: oConfig.StoreMem,
+			RootDir:   "./testdata",
+		},
 	})
 	ts := httptest.NewServer(regHandler)
 	t.Cleanup(func() { ts.Close() })
@@ -173,23 +175,6 @@ func TestCopy(t *testing.T) {
 		WithLog(log),
 		WithRetryDelay(delayInit, delayMax),
 	)
-	for _, tag := range []string{"v1", "v2", "v3", "child"} {
-		rTestData1, err := ref.New("ocidir://./testdata/testrepo:" + tag)
-		if err != nil {
-			t.Errorf("failed to parse ref %s: %v", "ocidir://./testdata/testrepo:"+tag, err)
-			return
-		}
-		rReg1v1, err := ref.New(tsHost + "/testrepo:" + tag)
-		if err != nil {
-			t.Errorf("failed to parse ref %s: %v", tsHost+"/testrepo:"+tag, err)
-			return
-		}
-		err = rc.ImageCopy(ctx, rTestData1, rReg1v1, ImageWithDigestTags(), ImageWithReferrers())
-		if err != nil {
-			t.Errorf("failed to run setup copy: %v", err)
-			return
-		}
-	}
 	tempDir := t.TempDir()
 	tt := []struct {
 		name      string
