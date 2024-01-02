@@ -19,8 +19,7 @@ func TestConfig(t *testing.T) {
 		return
 	}
 	curPath := os.Getenv("PATH")
-	os.Setenv("PATH", filepath.Join(cwd, "testdata")+string(os.PathListSeparator)+curPath)
-	defer os.Setenv("PATH", curPath)
+	t.Setenv("PATH", filepath.Join(cwd, "testdata")+string(os.PathListSeparator)+curPath)
 
 	// generate new/blank
 	blankHostP := HostNew()

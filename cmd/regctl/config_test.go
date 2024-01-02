@@ -1,7 +1,6 @@
 package main
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 )
@@ -9,11 +8,7 @@ import (
 func TestConfig(t *testing.T) {
 	// set a temp dir for storing configs
 	tempDir := t.TempDir()
-	origEnv, set := os.LookupEnv(ConfigEnv)
-	if set {
-		defer os.Setenv(ConfigEnv, origEnv)
-	}
-	os.Setenv(ConfigEnv, filepath.Join(tempDir, "config.json"))
+	t.Setenv(ConfigEnv, filepath.Join(tempDir, "config.json"))
 
 	// test empty config
 	out, err := cobraTest(t, nil, "config", "get", "--format", "{{ json . }}")
