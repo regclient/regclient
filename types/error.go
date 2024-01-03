@@ -55,6 +55,8 @@ var (
 	ErrNotFound = errors.New("not found")
 	// ErrNotImplemented returned when method has not been implemented yet
 	ErrNotImplemented = errors.New("not implemented")
+	// ErrNotRetryable indicates the process cannot be retried
+	ErrNotRetryable = errors.New("not retryable")
 	// ErrParsingFailed when a string cannot be parsed
 	ErrParsingFailed = errors.New("parsing failed")
 	// ErrRetryNeeded indicates a request needs to be retried

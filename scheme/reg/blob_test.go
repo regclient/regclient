@@ -1072,6 +1072,22 @@ func TestBlobPut(t *testing.T) {
 		}
 	})
 
+	t.Run("Not retryable", func(t *testing.T) {
+		r, err := ref.New("retry." + tsURL.Host + blobRepo)
+		if err != nil {
+			t.Errorf("Failed creating ref: %v", err)
+		}
+		br := bytes.NewReader(blob2)
+		_, err = reg.BlobPut(ctx, r, types.Descriptor{Digest: d2, Size: int64(len(blob2))}, io.NopCloser(br))
+		if err == nil {
+			t.Errorf("Blob put succeeded on a gateway timeout")
+			return
+		}
+		if !errors.Is(err, types.ErrHTTPStatus) {
+			t.Errorf("unexpected err, expected %v, received %v", types.ErrHTTPStatus, err)
+		}
+	})
+
 	t.Run("PartialChunk", func(t *testing.T) {
 		r, err := ref.New(tsURL.Host + blobRepo)
 		if err != nil {
