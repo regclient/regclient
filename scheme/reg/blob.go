@@ -391,15 +391,16 @@ func (reg *Reg) blobPutUploadFull(ctx context.Context, r ref.Ref, d types.Descri
 	// make a reader function for the blob
 	readOnce := false
 	bodyFunc := func() (io.ReadCloser, error) {
-		// if reader is reused,
+		// handle attempt to reuse blob reader (e.g. on a connection retry or fallback)
 		if readOnce {
 			rdrSeek, ok := rdr.(io.ReadSeeker)
 			if !ok {
-				return nil, fmt.Errorf("unable to reuse reader")
+				return nil, fmt.Errorf("blob source is not a seeker%.0w", types.ErrNotRetryable)
 			}
 			_, err := rdrSeek.Seek(0, io.SeekStart)
 			if err != nil {
-				return nil, fmt.Errorf("unable to reuse reader")
+				// TODO: after Go 1.19 support is dropped, convert this to multiple errors with %w%.0w
+				return nil, fmt.Errorf("seek on blob source failed: %v%.0w", err, types.ErrNotRetryable)
 			}
 		}
 		readOnce = true
