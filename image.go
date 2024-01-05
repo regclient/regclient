@@ -657,7 +657,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					opt.mu.Unlock()
 					waitCh <- nil
 				} else {
-					if err != nil {
+					if err != nil && !errors.Is(err, context.Canceled) {
 						rc.log.WithFields(logrus.Fields{
 							"digest": rDesc.Digest.String(),
 							"src":    referrerSrc.CommonName(),
@@ -728,7 +728,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 						opt.mu.Unlock()
 						waitCh <- nil
 					} else {
-						if err != nil {
+						if err != nil && !errors.Is(err, context.Canceled) {
 							rc.log.WithFields(logrus.Fields{
 								"tag": tag,
 								"src": refTagSrc.CommonName(),
@@ -792,7 +792,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					"digest": cd.Digest.String(),
 				}).Info("Copy config")
 				err := rc.imageCopyBlob(ctx, refSrc, refTgt, cd, opt, bOpt...)
-				if err != nil {
+				if err != nil && !errors.Is(err, context.Canceled) {
 					rc.log.WithFields(logrus.Fields{
 						"source": refSrc.Reference,
 						"target": refTgt.Reference,
@@ -829,7 +829,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					"layer":  layerSrc.Digest.String(),
 				}).Info("Copy layer")
 				err := rc.imageCopyBlob(ctx, refSrc, refTgt, layerSrc, opt, bOpt...)
-				if err != nil {
+				if err != nil && !errors.Is(err, context.Canceled) {
 					rc.log.WithFields(logrus.Fields{
 						"source": refSrc.Reference,
 						"target": refTgt.Reference,
@@ -863,10 +863,12 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 	if mTgt == nil || sDig != mTgt.GetDescriptor().Digest || opt.forceRecursive {
 		err = rc.ManifestPut(ctx, refTgt, mSrc, mOpts...)
 		if err != nil {
-			rc.log.WithFields(logrus.Fields{
-				"target": refTgt.Reference,
-				"err":    err,
-			}).Warn("Failed to push manifest")
+			if !errors.Is(err, context.Canceled) {
+				rc.log.WithFields(logrus.Fields{
+					"target": refTgt.Reference,
+					"err":    err,
+				}).Warn("Failed to push manifest")
+			}
 			return err
 		}
 		if opt.callback != nil {
