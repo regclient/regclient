@@ -16,7 +16,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/internal/godbg"
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/ref"
@@ -142,7 +141,6 @@ func TestImageCheckBase(t *testing.T) {
 
 func TestCopy(t *testing.T) {
 	t.Parallel()
-	godbg.SignalTrace()
 	ctx := context.Background()
 	regHandler := olareg.New(oConfig.Config{
 		Storage: oConfig.ConfigStorage{
