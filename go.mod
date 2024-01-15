@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7
 	github.com/google/uuid v1.5.0
-	github.com/olareg/olareg v0.0.0-20240107203551-34f4f5e5310f
+	github.com/olareg/olareg v0.0.0-20240113232603-66cb4ed3d767
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/sirupsen/logrus v1.9.3

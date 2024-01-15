@@ -1,7 +1,7 @@
 {"name":"gha-uses-semver","key":"actions/checkout","version":"v4.1.1"}
 {"name":"gha-uses-semver","key":"actions/setup-go","version":"v5.0.0"}
 {"name":"gha-uses-semver","key":"actions/stale","version":"v9.0.0"}
-{"name":"gha-uses-semver","key":"actions/upload-artifact","version":"v4.0.0"}
+{"name":"gha-uses-semver","key":"actions/upload-artifact","version":"v4.1.0"}
 {"name":"gha-uses-semver","key":"anchore/sbom-action","version":"v0.15.3"}
 {"name":"gha-uses-semver","key":"docker/build-push-action","version":"v5.1.0"}
 {"name":"gha-uses-semver","key":"docker/login-action","version":"v3.0.0"}
@@ -28,6 +28,7 @@
 {"name":"github-commit-match","key":"actions/stale:v9.0.0","version":"28ca1036281a5e5922ead5184a1bbf96e5fc984e"}
 {"name":"github-commit-match","key":"actions/upload-artifact:v3.1.3","version":"a8a3f3ad30e3422c9c7b888a15615d19a852ae32"}
 {"name":"github-commit-match","key":"actions/upload-artifact:v4.0.0","version":"c7d193f32edcb7bfad88892161225aeda64e9392"}
+{"name":"github-commit-match","key":"actions/upload-artifact:v4.1.0","version":"1eb3cb2b3e0f29609092a73eb033bb759a334595"}
 {"name":"github-commit-match","key":"anchore/sbom-action:v0.14.3","version":"78fc58e266e87a38d4194b2137a3d4e9bcaf7ca1"}
 {"name":"github-commit-match","key":"anchore/sbom-action:v0.15.0","version":"fd74a6fb98a204a1ad35bbfae0122c1a302ff88b"}
 {"name":"github-commit-match","key":"anchore/sbom-action:v0.15.1","version":"5ecf649a417b8ae17dc8383dc32d46c03f2312df"}
@@ -60,7 +61,7 @@
 {"name":"registry-golang-matrix","key":"golang-matrix","version":"[\"1.19\", \"1.20\", \"1.21\"]"}
 {"name":"registry-golang-oldest","key":"golang-oldest","version":"1.19"}
 {"name":"registry-tag-arg-semver","key":"anchore/syft","version":"v0.100.0"}
-{"name":"registry-tag-arg-semver","key":"davidanson/markdownlint-cli2","version":"v0.11.0"}
+{"name":"registry-tag-arg-semver","key":"davidanson/markdownlint-cli2","version":"v0.12.1"}
 {"name":"registry-tag-arg-semver","key":"docker.io/library/alpine","version":"3.19.0"}
 {"name":"registry-tag-arg-semver","key":"docker.io/library/golang","version":"1.21.6"}
 {"name":"registry-tag-arg-semver","key":"ghcr.io/igorshubovych/markdownlint-cli","version":"v0.35.0"}
