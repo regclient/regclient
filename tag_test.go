@@ -45,6 +45,12 @@ func TestTag(t *testing.T) {
 	tsRO := httptest.NewServer(regROHandler)
 	tsROURL, _ := url.Parse(tsRO.URL)
 	tsROHost := tsROURL.Host
+	t.Cleanup(func() {
+		tsRW.Close()
+		tsRO.Close()
+		_ = regRWHandler.Close()
+		_ = regROHandler.Close()
+	})
 	rcHosts := []config.Host{
 		{
 			Name:      tsRWHost,

@@ -31,6 +31,11 @@ func TestRegistry(t *testing.T) {
 	}))
 	tsBadURL, _ := url.Parse(tsBad.URL)
 	tsBadHost := tsBadURL.Host
+	t.Cleanup(func() {
+		tsGood.Close()
+		tsBad.Close()
+		_ = regHandler.Close()
+	})
 	tempDir := t.TempDir()
 	t.Setenv(ConfigEnv, filepath.Join(tempDir, "config.json"))
 	tt := []struct {

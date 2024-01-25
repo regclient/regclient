@@ -149,7 +149,10 @@ func TestCopy(t *testing.T) {
 		},
 	})
 	ts := httptest.NewServer(regHandler)
-	t.Cleanup(func() { ts.Close() })
+	t.Cleanup(func() {
+		ts.Close()
+		_ = regHandler.Close()
+	})
 	tsURL, _ := url.Parse(ts.URL)
 	tsHost := tsURL.Host
 	rcHosts := []config.Host{
