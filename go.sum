@@ -10,6 +10,8 @@ github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
 github.com/olareg/olareg v0.0.0-20240113232603-66cb4ed3d767 h1:wMkZ1kqA0IH+z1eDMaFjb/ZeMuZvvHBXDlW8JXBjoZ0=
 github.com/olareg/olareg v0.0.0-20240113232603-66cb4ed3d767/go.mod h1:YazBF7Kwb7UGtorlfDOqMv4cxPXERX55H0xbiIYFzow=
+github.com/olareg/olareg v0.0.0-20240124210831-6f69033fe212 h1:J+ScE7b48gNTblZ7VQs/q1CwfxWA6jgV0tlVMFm1TXU=
+github.com/olareg/olareg v0.0.0-20240124210831-6f69033fe212/go.mod h1:YazBF7Kwb7UGtorlfDOqMv4cxPXERX55H0xbiIYFzow=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
