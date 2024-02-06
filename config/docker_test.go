@@ -10,21 +10,14 @@ import (
 
 func TestDocker(t *testing.T) {
 	// cannot run cred helper in parallel because of OS working directory race conditions
-	curPath := os.Getenv("PATH")
 	pwd, err := os.Getwd()
 	if err != nil {
 		t.Errorf("failed to get working dir: %v", err)
 		return
 	}
-	os.Setenv("PATH", filepath.Join(pwd, "testdata")+string(os.PathListSeparator)+curPath)
-	defer os.Setenv("PATH", curPath)
-	curDockerConf := os.Getenv(dockerEnv)
-	os.Setenv(dockerEnv, "testdata")
-	if curDockerConf != "" {
-		defer os.Setenv(dockerEnv, curDockerConf)
-	} else {
-		defer os.Unsetenv(dockerEnv)
-	}
+	curPath := os.Getenv("PATH")
+	t.Setenv("PATH", filepath.Join(pwd, "testdata")+string(os.PathListSeparator)+curPath)
+	t.Setenv(dockerEnv, "testdata")
 	hosts, err := DockerLoad()
 	if err != nil {
 		t.Errorf("error loading docker credentials: %v", err)

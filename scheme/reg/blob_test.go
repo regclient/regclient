@@ -380,7 +380,9 @@ func TestBlobPut(t *testing.T) {
 	d1, blob1 := reqresp.NewRandomBlob(blobLen, seed)
 	uuid1 := uuid.New()
 	d2, blob2 := reqresp.NewRandomBlob(blobLen, seed+1)
+	d2Bad := digest.Canonical.FromString("digest 2 bad")
 	uuid2 := uuid.New()
+	uuid2Bad := uuid.New()
 	d3, blob3 := reqresp.NewRandomBlob(blobLen3, seed+2)
 	uuid3 := uuid.New()
 	d4, blob4 := reqresp.NewRandomBlob(blobLen4, seed+3)
@@ -615,6 +617,148 @@ func TestBlobPut(t *testing.T) {
 				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2.String(),
 				Query: map[string][]string{
 					"digest": {d2.String()},
+				},
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", len(blob2))},
+					"Content-Type":   {"application/octet-stream"},
+				},
+				Body: blob2,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusGatewayTimeout,
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", 0)},
+				},
+			},
+		},
+		// get upload2 location
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "POST for d2Bad",
+				Method: "POST",
+				Path:   "/v2" + blobRepo + "/blobs/uploads/",
+				Query: map[string][]string{
+					"mount": {d2Bad.String()},
+				},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusAccepted,
+				Headers: http.Header{
+					"Content-Length": {"0"},
+					"Location":       {uuid2Bad.String()},
+				},
+			},
+		},
+		// upload put for d2Bad
+		{
+			ReqEntry: reqresp.ReqEntry{
+				DelOnUse: false,
+				Name:     "PUT for patched d2Bad",
+				Method:   "PUT",
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2Bad.String(),
+				Query: map[string][]string{
+					"digest": {d2Bad.String()},
+					"chunk":  {"3"},
+				},
+				Headers: http.Header{
+					"Content-Length": {"0"},
+					"Content-Type":   {"application/octet-stream"},
+				},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusBadRequest,
+				Headers: http.Header{
+					"Content-Length": {"0"},
+					// "Location":              {"/v2" + blobRepo + "/blobs/" + d2Bad.String()},
+					// "Docker-Content-Digest": {d2Bad.String()},
+				},
+			},
+		},
+		// upload patch 2b for d2
+		{
+			ReqEntry: reqresp.ReqEntry{
+				DelOnUse: false,
+				Name:     "PATCH 2b for d2Bad",
+				Method:   "PATCH",
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2Bad.String(),
+				Query: map[string][]string{
+					"chunk": {"2b"},
+				},
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", blobLen-blobChunk-20)},
+					"Content-Range":  {fmt.Sprintf("%d-%d", blobChunk+20, blobLen-1)},
+					"Content-Type":   {"application/octet-stream"},
+				},
+				Body: blob2[blobChunk+20:],
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusAccepted,
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", 0)},
+					"Range":          {fmt.Sprintf("bytes=0-%d", blobLen-1)},
+					"Location":       {uuid2Bad.String() + "?chunk=3"},
+				},
+			},
+		},
+		// upload patch 2 for d2
+		{
+			ReqEntry: reqresp.ReqEntry{
+				DelOnUse: false,
+				Name:     "PATCH 2 for d2Bad",
+				Method:   "PATCH",
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2Bad.String(),
+				Query: map[string][]string{
+					"chunk": {"2"},
+				},
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", blobLen-blobChunk)},
+					"Content-Range":  {fmt.Sprintf("%d-%d", blobChunk, blobLen-1)},
+					"Content-Type":   {"application/octet-stream"},
+				},
+				Body: blob2[blobChunk:],
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusRequestedRangeNotSatisfiable,
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", 0)},
+					"Range":          {fmt.Sprintf("bytes=0-%d", blobChunk+20-1)},
+					"Location":       {uuid2Bad.String() + "?chunk=2b"},
+				},
+			},
+		},
+		// upload patch 1 for d2
+		{
+			ReqEntry: reqresp.ReqEntry{
+				DelOnUse: false,
+				Name:     "PATCH 1 for d2Bad",
+				Method:   "PATCH",
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2Bad.String(),
+				Query:    map[string][]string{},
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", blobChunk)},
+					"Content-Range":  {fmt.Sprintf("0-%d", blobChunk-1)},
+					"Content-Type":   {"application/octet-stream"},
+				},
+				Body: blob2[0:blobChunk],
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusAccepted,
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", 0)},
+					"Range":          {fmt.Sprintf("bytes=0-%d", blobChunk-1)},
+					"Location":       {uuid2Bad.String() + "?chunk=2"},
+				},
+			},
+		},
+		// upload blob
+		{
+			ReqEntry: reqresp.ReqEntry{
+				DelOnUse: false,
+				Name:     "PUT for d2Bad",
+				Method:   "PUT",
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2Bad.String(),
+				Query: map[string][]string{
+					"digest": {d2Bad.String()},
 				},
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", len(blob2))},
@@ -1059,7 +1203,8 @@ func TestBlobPut(t *testing.T) {
 			t.Errorf("Failed creating ref: %v", err)
 		}
 		br := bytes.NewReader(blob2)
-		dp, err := reg.BlobPut(ctx, r, types.Descriptor{Digest: d2, Size: int64(len(blob2))}, br)
+		mt := "application/vnd.example.test"
+		dp, err := reg.BlobPut(ctx, r, types.Descriptor{MediaType: mt, Digest: d2, Size: int64(len(blob2))}, br)
 		if err != nil {
 			t.Errorf("Failed running BlobPut: %v", err)
 			return
@@ -1069,6 +1214,51 @@ func TestBlobPut(t *testing.T) {
 		}
 		if dp.Size != int64(len(blob2)) {
 			t.Errorf("Content length mismatch, expected %d, received %d", len(blob2), dp.Size)
+		}
+		if dp.MediaType != mt {
+			t.Errorf("Blob put did not preserve descriptor media type: expected %s, received %s", mt, dp.MediaType)
+		}
+	})
+
+	t.Run("Not retryable", func(t *testing.T) {
+		r, err := ref.New("retry." + tsURL.Host + blobRepo)
+		if err != nil {
+			t.Errorf("Failed creating ref: %v", err)
+		}
+		br := bytes.NewReader(blob2)
+		_, err = reg.BlobPut(ctx, r, types.Descriptor{Digest: d2, Size: int64(len(blob2))}, io.NopCloser(br))
+		if err == nil {
+			t.Errorf("Blob put succeeded on a gateway timeout")
+			return
+		}
+		if !errors.Is(err, types.ErrHTTPStatus) {
+			t.Errorf("unexpected err, expected %v, received %v", types.ErrHTTPStatus, err)
+		}
+	})
+
+	t.Run("Invalid digest", func(t *testing.T) {
+		r, err := ref.New("retry." + tsURL.Host + blobRepo)
+		if err != nil {
+			t.Errorf("Failed creating ref: %v", err)
+		}
+		br := bytes.NewReader(blob2)
+		mt := "application/vnd.example.test"
+		_, err = reg.BlobPut(ctx, r, types.Descriptor{MediaType: mt, Digest: d2Bad, Size: int64(len(blob2))}, br)
+		if err == nil || !errors.Is(err, types.ErrDigestMismatch) {
+			t.Errorf("unexpected error, expected %v, received %v", types.ErrDigestMismatch, err)
+		}
+	})
+
+	t.Run("Invalid size", func(t *testing.T) {
+		r, err := ref.New("retry." + tsURL.Host + blobRepo)
+		if err != nil {
+			t.Errorf("Failed creating ref: %v", err)
+		}
+		br := bytes.NewReader(blob2)
+		mt := "application/vnd.example.test"
+		_, err = reg.BlobPut(ctx, r, types.Descriptor{MediaType: mt, Digest: d2, Size: int64(len(blob2) - 2)}, br)
+		if err == nil || !errors.Is(err, types.ErrMismatch) {
+			t.Errorf("unexpected error, expected %v, received %v", types.ErrMismatch, err)
 		}
 	})
 

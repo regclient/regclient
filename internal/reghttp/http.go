@@ -291,7 +291,7 @@ func (resp *clientResp) Next() error {
 		}
 
 		// try each host in a closure to handle all the backoff/dropHost from one place
-		err = func() error {
+		loopErr := func() error {
 			var err error
 			if !okAPI {
 				dropHost = true
@@ -513,7 +513,7 @@ func (resp *clientResp) Next() error {
 			return nil
 		}()
 		// return on success
-		if err == nil {
+		if loopErr == nil {
 			resp.throttle = h.config.Throttle()
 			return nil
 		}
@@ -534,6 +534,11 @@ func (resp *clientResp) Next() error {
 				}
 			}
 		}
+		// when error does not allow retries, abort with the last known err value
+		if err != nil && errors.Is(loopErr, types.ErrNotRetryable) {
+			return err
+		}
+		err = loopErr
 		if dropHost {
 			hosts = append(hosts[:curHost], hosts[curHost+1:]...)
 		} else if !retryHost {

@@ -59,8 +59,7 @@ func TestCredHelper(t *testing.T) {
 		return
 	}
 	curPath := os.Getenv("PATH")
-	os.Setenv("PATH", filepath.Join(cwd, "testdata")+string(os.PathListSeparator)+curPath)
-	defer os.Setenv("PATH", curPath)
+	t.Setenv("PATH", filepath.Join(cwd, "testdata")+string(os.PathListSeparator)+curPath)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := HostNewName(tt.host)

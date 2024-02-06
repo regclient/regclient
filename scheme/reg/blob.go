@@ -24,6 +24,10 @@ import (
 	"github.com/regclient/regclient/types/ref"
 )
 
+var (
+	zeroDig = digest.Canonical.FromBytes([]byte{})
+)
+
 // BlobDelete removes a blob from the repository
 func (reg *Reg) BlobDelete(ctx context.Context, r ref.Ref, d types.Descriptor) error {
 	req := &reghttp.Req{
@@ -180,13 +184,10 @@ func (reg *Reg) BlobMount(ctx context.Context, rSrc ref.Ref, rTgt ref.Ref, d typ
 func (reg *Reg) BlobPut(ctx context.Context, r ref.Ref, d types.Descriptor, rdr io.Reader) (types.Descriptor, error) {
 	var putURL *url.URL
 	var err error
-	// defaults for content-type and length
-	if d.Size == 0 {
-		d.Size = -1
-	}
+	validDesc := (d.Digest != "" && d.Size > 0) || (d.Size == 0 && d.Digest == zeroDig)
 
 	// attempt an anonymous blob mount
-	if d.Digest != "" && d.Size > 0 {
+	if validDesc {
 		putURL, _, err = reg.blobMount(ctx, r, d, ref.Ref{})
 		if err == nil {
 			return d, nil
@@ -202,9 +203,8 @@ func (reg *Reg) BlobPut(ctx context.Context, r ref.Ref, d types.Descriptor, rdr 
 			return d, err
 		}
 	}
-
 	// send upload as one-chunk
-	tryPut := bool(d.Digest != "" && d.Size > 0)
+	tryPut := validDesc
 	if tryPut {
 		host := reg.hostGet(r.Registry)
 		maxPut := host.BlobMax
@@ -230,9 +230,8 @@ func (reg *Reg) BlobPut(ctx context.Context, r ref.Ref, d types.Descriptor, rdr 
 			return d, err
 		}
 	}
-
 	// send a chunked upload if full upload not possible or too large
-	return reg.blobPutUploadChunked(ctx, r, putURL, rdr)
+	return reg.blobPutUploadChunked(ctx, r, d, putURL, rdr)
 }
 
 func (reg *Reg) blobGetUploadURL(ctx context.Context, r ref.Ref) (*url.URL, error) {
@@ -391,19 +390,24 @@ func (reg *Reg) blobPutUploadFull(ctx context.Context, r ref.Ref, d types.Descri
 	// make a reader function for the blob
 	readOnce := false
 	bodyFunc := func() (io.ReadCloser, error) {
-		// if reader is reused,
+		// handle attempt to reuse blob reader (e.g. on a connection retry or fallback)
 		if readOnce {
 			rdrSeek, ok := rdr.(io.ReadSeeker)
 			if !ok {
-				return nil, fmt.Errorf("unable to reuse reader")
+				return nil, fmt.Errorf("blob source is not a seeker%.0w", types.ErrNotRetryable)
 			}
 			_, err := rdrSeek.Seek(0, io.SeekStart)
 			if err != nil {
-				return nil, fmt.Errorf("unable to reuse reader")
+				// TODO: after Go 1.19 support is dropped, convert this to multiple errors with %w%.0w
+				return nil, fmt.Errorf("seek on blob source failed: %v%.0w", err, types.ErrNotRetryable)
 			}
 		}
 		readOnce = true
 		return io.NopCloser(rdr), nil
+	}
+	// special case for the empty blob
+	if d.Size == 0 && d.Digest == zeroDig {
+		bodyFunc = nil
 	}
 
 	// build/send request
@@ -436,7 +440,7 @@ func (reg *Reg) blobPutUploadFull(ctx context.Context, r ref.Ref, d types.Descri
 	return nil
 }
 
-func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url.URL, rdr io.Reader) (types.Descriptor, error) {
+func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, d types.Descriptor, putURL *url.URL, rdr io.Reader) (types.Descriptor, error) {
 	host := reg.hostGet(r.Registry)
 	bufSize := host.BlobChunk
 	if bufSize <= 0 {
@@ -480,7 +484,7 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				finalChunk = true
 			} else if err != nil {
-				return types.Descriptor{}, fmt.Errorf("failed to send blob chunk, ref %s: %w", r.CommonName(), err)
+				return d, fmt.Errorf("failed to send blob chunk, ref %s: %w", r.CommonName(), err)
 			}
 			// update length on partial read
 			if chunkSize != len(bufBytes) {
@@ -496,7 +500,7 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url
 			bufChange = true
 		}
 		if chunkSize > 0 && chunkStart != bufStart {
-			return types.Descriptor{}, fmt.Errorf("chunkStart (%d) != bufStart (%d)", chunkStart, bufStart)
+			return d, fmt.Errorf("chunkStart (%d) != bufStart (%d)", chunkStart, bufStart)
 		}
 		if bufChange {
 			// need to recreate the reader on a change to the slice length,
@@ -526,11 +530,11 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url
 			}
 			resp, err := reg.reghttp.Do(ctx, req)
 			if err != nil && !errors.Is(err, types.ErrHTTPStatus) && !errors.Is(err, types.ErrNotFound) {
-				return types.Descriptor{}, fmt.Errorf("failed to send blob (chunk), ref %s: http do: %w", r.CommonName(), err)
+				return d, fmt.Errorf("failed to send blob (chunk), ref %s: http do: %w", r.CommonName(), err)
 			}
 			err = resp.Close()
 			if err != nil {
-				return types.Descriptor{}, fmt.Errorf("failed to close request: %w", err)
+				return d, fmt.Errorf("failed to close request: %w", err)
 			}
 			httpResp := resp.HTTPResponse()
 			// distribution-spec is 202, AWS ECR returns a 201 and rejects the put
@@ -554,7 +558,7 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url
 				retryCur++
 				statusResp, statusErr := reg.blobUploadStatus(ctx, r, &chunkURL)
 				if retryCur > retryLimit || statusErr != nil {
-					return types.Descriptor{}, fmt.Errorf("failed to send blob (chunk), ref %s: http status: %w", r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
+					return d, fmt.Errorf("failed to send blob (chunk), ref %s: http status: %w", r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 				}
 				httpResp = statusResp
 			} else {
@@ -577,7 +581,7 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url
 				prevURL := httpResp.Request.URL
 				parseURL, err := prevURL.Parse(location)
 				if err != nil {
-					return types.Descriptor{}, fmt.Errorf("failed to send blob (parse next chunk location), ref %s: %w", r.CommonName(), err)
+					return d, fmt.Errorf("failed to send blob (parse next chunk location), ref %s: %w", r.CommonName(), err)
 				}
 				chunkURL = *parseURL
 			}
@@ -585,14 +589,22 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url
 	}
 
 	// compute digest
-	d := digester.Digest()
+	dOut := digester.Digest()
+	if d.Digest != "" && dOut != d.Digest {
+		return d, fmt.Errorf("%w, expected %s, computed %s", types.ErrDigestMismatch, d.Digest.String(), dOut.String())
+	}
+	if d.Size != 0 && chunkStart != d.Size {
+		return d, fmt.Errorf("blob content size does not match descriptor, expected %d, received %d%.0w", d.Size, chunkStart, types.ErrMismatch)
+	}
+	d.Digest = dOut
+	d.Size = chunkStart
 
 	// send the final put
 	// append digest to request to use the monolithic upload option
 	if chunkURL.RawQuery != "" {
-		chunkURL.RawQuery = chunkURL.RawQuery + "&digest=" + url.QueryEscape(d.String())
+		chunkURL.RawQuery = chunkURL.RawQuery + "&digest=" + url.QueryEscape(dOut.String())
 	} else {
-		chunkURL.RawQuery = "digest=" + url.QueryEscape(d.String())
+		chunkURL.RawQuery = "digest=" + url.QueryEscape(dOut.String())
 	}
 
 	header := http.Header{
@@ -613,15 +625,15 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, putURL *url
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
-		return types.Descriptor{}, fmt.Errorf("failed to send blob (chunk digest), digest %s, ref %s: %w", d, r.CommonName(), err)
+		return d, fmt.Errorf("failed to send blob (chunk digest), digest %s, ref %s: %w", dOut, r.CommonName(), err)
 	}
 	defer resp.Close()
 	// 201 follows distribution-spec, 204 is listed as possible in the Docker registry spec
 	if resp.HTTPResponse().StatusCode != 201 && resp.HTTPResponse().StatusCode != 204 {
-		return types.Descriptor{}, fmt.Errorf("failed to send blob (chunk digest), digest %s, ref %s: %w", d, r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
+		return d, fmt.Errorf("failed to send blob (chunk digest), digest %s, ref %s: %w", dOut, r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 	}
 
-	return types.Descriptor{Digest: d, Size: chunkStart}, nil
+	return d, nil
 }
 
 // TODO: just take a putURL rather than the uuid and call a delete on that url

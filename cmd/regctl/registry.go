@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"syscall"
 
@@ -33,6 +32,7 @@ type registryCmd struct {
 	blobChunk, blobMax   int64
 	reqPerSec            float64
 	reqConcurrent        int64
+	skipCheck            bool
 	apiOpts              []string
 	scheme               string   // TODO: remove
 	dns                  []string // TODO: remove
@@ -84,25 +84,27 @@ the contents of the file, e.g. --cacert "$(cat reg-ca.crt)"`,
 
 	registryLoginCmd.Flags().StringVarP(&registryOpts.user, "user", "u", "", "Username")
 	registryLoginCmd.Flags().StringVarP(&registryOpts.pass, "pass", "p", "", "Password")
-	registryLoginCmd.Flags().BoolVarP(&registryOpts.passStdin, "pass-stdin", "", false, "Read password from stdin")
+	registryLoginCmd.Flags().BoolVar(&registryOpts.passStdin, "pass-stdin", false, "Read password from stdin")
+	registryLoginCmd.Flags().BoolVar(&registryOpts.skipCheck, "skip-check", false, "Skip checking connectivity to the registry")
 	_ = registryLoginCmd.RegisterFlagCompletionFunc("user", completeArgNone)
 	_ = registryLoginCmd.RegisterFlagCompletionFunc("pass", completeArgNone)
 
-	registrySetCmd.Flags().StringVarP(&registryOpts.credHelper, "cred-helper", "", "", "Credential helper (full binary name, including docker-credential- prefix)")
-	registrySetCmd.Flags().StringVarP(&registryOpts.cacert, "cacert", "", "", "CA Certificate (not a filename, use \"$(cat ca.pem)\" to use a file)")
-	registrySetCmd.Flags().StringVarP(&registryOpts.clientCert, "client-cert", "", "", "Client certificate for mTLS (not a filename, use \"$(cat client.pem)\" to use a file)")
-	registrySetCmd.Flags().StringVarP(&registryOpts.clientKey, "client-key", "", "", "Client key for mTLS (not a filename, use \"$(cat client.key)\" to use a file)")
-	registrySetCmd.Flags().StringVarP(&registryOpts.tls, "tls", "", "", "TLS (enabled, insecure, disabled)")
-	registrySetCmd.Flags().StringVarP(&registryOpts.hostname, "hostname", "", "", "Hostname or ip with port")
-	registrySetCmd.Flags().StringVarP(&registryOpts.pathPrefix, "path-prefix", "", "", "Prefix to all repositories")
-	registrySetCmd.Flags().StringArrayVarP(&registryOpts.mirrors, "mirror", "", nil, "List of mirrors (registry names)")
-	registrySetCmd.Flags().UintVarP(&registryOpts.priority, "priority", "", 0, "Priority (for sorting mirrors)")
-	registrySetCmd.Flags().BoolVarP(&registryOpts.repoAuth, "repo-auth", "", false, "Separate auth requests per repository instead of per registry")
-	registrySetCmd.Flags().Int64VarP(&registryOpts.blobChunk, "blob-chunk", "", 0, "Blob chunk size")
-	registrySetCmd.Flags().Int64VarP(&registryOpts.blobMax, "blob-max", "", 0, "Blob size before switching to chunked push, -1 to disable")
-	registrySetCmd.Flags().Float64VarP(&registryOpts.reqPerSec, "req-per-sec", "", 0, "Requests per second")
-	registrySetCmd.Flags().Int64VarP(&registryOpts.reqConcurrent, "req-concurrent", "", 0, "Concurrent requests")
-	registrySetCmd.Flags().StringArrayVarP(&registryOpts.apiOpts, "api-opts", "", nil, "List of options (key=value))")
+	registrySetCmd.Flags().StringVar(&registryOpts.credHelper, "cred-helper", "", "Credential helper (full binary name, including docker-credential- prefix)")
+	registrySetCmd.Flags().StringVar(&registryOpts.cacert, "cacert", "", "CA Certificate (not a filename, use \"$(cat ca.pem)\" to use a file)")
+	registrySetCmd.Flags().StringVar(&registryOpts.clientCert, "client-cert", "", "Client certificate for mTLS (not a filename, use \"$(cat client.pem)\" to use a file)")
+	registrySetCmd.Flags().StringVar(&registryOpts.clientKey, "client-key", "", "Client key for mTLS (not a filename, use \"$(cat client.key)\" to use a file)")
+	registrySetCmd.Flags().StringVar(&registryOpts.tls, "tls", "", "TLS (enabled, insecure, disabled)")
+	registrySetCmd.Flags().StringVar(&registryOpts.hostname, "hostname", "", "Hostname or ip with port")
+	registrySetCmd.Flags().StringVar(&registryOpts.pathPrefix, "path-prefix", "", "Prefix to all repositories")
+	registrySetCmd.Flags().StringArrayVar(&registryOpts.mirrors, "mirror", nil, "List of mirrors (registry names)")
+	registrySetCmd.Flags().UintVar(&registryOpts.priority, "priority", 0, "Priority (for sorting mirrors)")
+	registrySetCmd.Flags().BoolVar(&registryOpts.repoAuth, "repo-auth", false, "Separate auth requests per repository instead of per registry")
+	registrySetCmd.Flags().Int64Var(&registryOpts.blobChunk, "blob-chunk", 0, "Blob chunk size")
+	registrySetCmd.Flags().Int64Var(&registryOpts.blobMax, "blob-max", 0, "Blob size before switching to chunked push, -1 to disable")
+	registrySetCmd.Flags().Float64Var(&registryOpts.reqPerSec, "req-per-sec", 0, "Requests per second")
+	registrySetCmd.Flags().Int64Var(&registryOpts.reqConcurrent, "req-concurrent", 0, "Concurrent requests")
+	registrySetCmd.Flags().BoolVar(&registryOpts.skipCheck, "skip-check", false, "Skip checking connectivity to the registry")
+	registrySetCmd.Flags().StringArrayVar(&registryOpts.apiOpts, "api-opts", nil, "List of options (key=value))")
 	_ = registrySetCmd.RegisterFlagCompletionFunc("cacert", completeArgNone)
 	_ = registrySetCmd.RegisterFlagCompletionFunc("tls", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{
@@ -119,8 +121,8 @@ the contents of the file, e.g. --cacert "$(cat reg-ca.crt)"`,
 	_ = registrySetCmd.RegisterFlagCompletionFunc("blob-max", completeArgNone)
 
 	// TODO: eventually remove
-	registrySetCmd.Flags().StringVarP(&registryOpts.scheme, "scheme", "", "", "[Deprecated] Scheme (http, https)")
-	registrySetCmd.Flags().StringArrayVarP(&registryOpts.dns, "dns", "", nil, "[Deprecated] DNS hostname or ip with port")
+	registrySetCmd.Flags().StringVar(&registryOpts.scheme, "scheme", "", "[Deprecated] Scheme (http, https)")
+	registrySetCmd.Flags().StringArrayVar(&registryOpts.dns, "dns", nil, "[Deprecated] DNS hostname or ip with port")
 	_ = registrySetCmd.Flags().MarkHidden("scheme")
 	_ = registrySetCmd.Flags().MarkHidden("dns")
 
@@ -176,7 +178,8 @@ func (registryOpts *registryCmd) runRegistryConfig(cmd *cobra.Command, args []st
 		}
 	}
 
-	fmt.Println(string(hj))
+	// TODO: enable formatted/template output
+	fmt.Fprintf(cmd.OutOrStdout(), "%s\n", hj)
 	return nil
 }
 
@@ -201,7 +204,7 @@ func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []str
 		return fmt.Errorf("user must be provided to read password from stdin")
 	} else {
 		// prompt for username
-		reader := bufio.NewReader(os.Stdin)
+		reader := bufio.NewReader(cmd.InOrStdin())
 		defUser := ""
 		if h.User != "" {
 			defUser = " [" + h.User + "]"
@@ -219,7 +222,7 @@ func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []str
 	if flagChanged(cmd, "pass") {
 		h.Pass = registryOpts.pass
 	} else if registryOpts.passStdin {
-		pass, err := io.ReadAll(os.Stdin)
+		pass, err := io.ReadAll(cmd.InOrStdin())
 		if err != nil {
 			return fmt.Errorf("failed to read password from stdin: %w", err)
 		}
@@ -259,18 +262,19 @@ func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []str
 		return err
 	}
 
-	r, err := ref.NewHost(args[0])
-	if err != nil {
-		return err
+	if !registryOpts.skipCheck {
+		r, err := ref.NewHost(args[0])
+		if err != nil {
+			return err
+		}
+		rc := registryOpts.rootOpts.newRegClient()
+		_, err = rc.Ping(ctx, r)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"err": err,
+			}).Warn("Failed to ping registry with credentials")
+		}
 	}
-	rc := registryOpts.rootOpts.newRegClient()
-	_, err = rc.Ping(ctx, r)
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"err": err,
-		}).Warn("Failed to ping registry with credentials")
-	}
-
 	log.WithFields(logrus.Fields{
 		"registry": args[0],
 	}).Info("Credentials set")
@@ -401,16 +405,18 @@ func (registryOpts *registryCmd) runRegistrySet(cmd *cobra.Command, args []strin
 		return err
 	}
 
-	r, err := ref.NewHost(args[0])
-	if err != nil {
-		return err
-	}
-	rc := registryOpts.rootOpts.newRegClient()
-	_, err = rc.Ping(ctx, r)
-	if err != nil {
-		log.WithFields(logrus.Fields{
-			"err": err,
-		}).Warn("Failed to ping registry with settings")
+	if !registryOpts.skipCheck {
+		r, err := ref.NewHost(args[0])
+		if err != nil {
+			return err
+		}
+		rc := registryOpts.rootOpts.newRegClient()
+		_, err = rc.Ping(ctx, r)
+		if err != nil {
+			log.WithFields(logrus.Fields{
+				"err": err,
+			}).Warn("Failed to ping registry with settings")
+		}
 	}
 
 	log.WithFields(logrus.Fields{

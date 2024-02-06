@@ -3,6 +3,7 @@ package regclient
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -108,7 +109,7 @@ func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Re
 			rc.log.WithFields(logrus.Fields{
 				"src":    refTgt.Reference,
 				"tgt":    refTgt.Reference,
-				"digest": d,
+				"digest": d.Digest,
 			}).Debug("Blob copy performed server side with registry mount")
 			return nil
 		}
@@ -121,11 +122,13 @@ func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Re
 	// fast options failed, download layer from source and push to target
 	blobIO, err := rc.BlobGet(ctx, refSrc, d)
 	if err != nil {
-		rc.log.WithFields(logrus.Fields{
-			"err":    err,
-			"src":    refSrc.Reference,
-			"digest": d,
-		}).Warn("Failed to retrieve blob")
+		if !errors.Is(err, context.Canceled) {
+			rc.log.WithFields(logrus.Fields{
+				"err":    err,
+				"src":    refSrc.Reference,
+				"digest": d.Digest,
+			}).Warn("Failed to retrieve blob")
+		}
 		return err
 	}
 	if opt.callback != nil {
@@ -155,11 +158,13 @@ func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Re
 	}
 	defer blobIO.Close()
 	if _, err := rc.BlobPut(ctx, refTgt, blobIO.GetDescriptor(), blobIO); err != nil {
-		rc.log.WithFields(logrus.Fields{
-			"err": err,
-			"src": refSrc.Reference,
-			"tgt": refTgt.Reference,
-		}).Warn("Failed to push blob")
+		if !errors.Is(err, context.Canceled) {
+			rc.log.WithFields(logrus.Fields{
+				"err": err,
+				"src": refSrc.Reference,
+				"tgt": refTgt.Reference,
+			}).Warn("Failed to push blob")
+		}
 		return err
 	}
 	return nil

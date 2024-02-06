@@ -24,15 +24,15 @@ ifeq "$(strip $(VER_BUMP))" ''
 		-u "$(shell id -u):$(shell id -g)" \
 		$(VER_BUMP_CONTAINER)
 endif
-MARKDOWN_LINT_VER?=v0.11.0
-GOMAJOR_VER?=v0.10.0
+MARKDOWN_LINT_VER?=v0.12.1
+GOMAJOR_VER?=v0.10.1
 GOSEC_VER?=v2.18.2
-GO_VULNCHECK_VER?=v1.0.1
-OSV_SCANNER_VER?=v1.5.0
+GO_VULNCHECK_VER?=v1.0.3
+OSV_SCANNER_VER?=v1.6.2
 SYFT?=$(shell command -v syft 2>/dev/null)
 SYFT_CMD_VER:=$(shell [ -x "$(SYFT)" ] && echo "v$$($(SYFT) version | awk '/^Version: / {print $$2}')" || echo "0")
-SYFT_VERSION?=v0.99.0
-SYFT_CONTAINER?=anchore/syft:v0.99.0@sha256:07d598b6a95280ed6ecc128685192173a00f370b5326cf50c62500d559075e1d
+SYFT_VERSION?=v0.103.1
+SYFT_CONTAINER?=anchore/syft:v0.103.1@sha256:96c56b2554079d90e5fc8999278638ecca6454713fceebd26321d0698975b243
 ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 	SYFT=docker run --rm \
 		-v "$(shell pwd)/:$(shell pwd)/" -w "$(shell pwd)" \
@@ -90,7 +90,7 @@ vulnerability-scan: osv-scanner vulncheck-go ## Run all vulnerability scanners
 
 .PHONY: osv-scanner
 osv-scanner: $(GOPATH)/bin/osv-scanner .FORCE ## Run OSV Scanner
-	$(GOPATH)/bin/osv-scanner -r .
+	$(GOPATH)/bin/osv-scanner scan -r .
 
 .PHONY: vulncheck-go
 vulncheck-go: $(GOPATH)/bin/govulncheck .FORCE ## Run govulncheck
@@ -235,8 +235,8 @@ $(GOPATH)/bin/govulncheck: .FORCE
 	|| CGO_ENABLED=0 go install "golang.org/x/vuln/cmd/govulncheck@$(GO_VULNCHECK_VER)"
 
 $(GOPATH)/bin/osv-scanner: .FORCE
-	@[ $$(go version -m $(GOPATH)/bin/osv-scanner | \
-		awk -F ' ' '{ if ($$1 == "mod" && $$2 == "github.com/google/osv-scanner") { printf "%s\n", $$3 } }') = "$(OSV_SCANNER_VER)" ] \
+	@[ -f $(GOPATH)/bin/osv-scanner ] \
+	&& [ "$$(osv-scanner --version | awk -F ': ' '{ if ($$1 == "osv-scanner version") { printf "%s\n", $$2 } }')" = "$(OSV_SCANNER_VER)" ] \
 	|| CGO_ENABLED=0 go install "github.com/google/osv-scanner/cmd/osv-scanner@$(OSV_SCANNER_VER)"
 
 .PHONY: help
