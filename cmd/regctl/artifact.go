@@ -60,6 +60,7 @@ type artifactCmd struct {
 	artifactConfigMT string
 	artifactFile     []string
 	artifactFileMT   []string
+	artifactTitle    bool
 	byDigest         bool
 	digestTags       bool
 	filterAT         string
@@ -168,12 +169,13 @@ func NewArtifactCmd(rootOpts *rootCmd) *cobra.Command {
 	_ = artifactPutCmd.RegisterFlagCompletionFunc("file-media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return artifactFileKnownTypes, cobra.ShellCompDirectiveNoFileComp
 	})
+	artifactPutCmd.Flags().BoolVar(&artifactOpts.artifactTitle, "file-title", false, "Include a title annotation with the filename")
 	artifactPutCmd.Flags().StringArrayVar(&artifactOpts.annotations, "annotation", []string{}, "Annotation to include on manifest")
 	artifactPutCmd.Flags().BoolVar(&artifactOpts.byDigest, "by-digest", false, "Push manifest by digest instead of tag")
 	artifactPutCmd.Flags().StringVar(&artifactOpts.formatPut, "format", "", "Format output with go template syntax")
 	artifactPutCmd.Flags().BoolVar(&artifactOpts.index, "index", false, "Create/append artifact to an index")
 	artifactPutCmd.Flags().StringVar(&artifactOpts.subject, "subject", "", "Set the subject to a reference (used for referrer queries)")
-	artifactPutCmd.Flags().BoolVar(&artifactOpts.stripDirs, "strip-dirs", false, "Strip directories from filenames in artifact")
+	artifactPutCmd.Flags().BoolVar(&artifactOpts.stripDirs, "strip-dirs", false, "Strip directories from filenames in file-title")
 	artifactPutCmd.Flags().StringVarP(&artifactOpts.platform, "platform", "p", "", "Specify platform of a subject (e.g. linux/amd64 or local)")
 	artifactPutCmd.Flags().StringVar(&artifactOpts.refers, "refers", "", "EXPERIMENTAL: Set a referrer to the reference")
 	_ = artifactPutCmd.Flags().MarkHidden("refers")
@@ -757,23 +759,26 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 				}
 				d := digester.Digest()
 				// add layer to manifest
-				af := f
-				if artifactOpts.stripDirs {
-					fSplit := strings.Split(f, "/")
-					if fSplit[len(fSplit)-1] != "" {
-						af = fSplit[len(fSplit)-1]
-					} else if len(fSplit) > 1 {
-						af = fSplit[len(fSplit)-2] + "/"
-					}
-				}
-				blobs = append(blobs, types.Descriptor{
+				desc := types.Descriptor{
 					MediaType: mt,
 					Digest:    d,
 					Size:      l,
-					Annotations: map[string]string{
+				}
+				if artifactOpts.artifactTitle {
+					af := f
+					if artifactOpts.stripDirs {
+						fSplit := strings.Split(f, "/")
+						if fSplit[len(fSplit)-1] != "" {
+							af = fSplit[len(fSplit)-1]
+						} else if len(fSplit) > 1 {
+							af = fSplit[len(fSplit)-2] + "/"
+						}
+					}
+					desc.Annotations = map[string]string{
 						ociAnnotTitle: af,
-					},
-				})
+					}
+				}
+				blobs = append(blobs, desc)
 				// if blob already exists, skip Put
 				bRdr, err := rc.BlobHead(ctx, r, types.Descriptor{Digest: d})
 				if err == nil {

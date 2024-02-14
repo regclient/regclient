@@ -157,6 +157,12 @@ func TestArtifactPut(t *testing.T) {
 		t.Errorf("failed creating test conf: %v", err)
 		return
 	}
+	testFileName := filepath.Join(testDir, "exFile")
+	err = os.WriteFile(testFileName, []byte(`example test file`), 0600)
+	if err != nil {
+		t.Errorf("failed creating test conf: %v", err)
+		return
+	}
 
 	tt := []struct {
 		name        string
@@ -197,18 +203,28 @@ func TestArtifactPut(t *testing.T) {
 			in:   testData,
 		},
 		{
+			name: "Put artifact example conf data and file",
+			args: []string{"artifact", "put", "--artifact-type", "", "--config-type", "application/vnd.example", "--config-file", testConfName, "--file", testFileName, "ocidir://" + testDir + ":put-example-file-data"},
+			in:   testData,
+		},
+		{
+			name: "Put artifact example conf data and file stripped",
+			args: []string{"artifact", "put", "--artifact-type", "", "--config-type", "application/vnd.example", "--config-file", testConfName, "--file", testFileName, "--file-title", "--strip-dirs", "ocidir://" + testDir + ":put-example-file-data"},
+			in:   testData,
+		},
+		{
 			name: "Put subject",
-			args: []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--config-file", "", "--subject", "ocidir://" + testDir + ":put-example-at"},
+			args: []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--subject", "ocidir://" + testDir + ":put-example-at"},
 			in:   testData,
 		},
 		{
 			name: "Put create index",
-			args: []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--config-file", "", "--annotation", "test=a", "--platform", "linux/amd64", "--index", "ocidir://" + testDir + ":index"},
+			args: []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--annotation", "test=a", "--platform", "linux/amd64", "--index", "ocidir://" + testDir + ":index"},
 			in:   testData,
 		},
 		{
 			name: "Put append index",
-			args: []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--config-file", "", "--annotation", "test=b", "--platform", "linux/arm64", "--index", "ocidir://" + testDir + ":index"},
+			args: []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--annotation", "test=b", "--platform", "linux/arm64", "--index", "ocidir://" + testDir + ":index"},
 			in:   testData,
 		},
 	}
