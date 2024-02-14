@@ -606,15 +606,6 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 	}
 
 	// validate/set artifactType and config.mediaType
-	if artifactOpts.artifactType == "" {
-		// always set artifactType field
-		if artifactOpts.artifactConfigMT != "" {
-			artifactOpts.artifactType = artifactOpts.artifactConfigMT
-		} else {
-			log.Warnf("using default value for artifact-type is not recommended")
-			artifactOpts.artifactType = defaultMTArtifact
-		}
-	}
 	if hasConfig && artifactOpts.artifactConfigMT == "" {
 		if artifactOpts.artifactConfig == "" {
 			artifactOpts.artifactConfigMT = types.MediaTypeOCI1Empty
@@ -630,9 +621,18 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 	if !hasConfig && (artifactOpts.artifactConfig != "" || artifactOpts.artifactConfigMT != "") {
 		return fmt.Errorf("cannot set config-type or config-file on %s%.0w", artifactOpts.artifactMT, types.ErrUnsupportedMediaType)
 	}
+	if artifactOpts.artifactType == "" {
+		if !hasConfig || artifactOpts.artifactConfigMT == types.MediaTypeOCI1Empty {
+			log.Warnf("using default value for artifact-type is not recommended")
+			artifactOpts.artifactType = defaultMTArtifact
+		}
+	}
 
-	// validate artifact files with media types
-	if len(artifactOpts.artifactFile) == 1 && len(artifactOpts.artifactFileMT) == 0 {
+	// set and validate artifact files with media types
+	if len(artifactOpts.artifactFile) <= 1 && len(artifactOpts.artifactFileMT) == 0 && artifactOpts.artifactType != "" && artifactOpts.artifactType != defaultMTArtifact {
+		// special case for single file and artifact-type
+		artifactOpts.artifactFileMT = []string{artifactOpts.artifactType}
+	} else if len(artifactOpts.artifactFile) == 1 && len(artifactOpts.artifactFileMT) == 0 {
 		// default media-type for a single file, same is used for stdin
 		artifactOpts.artifactFileMT = []string{defaultMTLayer}
 	} else if len(artifactOpts.artifactFile) == 0 && len(artifactOpts.artifactFileMT) == 1 {
