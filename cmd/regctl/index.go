@@ -50,30 +50,50 @@ func NewIndexCmd(rootOpts *rootCmd) *cobra.Command {
 	}
 
 	var indexAddCmd = &cobra.Command{
-		Use:       "add <image_ref>",
-		Aliases:   []string{"append", "insert"},
-		Short:     "add an index entry",
-		Long:      `Add an entry to a manifest list or OCI Index.`,
+		Use:     "add <image_ref>",
+		Aliases: []string{"append", "insert"},
+		Short:   "add an index entry",
+		Long:    `Add an entry to a manifest list or OCI Index.`,
+		Example: `
+# add arm64 to the v1 image
+regctl index add registry.example.org/repo:v1 --ref registry.example.org/repo:arm64`,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{}, // do not auto complete digests
 		RunE:      indexOpts.runIndexAdd,
 	}
 
 	var indexCreateCmd = &cobra.Command{
-		Use:       "create <image_ref>",
-		Aliases:   []string{"init", "new"},
-		Short:     "create an index",
-		Long:      `Create a manifest list or OCI Index.`,
+		Use:     "create <image_ref>",
+		Aliases: []string{"init", "new"},
+		Short:   "create an index",
+		Long:    `Create a manifest list or OCI Index.`,
+		Example: `
+# create an empty index
+regctl index create registry.example.org/repo:v1
+
+# create an index from the amd64 and arm64 platforms
+regctl index create registry.example.org/alpine:latest \
+  --ref alpine:latest --platform linux/amd64 --platform linux/arm64
+
+# create a docker manifest list
+regctl index create registry.example.org/busybox:1.34 \
+  --media-type application/vnd.docker.distribution.manifest.list.v2+json \
+  --ref busybox:1.34 --platform linux/amd64 --platform linux/arm64`,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{}, // do not auto complete digests
 		RunE:      indexOpts.runIndexCreate,
 	}
 
 	var indexDeleteCmd = &cobra.Command{
-		Use:       "delete <image_ref>",
-		Aliases:   []string{"del", "rm", "remove"},
-		Short:     "delete an index entry",
-		Long:      `Delete an entry from a manifest list or OCI Index.`,
+		Use:     "delete <image_ref>",
+		Aliases: []string{"del", "rm", "remove"},
+		Short:   "delete an index entry",
+		Long:    `Delete an entry from a manifest list or OCI Index.`,
+		Example: `
+# remove the several platforms from an image
+regctl index delete registry.example.org/repo:v1 \
+  --platform unknown/unknown --platform linux/s390x \
+  --platform linux/ppc64le --platform linux/mips64le`,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{}, // do not auto complete digests
 		RunE:      indexOpts.runIndexDelete,

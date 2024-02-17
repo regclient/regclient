@@ -48,17 +48,27 @@ func NewBlobCmd(rootOpts *rootCmd) *cobra.Command {
 		Short:   "manage image blobs/layers",
 	}
 	var blobDiffConfigCmd = &cobra.Command{
-		Use:       "diff-config <repository> <digest> <repository> <digest>",
-		Short:     "diff two image configs",
-		Long:      `This returns the difference between two configs, comparing the contents of each config json.`,
+		Use:   "diff-config <repository> <digest> <repository> <digest>",
+		Short: "diff two image configs",
+		Long:  `This returns the difference between two configs, comparing the contents of each config json.`,
+		Example: `
+# compare two versions of busybox
+regctl blob diff-config \
+  busybox sha256:0c00acac9c2794adfa8bb7b13ef38504300b505a043bf68dff7a00068dcc732b \
+  busybox sha256:3f57d9401f8d42f986df300f0c69192fc41da28ccc8d797829467780db3dd741`,
 		Args:      cobra.ExactArgs(4),
 		ValidArgs: []string{}, // do not auto complete repository or digest
 		RunE:      blobOpts.runBlobDiffConfig,
 	}
 	var blobDiffLayerCmd = &cobra.Command{
-		Use:       "diff-layer <repository> <digest> <repository> <digest>",
-		Short:     "diff two tar layers",
-		Long:      `This returns the difference between two layers, comparing the contents of each tar.`,
+		Use:   "diff-layer <repository> <digest> <repository> <digest>",
+		Short: "diff two tar layers",
+		Long:  `This returns the difference between two layers, comparing the contents of each tar.`,
+		Example: `
+# compare two versions of busybox, ignoring timestamp changes
+regctl blob diff-layer \
+  busybox sha256:2354422721e449fa3fa83b84465b9d5bb65ac5415ec93c06f598854312e8957e \
+  busybox sha256:9ad63333ebc97e32b987ae66aa3cff81300e4c2e6d2f2395cef8a3ae18b249fe --ignore-timestamp`,
 		Args:      cobra.ExactArgs(4),
 		ValidArgs: []string{}, // do not auto complete repository or digest
 		RunE:      blobOpts.runBlobDiffLayer,
@@ -70,24 +80,38 @@ func NewBlobCmd(rootOpts *rootCmd) *cobra.Command {
 		Long: `Download a blob from the registry. The output is the blob itself which may
 be a compressed tar file, a json config, or any other blob supported by the
 registry. The blob or layer digest can be found in the image manifest.`,
+		Example: `
+# inspect the layer contents of a busybox image
+regctl blob get busybox \
+  sha256:a58ecd4f0c864650a4286c3c2d49c7219a3f2fc8d7a0bf478aa9834acfe14ae7 \
+  | tar -tvzf -`,
 		Args:      cobra.ExactArgs(2),
 		ValidArgs: []string{}, // do not auto complete repository or digest
 		RunE:      blobOpts.runBlobGet,
 	}
 	var blobGetFileCmd = &cobra.Command{
-		Use:       "get-file <repository> <digest> <file> [out-file]",
-		Aliases:   []string{"cat"},
-		Short:     "get a file from a layer",
-		Long:      `This returns a requested file from a layer.`,
+		Use:     "get-file <repository> <digest> <file> [out-file]",
+		Aliases: []string{"cat"},
+		Short:   "get a file from a layer",
+		Long:    `This returns a requested file from a layer.`,
+		Example: `
+# retrieve the contents of /etc/alpine-release
+regctl blob get-file alpine \
+  sha256:9123ac7c32f74759e6283f04dbf571f18246abe5bb2c779efcb32cd50f3ff13c \
+  /etc/alpine-release`,
 		Args:      cobra.RangeArgs(3, 4),
 		ValidArgs: []string{}, // do not auto complete repository, digest, or filenames
 		RunE:      blobOpts.runBlobGetFile,
 	}
 	var blobHeadCmd = &cobra.Command{
-		Use:       "head <repository> <digest>",
-		Aliases:   []string{"digest"},
-		Short:     "http head request for a blob",
-		Long:      `Shows the headers for a blob head request.`,
+		Use:     "head <repository> <digest>",
+		Aliases: []string{"digest"},
+		Short:   "http head request for a blob",
+		Long:    `Shows the headers for a blob head request.`,
+		Example: `
+# verify the existence of a blob
+regctl blob head alpine \
+  sha256:9123ac7c32f74759e6283f04dbf571f18246abe5bb2c779efcb32cd50f3ff13c`,
 		Args:      cobra.ExactArgs(2),
 		ValidArgs: []string{}, // do not auto complete repository or digest
 		RunE:      blobOpts.runBlobHead,
@@ -98,6 +122,9 @@ registry. The blob or layer digest can be found in the image manifest.`,
 		Short:   "upload a blob/layer",
 		Long: `Upload a blob to a repository. Stdin must be the blob contents. The output
 is the digest of the blob.`,
+		Example: `
+# push a blob
+regctl blob put registry.example.org/repo <layer.tgz`,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{}, // do not auto complete repository
 		RunE:      blobOpts.runBlobPut,
@@ -109,6 +136,10 @@ is the digest of the blob.`,
 		Long: `Copy a blob between repositories. This works in the same registry only. It
 attempts to mount the layers between repositories. And within the same repository
 it only sends the manifest with the new tag.`,
+		Example: `
+# copy a blob
+regctl blob copy alpine registry.example.org/library/alpine \
+  sha256:9123ac7c32f74759e6283f04dbf571f18246abe5bb2c779efcb32cd50f3ff13c`,
 		Args:      cobra.ExactArgs(3),
 		ValidArgs: []string{}, // do not auto complete repository or digest
 		RunE:      blobOpts.runBlobCopy,

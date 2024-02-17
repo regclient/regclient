@@ -89,37 +89,82 @@ func NewArtifactCmd(rootOpts *rootCmd) *cobra.Command {
 		Short: "manage artifacts",
 	}
 	var artifactGetCmd = &cobra.Command{
-		Use:       "get <reference>",
-		Aliases:   []string{"pull"},
-		Short:     "download artifacts",
-		Long:      `Download artifacts from the registry.`,
+		Use:     "get <reference>",
+		Aliases: []string{"pull"},
+		Short:   "download artifacts",
+		Long:    `Download artifacts from the registry.`,
+		Example: `
+# download a helm chart
+regctl artifact get registry.example.org/helm-charts/chart:0.0.1 > chart.tgz
+
+# retrieve the SPDX SBOM for the latest regsync image for this platform
+regctl artifact get \
+  --subject ghcr.io/regclient/regsync:latest \
+  --filter-artifact-type application/spdx+json \
+  --platform local | jq .`,
 		Args:      cobra.RangeArgs(0, 1),
 		ValidArgs: []string{}, // do not auto complete repository/tag
 		RunE:      artifactOpts.runArtifactGet,
 	}
 	var artifactListCmd = &cobra.Command{
-		Use:       "list <reference>",
-		Aliases:   []string{"ls"},
-		Short:     "list artifacts that have a subject to the given reference",
-		Long:      `List artifacts that have a subject to the given reference.`,
+		Use:     "list <reference>",
+		Aliases: []string{"ls"},
+		Short:   "list artifacts that have a subject to the given reference",
+		Long:    `List artifacts that have a subject to the given reference.`,
+		Example: `
+# list all referrers of the regsync package for the local platform
+regctl artifact list ghcr.io/regclient/regctl --platform local
+
+# return the original referrers response
+regctl artifact list registry.example.com/repo:v1 --format body
+
+# pretty print the referrers response
+regctl artifact list registry.example.com/repo:v1 --format '{{jsonPretty .Manifest}}'`,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{}, // do not auto complete repository/tag
 		RunE:      artifactOpts.runArtifactList,
 	}
 	var artifactPutCmd = &cobra.Command{
-		Use:       "put <reference>",
-		Aliases:   []string{"push"},
-		Short:     "upload artifacts",
-		Long:      `Upload artifacts to the registry.`,
+		Use:     "put <reference>",
+		Aliases: []string{"push"},
+		Short:   "upload artifacts",
+		Long:    `Upload artifacts to the registry.`,
+		Example: `
+# push a simple artifact by name
+regctl artifact put \
+  --artifact-type application/example.test \
+  registry.example.com/repo:artifact <text.txt
+
+# push an artifact with a config
+regctl artifact put \
+  --config-type application/vnd.example.config.v1+json \
+  --config-file config.json \
+  --file-media-type application/vnd.example.data.v1.tar+gzip \
+  --file data.tgz \
+  registry.example.com/repo:artifact
+
+# push an SBOM that is a referrer to an existing image
+regctl artifact put \
+  --artifact-type application/spdx+json \
+  --subject registry.example.com/repo:v1 \
+  < spdx.json`,
 		Args:      cobra.RangeArgs(0, 1),
 		ValidArgs: []string{}, // do not auto complete repository/tag
 		RunE:      artifactOpts.runArtifactPut,
 	}
 	var artifactTreeCmd = &cobra.Command{
-		Use:       "tree <reference>",
-		Aliases:   []string{},
-		Short:     "tree listing of artifacts",
-		Long:      `Return a graph of manifests and referrers to those manifests.`,
+		Use:     "tree <reference>",
+		Aliases: []string{},
+		Short:   "tree listing of artifacts",
+		Long: `Return a graph of manifests and referrers to those manifests.
+This command will recursively query referrers to all child images.
+For a single image, it is better to run "regctl artifact list".`,
+		Example: `
+# list all referrers to the latest regsync image
+regctl artifact tree ghcr.io/regclient/regsync:latest
+
+# include digest tags (used by sigstore)
+regctl artifact tree --digest-tags ghcr.io/regclient/regsync:latest`,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{}, // do not auto complete repository/tag
 		RunE:      artifactOpts.runArtifactTree,
