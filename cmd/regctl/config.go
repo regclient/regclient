@@ -54,15 +54,27 @@ func NewConfigCmd(rootOpts *rootCmd) *cobra.Command {
 		Use:   "get",
 		Short: "show the config",
 		Long:  `Displays the configuration. Passwords are not included in the output.`,
-		Args:  cobra.ExactArgs(0),
-		RunE:  configOpts.runConfigGet,
+		Example: `
+# retrieve the full config
+regctl config get
+
+# display the filename of the config
+regctl config get --format '{{.Filename}}'`,
+		Args: cobra.ExactArgs(0),
+		RunE: configOpts.runConfigGet,
 	}
 	var configSetCmd = &cobra.Command{
 		Use:   "set",
 		Short: "set a configuration option",
 		Long:  `Modifies an option used in future executions.`,
-		Args:  cobra.ExactArgs(0),
-		RunE:  configOpts.runConfigSet,
+		Example: `
+# disable loading credentials from docker
+regctl config set --docker-cred=false
+
+# enable loading credentials from docker
+regctl config set --docker-cred`,
+		Args: cobra.ExactArgs(0),
+		RunE: configOpts.runConfigSet,
 	}
 
 	configGetCmd.Flags().StringVar(&configOpts.format, "format", "{{ printPretty . }}", "format the output with Go template syntax")
