@@ -107,8 +107,12 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 			return rTgt, err
 		}
 	}
-	if len(dc.stepsLayerFile) > 0 || !ref.EqualRepository(rSrc, rTgt) {
+	if len(dc.stepsLayerFile) > 0 || !ref.EqualRepository(rSrc, rTgt) || dc.forceLayerWalk {
 		err = dagWalkLayers(dm, func(dl *dagLayer) (*dagLayer, error) {
+			rSrc := rSrc
+			if dl.rSrc.IsSet() {
+				rSrc = dl.rSrc
+			}
 			if dl.mod == deleted || len(dl.desc.URLs) > 0 {
 				// skip deleted or external layers
 				return dl, nil
