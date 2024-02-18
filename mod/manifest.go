@@ -687,12 +687,6 @@ func rebaseAddStep(dc *dagConfig, rBaseOld, rBaseNew ref.Ref) error {
 		if len(layersNew) != historyLayers || len(confOCINew.RootFS.DiffIDs) != historyLayers {
 			return fmt.Errorf("new base image config history doesn't match layer count")
 		}
-		// copy blobs from new base to repo
-		for _, d := range layersNew {
-			if err := rc.BlobCopy(ctx, rBaseNew, rSrc, d); err != nil {
-				return fmt.Errorf("failed copying blobs for rebase: %w", err)
-			}
-		}
 
 		// delete the old layers and config entries from vars and dag
 		pruneNum := len(layersOld)
@@ -722,6 +716,7 @@ func rebaseAddStep(dc *dagConfig, rBaseOld, rBaseNew ref.Ref) error {
 				mod:      unchanged,
 				ucDigest: confOCINew.RootFS.DiffIDs[i],
 				desc:     l,
+				rSrc:     rBaseNew,
 			})
 		}
 		dm.layers = append(dagAdd, dm.layers...)
@@ -738,6 +733,7 @@ func rebaseAddStep(dc *dagConfig, rBaseOld, rBaseNew ref.Ref) error {
 		// set modified flags on config and manifest
 		dm.config.modified = true
 		dm.mod = replaced
+		dc.forceLayerWalk = true
 
 		return nil
 	})

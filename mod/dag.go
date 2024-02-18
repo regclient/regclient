@@ -33,6 +33,7 @@ type dagConfig struct {
 	stepsLayerFile []func(context.Context, *regclient.RegClient, ref.Ref, ref.Ref, *dagLayer, *tar.Header, io.Reader) (*tar.Header, io.Reader, changes, error)
 	maxDataSize    int64
 	rTgt           ref.Ref
+	forceLayerWalk bool
 }
 
 type dagManifest struct {
@@ -58,6 +59,7 @@ type dagLayer struct {
 	newDesc  types.Descriptor
 	ucDigest digest.Digest // uncompressed descriptor
 	desc     types.Descriptor
+	rSrc     ref.Ref
 }
 
 func dagGet(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, d types.Descriptor) (*dagManifest, error) {
@@ -383,29 +385,32 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rT
 	if dm.mod == replaced || dm.mod == added {
 		dm.newDesc = dm.m.GetDescriptor()
 	}
-	for i := range dm.referrers {
-		if dm.referrers[i].mod == deleted || !(dm.mod == replaced || dm.mod == added || dm.referrers[i].mod == added) {
-			continue
+	if ref.EqualRepository(rSrc, rTgt) {
+		// only update referrers when modifying a manifest in the same repository
+		for i := range dm.referrers {
+			if dm.referrers[i].mod == deleted || !(dm.mod == replaced || dm.mod == added || dm.referrers[i].mod == added) {
+				continue
+			}
+			sm, ok := dm.referrers[i].m.(manifest.Subjecter)
+			if !ok {
+				return fmt.Errorf("referrer does not support subject field, mt=%s", dm.referrers[i].m.GetDescriptor().MediaType)
+			}
+			d := dm.m.GetDescriptor()
+			err = sm.SetSubject(&d)
+			if err != nil {
+				return fmt.Errorf("failed to set subject: %w", err)
+			}
+			if dm.referrers[i].mod == unchanged {
+				dm.referrers[i].mod = replaced
+			}
+			dm.referrers[i].newDesc = dm.referrers[i].m.GetDescriptor()
 		}
-		sm, ok := dm.referrers[i].m.(manifest.Subjecter)
-		if !ok {
-			return fmt.Errorf("referrer does not support subject field, mt=%s", dm.referrers[i].m.GetDescriptor().MediaType)
-		}
-		d := dm.m.GetDescriptor()
-		err = sm.SetSubject(&d)
-		if err != nil {
-			return fmt.Errorf("failed to set subject: %w", err)
-		}
-		if dm.referrers[i].mod == unchanged {
-			dm.referrers[i].mod = replaced
-		}
-		dm.referrers[i].newDesc = dm.referrers[i].m.GetDescriptor()
-	}
-	// recursively push referrers
-	for _, child := range dm.referrers {
-		err = dagPut(ctx, rc, mc, rSrc, rTgt, child)
-		if err != nil {
-			return err
+		// recursively push referrers
+		for _, child := range dm.referrers {
+			err = dagPut(ctx, rc, mc, rSrc, rTgt, child)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	// push manifest
@@ -418,7 +423,11 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rT
 		}
 		if rPut.Tag == "" {
 			// push by digest
-			rPut.Digest = dm.newDesc.Digest.String()
+			if dm.newDesc.Digest != "" {
+				rPut.Digest = dm.newDesc.Digest.String()
+			} else {
+				rPut.Digest = dm.origDesc.Digest.String()
+			}
 		} else {
 			// push by tag
 			rPut.Digest = ""
