@@ -3,6 +3,7 @@
 - [Building From Source](#building-from-source)
 - [Downloading Binaries](#downloading-binaries)
 - [Running as a Container](#running-as-a-container)
+- [GitHub Actions](#github-actions)
 - [Verifying Signatures](#verifying-signatures)
 - [Reproducible Builds](#reproducible-builds)
 
@@ -94,6 +95,25 @@ chmod 755 regctl
 
 Images are also included with an alpine base, which are useful for CI pipelines that expect the container to include a `/bin/sh`.
 These alpine based images also include the `ecr-login` and `gcr` credential helpers.
+
+## GitHub Actions
+
+GitHub Actions have been provided at [github.com/regclient/actions](https://github.com/regclient/actions).
+An example of installing `regctl` and logging into GHCR looks like:
+
+```yaml
+jobs:
+  example:
+    runs-on: ubuntu-latest
+    name: example
+    steps:
+      - name: Install regctl
+        uses: regclient/actions/regctl-installer@main
+      - name: regctl login
+        uses: regclient/actions/regctl-login@main
+```
+
+For more details, see the [github.com/regclient/actions](https://github.com/regclient/actions) repo.
 
 ## Verifying Signatures
 
