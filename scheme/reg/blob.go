@@ -166,10 +166,10 @@ func (reg *Reg) BlobHead(ctx context.Context, r ref.Ref, d types.Descriptor) (bl
 
 // BlobMount attempts to perform a server side copy/mount of the blob between repositories
 func (reg *Reg) BlobMount(ctx context.Context, rSrc ref.Ref, rTgt ref.Ref, d types.Descriptor) error {
-	_, uuid, err := reg.blobMount(ctx, rTgt, d, rSrc)
+	putURL, _, err := reg.blobMount(ctx, rTgt, d, rSrc)
 	// if mount fails and returns an upload location, cancel that upload
 	if err != nil {
-		_ = reg.blobUploadCancel(ctx, rTgt, uuid)
+		_ = reg.blobUploadCancel(ctx, rTgt, putURL)
 	}
 	return err
 }
@@ -223,15 +223,21 @@ func (reg *Reg) BlobPut(ctx context.Context, r ref.Ref, d types.Descriptor, rdr 
 		// on failure, attempt to seek back to start to perform a chunked upload
 		rdrSeek, ok := rdr.(io.ReadSeeker)
 		if !ok {
+			_ = reg.blobUploadCancel(ctx, r, putURL)
 			return d, err
 		}
 		offset, errR := rdrSeek.Seek(0, io.SeekStart)
 		if errR != nil || offset != 0 {
+			_ = reg.blobUploadCancel(ctx, r, putURL)
 			return d, err
 		}
 	}
 	// send a chunked upload if full upload not possible or too large
-	return reg.blobPutUploadChunked(ctx, r, d, putURL, rdr)
+	d, err = reg.blobPutUploadChunked(ctx, r, d, putURL, rdr)
+	if err != nil {
+		_ = reg.blobUploadCancel(ctx, r, putURL)
+	}
+	return d, err
 }
 
 func (reg *Reg) blobGetUploadURL(ctx context.Context, r ref.Ref) (*url.URL, error) {
@@ -636,10 +642,10 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, d types.Des
 	return d, nil
 }
 
-// TODO: just take a putURL rather than the uuid and call a delete on that url
-func (reg *Reg) blobUploadCancel(ctx context.Context, r ref.Ref, uuid string) error {
-	if uuid == "" {
-		return fmt.Errorf("failed to cancel upload %s: uuid undefined", r.CommonName())
+// blobUploadCancel stops an upload, releasing resources on the server.
+func (reg *Reg) blobUploadCancel(ctx context.Context, r ref.Ref, putURL *url.URL) error {
+	if putURL == nil {
+		return fmt.Errorf("failed to cancel upload %s: url undefined", r.CommonName())
 	}
 	req := &reghttp.Req{
 		Host:      r.Registry,
@@ -648,7 +654,7 @@ func (reg *Reg) blobUploadCancel(ctx context.Context, r ref.Ref, uuid string) er
 			"": {
 				Method:     "DELETE",
 				Repository: r.Repository,
-				Path:       "blobs/uploads/" + uuid,
+				DirectURL:  putURL,
 			},
 		},
 	}

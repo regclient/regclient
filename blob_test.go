@@ -846,6 +846,16 @@ func TestBlobCopy(t *testing.T) {
 				},
 			},
 		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "DELETE for repo b - d1",
+				Method: "DELETE",
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid1.String(),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusAccepted,
+			},
+		},
 		// head
 		{
 			ReqEntry: reqresp.ReqEntry{
@@ -964,6 +974,16 @@ func TestBlobCopy(t *testing.T) {
 				},
 			},
 		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "DELETE for repo b - d2",
+				Method: "DELETE",
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid2.String(),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusAccepted,
+			},
+		},
 		// upload blob
 		{
 			ReqEntry: reqresp.ReqEntry{
@@ -1050,6 +1070,16 @@ func TestBlobCopy(t *testing.T) {
 					"Content-Length": {"0"},
 					"Location":       {uuid3.String()},
 				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "DELETE for repo b - d3",
+				Method: "DELETE",
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid3.String(),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusAccepted,
 			},
 		},
 		// upload blob
