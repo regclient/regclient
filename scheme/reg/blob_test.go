@@ -631,6 +631,18 @@ func TestBlobPut(t *testing.T) {
 				},
 			},
 		},
+		// cancel the d2 upload
+		{
+			ReqEntry: reqresp.ReqEntry{
+				DelOnUse: false,
+				Name:     "DELETE for d2",
+				Method:   "DELETE",
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2.String(),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusAccepted,
+			},
+		},
 		// get upload2 location
 		{
 			ReqEntry: reqresp.ReqEntry{
@@ -771,6 +783,17 @@ func TestBlobPut(t *testing.T) {
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
 				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				DelOnUse: false,
+				Name:     "DELETE for d2Bad",
+				Method:   "DELETE",
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2Bad.String(),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusAccepted,
 			},
 		},
 
