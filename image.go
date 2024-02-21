@@ -756,7 +756,12 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 				done = true // happy path
 			}
 		} else {
-			<-waitCh
+			if errors.Is(err, context.Canceled) {
+				// try to find a better error message than context canceled
+				err = <-waitCh
+			} else {
+				<-waitCh
+			}
 		}
 		if !done {
 			waitCount--
@@ -851,7 +856,12 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 				cancel()
 			}
 		} else {
-			<-waitCh
+			if errors.Is(err, context.Canceled) {
+				// try to find a better error message than context canceled
+				err = <-waitCh
+			} else {
+				<-waitCh
+			}
 		}
 		waitCount--
 	}

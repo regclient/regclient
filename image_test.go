@@ -142,23 +142,42 @@ func TestImageCheckBase(t *testing.T) {
 func TestCopy(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
+	boolT := true
 	regHandler := olareg.New(oConfig.Config{
 		Storage: oConfig.ConfigStorage{
 			StoreType: oConfig.StoreMem,
 			RootDir:   "./testdata",
 		},
 	})
+	regROHandler := olareg.New(oConfig.Config{
+		Storage: oConfig.ConfigStorage{
+			StoreType: oConfig.StoreMem,
+			RootDir:   "./testdata",
+			ReadOnly:  &boolT,
+		},
+	})
 	ts := httptest.NewServer(regHandler)
+	tsRO := httptest.NewServer(regROHandler)
 	t.Cleanup(func() {
 		ts.Close()
 		_ = regHandler.Close()
+		tsRO.Close()
+		_ = regROHandler.Close()
 	})
 	tsURL, _ := url.Parse(ts.URL)
 	tsHost := tsURL.Host
+	tsROURL, _ := url.Parse(tsRO.URL)
+	tsROHost := tsROURL.Host
 	rcHosts := []config.Host{
 		{
 			Name:      tsHost,
 			Hostname:  tsHost,
+			TLS:       config.TLSDisabled,
+			ReqPerSec: 1000,
+		},
+		{
+			Name:      tsROHost,
+			Hostname:  tsROHost,
 			TLS:       config.TLSDisabled,
 			ReqPerSec: 1000,
 		},
@@ -187,6 +206,12 @@ func TestCopy(t *testing.T) {
 			name: "ocidir to registry",
 			src:  "ocidir://./testdata/testrepo:v1",
 			tgt:  tsHost + "/dest-ocidir:v1",
+		},
+		{
+			name:      "ocidir to read-only registry",
+			src:       "ocidir://./testdata/testrepo:v1",
+			tgt:       tsROHost + "/dest-ocidir:v1",
+			expectErr: types.ErrHTTPStatus,
 		},
 		{
 			name: "ocidir to ocidir",
