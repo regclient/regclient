@@ -53,7 +53,7 @@ func TestBlob(t *testing.T) {
 		}
 	})
 
-	t.Run("Put", func(t *testing.T) {
+	t.Run("Put and Delete", func(t *testing.T) {
 		dir := t.TempDir()
 		bufStr := "hello world"
 		cobraOpts := cobraTestOpts{
@@ -62,7 +62,7 @@ func TestBlob(t *testing.T) {
 		// put a blob
 		dig, err := cobraTest(t, &cobraOpts, "blob", "put", "--format", "{{println .Digest}}", "ocidir://"+dir)
 		if err != nil {
-			t.Errorf("failed to blob copy: %v", err)
+			t.Errorf("failed to put blob: %v", err)
 		}
 		// get the blob from the tempdir
 		out, err := cobraTest(t, nil, "blob", "get", "--format", "{{printPretty .}}", "ocidir://"+dir, dig)
@@ -71,6 +71,16 @@ func TestBlob(t *testing.T) {
 		}
 		if out != bufStr {
 			t.Errorf("unexpected blob output, expected %s, received %s", bufStr, out)
+		}
+		// delete the blob
+		_, err = cobraTest(t, nil, "blob", "delete", "ocidir://"+dir, dig)
+		if err != nil {
+			t.Errorf("failed to delete blob: %v", err)
+		}
+		// verify blob was deleted
+		_, err = cobraTest(t, nil, "blob", "get", "--format", "{{printPretty .}}", "ocidir://"+dir, dig)
+		if err == nil {
+			t.Errorf("get deleted blob did not fail")
 		}
 	})
 

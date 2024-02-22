@@ -47,6 +47,22 @@ func NewBlobCmd(rootOpts *rootCmd) *cobra.Command {
 		Aliases: []string{"layer"},
 		Short:   "manage image blobs/layers",
 	}
+	var blobDeleteCmd = &cobra.Command{
+		Use:     "delete <repository> <digest>",
+		Aliases: []string{"del", "rm"},
+		Short:   "delete a blob",
+		Long: `Delete a blob from the registry. This is rarely needed since registries should
+have their own garbage collection algorithms and may clean unreferenced blobs
+automatically. This command is useful for repairing a corrupt registry. The
+blob or layer digest can be found in the image manifest.`,
+		Example: `
+# delete a blob
+regctl blob delete registry.example.org/repo \
+  sha256:a58ecd4f0c864650a4286c3c2d49c7219a3f2fc8d7a0bf478aa9834acfe14ae7`,
+		Args:      cobra.ExactArgs(2),
+		ValidArgs: []string{}, // do not auto complete repository or digest
+		RunE:      blobOpts.runBlobDelete,
+	}
 	var blobDiffConfigCmd = &cobra.Command{
 		Use:   "diff-config <repository> <digest> <repository> <digest>",
 		Short: "diff two image configs",
@@ -178,6 +194,7 @@ regctl blob copy alpine registry.example.org/library/alpine \
 	_ = blobPutCmd.RegisterFlagCompletionFunc("digest", completeArgNone)
 	_ = blobPutCmd.Flags().MarkHidden("content-type")
 
+	blobTopCmd.AddCommand(blobDeleteCmd)
 	blobTopCmd.AddCommand(blobDiffConfigCmd)
 	blobTopCmd.AddCommand(blobDiffLayerCmd)
 	blobTopCmd.AddCommand(blobGetCmd)
@@ -187,6 +204,27 @@ regctl blob copy alpine registry.example.org/library/alpine \
 	blobTopCmd.AddCommand(blobCopyCmd)
 
 	return blobTopCmd
+}
+
+func (blobOpts *blobCmd) runBlobDelete(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	r, err := ref.New(args[0])
+	if err != nil {
+		return err
+	}
+	d, err := digest.Parse(args[1])
+	if err != nil {
+		return err
+	}
+	rc := blobOpts.rootOpts.newRegClient()
+	defer rc.Close(ctx, r)
+
+	log.WithFields(logrus.Fields{
+		"host":       r.Registry,
+		"repository": r.Repository,
+		"digest":     args[1],
+	}).Debug("Deleting blob")
+	return rc.BlobDelete(ctx, r, types.Descriptor{Digest: d})
 }
 
 func (blobOpts *blobCmd) runBlobDiffConfig(cmd *cobra.Command, args []string) error {

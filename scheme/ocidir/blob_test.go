@@ -136,15 +136,23 @@ func TestBlob(t *testing.T) {
 	if err != nil {
 		t.Errorf("blob put open file: %v", err)
 	}
-	defer fd.Close()
 	fBytes, err := io.ReadAll(fd)
+	_ = fd.Close()
 	if err != nil {
 		t.Errorf("blob put readall: %v", err)
 	}
 	if !bytes.Equal(fBytes, bBytes) {
 		t.Errorf("blob put bytes, expected %s, saw %s", string(bBytes), string(fBytes))
 	}
-
+	// blob delete (from memfs)
+	err = om.BlobDelete(ctx, r, cd)
+	if err != nil {
+		t.Errorf("failed to delete blob: %v", err)
+	}
+	_, err = fm.Stat(fmt.Sprintf("testdata/regctl/blobs/%s/%s", cd.Digest.Algorithm().String(), cd.Digest.Encoded()))
+	if err == nil {
+		t.Errorf("stat of a deleted blob did not fail")
+	}
 	// concurrent blob put, without the descriptor to test for races
 	rPut, err := ref.New(fmt.Sprintf("%s@%s", "ocidir://testdata/put:latest", dl[0].Digest))
 	if err != nil {
@@ -176,8 +184,8 @@ func TestBlob(t *testing.T) {
 	if err != nil {
 		t.Errorf("blob put open file: %v", err)
 	}
-	defer fd.Close()
 	fBytes, err = io.ReadAll(fd)
+	_ = fd.Close()
 	if err != nil {
 		t.Errorf("blob put readall: %v", err)
 	}

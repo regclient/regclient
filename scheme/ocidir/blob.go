@@ -21,9 +21,12 @@ import (
 	"github.com/regclient/regclient/types/ref"
 )
 
-// BlobDelete removes a blob from the repository
+// BlobDelete removes a blob from the repository.
+// This method does not verify that blobs are unused.
+// Calling the [OCIDir.Close] method to trigger the garbage collection is preferred.
 func (o *OCIDir) BlobDelete(ctx context.Context, r ref.Ref, d types.Descriptor) error {
-	return types.ErrNotImplemented
+	file := path.Join(r.Path, "blobs", d.Digest.Algorithm().String(), d.Digest.Encoded())
+	return o.fs.Remove(file)
 }
 
 // BlobGet retrieves a blob, returning a reader
