@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"os/signal"
 	"strings"
 	"syscall"
 
@@ -185,6 +187,8 @@ func (registryOpts *registryCmd) runRegistryConfig(cmd *cobra.Command, args []st
 
 func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
+	// disable signal handler to allow ctrl-c to be used on prompts (context cancel on a blocking reader is difficult)
+	signal.Reset(os.Interrupt, syscall.SIGTERM)
 	c, err := ConfigLoadDefault()
 	if err != nil {
 		return err
@@ -209,7 +213,7 @@ func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []str
 		if h.User != "" {
 			defUser = " [" + h.User + "]"
 		}
-		fmt.Printf("Enter Username%s: ", defUser)
+		fmt.Fprintf(cmd.OutOrStdout(), "Enter Username%s: ", defUser)
 		user, _ := reader.ReadString('\n')
 		user = strings.TrimSpace(user)
 		if user != "" {
@@ -235,13 +239,19 @@ func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []str
 		}
 	} else {
 		// prompt for a password
-		fmt.Print("Enter Password: ")
-		pass, err := term.ReadPassword(int(syscall.Stdin))
+		var fd int
+		if ifd, ok := cmd.InOrStdin().(interface{ Fd() uintptr }); ok {
+			fd = int(ifd.Fd())
+		} else {
+			return fmt.Errorf("file descriptor needed to prompt for password (resolve by using \"-p\" flag)")
+		}
+		fmt.Fprint(cmd.OutOrStdout(), "Enter Password: ")
+		pass, err := term.ReadPassword(fd)
 		if err != nil {
 			return fmt.Errorf("unable to read from tty (resolve by using \"-p\" flag, or winpty on Windows): %w", err)
 		}
 		passwd := strings.TrimRight(string(pass), "\n")
-		fmt.Print("\n")
+		fmt.Fprint(cmd.OutOrStdout(), "\n")
 		if passwd != "" {
 			h.Pass = passwd
 		} else {
