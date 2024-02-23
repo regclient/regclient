@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path"
 	"strconv"
 
 	"github.com/sirupsen/logrus"
@@ -61,7 +62,7 @@ func (reg *Reg) ManifestDelete(ctx context.Context, r ref.Ref, opts ...scheme.Ma
 			"": {
 				Method:     "DELETE",
 				Repository: r.Repository,
-				Path:       "manifests/" + r.Digest,
+				Path:       path.Join(r.Path, "manifests", r.Digest),
 			},
 		},
 	}
@@ -104,17 +105,7 @@ func (reg *Reg) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest, 
 			types.MediaTypeOCI1Artifact,
 		},
 	}
-	req := &reghttp.Req{
-		Host: r.Registry,
-		APIs: map[string]reghttp.ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: r.Repository,
-				Path:       "manifests/" + tagOrDigest,
-				Headers:    headers,
-			},
-		},
-	}
+	req := BuildRequest(r, "GET", tagOrDigest, headers)
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get manifest %s: %w", r.CommonName(), err)
@@ -181,17 +172,7 @@ func (reg *Reg) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest,
 			types.MediaTypeOCI1Artifact,
 		},
 	}
-	req := &reghttp.Req{
-		Host: r.Registry,
-		APIs: map[string]reghttp.ReqAPI{
-			"": {
-				Method:     "HEAD",
-				Repository: r.Repository,
-				Path:       "manifests/" + tagOrDigest,
-				Headers:    headers,
-			},
-		},
-	}
+	req := BuildRequest(r, "HEAD", tagOrDigest, headers)
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to request manifest head %s: %w", r.CommonName(), err)
@@ -205,6 +186,21 @@ func (reg *Reg) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest,
 		manifest.WithRef(r),
 		manifest.WithHeader(resp.HTTPResponse().Header),
 	)
+}
+
+// BuildRequest builds a reghttp.Req for a given ref.Ref given a tagOrDigest and some http.Header's
+func BuildRequest(r ref.Ref, method string, tagOrDigest string, headers http.Header) *reghttp.Req {
+	return &reghttp.Req{
+		Host: r.Registry,
+		APIs: map[string]reghttp.ReqAPI{
+			"": {
+				Method:     method,
+				Repository: r.Repository,
+				Path:       path.Join(r.Path, "manifests", tagOrDigest),
+				Headers:    headers,
+			},
+		},
+	}
 }
 
 // ManifestPut uploads a manifest to a registry
@@ -247,7 +243,7 @@ func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest,
 			"": {
 				Method:     "PUT",
 				Repository: r.Repository,
-				Path:       "manifests/" + tagOrDigest,
+				Path:       path.Join(r.Path, "manifests", tagOrDigest),
 				Headers:    headers,
 				BodyLen:    int64(len(mj)),
 				BodyBytes:  mj,
