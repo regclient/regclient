@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -16,11 +15,13 @@ import (
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
+	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/types/ref"
 )
 
 type registryCmd struct {
 	rootOpts             *rootCmd
+	formatConf           string
 	user, pass           string // login opts
 	passStdin            bool
 	credHelper           string
@@ -61,7 +62,10 @@ regctl registry config
 regctl registry config registry.example.org
 
 # show the configuration for Docker Hub
-regctl registry config docker.io`,
+regctl registry config docker.io
+
+# show the username used to login to docker hub
+regctl registry config docker.io --format '{{.User}}'`,
 		Args:              cobra.RangeArgs(0, 1),
 		ValidArgsFunction: registryArgListReg,
 		RunE:              registryOpts.runRegistryConfig,
@@ -118,6 +122,8 @@ regctl registry set quay.io --req-per-sec 10`,
 		ValidArgsFunction: registryArgListReg,
 		RunE:              registryOpts.runRegistrySet,
 	}
+
+	registryConfigCmd.Flags().StringVar(&registryOpts.formatConf, "format", "{{jsonPretty .}}", "Format output with go template syntax")
 
 	registryLoginCmd.Flags().StringVarP(&registryOpts.user, "user", "u", "", "Username")
 	registryLoginCmd.Flags().StringVarP(&registryOpts.pass, "pass", "p", "", "Password")
@@ -195,7 +201,6 @@ func (registryOpts *registryCmd) runRegistryConfig(cmd *cobra.Command, args []st
 		c.Hosts[i].Token = ""
 		c.Hosts[i].ClientKey = ""
 	}
-	var hj []byte
 	if len(args) > 0 {
 		h, ok := c.Hosts[args[0]]
 		if !ok {
@@ -204,20 +209,10 @@ func (registryOpts *registryCmd) runRegistryConfig(cmd *cobra.Command, args []st
 			}).Warn("No configuration found for registry")
 			return nil
 		}
-		hj, err = json.MarshalIndent(h, "", "  ")
-		if err != nil {
-			return err
-		}
+		return template.Writer(cmd.OutOrStdout(), registryOpts.formatConf, h)
 	} else {
-		hj, err = json.MarshalIndent(c.Hosts, "", "  ")
-		if err != nil {
-			return err
-		}
+		return template.Writer(cmd.OutOrStdout(), registryOpts.formatConf, c)
 	}
-
-	// TODO: enable formatted/template output
-	fmt.Fprintf(cmd.OutOrStdout(), "%s\n", hj)
-	return nil
 }
 
 func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []string) error {
