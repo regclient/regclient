@@ -158,6 +158,69 @@ func WithAnnotationOCIBase(rBase ref.Ref, dBase digest.Digest) Opts {
 	}
 }
 
+// WithAnnotationPromoteCommon pulls up common annotations from child images to the index.
+func WithAnnotationPromoteCommon() Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		dc.stepsManifest = append(dc.stepsManifest, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
+			if dm.mod == deleted {
+				return nil
+			}
+			changed := false
+			if !dm.m.IsList() {
+				return nil
+			}
+			ociI, err := manifest.OCIIndexFromAny(dm.m.GetOrig())
+			if err != nil {
+				return err
+			}
+			common := map[string]string{}
+			for i, child := range dm.manifests {
+				mAnnot, ok := child.m.(manifest.Annotator)
+				if !ok {
+					return fmt.Errorf("manifest does not support annotations: %s%.0w", child.m.GetDescriptor().Digest.String(), types.ErrUnsupportedMediaType)
+				}
+				cur, err := mAnnot.GetAnnotations()
+				if err != nil {
+					return err
+				}
+				if i == 0 {
+					common = cur
+				} else {
+					for k, v := range common {
+						if curV, ok := cur[k]; !ok || v != curV {
+							delete(common, k)
+						}
+					}
+				}
+			}
+			if len(common) == 0 {
+				return nil
+			}
+			if ociI.Annotations == nil {
+				ociI.Annotations = common
+				changed = true
+			} else {
+				for k, v := range common {
+					if curV, ok := ociI.Annotations[k]; !ok || v != curV {
+						ociI.Annotations[k] = v
+						changed = true
+					}
+				}
+			}
+			if changed {
+				dm.mod = replaced
+				err = dm.m.SetOrig(ociI)
+				if err != nil {
+					return err
+				}
+				dm.newDesc = dm.m.GetDescriptor()
+			}
+			return nil
+		})
+		return nil
+	}
+}
+
 // WithLabelToAnnotation copies image config labels to manifest annotations.
 func WithLabelToAnnotation() Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
