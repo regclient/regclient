@@ -53,6 +53,15 @@ func NewRegistryCmd(rootOpts *rootCmd) *cobra.Command {
 		Short: "show registry config",
 		Long: `Displays the configuration used for a registry. Secrets are not included
 in the output (e.g. passwords, tokens, and TLS keys).`,
+		Example: `
+# show the full config
+regctl registry config
+
+# show the configuration for a single registry
+regctl registry config registry.example.org
+
+# show the configuration for Docker Hub
+regctl registry config docker.io`,
 		Args:              cobra.RangeArgs(0, 1),
 		ValidArgsFunction: registryArgListReg,
 		RunE:              registryOpts.runRegistryConfig,
@@ -62,14 +71,29 @@ in the output (e.g. passwords, tokens, and TLS keys).`,
 		Short: "login to a registry",
 		Long: `Provide login credentials for a registry. This may not be necessary if you
 have already logged in with docker.`,
+		Example: `
+# login to Docker Hub
+regctl registry login
+
+# login to registry
+regctl registry login registry.example.org
+
+# login to GHCR with a provided password
+echo "${token}" | regctl registry login ghcr.io -u "${username}" --pass-stdin`,
 		Args:              cobra.RangeArgs(0, 1),
 		ValidArgsFunction: registryArgListReg,
 		RunE:              registryOpts.runRegistryLogin,
 	}
 	var registryLogoutCmd = &cobra.Command{
-		Use:               "logout <registry>",
-		Short:             "logout of a registry",
-		Long:              `Remove registry credentials from the configuration.`,
+		Use:   "logout <registry>",
+		Short: "logout of a registry",
+		Long:  `Remove registry credentials from the configuration.`,
+		Example: `
+# logout from Docker Hub
+regctl registry logout
+
+# logout from a specific registry
+regctl registry logout registry.example.org`,
 		Args:              cobra.RangeArgs(0, 1),
 		ValidArgsFunction: registryArgListReg,
 		RunE:              registryOpts.runRegistryLogout,
@@ -77,8 +101,19 @@ have already logged in with docker.`,
 	var registrySetCmd = &cobra.Command{
 		Use:   "set <registry>",
 		Short: "set options on a registry",
-		Long: `Set or modify the configuration of a registry. To pass a certificate, include
-the contents of the file, e.g. --cacert "$(cat reg-ca.crt)"`,
+		Long:  `Set or modify the configuration of a registry.`,
+		Example: `
+# configure a registry for HTTP
+regctl registry set localhost:5000 --tls disabled
+
+# configure a self signed certificate
+regctl registry set registry.example.org --cacert "$(cat reg-ca.crt)"
+
+# specify a local mirror for Docker Hub
+regctl registry set docker.io --mirror hub-mirror.example.org
+
+# specify the requests per sec throttle
+regctl registry set quay.io --req-per-sec 10`,
 		Args:              cobra.RangeArgs(0, 1),
 		ValidArgsFunction: registryArgListReg,
 		RunE:              registryOpts.runRegistrySet,

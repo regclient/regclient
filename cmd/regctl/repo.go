@@ -31,6 +31,12 @@ func NewRepoCmd(rootOpts *rootCmd) *cobra.Command {
 		Short:   "list repositories in a registry",
 		Long: `List repositories in a registry.
 Note: Docker Hub does not support this API request.`,
+		Example: `
+# list all repositories
+regctl repo ls registry.example.org
+
+# list the next 5 repositories after repo1
+regctl repo ls --last repo1 --limit 5 registry.example.org`,
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: registryArgListReg,
 		RunE:              repoOpts.runRepoLs,
