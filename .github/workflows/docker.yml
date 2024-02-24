@@ -41,7 +41,7 @@ jobs:
         fi
         HUB_IMAGE=regclient/${{ matrix.image }}
         GHCR_IMAGE=ghcr.io/regclient/${{ matrix.image }}
-        VERSION=noop
+        VERSION="(devel)"
         if [ "${{ github.event_name }}" = "schedule" ]; then
           VERSION=edge
         elif [[ $GITHUB_REF == refs/tags/* ]]; then
@@ -109,11 +109,9 @@ jobs:
         outputs: type=oci,dest=output/${{matrix.image}}-${{matrix.type}}.tar
         build-args: |
           SOURCE_DATE_EPOCH=${{ steps.prep.outputs.vcs_sec }}
-        labels: |
-          org.opencontainers.image.created=${{ steps.prep.outputs.created }}
-          org.opencontainers.image.source=${{ steps.prep.outputs.repo_url }}
-          org.opencontainers.image.version=${{ steps.prep.outputs.version }}
-          org.opencontainers.image.revision=${{ github.sha }}
+          BUILD_DATE=${{ steps.prep.outputs.created }}
+          VCS_REF=${{ github.sha }}
+          VCS_VERSION=${{ steps.prep.outputs.version }} 
 
     - name: Install cosign
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
@@ -152,12 +150,7 @@ jobs:
         regctl image import "${local_tag}" "output/${{matrix.image}}-${{matrix.type}}.tar"
         echo "Modifying image for reproducibility"
         regctl image mod "${local_tag}" --replace \
-          --to-oci-referrers
-        regctl image mod "${local_tag}" --replace \
-          --annotation "[*]org.opencontainers.image.created=${vcs_date}" \
-          --annotation "[*]org.opencontainers.image.source=${{ steps.prep.outputs.repo_url }}" \
-          --annotation "[*]org.opencontainers.image.version=${{ steps.prep.outputs.version }}" \
-          --annotation "[*]org.opencontainers.image.revision=${{ github.sha }}"
+          --to-oci-referrers --label-to-annotation --annotation-promote
         if [ -n "$base_name" ] && [ -n "$base_digest" ]; then
           regctl image mod "${local_tag}" --replace \
             --annotation "[*]org.opencontainers.image.base.name=${base_name}" \

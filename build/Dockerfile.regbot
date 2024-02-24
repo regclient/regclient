@@ -74,18 +74,19 @@ CMD [ "regbot", "--help" ]
 
 ARG BUILD_DATE
 ARG VCS_REF
+ARG VCS_VERSION=(devel)
 LABEL maintainer="" \
       org.opencontainers.image.created=$BUILD_DATE \
-      org.opencontainers.image.authors="Regclient contributors" \
+      org.opencontainers.image.authors="regclient contributors" \
       org.opencontainers.image.url="https://github.com/regclient/regclient" \
       org.opencontainers.image.documentation="https://github.com/regclient/regclient" \
       org.opencontainers.image.source="https://github.com/regclient/regclient" \
-      org.opencontainers.image.version="latest" \
+      org.opencontainers.image.version=$VCS_VERSION \
       org.opencontainers.image.revision=$VCS_REF \
-      org.opencontainers.image.vendor="" \
+      org.opencontainers.image.vendor="regclient" \
       org.opencontainers.image.licenses="Apache 2.0" \
       org.opencontainers.image.title="regbot" \
-      org.opencontainers.image.description=""
+      org.opencontainers.image.description="regclient/regbot utility for managing registry content (alpine)"
 
 FROM scratch as release-scratch
 ADD  build/root.tgz /
@@ -100,15 +101,16 @@ ENTRYPOINT [ "/regbot" ]
 
 ARG BUILD_DATE
 ARG VCS_REF
+ARG VCS_VERSION=(devel)
 LABEL maintainer="" \
       org.opencontainers.image.created=$BUILD_DATE \
-      org.opencontainers.image.authors="Regclient contributors" \
+      org.opencontainers.image.authors="regclient contributors" \
       org.opencontainers.image.url="https://github.com/regclient/regclient" \
       org.opencontainers.image.documentation="https://github.com/regclient/regclient" \
       org.opencontainers.image.source="https://github.com/regclient/regclient" \
-      org.opencontainers.image.version="latest" \
+      org.opencontainers.image.version=$VCS_VERSION \
       org.opencontainers.image.revision=$VCS_REF \
-      org.opencontainers.image.vendor="" \
+      org.opencontainers.image.vendor="regclient" \
       org.opencontainers.image.licenses="Apache 2.0" \
       org.opencontainers.image.title="regbot" \
-      org.opencontainers.image.description=""
+      org.opencontainers.image.description="regclient/regbot utility for managing registry content (scratch)"
