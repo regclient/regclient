@@ -9,11 +9,20 @@ VCS_REF?=$(shell git rev-list -1 HEAD)
 ifneq ($(shell git status --porcelain 2>/dev/null),)
   VCS_REF := $(VCS_REF)-dirty
 endif
+VCS_VERSION?=$(shell vcs_describe="$$(git describe --all)"; \
+  vcs_version="(devel)"; \
+  if [ "$${vcs_describe}" != "$${vcs_describe#tags/}" ]; then \
+    vcs_version="$${vcs_describe#tags/}"; \
+  elif [ "$${vcs_describe}" != "$${vcs_describe#heads/}" ]; then \
+    vcs_version="$${vcs_describe#heads/}"; \
+    if [ "main" = "$${vcs_version}" ]; then vcs_version=edge; fi; \
+  fi; \
+  echo "$${vcs_version}" | sed -r 's#/+#-#g')
 VCS_TAG?=$(shell git describe --tags --abbrev=0 2>/dev/null || true)
 LD_FLAGS?=-s -w -extldflags -static -buildid= -X \"github.com/regclient/regclient/internal/version.vcsTag=$(VCS_TAG)\"
 GO_BUILD_FLAGS?=-trimpath -ldflags "$(LD_FLAGS)" -tags nolegacy
 DOCKERFILE_EXT?=$(shell if docker build --help 2>/dev/null | grep -q -- '--progress'; then echo ".buildkit"; fi)
-DOCKER_ARGS?=--build-arg "VCS_REF=$(VCS_REF)"
+DOCKER_ARGS?=--build-arg "VCS_REF=$(VCS_REF)" --build-arg "VCS_VERSION=$(VCS_VERSION)"
 GOPATH?=$(shell go env GOPATH)
 PWD:=$(shell pwd)
 VER_BUMP?=$(shell command -v version-bump 2>/dev/null)

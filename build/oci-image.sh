@@ -47,13 +47,16 @@ vcs_sec="$(git log -1 --format=%ct)"
 vcs_date="$(date -d "@${vcs_sec}" +%Y-%m-%dT%H:%M:%SZ --utc)"
 vcs_repo="https://github.com/regclient/regclient.git"
 vcs_sha="$(git rev-list -1 HEAD)"
+if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+  vcs_sha="${vcs_sha}-dirty"
+fi
 vcs_describe="$(git describe --all)"
-vcs_version="noop"
+vcs_version="(devel)"
 if [ "${vcs_describe}" != "${vcs_describe#tags/}" ]; then
   vcs_version="${vcs_describe#tags/}"
 elif [ "${vcs_describe}" != "${vcs_describe#heads/}" ]; then
   vcs_version="${vcs_describe#heads/}"
-  if [ "main" = "$vcs_version" ]; then
+  if [ "main" = "${vcs_version}" ]; then
     vcs_version=edge
   fi
 fi
@@ -75,27 +78,19 @@ docker buildx build --platform="$platforms" \
   -o "type=oci,dest=output/${image}-${release}.tar" \
   --target "release-${release}" \
   --build-arg "SOURCE_DATE_EPOCH=${vcs_sec}" \
-  --label org.opencontainers.image.created=${vcs_date} \
-  --label org.opencontainers.image.source=${vcs_repo} \
-  --label org.opencontainers.image.version=${vcs_version} \
-  --label org.opencontainers.image.revision=${vcs_sha} \
+  --build-arg "BUILD_DATE=${vcs_date}" \
+  --build-arg "VCS_REF=${vcs_sha}" \
+  --build-arg "VCS_VERSION=${vcs_version}" \
   ${build_opts} .
 
 echo "Importing tar"
 regctl tag rm "ocidir://output/${image}:${release}" 2>/dev/null || true
 regctl image import "ocidir://output/${image}:${release}" "output/${image}-${release}.tar"
+
 echo "Modding image"
 regctl image mod \
   "ocidir://output/${image}:${release}" --replace \
-  --to-oci-referrers
-regctl image mod \
-  "ocidir://output/${image}:${release}" --replace \
-  --annotation "[*]org.opencontainers.image.created=${vcs_date}" \
-  --annotation "[*]org.opencontainers.image.source=${vcs_repo}" \
-  --annotation "[*]org.opencontainers.image.version=${vcs_version}" \
-  --annotation "[*]org.opencontainers.image.revision=${vcs_sha}" \
-  >/dev/null
-
+  --to-oci-referrers --label-to-annotation --annotation-promote
 if [ -n "$base_name" ] && [ -n "$base_digest" ]; then
   regctl image mod \
     "ocidir://output/${image}:${release}" --replace \
