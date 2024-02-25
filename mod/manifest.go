@@ -173,8 +173,11 @@ func WithAnnotationPromoteCommon() Opts {
 			if err != nil {
 				return err
 			}
-			common := map[string]string{}
-			for i, child := range dm.manifests {
+			var common map[string]string
+			for _, child := range dm.manifests {
+				if child.mod == deleted {
+					continue
+				}
 				mAnnot, ok := child.m.(manifest.Annotator)
 				if !ok {
 					return fmt.Errorf("manifest does not support annotations: %s%.0w", child.m.GetDescriptor().Digest.String(), types.ErrUnsupportedMediaType)
@@ -183,7 +186,7 @@ func WithAnnotationPromoteCommon() Opts {
 				if err != nil {
 					return err
 				}
-				if i == 0 {
+				if common == nil {
 					common = cur
 				} else {
 					for k, v := range common {
@@ -191,6 +194,9 @@ func WithAnnotationPromoteCommon() Opts {
 							delete(common, k)
 						}
 					}
+				}
+				if len(common) == 0 {
+					return nil
 				}
 			}
 			if len(common) == 0 {

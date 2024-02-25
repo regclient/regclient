@@ -778,7 +778,16 @@ func TestMod(t *testing.T) {
 			ref: "ocidir://testrepo:v2",
 		},
 		{
-			name: "Setup Annotations",
+			name: "Pull up labels and common annotations v1",
+			opts: []Opts{
+				WithManifestToOCIReferrers(),
+				WithLabelToAnnotation(),
+				WithAnnotationPromoteCommon(),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Setup Annotations v2",
 			opts: []Opts{
 				WithAnnotation("[*]common", "annotation on all images"),
 				WithAnnotation("[linux/amd64,linux/arm64,linux/arm/v7]child", "annotation on all child images"),
@@ -791,7 +800,7 @@ func TestMod(t *testing.T) {
 			ref: "ocidir://testrepo:v2",
 		},
 		{
-			name: "Pull up common annotations",
+			name: "Pull up common annotations v2",
 			opts: []Opts{
 				WithAnnotationPromoteCommon(),
 			},
