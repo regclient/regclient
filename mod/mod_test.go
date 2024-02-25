@@ -777,6 +777,26 @@ func TestMod(t *testing.T) {
 			},
 			ref: "ocidir://testrepo:v2",
 		},
+		{
+			name: "Setup Annotations",
+			opts: []Opts{
+				WithAnnotation("[*]common", "annotation on all images"),
+				WithAnnotation("[linux/amd64,linux/arm64,linux/arm/v7]child", "annotation on all child images"),
+				WithAnnotation("[linux/amd64]unique", "amd64"),
+				WithAnnotation("[linux/arm64]unique", "arm64"),
+				WithAnnotation("[linux/arm/v7]unique", "arm/v7"),
+				WithAnnotation("[linux/amd64]amd64only", "value for amd64"),
+				WithRefTgt(rTgt2),
+			},
+			ref: "ocidir://testrepo:v2",
+		},
+		{
+			name: "Pull up common annotations",
+			opts: []Opts{
+				WithAnnotationPromoteCommon(),
+			},
+			ref: rTgt2.CommonName(),
+		},
 	}
 
 	// run tests

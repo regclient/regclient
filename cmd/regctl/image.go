@@ -355,6 +355,20 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 			return nil
 		},
 	}, "annotation-base", "", `set base image annotations (image/name:tag,sha256:digest)`)
+	flagAnnotationPromote := imageModCmd.Flags().VarPF(&modFlagFunc{
+		t: "bool",
+		f: func(val string) error {
+			b, err := strconv.ParseBool(val)
+			if err != nil {
+				return fmt.Errorf("unable to parse value %s: %w", val, err)
+			}
+			if b {
+				imageOpts.modOpts = append(imageOpts.modOpts, mod.WithAnnotationPromoteCommon())
+			}
+			return nil
+		},
+	}, "annotation-promote", "", `promote common annotations from child images to index`)
+	flagAnnotationPromote.NoOptDefVal = "true"
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
