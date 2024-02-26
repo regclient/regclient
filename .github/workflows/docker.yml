@@ -27,6 +27,10 @@ jobs:
         image: ["regctl", "regsync", "regbot"]
         type: ["scratch", "alpine"]
 
+    env:
+      ALPINE_NAME: "alpine:3"
+      ALPINE_DIGEST: "sha256:c5b1261d6d3e43071626931fc004f70149baeba2c8ec672bd4f27761f8e1ad6b" # 3.19.1
+
     steps:
     - name: Check out code
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
@@ -141,8 +145,8 @@ jobs:
         base_name=""
         mkdir -p "output/${{matrix.image}}"
         if [ "${{matrix.type}}" = "alpine" ]; then
-          base_name="alpine:3"
-          base_digest="$(regctl image digest "${base_name}")"
+          base_name="${ALPINE_NAME}"
+          base_digest="${ALPINE_DIGEST}"
         fi
         # mutate the image locally
         local_tag="ocidir://output/${{matrix.image}}:${{matrix.type}}"
@@ -163,6 +167,7 @@ jobs:
             --time "set=${vcs_date}"
         fi
         echo "digest=$(regctl image digest ${local_tag})" >>$GITHUB_OUTPUT
+
     - name: Attach SBOMs
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       id: sbom
