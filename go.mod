@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7
-	github.com/olareg/olareg v0.0.0-20240210214547-d6cf6b4d3a49
+	github.com/olareg/olareg v0.0.0-20240221195309-f0372f7308b4
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/sirupsen/logrus v1.9.3
