@@ -3,6 +3,7 @@ package reqresp
 
 import (
 	"bytes"
+	"encoding/base64"
 	"io"
 	"math/rand"
 	"net/http"
@@ -173,4 +174,16 @@ func NewRandomBlob(size int, seed int64) (digest.Digest, []byte) {
 		panic("unable to read enough bytes")
 	}
 	return digest.FromBytes(b), b
+}
+
+// NewRandomID outputs a reproducible random ID (based on the seed) appropriate for blob upload URLs.
+func NewRandomID(seed int64) string {
+	//#nosec G404 regresp is only used for testing
+	r := rand.New(rand.NewSource(seed))
+	b := make([]byte, 16)
+	_, err := r.Read(b)
+	if err != nil {
+		panic(err)
+	}
+	return base64.RawURLEncoding.EncodeToString(b)
 }
