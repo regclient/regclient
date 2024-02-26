@@ -6,6 +6,8 @@ platforms="linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc
 base_name=""
 release="scratch"
 push_tags=""
+ALPINE_NAME="alpine:3"
+ALPINE_DIGEST="sha256:c5b1261d6d3e43071626931fc004f70149baeba2c8ec672bd4f27761f8e1ad6b" # 3.19.1
 
 # CLI options to override image, platform, base digest, and comma separated list of tags to push
 opt_c=0
@@ -64,7 +66,11 @@ vcs_version="$(echo "${vcs_version}" | sed -r 's#/+#-#g')"
 
 build_opts=""
 if [ -n "$base_name" ] && [ -z "$base_digest" ]; then
-  base_digest="$(regctl image digest "${base_name}")"
+  if [ "$base_name" = "${ALPINE_NAME}" ]; then
+    base_digest="${ALPINE_DIGEST}"
+  else
+    base_digest="$(regctl image digest "${base_name}")"
+  fi
   echo "Base image digest: ${base_digest}"
 elif [ -n "$base_name" ] && [ -n "$base_digest" ]; then
   build_opts=--build-context "${base_name}=docker-image://${base_name}@${base_digest}"
