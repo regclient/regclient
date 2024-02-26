@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/opencontainers/go-digest"
 	"github.com/sirupsen/logrus"
 
@@ -311,11 +310,11 @@ func TestBlobPut(t *testing.T) {
 	blobLen := 1024  // must be blobChunk < blobLen <= blobChunk * 2
 	blobLen3 := 1000 // blob without a full final chunk
 	d1, blob1 := reqresp.NewRandomBlob(blobLen, seed)
-	uuid1 := uuid.New()
 	d2, blob2 := reqresp.NewRandomBlob(blobLen, seed+1)
-	uuid2 := uuid.New()
 	d3, blob3 := reqresp.NewRandomBlob(blobLen3, seed+2)
-	uuid3 := uuid.New()
+	uuid1 := reqresp.NewRandomID(seed + 3)
+	uuid2 := reqresp.NewRandomID(seed + 4)
+	uuid3 := reqresp.NewRandomID(seed + 5)
 	// dMissing := digest.FromBytes([]byte("missing"))
 	// define req/resp entries
 	rrs := []reqresp.ReqResp{
@@ -333,7 +332,7 @@ func TestBlobPut(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Location":       {uuid1.String()},
+					"Location":       {uuid1},
 				},
 			},
 		},
@@ -342,7 +341,7 @@ func TestBlobPut(t *testing.T) {
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "PUT for d1",
 				Method: "PUT",
-				Path:   "/v2" + blobRepo + "/blobs/uploads/" + uuid1.String(),
+				Path:   "/v2" + blobRepo + "/blobs/uploads/" + uuid1,
 				Query: map[string][]string{
 					"digest": {d1.String()},
 				},
@@ -376,7 +375,7 @@ func TestBlobPut(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Location":       {uuid2.String()},
+					"Location":       {uuid2},
 				},
 			},
 		},
@@ -386,7 +385,7 @@ func TestBlobPut(t *testing.T) {
 				DelOnUse: false,
 				Name:     "PUT for patched d2",
 				Method:   "PUT",
-				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2.String(),
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2,
 				Query: map[string][]string{
 					"digest": {d2.String()},
 					"chunk":  {"3"},
@@ -411,7 +410,7 @@ func TestBlobPut(t *testing.T) {
 		// 		DelOnUse: true,
 		// 		Name:     "PATCH 2 fail for d2",
 		// 		Method:   "PATCH",
-		// 		Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2.String(),
+		// 		Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2,
 		// 		Query: map[string][]string{
 		// 			"chunk": {"2"},
 		// 		},
@@ -435,7 +434,7 @@ func TestBlobPut(t *testing.T) {
 				DelOnUse: false,
 				Name:     "PATCH 2 for d2",
 				Method:   "PATCH",
-				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2.String(),
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2,
 				Query: map[string][]string{
 					"chunk": {"2"},
 				},
@@ -451,7 +450,7 @@ func TestBlobPut(t *testing.T) {
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
 					"Range":          {fmt.Sprintf("bytes=0-%d", blobLen-1)},
-					"Location":       {uuid2.String() + "?chunk=3"},
+					"Location":       {uuid2 + "?chunk=3"},
 				},
 			},
 		},
@@ -461,7 +460,7 @@ func TestBlobPut(t *testing.T) {
 				DelOnUse: false,
 				Name:     "PATCH 1 for d2",
 				Method:   "PATCH",
-				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2.String(),
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2,
 				Query:    map[string][]string{},
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", blobChunk)},
@@ -475,7 +474,7 @@ func TestBlobPut(t *testing.T) {
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
 					"Range":          {fmt.Sprintf("bytes=0-%d", blobChunk-1)},
-					"Location":       {uuid2.String() + "?chunk=2"},
+					"Location":       {uuid2 + "?chunk=2"},
 				},
 			},
 		},
@@ -485,7 +484,7 @@ func TestBlobPut(t *testing.T) {
 				DelOnUse: false,
 				Name:     "PUT for d2",
 				Method:   "PUT",
-				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2.String(),
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2,
 				Query: map[string][]string{
 					"digest": {d2.String()},
 				},
@@ -517,7 +516,7 @@ func TestBlobPut(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Location":       {uuid3.String()},
+					"Location":       {uuid3},
 				},
 			},
 		},
@@ -527,7 +526,7 @@ func TestBlobPut(t *testing.T) {
 				DelOnUse: false,
 				Name:     "PUT for patched d3",
 				Method:   "PUT",
-				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3.String(),
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3,
 				Query: map[string][]string{
 					"digest": {d3.String()},
 					"chunk":  {"3"},
@@ -552,7 +551,7 @@ func TestBlobPut(t *testing.T) {
 		// 		DelOnUse: true,
 		// 		Name:     "PATCH 2 fail for d3",
 		// 		Method:   "PATCH",
-		// 		Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3.String(),
+		// 		Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3,
 		// 		Query: map[string][]string{
 		// 			"chunk": {"2"},
 		// 		},
@@ -576,7 +575,7 @@ func TestBlobPut(t *testing.T) {
 				DelOnUse: false,
 				Name:     "PATCH 2 for d3",
 				Method:   "PATCH",
-				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3.String(),
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3,
 				Query: map[string][]string{
 					"chunk": {"2"},
 				},
@@ -592,7 +591,7 @@ func TestBlobPut(t *testing.T) {
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
 					"Range":          {fmt.Sprintf("bytes=0-%d", blobLen3-1)},
-					"Location":       {uuid3.String() + "?chunk=3"},
+					"Location":       {uuid3 + "?chunk=3"},
 				},
 			},
 		},
@@ -602,7 +601,7 @@ func TestBlobPut(t *testing.T) {
 				DelOnUse: false,
 				Name:     "PATCH 1 for d3",
 				Method:   "PATCH",
-				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3.String(),
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3,
 				Query:    map[string][]string{},
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", blobChunk)},
@@ -616,7 +615,7 @@ func TestBlobPut(t *testing.T) {
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
 					"Range":          {fmt.Sprintf("bytes=0-%d", blobChunk-1)},
-					"Location":       {uuid3.String() + "?chunk=2"},
+					"Location":       {uuid3 + "?chunk=2"},
 				},
 			},
 		},
@@ -626,7 +625,7 @@ func TestBlobPut(t *testing.T) {
 				DelOnUse: false,
 				Name:     "PUT for d3",
 				Method:   "PUT",
-				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3.String(),
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3,
 				Query: map[string][]string{
 					"digest": {d3.String()},
 				},
@@ -750,9 +749,9 @@ func TestBlobCopy(t *testing.T) {
 	d1, blob1 := reqresp.NewRandomBlob(blobLen, seed)
 	d2, blob2 := reqresp.NewRandomBlob(blobLen, seed+1)
 	d3, blob3 := reqresp.NewRandomBlob(blobLen, seed+2)
-	uuid1 := uuid.New()
-	uuid2 := uuid.New()
-	uuid3 := uuid.New()
+	uuid1 := reqresp.NewRandomID(seed + 3)
+	uuid2 := reqresp.NewRandomID(seed + 4)
+	uuid3 := reqresp.NewRandomID(seed + 5)
 
 	// define req/resp entries
 	rrs := []reqresp.ReqResp{
@@ -816,7 +815,7 @@ func TestBlobCopy(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Location":       {uuid1.String()},
+					"Location":       {uuid1},
 				},
 			},
 		},
@@ -825,7 +824,7 @@ func TestBlobCopy(t *testing.T) {
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "PUT for repo b - d1",
 				Method: "PUT",
-				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid1.String(),
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid1,
 				Query: map[string][]string{
 					"digest": {d1.String()},
 				},
@@ -850,7 +849,7 @@ func TestBlobCopy(t *testing.T) {
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "DELETE for repo b - d1",
 				Method: "DELETE",
-				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid1.String(),
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid1,
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusAccepted,
@@ -970,7 +969,7 @@ func TestBlobCopy(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Location":       {uuid2.String()},
+					"Location":       {uuid2},
 				},
 			},
 		},
@@ -978,7 +977,7 @@ func TestBlobCopy(t *testing.T) {
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "DELETE for repo b - d2",
 				Method: "DELETE",
-				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid2.String(),
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid2,
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusAccepted,
@@ -989,7 +988,7 @@ func TestBlobCopy(t *testing.T) {
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "PUT for repo b - d2",
 				Method: "PUT",
-				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid2.String(),
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid2,
 				Query: map[string][]string{
 					"digest": {d2.String()},
 				},
@@ -1068,7 +1067,7 @@ func TestBlobCopy(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Location":       {uuid3.String()},
+					"Location":       {uuid3},
 				},
 			},
 		},
@@ -1076,7 +1075,7 @@ func TestBlobCopy(t *testing.T) {
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "DELETE for repo b - d3",
 				Method: "DELETE",
-				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid3.String(),
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid3,
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusAccepted,
@@ -1087,7 +1086,7 @@ func TestBlobCopy(t *testing.T) {
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "PUT for repo b - d3",
 				Method: "PUT",
-				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid3.String(),
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid3,
 				Query: map[string][]string{
 					"digest": {d3.String()},
 				},
@@ -1111,7 +1110,7 @@ func TestBlobCopy(t *testing.T) {
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "PUT for repo b - d3 fail",
 				Method: "PUT",
-				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid3.String(),
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid3,
 				Query: map[string][]string{
 					"digest": {d3.String()},
 				},

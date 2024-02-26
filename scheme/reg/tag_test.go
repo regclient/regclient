@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/opencontainers/go-digest"
 	"github.com/sirupsen/logrus"
 
@@ -26,6 +25,8 @@ import (
 
 func TestTag(t *testing.T) {
 	t.Parallel()
+	seed := time.Now().UTC().Unix()
+	t.Logf("Using seed %d", seed)
 	repoPath := "/proj"
 	repoPath2 := "/proj2"
 	pageLen := 2
@@ -44,7 +45,7 @@ func TestTag(t *testing.T) {
 	delFallbackTag := "del-fallback"
 	delFallbackManifest := "digest for del-fallback"
 	delFallbackDigest := digest.FromString(delFallbackManifest)
-	uuid1 := uuid.New()
+	uuid1 := reqresp.NewRandomID(seed)
 	ctx := context.Background()
 	rrs := []reqresp.ReqResp{
 		{
@@ -203,7 +204,7 @@ func TestTag(t *testing.T) {
 				Headers: http.Header{
 					"Content-Length": {"0"},
 					"Range":          {"bytes=0-0"},
-					"Location":       {uuid1.String()},
+					"Location":       {uuid1},
 				},
 			},
 		},
@@ -212,13 +213,13 @@ func TestTag(t *testing.T) {
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "PUT for fallback blob",
 				Method: "PUT",
-				Path:   "/v2" + repoPath + "/blobs/uploads/" + uuid1.String(),
+				Path:   "/v2" + repoPath + "/blobs/uploads/" + uuid1,
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusCreated,
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Location":       {"/v2" + repoPath + "/blobs/" + uuid1.String()},
+					"Location":       {"/v2" + repoPath + "/blobs/" + uuid1},
 				},
 			},
 		},
