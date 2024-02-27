@@ -574,14 +574,14 @@ func (artifactOpts *artifactCmd) runArtifactList(cmd *cobra.Command, args []stri
 		}
 		prefix, err := referrer.FallbackTag(rl.Subject)
 		if err != nil {
-			return fmt.Errorf("failed to compute fallback tag: %v", err)
+			return fmt.Errorf("failed to compute fallback tag: %w", err)
 		}
 		for _, t := range tl.Tags {
 			if strings.HasPrefix(t, prefix.Tag) && !sliceHasStr(rl.Tags, t) {
 				rTag := rl.Subject.SetTag(t)
 				mh, err := rc.ManifestHead(ctx, rTag, regclient.WithManifestRequireDigest())
 				if err != nil {
-					return fmt.Errorf("failed to query digest tag: %v", err)
+					return fmt.Errorf("failed to query digest tag: %w", err)
 				}
 				desc := mh.GetDescriptor()
 				if desc.Annotations == nil {
@@ -1096,7 +1096,7 @@ func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclien
 	if artifactOpts.digestTags {
 		prefix, err := referrer.FallbackTag(r)
 		if err != nil {
-			return &tr, fmt.Errorf("failed to compute fallback tag: %v", err)
+			return &tr, fmt.Errorf("failed to compute fallback tag: %w", err)
 		}
 		for _, t := range tags {
 			if strings.HasPrefix(t, prefix.Tag) && !sliceHasStr(rl.Tags, t) {

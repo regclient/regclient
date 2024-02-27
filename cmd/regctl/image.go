@@ -331,7 +331,7 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 			}
 			r, err := ref.New(vs[0])
 			if err != nil {
-				return fmt.Errorf("invalid image reference: %v", err)
+				return fmt.Errorf("invalid image reference: %w", err)
 			}
 			d := digest.Digest("")
 			if len(vs) == 1 {
@@ -341,14 +341,14 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 				}
 				d, err = digest.Parse(r.Digest)
 				if err != nil {
-					return fmt.Errorf("invalid digest: %v", err)
+					return fmt.Errorf("invalid digest: %w", err)
 				}
 				r.Digest = ""
 			} else {
 				// parse separate ref and digest
 				d, err = digest.Parse(vs[1])
 				if err != nil {
-					return fmt.Errorf("invalid digest: %v", err)
+					return fmt.Errorf("invalid digest: %w", err)
 				}
 			}
 			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithAnnotationOCIBase(r, d))

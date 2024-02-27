@@ -404,8 +404,7 @@ func (reg *Reg) blobPutUploadFull(ctx context.Context, r ref.Ref, d types.Descri
 			}
 			_, err := rdrSeek.Seek(0, io.SeekStart)
 			if err != nil {
-				// TODO: after Go 1.19 support is dropped, convert this to multiple errors with %w%.0w
-				return nil, fmt.Errorf("seek on blob source failed: %v%.0w", err, types.ErrNotRetryable)
+				return nil, fmt.Errorf("seek on blob source failed: %w%.0w", err, types.ErrNotRetryable)
 			}
 		}
 		readOnce = true
@@ -684,7 +683,7 @@ func (reg *Reg) blobUploadStatus(ctx context.Context, r ref.Ref, putURL *url.URL
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get upload status: %v", err)
+		return nil, fmt.Errorf("failed to get upload status: %w", err)
 	}
 	defer resp.Close()
 	if resp.HTTPResponse().StatusCode != 204 {

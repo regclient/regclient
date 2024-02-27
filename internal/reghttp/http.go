@@ -858,7 +858,7 @@ func makeRootPool(rootCAPool [][]byte, rootCADirs []string, hostname string, hos
 		files, err := os.ReadDir(hostDir)
 		if err != nil {
 			if !os.IsNotExist(err) {
-				return nil, fmt.Errorf("failed to read directory %s: %v", hostDir, err)
+				return nil, fmt.Errorf("failed to read directory %s: %w", hostDir, err)
 			}
 			continue
 		}
@@ -871,7 +871,7 @@ func makeRootPool(rootCAPool [][]byte, rootCADirs []string, hostname string, hos
 				//#nosec G304 file from a known directory and extension read by the user running the command on their own host
 				cert, err := os.ReadFile(f)
 				if err != nil {
-					return nil, fmt.Errorf("failed to read %s: %v", f, err)
+					return nil, fmt.Errorf("failed to read %s: %w", f, err)
 				}
 				if ok := pool.AppendCertsFromPEM(cert); !ok {
 					return nil, fmt.Errorf("failed to import cert from %s", f)

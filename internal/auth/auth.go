@@ -608,14 +608,14 @@ func (b *BearerHandler) GenerateAuth() (string, error) {
 	if err := b.tryPost(); err == nil {
 		return fmt.Sprintf("Bearer %s", b.token.Token), nil
 	} else if err != ErrUnauthorized {
-		return "", fmt.Errorf("failed to request auth token (post): %v%.0w", err, types.ErrHTTPUnauthorized)
+		return "", fmt.Errorf("failed to request auth token (post): %w%.0w", err, types.ErrHTTPUnauthorized)
 	}
 
 	// attempt a get (with basic auth if user/pass available)
 	if err := b.tryGet(); err == nil {
 		return fmt.Sprintf("Bearer %s", b.token.Token), nil
 	} else if err != ErrUnauthorized {
-		return "", fmt.Errorf("failed to request auth token (get): %v%.0w", err, types.ErrHTTPUnauthorized)
+		return "", fmt.Errorf("failed to request auth token (get): %w%.0w", err, types.ErrHTTPUnauthorized)
 	}
 
 	return "", ErrUnauthorized
