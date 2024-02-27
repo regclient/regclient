@@ -526,8 +526,7 @@ func TestDataJSON(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("received error %v", err)
-				return
+				t.Fatalf("received error %v", err)
 			}
 			if !bytes.Equal(out, tt.wantData) {
 				t.Errorf("data mismatch, expected %s, received %s", string(tt.wantData), string(out))
@@ -777,8 +776,7 @@ func TestDescriptorSearch(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("unexpected error, received %v", err)
-				return
+				t.Fatalf("unexpected error, received %v", err)
 			}
 			if !tc.expect.Equal(result) {
 				t.Errorf("unexpected result, expected %v, received %v", tc.expect, result)

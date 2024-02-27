@@ -62,8 +62,7 @@ func TestManifestHead(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("returned unexpected error: %v", err)
-				return
+				t.Fatalf("returned unexpected error: %v", err)
 			}
 			if (!tc.outContains && out != tc.expectOut) || (tc.outContains && !strings.Contains(out, tc.expectOut)) {
 				t.Errorf("unexpected output, expected %s, received %s", tc.expectOut, out)

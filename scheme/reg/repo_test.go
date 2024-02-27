@@ -169,8 +169,7 @@ func TestRepo(t *testing.T) {
 		host := u.Host
 		rl, err := reg.RepoList(ctx, host)
 		if err != nil {
-			t.Errorf("error listing repos: %v", err)
-			return
+			t.Fatalf("error listing repos: %v", err)
 		}
 		rlRepos, err := rl.GetRepos()
 		if err != nil {
@@ -185,8 +184,7 @@ func TestRepo(t *testing.T) {
 		host := u.Host
 		rl, err := reg.RepoList(ctx, host)
 		if err != nil {
-			t.Errorf("error listing repos: %v", err)
-			return
+			t.Fatalf("error listing repos: %v", err)
 		}
 		rlRepos, err := rl.GetRepos()
 		if err != nil {
@@ -201,8 +199,7 @@ func TestRepo(t *testing.T) {
 		host := u.Host
 		rl, err := reg.RepoList(ctx, host, scheme.WithRepoLimit(partialLen))
 		if err != nil {
-			t.Errorf("error listing repos: %v", err)
-			return
+			t.Fatalf("error listing repos: %v", err)
 		}
 		rlRepos, err := rl.GetRepos()
 		if err != nil {
@@ -213,8 +210,7 @@ func TestRepo(t *testing.T) {
 
 		rl, err = reg.RepoList(ctx, host, scheme.WithRepoLast(rlRepos[len(rlRepos)-1]))
 		if err != nil {
-			t.Errorf("error listing repos: %v", err)
-			return
+			t.Fatalf("error listing repos: %v", err)
 		}
 		rlRepos, err = rl.GetRepos()
 		if err != nil {
@@ -261,8 +257,7 @@ func TestRepo(t *testing.T) {
 		host := u.Host
 		rl, err := reg.RepoList(ctx, host+"/path")
 		if err != nil {
-			t.Errorf("error listing repos: %v", err)
-			return
+			t.Fatalf("error listing repos: %v", err)
 		}
 		rlRepos, err := rl.GetRepos()
 		if err != nil {

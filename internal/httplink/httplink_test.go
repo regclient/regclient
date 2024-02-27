@@ -118,8 +118,7 @@ func TestParseGet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			links, err := Parse(tt.headers)
 			if err != nil {
-				t.Errorf("parse failed: %v", err)
-				return
+				t.Fatalf("parse failed: %v", err)
 			}
 			link, err := links.Get(tt.parm, tt.val)
 			if tt.expectMissing {
@@ -129,8 +128,7 @@ func TestParseGet(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("failed to run get: %v", err)
-				return
+				t.Fatalf("failed to run get: %v", err)
 			}
 			if link.URI != tt.expectURI {
 				t.Errorf("URI mismatch: expected %s, received %s", tt.expectURI, link.URI)

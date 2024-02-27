@@ -89,8 +89,7 @@ func TestSplitCSKV(t *testing.T) {
 				}
 				return
 			} else if err != nil {
-				t.Errorf("unexpected error, received %v", err)
-				return
+				t.Fatalf("unexpected error, received %v", err)
 			}
 			for k, v := range tc.result {
 				if result[k] != v {

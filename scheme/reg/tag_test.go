@@ -269,18 +269,16 @@ func TestTag(t *testing.T) {
 	t.Run("List", func(t *testing.T) {
 		listRef, err := ref.New(tsURL.Host + repoPath)
 		if err != nil {
-			t.Errorf("failed creating getRef: %v", err)
+			t.Fatalf("failed creating getRef: %v", err)
 		}
 
 		tl, err := reg.TagList(ctx, listRef)
 		if err != nil {
-			t.Errorf("failed to list tags: %v", err)
-			return
+			t.Fatalf("failed to list tags: %v", err)
 		}
 		tags, err := tl.GetTags()
 		if err != nil {
-			t.Errorf("failed to extract tag list: %v", err)
-			return
+			t.Fatalf("failed to extract tag list: %v", err)
 		}
 		if !stringSliceCmp(tags, listTagList) {
 			t.Errorf("returned list mismatch, expected %v, received %v", listTagList, tags)
@@ -290,19 +288,17 @@ func TestTag(t *testing.T) {
 	t.Run("Pagination", func(t *testing.T) {
 		listRef, err := ref.New(tsURL.Host + repoPath)
 		if err != nil {
-			t.Errorf("failed creating getRef: %v", err)
+			t.Fatalf("failed creating getRef: %v", err)
 		}
 		// page 1
 		tl, err := reg.TagList(ctx, listRef,
 			scheme.WithTagLimit(pageLen))
 		if err != nil {
-			t.Errorf("failed to list tags: %v", err)
-			return
+			t.Fatalf("failed to list tags: %v", err)
 		}
 		tags, err := tl.GetTags()
 		if err != nil {
-			t.Errorf("failed to extract tag list: %v", err)
-			return
+			t.Fatalf("failed to extract tag list: %v", err)
 		}
 		if !stringSliceCmp(tags, listTagList[:pageLen]) {
 			t.Errorf("returned list mismatch, expected %v, received %v", listTagList[:pageLen], tags)
@@ -313,13 +309,11 @@ func TestTag(t *testing.T) {
 			scheme.WithTagLimit(pageLen),
 			scheme.WithTagLast(tags[len(tags)-1]))
 		if err != nil {
-			t.Errorf("failed to list tags: %v", err)
-			return
+			t.Fatalf("failed to list tags: %v", err)
 		}
 		tags, err = tl.GetTags()
 		if err != nil {
-			t.Errorf("failed to extract tag list: %v", err)
-			return
+			t.Fatalf("failed to extract tag list: %v", err)
 		}
 		if !stringSliceCmp(tags, listTagList[pageLen:]) {
 			t.Errorf("returned list mismatch, expected %v, received %v", listTagList[:pageLen], tags)
@@ -329,18 +323,16 @@ func TestTag(t *testing.T) {
 	t.Run("Pagination automatic", func(t *testing.T) {
 		listRef, err := ref.New(tsURL.Host + repoPath2)
 		if err != nil {
-			t.Errorf("failed creating getRef: %v", err)
+			t.Fatalf("failed creating getRef: %v", err)
 		}
 		// page 1
 		tl, err := reg.TagList(ctx, listRef)
 		if err != nil {
-			t.Errorf("failed to list tags: %v", err)
-			return
+			t.Fatalf("failed to list tags: %v", err)
 		}
 		tags, err := tl.GetTags()
 		if err != nil {
-			t.Errorf("failed to extract tag list: %v", err)
-			return
+			t.Fatalf("failed to extract tag list: %v", err)
 		}
 		if !stringSliceCmp(tags, listTagList) {
 			t.Errorf("returned list mismatch, expected %v, received %v", listTagList, tags)
@@ -350,15 +342,13 @@ func TestTag(t *testing.T) {
 	t.Run("Missing", func(t *testing.T) {
 		listRef, err := ref.New(tsURL.Host + missingRepo)
 		if err != nil {
-			t.Errorf("failed creating getRef: %v", err)
+			t.Fatalf("failed creating getRef: %v", err)
 		}
 		_, err = reg.TagList(ctx, listRef)
 		if err == nil {
-			t.Errorf("tag listing succeeded on missing repo")
-			return
+			t.Fatalf("tag listing succeeded on missing repo")
 		} else if !errors.Is(err, types.ErrNotFound) {
-			t.Errorf("unexpected error: expected %v, received %v", types.ErrNotFound, err)
-			return
+			t.Fatalf("unexpected error: expected %v, received %v", types.ErrNotFound, err)
 		}
 	})
 
@@ -370,8 +360,7 @@ func TestTag(t *testing.T) {
 		}
 		err = reg.TagDelete(ctx, delRef)
 		if err != nil {
-			t.Errorf("failed to delete tag: %v", err)
-			return
+			t.Fatalf("failed to delete tag: %v", err)
 		}
 	})
 
@@ -383,8 +372,7 @@ func TestTag(t *testing.T) {
 		}
 		err = reg.TagDelete(ctx, delRef)
 		if err != nil {
-			t.Errorf("failed to delete tag: %v", err)
-			return
+			t.Fatalf("failed to delete tag: %v", err)
 		}
 	})
 }

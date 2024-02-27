@@ -174,11 +174,11 @@ func TestIndex(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := o.writeIndex(r, tt.index, false)
 			if err != nil {
-				t.Errorf("failed to write index: %v", err)
+				t.Fatalf("failed to write index: %v", err)
 			}
 			index, err := o.readIndex(r, false)
 			if err != nil {
-				t.Errorf("failed to read index: %v", err)
+				t.Fatalf("failed to read index: %v", err)
 			}
 			if !tt.get.IsZero() {
 				d, err := indexGet(index, tt.get)

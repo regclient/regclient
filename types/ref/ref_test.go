@@ -396,8 +396,7 @@ func TestNew(t *testing.T) {
 				}
 				return
 			} else if err != nil {
-				t.Errorf("failed creating reference, err: %v", err)
-				return
+				t.Fatalf("failed creating reference, err: %v", err)
 			}
 			if tc.ref != r.Reference {
 				t.Errorf("reference mismatch for %s, received %s", tc.ref, r.Reference)
@@ -592,8 +591,7 @@ func TestNewHost(t *testing.T) {
 				}
 				return
 			} else if err != nil {
-				t.Errorf("failed creating reference, err: %v", err)
-				return
+				t.Fatalf("failed creating reference, err: %v", err)
 			}
 			if r.Scheme == "reg" && r.IsSet() {
 				t.Errorf("isSet unexpected for %s, expected %t, received %t", tc.host, false, r.IsSet())
@@ -638,8 +636,7 @@ func TestCommon(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r, err := New(tc.str)
 			if err != nil {
-				t.Errorf("failed to parse %s: %v", tc.str, err)
-				return
+				t.Fatalf("failed to parse %s: %v", tc.str, err)
 			}
 			cn := r.CommonName()
 			if tc.str != cn {
@@ -901,8 +898,7 @@ func TestSet(t *testing.T) {
 	rTagStr := "example.com/repo:v2"
 	r, err := New(rStr)
 	if err != nil {
-		t.Errorf("unexpected parse failure: %v", err)
-		return
+		t.Fatalf("unexpected parse failure: %v", err)
 	}
 	r = r.SetDigest(testDigest)
 	if r.Tag != "" {
@@ -958,8 +954,7 @@ func TestToReg(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r, err := New(tc.inRef)
 			if err != nil {
-				t.Errorf("failed parsing input ref: %v", err)
-				return
+				t.Fatalf("failed parsing input ref: %v", err)
 			}
 			outRef := r.ToReg()
 			if outRef.CommonName() != tc.expect {

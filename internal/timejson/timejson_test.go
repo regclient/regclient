@@ -31,8 +31,7 @@ func TestMarshal(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			b, err := tt.d.MarshalJSON()
 			if err != nil {
-				t.Errorf("failed marshaling: %v", err)
-				return
+				t.Fatalf("failed marshaling: %v", err)
 			}
 			if !bytes.Equal(b, []byte(tt.expect)) {
 				t.Errorf("mismatch, expected %s, received %s", tt.expect, string(b))
@@ -97,8 +96,7 @@ func TestUnmarshal(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("failed unmarshaling: %v", err)
-				return
+				t.Fatalf("failed unmarshaling: %v", err)
 			}
 			if d != tt.expect {
 				t.Errorf("duration mismatch, expected %s, received %s", time.Duration(tt.expect).String(), time.Duration(d).String())

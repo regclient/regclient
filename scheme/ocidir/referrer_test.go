@@ -25,8 +25,7 @@ func TestReferrer(t *testing.T) {
 	fsMem := rwfs.MemNew()
 	err := rwfs.CopyRecursive(fsOS, "../../testdata", fsMem, ".")
 	if err != nil {
-		t.Errorf("failed to setup memfs copy: %v", err)
-		return
+		t.Fatalf("failed to setup memfs copy: %v", err)
 	}
 	log := &logrus.Logger{
 		Out:       os.Stderr,
@@ -51,8 +50,7 @@ func TestReferrer(t *testing.T) {
 	digest2 := digest.FromString("example2")
 	mRef, err := ref.New(repo + ":" + tagName)
 	if err != nil {
-		t.Errorf("failed to parse ref %s: %v", repo+":"+tagName, err)
-		return
+		t.Fatalf("failed to parse ref %s: %v", repo+":"+tagName, err)
 	}
 	m, err := o.ManifestGet(ctx, mRef)
 	if err != nil {
@@ -69,13 +67,11 @@ func TestReferrer(t *testing.T) {
 	pAMDStr := "linux/amd64"
 	pAMD, err := platform.Parse(pAMDStr)
 	if err != nil {
-		t.Errorf("failed to parse platform: %v", err)
-		return
+		t.Fatalf("failed to parse platform: %v", err)
 	}
 	mAMDDesc, err := manifest.GetPlatformDesc(m, &pAMD)
 	if err != nil {
-		t.Errorf("failed to get AMD descriptor: %v", err)
-		return
+		t.Fatalf("failed to get AMD descriptor: %v", err)
 	}
 	artifactA := v1.Manifest{
 		Versioned: v1.ManifestSchemaVersion,
@@ -122,13 +118,11 @@ func TestReferrer(t *testing.T) {
 	}
 	artifactBM, err := manifest.New(manifest.WithOrig(artifactB))
 	if err != nil {
-		t.Errorf("failed creating artifact manifest: %v", err)
-		return
+		t.Fatalf("failed creating artifact manifest: %v", err)
 	}
 	artifactBBody, err := artifactBM.RawBody()
 	if err != nil {
-		t.Errorf("failed extracting raw body from artifact: %v", err)
-		return
+		t.Fatalf("failed extracting raw body from artifact: %v", err)
 	}
 	artifactC := v1.ArtifactManifest{
 		MediaType:    types.MediaTypeOCI1Artifact,
@@ -144,8 +138,7 @@ func TestReferrer(t *testing.T) {
 	}
 	artifactCM, err := manifest.New(manifest.WithOrig(artifactC))
 	if err != nil {
-		t.Errorf("failed creating artifact manifest: %v", err)
-		return
+		t.Fatalf("failed creating artifact manifest: %v", err)
 	}
 
 	// list empty
@@ -153,12 +146,10 @@ func TestReferrer(t *testing.T) {
 		r := mRef
 		rl, err := o.ReferrerList(ctx, r)
 		if err != nil {
-			t.Errorf("Failed running ReferrerList: %v", err)
-			return
+			t.Fatalf("Failed running ReferrerList: %v", err)
 		}
 		if len(rl.Descriptors) > 0 {
-			t.Errorf("descriptors exist")
-			return
+			t.Fatalf("descriptors exist")
 		}
 	})
 
@@ -167,25 +158,21 @@ func TestReferrer(t *testing.T) {
 		r := mRef.SetDigest(artifactAM.GetDescriptor().Digest.String())
 		err = o.ManifestPut(ctx, r, artifactAM, scheme.WithManifestChild())
 		if err != nil {
-			t.Errorf("Failed running ManifestPut on Manifest: %v", err)
-			return
+			t.Fatalf("Failed running ManifestPut on Manifest: %v", err)
 		}
 		err = o.ManifestPut(ctx, r, artifactAM, scheme.WithManifestChild())
 		if err != nil {
-			t.Errorf("Failed running ManifestPut on Manifest again: %v", err)
-			return
+			t.Fatalf("Failed running ManifestPut on Manifest again: %v", err)
 		}
 		r.Digest = artifactBM.GetDescriptor().Digest.String()
 		err = o.ManifestPut(ctx, r, artifactBM, scheme.WithManifestChild())
 		if err != nil {
-			t.Errorf("Failed running ManifestPut on Artifact: %v", err)
-			return
+			t.Fatalf("Failed running ManifestPut on Artifact: %v", err)
 		}
 		r.Digest = artifactCM.GetDescriptor().Digest.String()
 		err = o.ManifestPut(ctx, r, artifactCM, scheme.WithManifestChild())
 		if err != nil {
-			t.Errorf("Failed running ManifestPut on Artifact: %v", err)
-			return
+			t.Fatalf("Failed running ManifestPut on Artifact: %v", err)
 		}
 	})
 
@@ -193,17 +180,14 @@ func TestReferrer(t *testing.T) {
 	t.Run("List", func(t *testing.T) {
 		r, err := ref.New(repo + ":" + tagName)
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
-			return
+			t.Fatalf("Failed creating getRef: %v", err)
 		}
 		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{SortAnnotation: timeAnnot}))
 		if err != nil {
-			t.Errorf("Failed running ReferrerList: %v", err)
-			return
+			t.Fatalf("Failed running ReferrerList: %v", err)
 		}
 		if len(rl.Descriptors) != 2 {
-			t.Errorf("descriptor list length, expected 2, received %d", len(rl.Descriptors))
-			return
+			t.Fatalf("descriptor list length, expected 2, received %d", len(rl.Descriptors))
 		}
 		// expecting artifact A in index 0
 		if rl.Descriptors[0].MediaType != types.MediaTypeOCI1Manifest ||
@@ -226,12 +210,10 @@ func TestReferrer(t *testing.T) {
 		}
 		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{SortAnnotation: timeAnnot, SortDesc: true}))
 		if err != nil {
-			t.Errorf("Failed running ReferrerList reverse: %v", err)
-			return
+			t.Fatalf("Failed running ReferrerList reverse: %v", err)
 		}
 		if len(rl.Descriptors) != 2 {
-			t.Errorf("descriptor list length, expected 2, received %d", len(rl.Descriptors))
-			return
+			t.Fatalf("descriptor list length, expected 2, received %d", len(rl.Descriptors))
 		}
 		// check order of responses
 		if rl.Descriptors[0].Digest != artifactBM.GetDescriptor().Digest ||
@@ -242,77 +224,62 @@ func TestReferrer(t *testing.T) {
 	t.Run("List with artifact filter", func(t *testing.T) {
 		r, err := ref.New(repo + ":" + tagName)
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
-			return
+			t.Fatalf("Failed creating getRef: %v", err)
 		}
 		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{ArtifactType: aType}))
 		if err != nil {
-			t.Errorf("Failed running ReferrerList: %v", err)
-			return
+			t.Fatalf("Failed running ReferrerList: %v", err)
 		}
 		if len(rl.Descriptors) != 1 {
-			t.Errorf("descriptor list length, expected 1, received %d", len(rl.Descriptors))
-			return
+			t.Fatalf("descriptor list length, expected 1, received %d", len(rl.Descriptors))
 		}
 		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{ArtifactType: "application/vnd.example.unknown"}))
 		if err != nil {
-			t.Errorf("Failed running ReferrerList: %v", err)
-			return
+			t.Fatalf("Failed running ReferrerList: %v", err)
 		}
 		if len(rl.Descriptors) > 0 {
-			t.Errorf("unexpected descriptors")
-			return
+			t.Fatalf("unexpected descriptors")
 		}
 	})
 	t.Run("List with annotation filter", func(t *testing.T) {
 		r, err := ref.New(repo + ":" + tagName)
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
-			return
+			t.Fatalf("Failed creating getRef: %v", err)
 		}
 		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{Annotations: map[string]string{extraAnnot: extraValueB}}))
 		if err != nil {
-			t.Errorf("Failed running ReferrerList: %v", err)
-			return
+			t.Fatalf("Failed running ReferrerList: %v", err)
 		}
 		if len(rl.Descriptors) != 1 {
-			t.Errorf("descriptor list length, expected 1, received %d", len(rl.Descriptors))
-			return
+			t.Fatalf("descriptor list length, expected 1, received %d", len(rl.Descriptors))
 		}
 		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{Annotations: map[string]string{extraAnnot: "unknown value"}}))
 		if err != nil {
-			t.Errorf("Failed running ReferrerList: %v", err)
-			return
+			t.Fatalf("Failed running ReferrerList: %v", err)
 		}
 		if len(rl.Descriptors) > 0 {
-			t.Errorf("unexpected descriptors")
-			return
+			t.Fatalf("unexpected descriptors")
 		}
 		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{Annotations: map[string]string{extraAnnot: ""}}))
 		if err != nil {
-			t.Errorf("Failed running ReferrerList: %v", err)
-			return
+			t.Fatalf("Failed running ReferrerList: %v", err)
 		}
 		if len(rl.Descriptors) != 2 {
-			t.Errorf("descriptor list length, expected 2, received %d", len(rl.Descriptors))
-			return
+			t.Fatalf("descriptor list length, expected 2, received %d", len(rl.Descriptors))
 		}
 	})
 	// list platform=linux/amd64
 	t.Run("List Annotation for Platform", func(t *testing.T) {
 		r, err := ref.New(repo + ":" + tagName)
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
-			return
+			t.Fatalf("Failed creating getRef: %v", err)
 		}
 		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerPlatform(pAMDStr))
 		if err != nil {
-			t.Errorf("Failed running ReferrerList: %v", err)
-			return
+			t.Fatalf("Failed running ReferrerList: %v", err)
 		}
 		if len(rl.Descriptors) != 1 {
-			t.Errorf("descriptor list length, expected 1, received %d", len(rl.Descriptors))
-			return
+			t.Fatalf("descriptor list length, expected 1, received %d", len(rl.Descriptors))
 		}
 	})
 
@@ -321,14 +288,12 @@ func TestReferrer(t *testing.T) {
 		r := mRef.SetDigest(artifactAM.GetDescriptor().Digest.String())
 		err = o.ManifestDelete(ctx, r, scheme.WithManifest(artifactAM))
 		if err != nil {
-			t.Errorf("Failed running ManifestDelete on Manifest: %v", err)
-			return
+			t.Fatalf("Failed running ManifestDelete on Manifest: %v", err)
 		}
 		r.Digest = artifactBM.GetDescriptor().Digest.String()
 		err = o.ManifestDelete(ctx, r, scheme.WithManifestCheckReferrers())
 		if err != nil {
-			t.Errorf("Failed running ManifestDelete on Artifact: %v", err)
-			return
+			t.Fatalf("Failed running ManifestDelete on Artifact: %v", err)
 		}
 	})
 
@@ -337,12 +302,10 @@ func TestReferrer(t *testing.T) {
 		r := mRef
 		rl, err := o.ReferrerList(ctx, r)
 		if err != nil {
-			t.Errorf("Failed running ReferrerList: %v", err)
-			return
+			t.Fatalf("Failed running ReferrerList: %v", err)
 		}
 		if len(rl.Descriptors) > 0 {
-			t.Errorf("descriptors exist")
-			return
+			t.Fatalf("descriptors exist")
 		}
 	})
 }

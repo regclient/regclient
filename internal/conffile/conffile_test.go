@@ -90,8 +90,7 @@ func TestNew(t *testing.T) {
 				return
 			}
 			if cf == nil {
-				t.Errorf("result was nil")
-				return
+				t.Fatalf("result was nil")
 			}
 			if cf.Name() != tt.expectName {
 				t.Errorf("fullname mismatch, expected %s, received %s", tt.expectName, cf.Name())
@@ -108,19 +107,16 @@ func TestWriteOpen(t *testing.T) {
 	cf := New(WithFS(memfs), WithFullname("test.json"))
 	err := cf.Write(bytes.NewReader(confContent))
 	if err != nil {
-		t.Errorf("failed to write config file: %v", err)
-		return
+		t.Fatalf("failed to write config file: %v", err)
 	}
 	rc, err := cf.Open()
 	if err != nil {
-		t.Errorf("failed to open config file: %v", err)
-		return
+		t.Fatalf("failed to open config file: %v", err)
 	}
 	defer rc.Close()
 	readBytes, err := io.ReadAll(rc)
 	if err != nil {
-		t.Errorf("failed to read content: %v", err)
-		return
+		t.Fatalf("failed to read content: %v", err)
 	}
 	if !bytes.Equal(readBytes, confContent) {
 		t.Errorf("content mismatch, write: %s, read: %s", string(confContent), string(readBytes))

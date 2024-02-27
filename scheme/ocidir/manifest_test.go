@@ -26,15 +26,13 @@ func TestManifest(t *testing.T) {
 	fsMem := rwfs.MemNew()
 	err := rwfs.CopyRecursive(fsOS, "../../testdata", fsMem, ".")
 	if err != nil {
-		t.Errorf("failed to setup memfs copy: %v", err)
-		return
+		t.Fatalf("failed to setup memfs copy: %v", err)
 	}
 	o := New(WithFS(fsMem))
 	rs := "ocidir://testrepo:v1"
 	r, err := ref.New(rs)
 	if err != nil {
-		t.Errorf("failed to parse ref %s: %v", rs, err)
-		return
+		t.Fatalf("failed to parse ref %s: %v", rs, err)
 	}
 	// manifest head
 	_, err = o.ManifestHead(ctx, r)
@@ -44,7 +42,7 @@ func TestManifest(t *testing.T) {
 	// manifest list
 	ml, err := o.ManifestGet(ctx, r)
 	if err != nil {
-		t.Errorf("manifest get: %v", err)
+		t.Fatalf("manifest get: %v", err)
 	}
 	if manifest.GetMediaType(ml) != types.MediaTypeOCI1ManifestList {
 		t.Errorf("manifest mt, expected %s, received %s", types.MediaTypeOCI1ManifestList, manifest.GetMediaType(ml))
@@ -54,19 +52,17 @@ func TestManifest(t *testing.T) {
 	}
 	mli, ok := ml.(manifest.Indexer)
 	if !ok {
-		t.Errorf("manifest doesn't support index methods")
-		return
+		t.Fatalf("manifest doesn't support index methods")
 	}
 	dl, err := mli.GetManifestList()
 	if err != nil || len(dl) < 1 {
-		t.Errorf("descriptor list (%d): %v", len(dl), err)
+		t.Fatalf("descriptor list (%d): %v", len(dl), err)
 	}
 	// manifest head on a child digest
 	rs = fmt.Sprintf("%s@%s", rs, dl[0].Digest)
 	r, err = ref.New(rs)
 	if err != nil {
-		t.Errorf("failed to parse ref %s: %v", rs, err)
-		return
+		t.Fatalf("failed to parse ref %s: %v", rs, err)
 	}
 	_, err = o.ManifestHead(ctx, r)
 	if err != nil {
@@ -81,13 +77,11 @@ func TestManifest(t *testing.T) {
 	// image manifest
 	m, err := o.ManifestGet(ctx, r)
 	if err != nil {
-		t.Errorf("manifest get: %v", err)
-		return
+		t.Fatalf("manifest get: %v", err)
 	}
 	mi, ok := m.(manifest.Imager)
 	if !ok {
-		t.Errorf("manifest doesn't support image methods")
-		return
+		t.Fatalf("manifest doesn't support image methods")
 	}
 	_, err = mi.GetConfig()
 	if err != nil {
@@ -103,17 +97,16 @@ func TestManifest(t *testing.T) {
 	}
 	fh, err := fm.Open("testrepo/" + imageLayoutFile)
 	if err != nil {
-		t.Errorf("open oci-layout: %v", err)
-		return
+		t.Fatalf("open oci-layout: %v", err)
 	}
 	lb, err := io.ReadAll(fh)
 	if err != nil {
-		t.Errorf("readall oci-layout: %v", err)
+		t.Fatalf("readall oci-layout: %v", err)
 	}
 	l := v1.ImageLayout{}
 	err = json.Unmarshal(lb, &l)
 	if err != nil {
-		t.Errorf("json unmarshal oci-layout: %v", err)
+		t.Fatalf("json unmarshal oci-layout: %v", err)
 	}
 	if l.Version != "1.0.0" {
 		t.Errorf("oci-layout version, expected 1.0.0, received %s", l.Version)
@@ -125,22 +118,22 @@ func TestManifest(t *testing.T) {
 	}
 	bRaw, err := io.ReadAll(fh)
 	if err != nil {
-		t.Errorf("failed to read manifest blob: %v", err)
+		t.Fatalf("failed to read manifest blob: %v", err)
 	}
 	mRaw, err := m.RawBody()
 	if err != nil {
-		t.Errorf("failed to run RawBody: %v", err)
+		t.Fatalf("failed to run RawBody: %v", err)
 	}
 	if !bytes.Equal(bRaw, mRaw) {
 		t.Errorf("blob and raw do not match, raw %s, blob %s", string(mRaw), string(bRaw))
 	}
 	tl, err := om.TagList(ctx, r)
 	if err != nil {
-		t.Errorf("tag list: %v", err)
+		t.Fatalf("tag list: %v", err)
 	}
 	tlt, err := tl.GetTags()
 	if err != nil {
-		t.Errorf("tag list tags: %v", err)
+		t.Fatalf("tag list tags: %v", err)
 	}
 	if len(tlt) != 1 || tlt[0] != "v1" {
 		t.Errorf("tag list, expected v1, received %v", tlt)
@@ -152,11 +145,11 @@ func TestManifest(t *testing.T) {
 	}
 	tl, err = om.TagList(ctx, r)
 	if err != nil {
-		t.Errorf("tag list: %v", err)
+		t.Fatalf("tag list: %v", err)
 	}
 	tlt, err = tl.GetTags()
 	if err != nil {
-		t.Errorf("tag list tags: %v", err)
+		t.Fatalf("tag list tags: %v", err)
 	}
 	if len(tlt) != 0 {
 		t.Errorf("tag list, expected empty list, received %v", tlt)

@@ -18,13 +18,11 @@ func TestClose(t *testing.T) {
 	fsMem := rwfs.MemNew()
 	err := rwfs.MkdirAll(fsMem, "testdata/regctl", 0777)
 	if err != nil {
-		t.Errorf("failed to setup memfs dir: %v", err)
-		return
+		t.Fatalf("failed to setup memfs dir: %v", err)
 	}
 	err = rwfs.CopyRecursive(fsOS, "testdata/regctl", fsMem, "testdata/regctl")
 	if err != nil {
-		t.Errorf("failed to setup memfs copy: %v", err)
-		return
+		t.Fatalf("failed to setup memfs copy: %v", err)
 	}
 	oMem := New(WithFS(fsMem))
 	tRef := "ocidir://testdata/regctl"
