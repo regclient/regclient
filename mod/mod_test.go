@@ -32,21 +32,20 @@ func TestMod(t *testing.T) {
 	fsMem := rwfs.MemNew()
 	err := rwfs.CopyRecursive(fsOS, "../testdata", fsMem, ".")
 	if err != nil {
-		t.Errorf("failed to setup memfs copy: %v", err)
-		return
+		t.Fatalf("failed to setup memfs copy: %v", err)
 	}
 	baseTime, err := time.Parse(time.RFC3339, "2020-01-01T00:00:00Z")
 	if err != nil {
-		t.Errorf("failed to parse test time: %v", err)
+		t.Fatalf("failed to parse test time: %v", err)
 	}
 	oldTime, err := time.Parse(time.RFC3339, "1999-01-01T00:00:00Z")
 	if err != nil {
-		t.Errorf("failed to parse test time: %v", err)
+		t.Fatalf("failed to parse test time: %v", err)
 	}
 	bDig := digest.FromString("digest for base image")
 	bRef, err := ref.New("base:latest")
 	if err != nil {
-		t.Errorf("failed to parse base image: %v", err)
+		t.Fatalf("failed to parse base image: %v", err)
 	}
 	bTrue := true
 	regSrc := olareg.New(oConfig.Config{
@@ -101,55 +100,55 @@ func TestMod(t *testing.T) {
 
 	rTgt1, err := ref.New(tTgtHost + "/tgtrepo1:v1")
 	if err != nil {
-		t.Errorf("failed to parse ref: %v", err)
+		t.Fatalf("failed to parse ref: %v", err)
 	}
 	rTgt2, err := ref.New(tTgtHost + "/tgtrepo2:v2")
 	if err != nil {
-		t.Errorf("failed to parse ref: %v", err)
+		t.Fatalf("failed to parse ref: %v", err)
 	}
 	rTgt3, err := ref.New(tTgtHost + "/tgtrepo3:v3")
 	if err != nil {
-		t.Errorf("failed to parse ref: %v", err)
+		t.Fatalf("failed to parse ref: %v", err)
 	}
 	rb1, err := ref.New("ocidir://testrepo:b1")
 	if err != nil {
-		t.Errorf("failed to parse ref: %v", err)
+		t.Fatalf("failed to parse ref: %v", err)
 	}
 	rb2, err := ref.New("ocidir://testrepo:b2")
 	if err != nil {
-		t.Errorf("failed to parse ref: %v", err)
+		t.Fatalf("failed to parse ref: %v", err)
 	}
 	rb3, err := ref.New("ocidir://testrepo:b3")
 	if err != nil {
-		t.Errorf("failed to parse ref: %v", err)
+		t.Fatalf("failed to parse ref: %v", err)
 	}
 	// r1, err := ref.New("ocidir://testrepo:v1")
 	// if err != nil {
-	// 	t.Errorf("failed to parse ref: %v", err)
+	// 	t.Fatalf("failed to parse ref: %v", err)
 	// }
 	// r2, err := ref.New("ocidir://testrepo:v2")
 	// if err != nil {
-	// 	t.Errorf("failed to parse ref: %v", err)
+	// 	t.Fatalf("failed to parse ref: %v", err)
 	// }
 	r3, err := ref.New("ocidir://testrepo:v3")
 	if err != nil {
-		t.Errorf("failed to parse ref: %v", err)
+		t.Fatalf("failed to parse ref: %v", err)
 	}
 	m3, err := rc.ManifestGet(ctx, r3)
 	if err != nil {
-		t.Errorf("failed to retrieve v3 ref: %v", err)
+		t.Fatalf("failed to retrieve v3 ref: %v", err)
 	}
 	pAMD, err := platform.Parse("linux/amd64")
 	if err != nil {
-		t.Errorf("failed to parse platform: %v", err)
+		t.Fatalf("failed to parse platform: %v", err)
 	}
 	m3DescAmd, err := manifest.GetPlatformDesc(m3, &pAMD)
 	if err != nil {
-		t.Errorf("failed to get amd64 descriptor: %v", err)
+		t.Fatalf("failed to get amd64 descriptor: %v", err)
 	}
 	r3amd, err := ref.New(fmt.Sprintf("ocidir://testrepo@%s", m3DescAmd.Digest.String()))
 	if err != nil {
-		t.Errorf("failed to parse platform specific descriptor: %v", err)
+		t.Fatalf("failed to parse platform specific descriptor: %v", err)
 	}
 
 	// define tests
@@ -813,8 +812,7 @@ func TestMod(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			rSrc, err := ref.New(tt.ref)
 			if err != nil {
-				t.Errorf("failed creating ref: %v", err)
-				return
+				t.Fatalf("failed creating ref: %v", err)
 			}
 			// run mod with opts
 			rMod, err := Apply(ctx, rc, rSrc, tt.opts...)
@@ -826,19 +824,16 @@ func TestMod(t *testing.T) {
 				}
 				return
 			} else if err != nil {
-				t.Errorf("unexpected error: %v", err)
-				return
+				t.Fatalf("unexpected error: %v", err)
 			}
 
 			mSrc, err := rc.ManifestHead(ctx, rSrc, regclient.WithManifestRequireDigest())
 			if err != nil {
-				t.Errorf("failed to get manifest from src: %v", err)
-				return
+				t.Fatalf("failed to get manifest from src: %v", err)
 			}
 			mTgt, err := rc.ManifestHead(ctx, rMod, regclient.WithManifestRequireDigest())
 			if err != nil {
-				t.Errorf("failed to get manifest from mod \"%s\": %v", rMod.CommonName(), err)
-				return
+				t.Fatalf("failed to get manifest from mod \"%s\": %v", rMod.CommonName(), err)
 			}
 
 			if tt.wantSame {

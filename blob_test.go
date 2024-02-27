@@ -182,18 +182,16 @@ func TestBlobGet(t *testing.T) {
 	t.Run("Get", func(t *testing.T) {
 		ref, err := ref.New(tsURL.Host + blobRepo)
 		if err != nil {
-			t.Errorf("Failed creating ref: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
 		br, err := rc.BlobGet(ctx, ref, types.Descriptor{Digest: d1, Size: int64(len(blob1))})
 		if err != nil {
-			t.Errorf("Failed running BlobGet: %v", err)
-			return
+			t.Fatalf("Failed running BlobGet: %v", err)
 		}
 		defer br.Close()
 		brBlob, err := io.ReadAll(br)
 		if err != nil {
-			t.Errorf("Failed reading blob: %v", err)
-			return
+			t.Fatalf("Failed reading blob: %v", err)
 		}
 		if !bytes.Equal(blob1, brBlob) {
 			t.Errorf("Blob does not match")
@@ -204,7 +202,7 @@ func TestBlobGet(t *testing.T) {
 	t.Run("Data", func(t *testing.T) {
 		ref, err := ref.New(tsURL.Host + blobRepo + "/data")
 		if err != nil {
-			t.Errorf("Failed creating ref: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
 		desc := types.Descriptor{
 			Digest: d1,
@@ -213,14 +211,12 @@ func TestBlobGet(t *testing.T) {
 		}
 		br, err := rc.BlobGet(ctx, ref, desc)
 		if err != nil {
-			t.Errorf("Failed running BlobGet: %v", err)
-			return
+			t.Fatalf("Failed running BlobGet: %v", err)
 		}
 		defer br.Close()
 		brBlob, err := io.ReadAll(br)
 		if err != nil {
-			t.Errorf("Failed reading blob: %v", err)
-			return
+			t.Fatalf("Failed reading blob: %v", err)
 		}
 		if !bytes.Equal(blob1, brBlob) {
 			t.Errorf("Blob does not match")
@@ -230,12 +226,11 @@ func TestBlobGet(t *testing.T) {
 	t.Run("Head", func(t *testing.T) {
 		ref, err := ref.New(tsURL.Host + blobRepo)
 		if err != nil {
-			t.Errorf("Failed creating ref: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
 		br, err := rc.BlobHead(ctx, ref, types.Descriptor{Digest: d1})
 		if err != nil {
-			t.Errorf("Failed running BlobHead: %v", err)
-			return
+			t.Fatalf("Failed running BlobHead: %v", err)
 		}
 		defer br.Close()
 		if br.GetDescriptor().Size != int64(blobLen) {
@@ -246,13 +241,12 @@ func TestBlobGet(t *testing.T) {
 	t.Run("Missing", func(t *testing.T) {
 		ref, err := ref.New(tsURL.Host + blobRepo)
 		if err != nil {
-			t.Errorf("Failed creating ref: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
 		br, err := rc.BlobGet(ctx, ref, types.Descriptor{Digest: dMissing})
 		if err == nil {
 			defer br.Close()
-			t.Errorf("Unexpected success running BlobGet")
-			return
+			t.Fatalf("Unexpected success running BlobGet")
 		}
 		if !errors.Is(err, types.ErrNotFound) {
 			t.Errorf("Error does not match \"ErrNotFound\": %v", err)
@@ -262,18 +256,16 @@ func TestBlobGet(t *testing.T) {
 	t.Run("Retry", func(t *testing.T) {
 		ref, err := ref.New(tsURL.Host + blobRepo)
 		if err != nil {
-			t.Errorf("Failed creating ref: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
 		br, err := rc.BlobGet(ctx, ref, types.Descriptor{Digest: d2})
 		if err != nil {
-			t.Errorf("Failed running BlobGet: %v", err)
-			return
+			t.Fatalf("Failed running BlobGet: %v", err)
 		}
 		defer br.Close()
 		brBlob, err := io.ReadAll(br)
 		if err != nil {
-			t.Errorf("Failed reading blob: %v", err)
-			return
+			t.Fatalf("Failed reading blob: %v", err)
 		}
 		if !bytes.Equal(blob2, brBlob) {
 			t.Errorf("Blob does not match")
@@ -283,13 +275,12 @@ func TestBlobGet(t *testing.T) {
 	t.Run("Forbidden", func(t *testing.T) {
 		ref, err := ref.New(tsURL.Host + privateRepo)
 		if err != nil {
-			t.Errorf("Failed creating ref: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
 		br, err := rc.BlobGet(ctx, ref, types.Descriptor{Digest: d1})
 		if err == nil {
-			defer br.Close()
-			t.Errorf("Unexpected success running BlobGet")
-			return
+			br.Close()
+			t.Fatalf("Unexpected success running BlobGet")
 		}
 		if !errors.Is(err, types.ErrHTTPUnauthorized) {
 			t.Errorf("Error does not match \"ErrUnauthorized\": %v", err)
@@ -678,13 +669,12 @@ func TestBlobPut(t *testing.T) {
 	t.Run("Put", func(t *testing.T) {
 		ref, err := ref.New(tsURL.Host + blobRepo)
 		if err != nil {
-			t.Errorf("Failed creating ref: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
 		br := bytes.NewReader(blob1)
 		dp, err := rc.BlobPut(ctx, ref, types.Descriptor{Digest: d1, Size: int64(len(blob1))}, br)
 		if err != nil {
-			t.Errorf("Failed running BlobPut: %v", err)
-			return
+			t.Fatalf("Failed running BlobPut: %v", err)
 		}
 		if dp.Digest.String() != d1.String() {
 			t.Errorf("Digest mismatch, expected %s, received %s", d1.String(), dp.Digest.String())
@@ -698,13 +688,12 @@ func TestBlobPut(t *testing.T) {
 	t.Run("Retry", func(t *testing.T) {
 		ref, err := ref.New(tsURL.Host + blobRepo)
 		if err != nil {
-			t.Errorf("Failed creating ref: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
 		br := bytes.NewReader(blob2)
 		dp, err := rc.BlobPut(ctx, ref, types.Descriptor{Digest: d2, Size: int64(len(blob2))}, br)
 		if err != nil {
-			t.Errorf("Failed running BlobPut: %v", err)
-			return
+			t.Fatalf("Failed running BlobPut: %v", err)
 		}
 		if dp.Digest.String() != d2.String() {
 			t.Errorf("Digest mismatch, expected %s, received %s", d2.String(), dp.Digest.String())
@@ -718,13 +707,12 @@ func TestBlobPut(t *testing.T) {
 	t.Run("PartialChunk", func(t *testing.T) {
 		ref, err := ref.New(tsURL.Host + blobRepo)
 		if err != nil {
-			t.Errorf("Failed creating ref: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
 		br := bytes.NewReader(blob3)
 		dp, err := rc.BlobPut(ctx, ref, types.Descriptor{Digest: d3, Size: int64(len(blob3))}, br)
 		if err != nil {
-			t.Errorf("Failed running BlobPut: %v", err)
-			return
+			t.Fatalf("Failed running BlobPut: %v", err)
 		}
 		if dp.Digest.String() != d3.String() {
 			t.Errorf("Digest mismatch, expected %s, received %s", d3.String(), dp.Digest.String())
@@ -1166,18 +1154,18 @@ func TestBlobCopy(t *testing.T) {
 
 	refA, err := ref.New(tsURL.Host + blobRepoA)
 	if err != nil {
-		t.Errorf("Failed creating ref: %v", err)
+		t.Fatalf("Failed creating ref: %v", err)
 	}
 	refB, err := ref.New(tsURL.Host + blobRepoB)
 	if err != nil {
-		t.Errorf("Failed creating ref: %v", err)
+		t.Fatalf("Failed creating ref: %v", err)
 	}
 
 	// same repo
 	t.Run("Copy Same Repo", func(t *testing.T) {
 		err = rc.BlobCopy(ctx, refA, refA, types.Descriptor{Digest: d1})
 		if err != nil {
-			t.Errorf("Failed to copy d1 from repo a to a: %v", err)
+			t.Fatalf("Failed to copy d1 from repo a to a: %v", err)
 		}
 	})
 
@@ -1185,7 +1173,7 @@ func TestBlobCopy(t *testing.T) {
 	t.Run("Copy Diff Repo", func(t *testing.T) {
 		err = rc.BlobCopy(ctx, refA, refB, types.Descriptor{Digest: d1})
 		if err != nil {
-			t.Errorf("Failed to copy d1 from repo a to b: %v", err)
+			t.Fatalf("Failed to copy d1 from repo a to b: %v", err)
 		}
 	})
 
@@ -1193,7 +1181,7 @@ func TestBlobCopy(t *testing.T) {
 	t.Run("Copy Existing Blob", func(t *testing.T) {
 		err = rc.BlobCopy(ctx, refA, refB, types.Descriptor{Digest: d1})
 		if err != nil {
-			t.Errorf("Failed to copy d1 from repo a to b: %v", err)
+			t.Fatalf("Failed to copy d1 from repo a to b: %v", err)
 		}
 	})
 
@@ -1201,7 +1189,7 @@ func TestBlobCopy(t *testing.T) {
 	t.Run("Copy Flaky Get", func(t *testing.T) {
 		err = rc.BlobCopy(ctx, refA, refB, types.Descriptor{Digest: d2})
 		if err != nil {
-			t.Errorf("Failed to copy d2 from repo a to b: %v", err)
+			t.Fatalf("Failed to copy d2 from repo a to b: %v", err)
 		}
 	})
 
@@ -1209,7 +1197,7 @@ func TestBlobCopy(t *testing.T) {
 	t.Run("Copy Flaky Put", func(t *testing.T) {
 		err = rc.BlobCopy(ctx, refA, refB, types.Descriptor{Digest: d3})
 		if err != nil {
-			t.Errorf("Failed to copy d3 from repo a to b: %v", err)
+			t.Fatalf("Failed to copy d3 from repo a to b: %v", err)
 		}
 	})
 

@@ -66,7 +66,7 @@ func TestExportImport(t *testing.T) {
 
 	jsonIn, err := json.Marshal(tsIn)
 	if err != nil {
-		t.Errorf("Failed to marshal test struct in: %v", err)
+		t.Fatalf("Failed to marshal test struct in: %v", err)
 	}
 	lv := Export(ls, tsIn)
 
@@ -74,12 +74,12 @@ func TestExportImport(t *testing.T) {
 	tsOut := reflect.New(reflect.ValueOf(tsIn).Type()).Interface()
 	err = Import(ls, lv, tsOut, tsIn)
 	if err != nil {
-		t.Errorf("Import failed: %v", err)
+		t.Fatalf("Import failed: %v", err)
 	}
 
 	jsonOut, err := json.Marshal(tsOut)
 	if err != nil {
-		t.Errorf("Failed to marshal test struct out: %v", err)
+		t.Fatalf("Failed to marshal test struct out: %v", err)
 	}
 
 	if !bytes.Equal(jsonIn, jsonOut) {

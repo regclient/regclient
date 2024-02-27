@@ -90,8 +90,7 @@ func TestLimitRead(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("read failed: %v", err)
-				return
+				t.Fatalf("read failed: %v", err)
 			}
 			if result != tc.expectLen {
 				t.Errorf("read length mismatch, expected %d, received %d", tc.expectLen, result)

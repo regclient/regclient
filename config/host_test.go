@@ -15,8 +15,7 @@ func TestConfig(t *testing.T) {
 	// cannot run cred helper in parallel because of OS working directory race conditions
 	cwd, err := os.Getwd()
 	if err != nil {
-		t.Errorf("failed checking current directory: %v", err)
-		return
+		t.Fatalf("failed checking current directory: %v", err)
 	}
 	curPath := os.Getenv("PATH")
 	t.Setenv("PATH", filepath.Join(cwd, "testdata")+string(os.PathListSeparator)+curPath)

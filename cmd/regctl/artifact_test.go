@@ -63,8 +63,7 @@ func TestArtifactGet(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("returned unexpected error: %v", err)
-				return
+				t.Fatalf("returned unexpected error: %v", err)
 			}
 			if (!tc.outContains && out != tc.expectOut) || (tc.outContains && !strings.Contains(out, tc.expectOut)) {
 				t.Errorf("unexpected output, expected %s, received %s", tc.expectOut, out)
@@ -138,8 +137,7 @@ func TestArtifactList(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("returned unexpected error: %v", err)
-				return
+				t.Fatalf("returned unexpected error: %v", err)
 			}
 			if (!tc.outContains && out != tc.expectOut) || (tc.outContains && !strings.Contains(out, tc.expectOut)) {
 				t.Errorf("unexpected output, expected %s, received %s", tc.expectOut, out)
@@ -154,14 +152,12 @@ func TestArtifactPut(t *testing.T) {
 	testConfName := filepath.Join(testDir, "exConf")
 	err := os.WriteFile(testConfName, []byte(`{"hello": "world"}`), 0600)
 	if err != nil {
-		t.Errorf("failed creating test conf: %v", err)
-		return
+		t.Fatalf("failed creating test conf: %v", err)
 	}
 	testFileName := filepath.Join(testDir, "exFile")
 	err = os.WriteFile(testFileName, []byte(`example test file`), 0600)
 	if err != nil {
-		t.Errorf("failed creating test conf: %v", err)
-		return
+		t.Fatalf("failed creating test conf: %v", err)
 	}
 
 	tt := []struct {
@@ -244,8 +240,7 @@ func TestArtifactPut(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("returned unexpected error: %v", err)
-				return
+				t.Fatalf("returned unexpected error: %v", err)
 			}
 			if (!tc.outContains && out != tc.expectOut) || (tc.outContains && !strings.Contains(out, tc.expectOut)) {
 				t.Errorf("unexpected output, expected %s, received %s", tc.expectOut, out)
@@ -324,8 +319,7 @@ func TestArtifactTree(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("returned unexpected error: %v", err)
-				return
+				t.Fatalf("returned unexpected error: %v", err)
 			}
 			if (!tc.outContains && out != tc.expectOut) || (tc.outContains && !strings.Contains(out, tc.expectOut)) {
 				t.Errorf("unexpected output, expected %s, received %s", tc.expectOut, out)

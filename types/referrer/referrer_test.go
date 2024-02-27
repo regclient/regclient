@@ -181,7 +181,7 @@ func TestEmpty(t *testing.T) {
 		MediaType: types.MediaTypeOCI1ManifestList,
 	}))
 	if err != nil {
-		t.Errorf("failed to generate index: %v", err)
+		t.Fatalf("failed to generate index: %v", err)
 	}
 	rlEmpty.Manifest = mEmpty
 	if !rlEmpty.IsEmpty() {
@@ -207,7 +207,7 @@ func TestEmpty(t *testing.T) {
 		},
 	}))
 	if err != nil {
-		t.Errorf("failed to generate index: %v", err)
+		t.Fatalf("failed to generate index: %v", err)
 	}
 	rlPopulated.Manifest = mPopulated
 	if rlPopulated.IsEmpty() {
@@ -255,7 +255,7 @@ func TestAdd(t *testing.T) {
 		MediaType: types.MediaTypeOCI1ManifestList,
 	}))
 	if err != nil {
-		t.Errorf("failed to generate empty index: %v", err)
+		t.Fatalf("failed to generate empty index: %v", err)
 	}
 	rl.Manifest = m
 	for _, tt := range tests {
@@ -305,7 +305,7 @@ func TestDelete(t *testing.T) {
 		},
 	}))
 	if err != nil {
-		t.Errorf("failed to generate index: %v", err)
+		t.Fatalf("failed to generate index: %v", err)
 	}
 	rl.Manifest = m
 

@@ -55,8 +55,7 @@ func TestCredHelper(t *testing.T) {
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
-		t.Errorf("failed checking current directory: %v", err)
-		return
+		t.Fatalf("failed checking current directory: %v", err)
 	}
 	curPath := os.Getenv("PATH")
 	t.Setenv("PATH", filepath.Join(cwd, "testdata")+string(os.PathListSeparator)+curPath)
@@ -74,7 +73,7 @@ func TestCredHelper(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("error running get: %v", err)
+				t.Fatalf("error running get: %v", err)
 			}
 			if tt.expectUser != h.User {
 				t.Errorf("user mismatch: expected %s, received %s", tt.expectUser, h.User)

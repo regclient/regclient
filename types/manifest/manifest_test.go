@@ -912,8 +912,7 @@ func TestNew(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("failed running New: %v", err)
-				return
+				t.Fatalf("failed running New: %v", err)
 			}
 			// MarshalPretty succeeds even if manifest is not set (it shows available metadata)
 			if mp, ok := m.(interface{ MarshalPretty() ([]byte, error) }); ok {
@@ -1171,39 +1170,33 @@ func TestModify(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m, err := New(tt.opts...)
 			if err != nil {
-				t.Errorf("error creating manifest: %v", err)
-				return
+				t.Fatalf("error creating manifest: %v", err)
 			}
 			orig := m.GetOrig()
 			if m.IsList() {
 				ociI, err := OCIIndexFromAny(orig)
 				if err != nil {
-					t.Errorf("error converting to index: %v", err)
-					return
+					t.Fatalf("error converting to index: %v", err)
 				}
 				ociI.Manifests = append(ociI.Manifests, tt.addDesc)
 				err = OCIIndexToAny(ociI, &orig)
 				if err != nil {
-					t.Errorf("error converting back to orig: %v", err)
-					return
+					t.Fatalf("error converting back to orig: %v", err)
 				}
 			} else {
 				ociM, err := OCIManifestFromAny(orig)
 				if err != nil {
-					t.Errorf("error converting to index: %v", err)
-					return
+					t.Fatalf("error converting to index: %v", err)
 				}
 				ociM.Layers = append(ociM.Layers, tt.addDesc)
 				err = OCIManifestToAny(ociM, &orig)
 				if err != nil {
-					t.Errorf("error converting back to orig: %v", err)
-					return
+					t.Fatalf("error converting back to orig: %v", err)
 				}
 			}
 			err = m.SetOrig(orig)
 			if err != nil {
-				t.Errorf("error setting orig: %v", err)
-				return
+				t.Fatalf("error setting orig: %v", err)
 			}
 			raw, _ := m.RawBody()
 			t.Logf("raw manifest: %s", string(raw))
@@ -1224,23 +1217,19 @@ func TestModify(t *testing.T) {
 	var manifestOCIIndex v1.Index
 	err := json.Unmarshal(rawDockerSchema2, &manifestDockerSchema2)
 	if err != nil {
-		t.Errorf("failed to unmarshal docker schema2 json: %v", err)
-		return
+		t.Fatalf("failed to unmarshal docker schema2 json: %v", err)
 	}
 	err = json.Unmarshal(rawDockerSchema2List, &manifestDockerSchema2List)
 	if err != nil {
-		t.Errorf("failed to unmarshal docker schema2 list json: %v", err)
-		return
+		t.Fatalf("failed to unmarshal docker schema2 list json: %v", err)
 	}
 	err = json.Unmarshal(rawOCIImage, &manifestOCIImage)
 	if err != nil {
-		t.Errorf("failed to unmarshal OCI image json: %v", err)
-		return
+		t.Fatalf("failed to unmarshal OCI image json: %v", err)
 	}
 	err = json.Unmarshal(rawOCIIndex, &manifestOCIIndex)
 	if err != nil {
-		t.Errorf("failed to unmarshal OCI index json: %v", err)
-		return
+		t.Fatalf("failed to unmarshal OCI index json: %v", err)
 	}
 	if manifestDockerSchema2.Annotations == nil || manifestDockerSchema2.Annotations["org.example.test"] != "hello world" {
 		t.Errorf("annotation missing from docker manifest")
@@ -1400,8 +1389,7 @@ func TestSet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m, err := New(tt.opts...)
 			if err != nil {
-				t.Errorf("error creating manifest: %v", err)
-				return
+				t.Fatalf("error creating manifest: %v", err)
 			}
 			if mi, ok := m.(Imager); ok {
 				if !tt.expectImage {

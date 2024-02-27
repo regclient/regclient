@@ -164,8 +164,7 @@ func TestPlatformParse(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-				return
+				t.Fatalf("unexpected error: %v", err)
 			}
 			if !Match(p, tt.goal) {
 				t.Errorf("platform did not match, want %v, received %v", tt.goal, p)

@@ -81,8 +81,7 @@ func TestTag(t *testing.T) {
 	tempDir := t.TempDir()
 	err := copy.Copy(tempDir+"/"+existingRepo, "./testdata/"+existingRepo)
 	if err != nil {
-		t.Errorf("failed to copy %s to tempDir: %v", existingRepo, err)
-		return
+		t.Fatalf("failed to copy %s to tempDir: %v", existingRepo, err)
 	}
 	tt := []struct {
 		name           string
@@ -107,22 +106,18 @@ func TestTag(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			r, err := ref.New(tc.repo)
 			if err != nil {
-				t.Errorf("failed to parse ref %s: %v", tc.repo, err)
-				return
+				t.Fatalf("failed to parse ref %s: %v", tc.repo, err)
 			}
 			tl, err := rc.TagList(ctx, r)
 			if err != nil {
-				t.Errorf("failed to list tags: %v", err)
-				return
+				t.Fatalf("failed to list tags: %v", err)
 			}
 			if len(tl.Tags) == 0 {
-				t.Errorf("failed to get tags: %v", tl)
-				return
+				t.Fatalf("failed to get tags: %v", tl)
 			}
 			rDel, err := ref.New(tc.repo + ":" + existingTag)
 			if err != nil {
-				t.Errorf("failed to parse ref %s: %v", tc.repo+":"+existingTag, err)
-				return
+				t.Fatalf("failed to parse ref %s: %v", tc.repo+":"+existingTag, err)
 			}
 			err = rc.TagDelete(ctx, rDel)
 			if tc.deleteDisabled {

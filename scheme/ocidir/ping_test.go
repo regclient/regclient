@@ -15,13 +15,11 @@ func TestPing(t *testing.T) {
 	o := New(WithFS(f))
 	rOkay, err := ref.NewHost("ocidir://testdata/regctl")
 	if err != nil {
-		t.Errorf("failed to create ref: %v", err)
-		return
+		t.Fatalf("failed to create ref: %v", err)
 	}
 	result, err := o.Ping(ctx, rOkay)
 	if err != nil {
-		t.Errorf("failed to ping: %v", err)
-		return
+		t.Fatalf("failed to ping: %v", err)
 	}
 	if result.Header != nil {
 		t.Errorf("header is not nil")
@@ -36,8 +34,7 @@ func TestPing(t *testing.T) {
 
 	rMissing, err := ref.NewHost("ocidir://testdata/missing")
 	if err != nil {
-		t.Errorf("failed to create ref: %v", err)
-		return
+		t.Fatalf("failed to create ref: %v", err)
 	}
 	result, err = o.Ping(ctx, rMissing)
 	if err == nil {
@@ -52,13 +49,11 @@ func TestPing(t *testing.T) {
 
 	rFile, err := ref.NewHost("ocidir://testdata/regctl/index.json")
 	if err != nil {
-		t.Errorf("failed to create ref: %v", err)
-		return
+		t.Fatalf("failed to create ref: %v", err)
 	}
 	result, err = o.Ping(ctx, rFile)
 	if err == nil {
-		t.Errorf("ping to a file did not fail")
-		return
+		t.Fatalf("ping to a file did not fail")
 	}
 	if result.Header != nil {
 		t.Errorf("header is not nil")
