@@ -17,7 +17,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient/internal/rwfs"
-	"github.com/regclient/regclient/internal/wraperr"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
@@ -30,7 +29,7 @@ func (o *OCIDir) ManifestDelete(ctx context.Context, r ref.Ref, opts ...scheme.M
 	defer o.mu.Unlock()
 
 	if r.Digest == "" {
-		return wraperr.New(fmt.Errorf("digest required to delete manifest, reference %s", r.CommonName()), types.ErrMissingDigest)
+		return fmt.Errorf("digest required to delete manifest, reference %s%.0w", r.CommonName(), types.ErrMissingDigest)
 	}
 
 	mc := scheme.ManifestConfig{}

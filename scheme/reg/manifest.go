@@ -12,7 +12,6 @@ import (
 
 	"github.com/regclient/regclient/internal/limitread"
 	"github.com/regclient/regclient/internal/reghttp"
-	"github.com/regclient/regclient/internal/wraperr"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
@@ -23,7 +22,7 @@ import (
 // This will implicitly delete all tags pointing to that manifest.
 func (reg *Reg) ManifestDelete(ctx context.Context, r ref.Ref, opts ...scheme.ManifestOpts) error {
 	if r.Digest == "" {
-		return wraperr.New(fmt.Errorf("digest required to delete manifest, reference %s", r.CommonName()), types.ErrMissingDigest)
+		return fmt.Errorf("digest required to delete manifest, reference %s%.0w", r.CommonName(), types.ErrMissingDigest)
 	}
 
 	mc := scheme.ManifestConfig{}
@@ -89,7 +88,7 @@ func (reg *Reg) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest, 
 	} else if r.Tag != "" {
 		tagOrDigest = r.Tag
 	} else {
-		return nil, wraperr.New(fmt.Errorf("reference missing tag and digest: %s", r.CommonName()), types.ErrMissingTagOrDigest)
+		return nil, fmt.Errorf("reference missing tag and digest: %s%.0w", r.CommonName(), types.ErrMissingTagOrDigest)
 	}
 
 	// build/send request
@@ -166,7 +165,7 @@ func (reg *Reg) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest,
 	} else if r.Tag != "" {
 		tagOrDigest = r.Tag
 	} else {
-		return nil, wraperr.New(fmt.Errorf("reference missing tag and digest: %s", r.CommonName()), types.ErrMissingTagOrDigest)
+		return nil, fmt.Errorf("reference missing tag and digest: %s%.0w", r.CommonName(), types.ErrMissingTagOrDigest)
 	}
 
 	// build/send request
