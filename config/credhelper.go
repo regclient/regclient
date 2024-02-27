@@ -54,7 +54,7 @@ func (ch *credHelper) get(host *Host) error {
 	outB, err := ch.run("get", hostIn)
 	if err != nil {
 		outS := strings.TrimSpace(string(outB))
-		return fmt.Errorf("error getting credentials, output: %s, error: %v", outS, err)
+		return fmt.Errorf("error getting credentials, output: %s, error: %w", outS, err)
 	}
 	err = json.NewDecoder(bytes.NewReader(outB)).Decode(&credOut)
 	if err != nil {
@@ -78,7 +78,7 @@ func (ch *credHelper) list() ([]Host, error) {
 	outB, err := ch.run("list", bytes.NewReader([]byte{}))
 	if err != nil {
 		outS := strings.TrimSpace(string(outB))
-		return nil, fmt.Errorf("error getting credential list, output: %s, error: %v", outS, err)
+		return nil, fmt.Errorf("error getting credential list, output: %s, error: %w", outS, err)
 	}
 	err = json.NewDecoder(bytes.NewReader(outB)).Decode(&credList)
 	if err != nil {

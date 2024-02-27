@@ -109,15 +109,15 @@ func (r *BReader) Read(p []byte) (int, error) {
 		if r.desc.Size == 0 {
 			r.desc.Size = r.readBytes
 		} else if r.readBytes < r.desc.Size {
-			err = fmt.Errorf("%w [expected %d, received %d]: %v", types.ErrShortRead, r.desc.Size, r.readBytes, err)
+			err = fmt.Errorf("%w [expected %d, received %d]: %w", types.ErrShortRead, r.desc.Size, r.readBytes, err)
 		} else if r.readBytes > r.desc.Size {
-			err = fmt.Errorf("%w [expected %d, received %d]: %v", types.ErrSizeLimitExceeded, r.desc.Size, r.readBytes, err)
+			err = fmt.Errorf("%w [expected %d, received %d]: %w", types.ErrSizeLimitExceeded, r.desc.Size, r.readBytes, err)
 		}
 		// check/save digest
 		if r.desc.Digest == "" {
 			r.desc.Digest = r.digester.Digest()
 		} else if r.desc.Digest != r.digester.Digest() {
-			err = fmt.Errorf("%w [expected %s, calculated %s]: %v", types.ErrDigestMismatch, r.desc.Digest.String(), r.digester.Digest().String(), err)
+			err = fmt.Errorf("%w [expected %s, calculated %s]: %w", types.ErrDigestMismatch, r.desc.Digest.String(), r.digester.Digest().String(), err)
 		}
 	}
 	return size, err
