@@ -1,9 +1,9 @@
 # regclient
 
-![Go Workflow Status](https://img.shields.io/github/actions/workflow/status/regclient/regclient/go.yml?branch=main&label=Go%20build)
-![Docker Workflow Status](https://img.shields.io/github/actions/workflow/status/regclient/regclient/docker.yml?branch=main&label=Docker%20build)
-![Dependency Workflow Status](https://img.shields.io/github/actions/workflow/status/regclient/regclient/version-check.yml?branch=main&label=Dependency%20check)
-![Vulnerability Workflow Status](https://img.shields.io/github/actions/workflow/status/regclient/regclient/vulnscans.yml?branch=main&label=Vulnerability%20check)
+[![Go Workflow Status](https://img.shields.io/github/actions/workflow/status/regclient/regclient/go.yml?branch=main&label=Go%20build)](https://github.com/regclient/regclient/actions/workflows/go.yml)
+[![Docker Workflow Status](https://img.shields.io/github/actions/workflow/status/regclient/regclient/docker.yml?branch=main&label=Docker%20build)](https://github.com/regclient/regclient/actions/workflows/docker.yml)
+[![Dependency Workflow Status](https://img.shields.io/github/actions/workflow/status/regclient/regclient/version-check.yml?branch=main&label=Dependency%20check)](https://github.com/regclient/regclient/actions/workflows/version-check.yml)
+[![Vulnerability Workflow Status](https://img.shields.io/github/actions/workflow/status/regclient/regclient/vulnscans.yml?branch=main&label=Vulnerability%20check)](https://github.com/regclient/regclient/actions/workflows/vulnscans.yml)
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/regclient/regclient.svg)](https://pkg.go.dev/github.com/regclient/regclient)
 ![License](https://img.shields.io/github/license/regclient/regclient)
