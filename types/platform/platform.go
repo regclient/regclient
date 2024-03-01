@@ -20,13 +20,11 @@ import (
 	"fmt"
 	"path"
 	"regexp"
-	"runtime"
 	"strings"
 )
 
 var (
 	partRE = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
-	verRE  = regexp.MustCompile(`^[A-Za-z0-9\._-]+$`)
 )
 
 // Platform specifies a platform where a particular image manifest is applicable.
@@ -55,8 +53,6 @@ func (p Platform) String() string {
 	(&p).normalize()
 	if p.OS == "" {
 		return "unknown"
-	} else if p.OS == "windows" {
-		return path.Join(p.OS, p.Architecture, p.OSVersion)
 	} else {
 		return path.Join(p.OS, p.Architecture, p.Variant)
 	}
@@ -101,13 +97,13 @@ func Match(a, b Platform) bool {
 	if a.OS == "linux" {
 		return a.Architecture == b.Architecture && a.Variant == b.Variant
 	} else if a.OS == "windows" {
-		return a.Architecture == b.Architecture &&
+		return a.Architecture == b.Architecture && a.Variant == b.Variant &&
 			prefix(a.OSVersion) == prefix(b.OSVersion)
 	} else {
 		return a.Architecture == b.Architecture &&
+			a.Variant == b.Variant &&
 			a.OSVersion == b.OSVersion &&
 			strSliceEq(a.OSFeatures, b.OSFeatures) &&
-			a.Variant == b.Variant &&
 			strSliceEq(a.Features, b.Features)
 	}
 }
@@ -117,12 +113,7 @@ func Parse(platStr string) (Platform, error) {
 	// split on slash, validate each component
 	platSplit := strings.Split(platStr, "/")
 	for i, part := range platSplit {
-		if i == 2 && platSplit[0] == "windows" {
-			// TODO: (bmitch) this may not be officially allowed, but I can't find a decent reference for what it should be
-			if !verRE.MatchString(part) {
-				return Platform{}, fmt.Errorf("invalid platform component %s in %s", part, platStr)
-			}
-		} else if !partRE.MatchString(part) {
+		if !partRE.MatchString(part) {
 			return Platform{}, fmt.Errorf("invalid platform component %s in %s", part, platStr)
 		}
 		platSplit[i] = strings.ToLower(part)
@@ -135,38 +126,40 @@ func Parse(platStr string) (Platform, error) {
 		plat.Architecture = platSplit[1]
 	}
 	if len(platSplit) >= 3 {
-		if plat.OS == "windows" {
-			plat.OSVersion = platSplit[2]
-		} else {
-			plat.Variant = platSplit[2]
-		}
+		plat.Variant = platSplit[2]
 	}
-	// extrapolate missing fields and normalize
+	// gather local platform details
 	platLocal := Local()
-	if plat.OS == "" || plat.OS == "local" {
-		// assume local OS
+	platLocal.normalize()
+	// normalize and extrapolate missing fields
+	switch plat.OS {
+	case "local", "":
 		plat.OS = platLocal.OS
 	}
-	switch plat.OS {
-	case "macos":
-		plat.OS = "darwin"
-	}
-	if len(platSplit) < 2 && plat.OS == runtime.GOOS {
+	plat.normalize()
+	if len(platSplit) < 2 && Compatible(Platform{OS: platLocal.OS}, Platform{OS: plat.OS}) {
+		// automatically expand local architecture with recognized OS
 		switch plat.OS {
 		case "linux", "darwin":
-			// automatically expand local architecture with recognized OS
 			plat.Architecture = platLocal.Architecture
+			plat.Variant = platLocal.Variant
 		case "windows":
 			plat.Architecture = platLocal.Architecture
-			plat.OSVersion = platLocal.OSVersion
+			plat.Variant = platLocal.Variant
 		}
 	}
-	plat.normalize()
+	if plat.OS == "windows" && plat.OS == platLocal.OS && plat.Architecture == platLocal.Architecture && plat.Variant == platLocal.Variant {
+		plat.OSVersion = platLocal.OSVersion
+	}
 
 	return *plat, nil
 }
 
 func (p *Platform) normalize() {
+	switch p.OS {
+	case "macos":
+		p.OS = "darwin"
+	}
 	switch p.Architecture {
 	case "i386":
 		p.Architecture = "386"

@@ -112,6 +112,18 @@ func TestCompare(t *testing.T) {
 }
 
 func TestPlatformParse(t *testing.T) {
+	platLocal := Local()
+	linuxGoal := Platform{OS: "linux"}
+	if Compatible(Platform{OS: platLocal.OS}, Platform{OS: "linux"}) {
+		linuxGoal.Architecture = platLocal.Architecture
+		linuxGoal.Variant = platLocal.Variant
+	}
+	winGoal := Platform{OS: "windows"}
+	if Compatible(Platform{OS: platLocal.OS}, Platform{OS: "windows"}) {
+		winGoal.Architecture = platLocal.Architecture
+		winGoal.Variant = platLocal.Variant
+		winGoal.OSVersion = platLocal.OSVersion
+	}
 	tests := []struct {
 		name    string
 		parse   string
@@ -144,14 +156,24 @@ func TestPlatformParse(t *testing.T) {
 			goal:  Platform{OS: "linux", Architecture: "arm64", Variant: "v8"},
 		},
 		{
-			name:  "windows amd64/10.0.14393",
-			parse: "windows/amd64/10.0.14393.4583",
-			goal:  Platform{OS: "windows", Architecture: "amd64", OSVersion: "10.0.14393.4583"},
+			name:  "linux",
+			parse: "linux",
+			goal:  linuxGoal,
+		},
+		{
+			name:  "windows amd64",
+			parse: "windows/amd64/v2",
+			goal:  Platform{OS: "windows", Architecture: "amd64", Variant: "v2"},
+		},
+		{
+			name:  "windows",
+			parse: "windows",
+			goal:  winGoal,
 		},
 		{
 			name:  "local",
 			parse: "local",
-			goal:  Local(),
+			goal:  platLocal,
 		},
 	}
 	for _, tt := range tests {
@@ -180,6 +202,11 @@ func TestPlatformString(t *testing.T) {
 		p    Platform
 	}{
 		{
+			name: "empty",
+			p:    Platform{},
+			goal: "unknown",
+		},
+		{
 			name: "linux/amd64",
 			p:    Platform{OS: "linux", Architecture: "amd64"},
 			goal: "linux/amd64",
@@ -200,9 +227,9 @@ func TestPlatformString(t *testing.T) {
 			goal: "linux/arm/v7",
 		},
 		{
-			name: "windows/amd64/10.0.17763.2114",
+			name: "windows/amd64",
 			p:    Platform{OS: "windows", Architecture: "amd64", OSVersion: "10.0.17763.2114"},
-			goal: "windows/amd64/10.0.17763.2114",
+			goal: "windows/amd64",
 		},
 	}
 	for _, tt := range tests {
