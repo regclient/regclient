@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 )
 
 type Cache[k comparable, v any] struct {
@@ -105,7 +105,7 @@ func (c *Cache[k, v]) Set(key k, val v) {
 func (c *Cache[k, v]) Get(key k) (v, error) {
 	if c == nil {
 		var val v
-		return val, types.ErrNotFound
+		return val, errs.ErrNotFound
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -119,7 +119,7 @@ func (c *Cache[k, v]) Get(key k) (v, error) {
 		}
 	}
 	var val v
-	return val, types.ErrNotFound
+	return val, errs.ErrNotFound
 }
 
 func (c *Cache[k, v]) prune() {

@@ -22,7 +22,10 @@ import (
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/mediatype"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
@@ -36,7 +39,7 @@ const (
 )
 
 var manifestKnownTypes = []string{
-	types.MediaTypeOCI1Manifest,
+	mediatype.OCI1Manifest,
 }
 var artifactFileKnownTypes = []string{
 	"application/octet-stream",
@@ -197,7 +200,7 @@ regctl artifact tree --digest-tags ghcr.io/regclient/regsync:latest`,
 	artifactListCmd.Flags().StringVar(&artifactOpts.sortAnnot, "sort-annotation", "", "Annotation used for sorting results")
 	artifactListCmd.Flags().BoolVar(&artifactOpts.sortDesc, "sort-desc", false, "Sort in descending order")
 
-	artifactPutCmd.Flags().StringVarP(&artifactOpts.artifactMT, "media-type", "", types.MediaTypeOCI1Manifest, "EXPERIMENTAL: Manifest media-type")
+	artifactPutCmd.Flags().StringVarP(&artifactOpts.artifactMT, "media-type", "", mediatype.OCI1Manifest, "EXPERIMENTAL: Manifest media-type")
 	_ = artifactPutCmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return manifestKnownTypes, cobra.ShellCompDirectiveNoFileComp
 	})
@@ -263,7 +266,7 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 	}
 
 	r := ref.Ref{}
-	matchOpts := types.MatchOpt{
+	matchOpts := descriptor.MatchOpt{
 		ArtifactType:   artifactOpts.filterAT,
 		SortAnnotation: artifactOpts.sortAnnot,
 		SortDesc:       artifactOpts.sortDesc,
@@ -335,13 +338,13 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 	if m.IsList() {
 		mi, ok := m.(manifest.Indexer)
 		if !ok {
-			return fmt.Errorf("manifest list does not support index methods%.0w", types.ErrUnsupportedMediaType)
+			return fmt.Errorf("manifest list does not support index methods%.0w", errs.ErrUnsupportedMediaType)
 		}
 		dl, err := mi.GetManifestList()
 		if err != nil {
 			return fmt.Errorf("failed to get descriptor list: %w", err)
 		}
-		d, err := types.DescriptorListSearch(dl, matchOpts)
+		d, err := descriptor.DescriptorListSearch(dl, matchOpts)
 		if err != nil {
 			return fmt.Errorf("no matching artifacts found in index: %w", err)
 		}
@@ -353,7 +356,7 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 	}
 	mi, ok := m.(manifest.Imager)
 	if !ok {
-		return fmt.Errorf("manifest does not support image methods%.0w", types.ErrUnsupportedMediaType)
+		return fmt.Errorf("manifest does not support image methods%.0w", errs.ErrUnsupportedMediaType)
 	}
 
 	// if config-file defined, create file as writer, perform a blob get
@@ -527,7 +530,7 @@ func (artifactOpts *artifactCmd) runArtifactList(cmd *cobra.Command, args []stri
 	rc := artifactOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, rSubject)
 
-	matchOpts := types.MatchOpt{
+	matchOpts := descriptor.MatchOpt{
 		ArtifactType:   artifactOpts.filterAT,
 		SortAnnotation: artifactOpts.sortAnnot,
 		SortDesc:       artifactOpts.sortDesc,
@@ -613,10 +616,10 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 	var err error
 
 	switch artifactOpts.artifactMT {
-	case types.MediaTypeOCI1Artifact:
+	case mediatype.OCI1Artifact:
 		log.Warnf("changing media-type is experimental and non-portable")
 		hasConfig = false
-	case "", types.MediaTypeOCI1Manifest:
+	case "", mediatype.OCI1Manifest:
 		hasConfig = true
 	default:
 		return fmt.Errorf("unsupported manifest media type: %s", artifactOpts.artifactMT)
@@ -655,7 +658,7 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 	// validate/set artifactType and config.mediaType
 	if hasConfig && artifactOpts.artifactConfigMT == "" {
 		if artifactOpts.artifactConfig == "" {
-			artifactOpts.artifactConfigMT = types.MediaTypeOCI1Empty
+			artifactOpts.artifactConfigMT = mediatype.OCI1Empty
 		} else {
 			if artifactOpts.artifactType != "" {
 				artifactOpts.artifactConfigMT = artifactOpts.artifactType
@@ -666,10 +669,10 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 		}
 	}
 	if !hasConfig && (artifactOpts.artifactConfig != "" || artifactOpts.artifactConfigMT != "") {
-		return fmt.Errorf("cannot set config-type or config-file on %s%.0w", artifactOpts.artifactMT, types.ErrUnsupportedMediaType)
+		return fmt.Errorf("cannot set config-type or config-file on %s%.0w", artifactOpts.artifactMT, errs.ErrUnsupportedMediaType)
 	}
 	if artifactOpts.artifactType == "" {
-		if !hasConfig || artifactOpts.artifactConfigMT == types.MediaTypeOCI1Empty {
+		if !hasConfig || artifactOpts.artifactConfigMT == mediatype.OCI1Empty {
 			log.Warnf("using default value for artifact-type is not recommended")
 			artifactOpts.artifactType = defaultMTArtifact
 		}
@@ -704,7 +707,7 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 	rc := artifactOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
-	var subjectDesc *types.Descriptor
+	var subjectDesc *descriptor.Descriptor
 	if rSubject.IsSet() {
 		smh, err := rc.ManifestHead(ctx, rSubject, regclient.WithManifestRequireDigest())
 		if err != nil {
@@ -723,21 +726,21 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 			if err != nil {
 				return fmt.Errorf("failed to get platform descriptor: %w", err)
 			}
-			subjectDesc = &types.Descriptor{MediaType: d.MediaType, Digest: d.Digest, Size: d.Size}
+			subjectDesc = &descriptor.Descriptor{MediaType: d.MediaType, Digest: d.Digest, Size: d.Size}
 		} else {
 			d := smh.GetDescriptor()
-			subjectDesc = &types.Descriptor{MediaType: d.MediaType, Digest: d.Digest, Size: d.Size}
+			subjectDesc = &descriptor.Descriptor{MediaType: d.MediaType, Digest: d.Digest, Size: d.Size}
 		}
 	}
 
 	// read config, or initialize to an empty json config
-	confDesc := types.Descriptor{}
+	confDesc := descriptor.Descriptor{}
 	if hasConfig {
 		var configBytes []byte
 		var configDigest digest.Digest
 		if artifactOpts.artifactConfig == "" {
-			configBytes = types.EmptyData
-			configDigest = types.EmptyDigest
+			configBytes = descriptor.EmptyData
+			configDigest = descriptor.EmptyDigest
 		} else {
 			var err error
 			configBytes, err = os.ReadFile(artifactOpts.artifactConfig)
@@ -747,19 +750,19 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 			configDigest = digest.FromBytes(configBytes)
 		}
 		// push config to registry
-		_, err = rc.BlobPut(ctx, r, types.Descriptor{Digest: configDigest, Size: int64(len(configBytes))}, bytes.NewReader(configBytes))
+		_, err = rc.BlobPut(ctx, r, descriptor.Descriptor{Digest: configDigest, Size: int64(len(configBytes))}, bytes.NewReader(configBytes))
 		if err != nil {
 			return err
 		}
 		// save config descriptor to manifest
-		confDesc = types.Descriptor{
+		confDesc = descriptor.Descriptor{
 			MediaType: artifactOpts.artifactConfigMT,
 			Digest:    configDigest,
 			Size:      int64(len(configBytes)),
 		}
 	}
 
-	blobs := []types.Descriptor{}
+	blobs := []descriptor.Descriptor{}
 	if len(artifactOpts.artifactFile) > 0 {
 		// if files were passed
 		for i, f := range artifactOpts.artifactFile {
@@ -804,7 +807,7 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 				}
 				d := digester.Digest()
 				// add layer to manifest
-				desc := types.Descriptor{
+				desc := descriptor.Descriptor{
 					MediaType: mt,
 					Digest:    d,
 					Size:      l,
@@ -825,7 +828,7 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 				}
 				blobs = append(blobs, desc)
 				// if blob already exists, skip Put
-				bRdr, err := rc.BlobHead(ctx, r, types.Descriptor{Digest: d})
+				bRdr, err := rc.BlobHead(ctx, r, descriptor.Descriptor{Digest: d})
 				if err == nil {
 					_ = bRdr.Close()
 					return nil
@@ -835,7 +838,7 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 				if err != nil {
 					return err
 				}
-				_, err = rc.BlobPut(ctx, r, types.Descriptor{Digest: d, Size: l}, rdr)
+				_, err = rc.BlobPut(ctx, r, descriptor.Descriptor{Digest: d, Size: l}, rdr)
 				if err != nil {
 					return err
 				}
@@ -851,7 +854,7 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 		if len(artifactOpts.artifactFileMT) > 0 {
 			mt = artifactOpts.artifactFileMT[0]
 		}
-		d, err := rc.BlobPut(ctx, r, types.Descriptor{}, cmd.InOrStdin())
+		d, err := rc.BlobPut(ctx, r, descriptor.Descriptor{}, cmd.InOrStdin())
 		if err != nil {
 			return err
 		}
@@ -860,19 +863,19 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 	}
 
 	switch artifactOpts.artifactMT {
-	case types.MediaTypeOCI1Artifact:
+	case mediatype.OCI1Artifact:
 		m := v1.ArtifactManifest{
-			MediaType:    types.MediaTypeOCI1Artifact,
+			MediaType:    mediatype.OCI1Artifact,
 			ArtifactType: artifactOpts.artifactType,
 			Blobs:        blobs,
 			Annotations:  annotations,
 			Subject:      subjectDesc,
 		}
 		mOpts = append(mOpts, manifest.WithOrig(m))
-	case "", types.MediaTypeOCI1Manifest:
+	case "", mediatype.OCI1Manifest:
 		m := v1.Manifest{
 			Versioned:    v1.ManifestSchemaVersion,
-			MediaType:    types.MediaTypeOCI1Manifest,
+			MediaType:    mediatype.OCI1Manifest,
 			ArtifactType: artifactOpts.artifactType,
 			Config:       confDesc,
 			Layers:       blobs,
@@ -942,8 +945,8 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 			// create a new index
 			mii := v1.Index{
 				Versioned: v1.IndexSchemaVersion,
-				MediaType: types.MediaTypeOCI1ManifestList,
-				Manifests: []types.Descriptor{d},
+				MediaType: mediatype.OCI1ManifestList,
+				Manifests: []descriptor.Descriptor{d},
 			}
 			mi, err := manifest.New(manifest.WithOrig(mii))
 			if err != nil {
@@ -981,7 +984,7 @@ func (artifactOpts *artifactCmd) runArtifactTree(cmd *cobra.Command, args []stri
 
 	referrerOpts := []scheme.ReferrerOpts{}
 	if artifactOpts.filterAT != "" {
-		referrerOpts = append(referrerOpts, scheme.WithReferrerMatchOpt(types.MatchOpt{ArtifactType: artifactOpts.filterAT}))
+		referrerOpts = append(referrerOpts, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{ArtifactType: artifactOpts.filterAT}))
 	}
 	if artifactOpts.filterAnnot != nil {
 		af := map[string]string{}
@@ -993,7 +996,7 @@ func (artifactOpts *artifactCmd) runArtifactTree(cmd *cobra.Command, args []stri
 				af[kv] = ""
 			}
 		}
-		referrerOpts = append(referrerOpts, scheme.WithReferrerMatchOpt(types.MatchOpt{Annotations: af}))
+		referrerOpts = append(referrerOpts, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{Annotations: af}))
 	}
 
 	// include digest tags if requested

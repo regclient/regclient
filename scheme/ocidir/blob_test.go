@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/regclient/regclient/internal/rwfs"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
 )
@@ -151,7 +151,7 @@ func TestBlob(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			bRdr := bytes.NewReader(bBytes)
-			bpd, err := om.BlobPut(ctx, rPut, types.Descriptor{}, bRdr)
+			bpd, err := om.BlobPut(ctx, rPut, descriptor.Descriptor{}, bRdr)
 			if err != nil {
 				t.Errorf("blob put: %v", err)
 				return

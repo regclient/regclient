@@ -22,9 +22,11 @@ import (
 	"github.com/regclient/regclient/internal/httplink"
 	"github.com/regclient/regclient/internal/reghttp"
 	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/docker/schema2"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/mediatype"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
@@ -37,7 +39,7 @@ import (
 func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 	var tempManifest manifest.Manifest
 	if r.Tag == "" {
-		return types.ErrMissingTag
+		return errs.ErrMissingTag
 	}
 
 	// attempt to delete the tag directly, available in OCI distribution-spec, and Hub API
@@ -70,7 +72,7 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 
 	// lookup the current manifest media type
 	curManifest, err := reg.ManifestHead(ctx, r)
-	if err != nil && errors.Is(err, types.ErrUnsupportedAPI) {
+	if err != nil && errors.Is(err, errs.ErrUnsupportedAPI) {
 		curManifest, err = reg.ManifestGet(ctx, r)
 	}
 	if err != nil {
@@ -102,7 +104,7 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 		RootFS: v1.RootFS{
 			Type: "layers",
 			DiffIDs: []digest.Digest{
-				types.EmptyDigest,
+				descriptor.EmptyDigest,
 			},
 		},
 	}
@@ -120,20 +122,20 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 
 	// create manifest with config, matching the original tag manifest type
 	switch manifest.GetMediaType(curManifest) {
-	case types.MediaTypeOCI1Manifest, types.MediaTypeOCI1ManifestList:
+	case mediatype.OCI1Manifest, mediatype.OCI1ManifestList:
 		tempManifest, err = manifest.New(manifest.WithOrig(v1.Manifest{
 			Versioned: v1.ManifestSchemaVersion,
-			MediaType: types.MediaTypeOCI1Manifest,
-			Config: types.Descriptor{
-				MediaType: types.MediaTypeOCI1ImageConfig,
+			MediaType: mediatype.OCI1Manifest,
+			Config: descriptor.Descriptor{
+				MediaType: mediatype.OCI1ImageConfig,
 				Digest:    confDigest,
 				Size:      int64(len(confB)),
 			},
-			Layers: []types.Descriptor{
+			Layers: []descriptor.Descriptor{
 				{
-					MediaType: types.MediaTypeOCI1Layer,
-					Size:      int64(len(types.EmptyData)),
-					Digest:    types.EmptyDigest,
+					MediaType: mediatype.OCI1Layer,
+					Size:      int64(len(descriptor.EmptyData)),
+					Digest:    descriptor.EmptyDigest,
 				},
 			},
 		}))
@@ -143,16 +145,16 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 	default: // default to the docker v2 schema
 		tempManifest, err = manifest.New(manifest.WithOrig(schema2.Manifest{
 			Versioned: schema2.ManifestSchemaVersion,
-			Config: types.Descriptor{
-				MediaType: types.MediaTypeDocker2ImageConfig,
+			Config: descriptor.Descriptor{
+				MediaType: mediatype.Docker2ImageConfig,
 				Digest:    confDigest,
 				Size:      int64(len(confB)),
 			},
-			Layers: []types.Descriptor{
+			Layers: []descriptor.Descriptor{
 				{
-					MediaType: types.MediaTypeDocker2LayerGzip,
-					Size:      int64(len(types.EmptyData)),
-					Digest:    types.EmptyDigest,
+					MediaType: mediatype.Docker2LayerGzip,
+					Size:      int64(len(descriptor.EmptyData)),
+					Digest:    descriptor.EmptyDigest,
 				},
 			},
 		}))
@@ -165,13 +167,13 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 	}).Debug("Sending dummy manifest to replace tag")
 
 	// push empty layer
-	_, err = reg.BlobPut(ctx, r, types.Descriptor{Digest: types.EmptyDigest, Size: int64(len(types.EmptyData))}, bytes.NewReader(types.EmptyData))
+	_, err = reg.BlobPut(ctx, r, descriptor.Descriptor{Digest: descriptor.EmptyDigest, Size: int64(len(descriptor.EmptyData))}, bytes.NewReader(descriptor.EmptyData))
 	if err != nil {
 		return err
 	}
 
 	// push config
-	_, err = reg.BlobPut(ctx, r, types.Descriptor{Digest: confDigest, Size: int64(len(confB))}, bytes.NewReader(confB))
+	_, err = reg.BlobPut(ctx, r, descriptor.Descriptor{Digest: confDigest, Size: int64(len(confB))}, bytes.NewReader(confB))
 	if err != nil {
 		return fmt.Errorf("failed sending dummy config to delete %s: %w", r.CommonName(), err)
 	}

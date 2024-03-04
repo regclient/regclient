@@ -12,8 +12,10 @@ import (
 
 	digest "github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/docker/schema1"
+	"github.com/regclient/regclient/types/errs"
+	"github.com/regclient/regclient/types/mediatype"
 	"github.com/regclient/regclient/types/platform"
 )
 
@@ -33,47 +35,47 @@ type docker1SignedManifest struct {
 	schema1.SignedManifest
 }
 
-func (m *docker1Manifest) GetConfig() (types.Descriptor, error) {
-	return types.Descriptor{}, fmt.Errorf("config digest not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
+func (m *docker1Manifest) GetConfig() (descriptor.Descriptor, error) {
+	return descriptor.Descriptor{}, fmt.Errorf("config digest not available for media type %s%.0w", m.desc.MediaType, errs.ErrUnsupportedMediaType)
 }
 func (m *docker1Manifest) GetConfigDigest() (digest.Digest, error) {
-	return "", fmt.Errorf("config digest not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
+	return "", fmt.Errorf("config digest not available for media type %s%.0w", m.desc.MediaType, errs.ErrUnsupportedMediaType)
 }
-func (m *docker1SignedManifest) GetConfig() (types.Descriptor, error) {
-	return types.Descriptor{}, fmt.Errorf("config digest not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
+func (m *docker1SignedManifest) GetConfig() (descriptor.Descriptor, error) {
+	return descriptor.Descriptor{}, fmt.Errorf("config digest not available for media type %s%.0w", m.desc.MediaType, errs.ErrUnsupportedMediaType)
 }
 func (m *docker1SignedManifest) GetConfigDigest() (digest.Digest, error) {
-	return "", fmt.Errorf("config digest not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
+	return "", fmt.Errorf("config digest not available for media type %s%.0w", m.desc.MediaType, errs.ErrUnsupportedMediaType)
 }
 
-func (m *docker1Manifest) GetManifestList() ([]types.Descriptor, error) {
-	return []types.Descriptor{}, fmt.Errorf("platform descriptor list not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
+func (m *docker1Manifest) GetManifestList() ([]descriptor.Descriptor, error) {
+	return []descriptor.Descriptor{}, fmt.Errorf("platform descriptor list not available for media type %s%.0w", m.desc.MediaType, errs.ErrUnsupportedMediaType)
 }
-func (m *docker1SignedManifest) GetManifestList() ([]types.Descriptor, error) {
-	return []types.Descriptor{}, fmt.Errorf("platform descriptor list not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
+func (m *docker1SignedManifest) GetManifestList() ([]descriptor.Descriptor, error) {
+	return []descriptor.Descriptor{}, fmt.Errorf("platform descriptor list not available for media type %s%.0w", m.desc.MediaType, errs.ErrUnsupportedMediaType)
 }
 
-func (m *docker1Manifest) GetLayers() ([]types.Descriptor, error) {
+func (m *docker1Manifest) GetLayers() ([]descriptor.Descriptor, error) {
 	if !m.manifSet {
-		return []types.Descriptor{}, types.ErrManifestNotSet
+		return []descriptor.Descriptor{}, errs.ErrManifestNotSet
 	}
 
-	var dl []types.Descriptor
+	var dl []descriptor.Descriptor
 	for _, sd := range m.FSLayers {
-		dl = append(dl, types.Descriptor{
+		dl = append(dl, descriptor.Descriptor{
 			Digest: sd.BlobSum,
 		})
 	}
 	return dl, nil
 }
-func (m *docker1SignedManifest) GetLayers() ([]types.Descriptor, error) {
+func (m *docker1SignedManifest) GetLayers() ([]descriptor.Descriptor, error) {
 	if !m.manifSet {
-		return []types.Descriptor{}, types.ErrManifestNotSet
+		return []descriptor.Descriptor{}, errs.ErrManifestNotSet
 	}
 
-	var dl []types.Descriptor
+	var dl []descriptor.Descriptor
 	for _, sd := range m.FSLayers {
-		dl = append(dl, types.Descriptor{
+		dl = append(dl, descriptor.Descriptor{
 			Digest: sd.BlobSum,
 		})
 	}
@@ -87,31 +89,31 @@ func (m *docker1SignedManifest) GetOrig() interface{} {
 	return m.SignedManifest
 }
 
-func (m *docker1Manifest) GetPlatformDesc(p *platform.Platform) (*types.Descriptor, error) {
-	return nil, fmt.Errorf("platform lookup not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
+func (m *docker1Manifest) GetPlatformDesc(p *platform.Platform) (*descriptor.Descriptor, error) {
+	return nil, fmt.Errorf("platform lookup not available for media type %s%.0w", m.desc.MediaType, errs.ErrUnsupportedMediaType)
 }
-func (m *docker1SignedManifest) GetPlatformDesc(p *platform.Platform) (*types.Descriptor, error) {
-	return nil, fmt.Errorf("platform lookup not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
+func (m *docker1SignedManifest) GetPlatformDesc(p *platform.Platform) (*descriptor.Descriptor, error) {
+	return nil, fmt.Errorf("platform lookup not available for media type %s%.0w", m.desc.MediaType, errs.ErrUnsupportedMediaType)
 }
 
 func (m *docker1Manifest) GetPlatformList() ([]*platform.Platform, error) {
-	return nil, fmt.Errorf("platform list not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
+	return nil, fmt.Errorf("platform list not available for media type %s%.0w", m.desc.MediaType, errs.ErrUnsupportedMediaType)
 }
 func (m *docker1SignedManifest) GetPlatformList() ([]*platform.Platform, error) {
-	return nil, fmt.Errorf("platform list not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
+	return nil, fmt.Errorf("platform list not available for media type %s%.0w", m.desc.MediaType, errs.ErrUnsupportedMediaType)
 }
 
 func (m *docker1Manifest) GetSize() (int64, error) {
-	return 0, fmt.Errorf("GetSize is not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
+	return 0, fmt.Errorf("GetSize is not available for media type %s%.0w", m.desc.MediaType, errs.ErrUnsupportedMediaType)
 }
 
 func (m *docker1SignedManifest) GetSize() (int64, error) {
-	return 0, fmt.Errorf("GetSize is not available for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
+	return 0, fmt.Errorf("GetSize is not available for media type %s%.0w", m.desc.MediaType, errs.ErrUnsupportedMediaType)
 }
 
 func (m *docker1Manifest) MarshalJSON() ([]byte, error) {
 	if !m.manifSet {
-		return []byte{}, types.ErrManifestNotSet
+		return []byte{}, errs.ErrManifestNotSet
 	}
 
 	if len(m.rawBody) > 0 {
@@ -123,7 +125,7 @@ func (m *docker1Manifest) MarshalJSON() ([]byte, error) {
 
 func (m *docker1SignedManifest) MarshalJSON() ([]byte, error) {
 	if !m.manifSet {
-		return []byte{}, types.ErrManifestNotSet
+		return []byte{}, errs.ErrManifestNotSet
 	}
 
 	return m.SignedManifest.MarshalJSON()
@@ -168,30 +170,30 @@ func (m *docker1SignedManifest) MarshalPretty() ([]byte, error) {
 	return buf.Bytes(), err
 }
 
-func (m *docker1Manifest) SetConfig(d types.Descriptor) error {
-	return fmt.Errorf("set methods not supported for for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
+func (m *docker1Manifest) SetConfig(d descriptor.Descriptor) error {
+	return fmt.Errorf("set methods not supported for for media type %s%.0w", m.desc.MediaType, errs.ErrUnsupportedMediaType)
 }
 
-func (m *docker1SignedManifest) SetConfig(d types.Descriptor) error {
-	return fmt.Errorf("set methods not supported for for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
+func (m *docker1SignedManifest) SetConfig(d descriptor.Descriptor) error {
+	return fmt.Errorf("set methods not supported for for media type %s%.0w", m.desc.MediaType, errs.ErrUnsupportedMediaType)
 }
 
-func (m *docker1Manifest) SetLayers(dl []types.Descriptor) error {
-	return fmt.Errorf("set methods not supported for for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
+func (m *docker1Manifest) SetLayers(dl []descriptor.Descriptor) error {
+	return fmt.Errorf("set methods not supported for for media type %s%.0w", m.desc.MediaType, errs.ErrUnsupportedMediaType)
 }
 
-func (m *docker1SignedManifest) SetLayers(dl []types.Descriptor) error {
-	return fmt.Errorf("set methods not supported for for media type %s%.0w", m.desc.MediaType, types.ErrUnsupportedMediaType)
+func (m *docker1SignedManifest) SetLayers(dl []descriptor.Descriptor) error {
+	return fmt.Errorf("set methods not supported for for media type %s%.0w", m.desc.MediaType, errs.ErrUnsupportedMediaType)
 }
 
 func (m *docker1Manifest) SetOrig(origIn interface{}) error {
 	orig, ok := origIn.(schema1.Manifest)
 	if !ok {
-		return types.ErrUnsupportedMediaType
+		return errs.ErrUnsupportedMediaType
 	}
-	if orig.MediaType != types.MediaTypeDocker1Manifest {
+	if orig.MediaType != mediatype.Docker1Manifest {
 		// TODO: error?
-		orig.MediaType = types.MediaTypeDocker1Manifest
+		orig.MediaType = mediatype.Docker1Manifest
 	}
 	mj, err := json.Marshal(orig)
 	if err != nil {
@@ -199,8 +201,8 @@ func (m *docker1Manifest) SetOrig(origIn interface{}) error {
 	}
 	m.manifSet = true
 	m.rawBody = mj
-	m.desc = types.Descriptor{
-		MediaType: types.MediaTypeDocker1Manifest,
+	m.desc = descriptor.Descriptor{
+		MediaType: mediatype.Docker1Manifest,
 		Digest:    digest.FromBytes(mj),
 		Size:      int64(len(mj)),
 	}
@@ -212,11 +214,11 @@ func (m *docker1Manifest) SetOrig(origIn interface{}) error {
 func (m *docker1SignedManifest) SetOrig(origIn interface{}) error {
 	orig, ok := origIn.(schema1.SignedManifest)
 	if !ok {
-		return types.ErrUnsupportedMediaType
+		return errs.ErrUnsupportedMediaType
 	}
-	if orig.MediaType != types.MediaTypeDocker1ManifestSigned {
+	if orig.MediaType != mediatype.Docker1ManifestSigned {
 		// TODO: error?
-		orig.MediaType = types.MediaTypeDocker1ManifestSigned
+		orig.MediaType = mediatype.Docker1ManifestSigned
 	}
 	mj, err := json.Marshal(orig)
 	if err != nil {
@@ -224,8 +226,8 @@ func (m *docker1SignedManifest) SetOrig(origIn interface{}) error {
 	}
 	m.manifSet = true
 	m.rawBody = mj
-	m.desc = types.Descriptor{
-		MediaType: types.MediaTypeDocker1ManifestSigned,
+	m.desc = descriptor.Descriptor{
+		MediaType: mediatype.Docker1ManifestSigned,
 		Digest:    digest.FromBytes(mj),
 		Size:      int64(len(mj)),
 	}

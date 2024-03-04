@@ -10,7 +10,7 @@ import (
 
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/mediatype"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 )
 
@@ -50,7 +50,7 @@ func NewOCIConfig(opts ...Opts) *BOCIConfig {
 		bc.desc.Digest = digest.FromBytes(bc.rawBody)
 		bc.desc.Size = int64(len(bc.rawBody))
 		if bc.desc.MediaType == "" {
-			bc.desc.MediaType = types.MediaTypeOCI1ImageConfig
+			bc.desc.MediaType = mediatype.OCI1ImageConfig
 		}
 	}
 	b := BOCIConfig{
@@ -91,7 +91,7 @@ func (oc *BOCIConfig) SetConfig(image v1.Image) {
 	oc.image = image
 	oc.rawBody, _ = json.Marshal(oc.image)
 	if oc.desc.MediaType == "" {
-		oc.desc.MediaType = types.MediaTypeOCI1ImageConfig
+		oc.desc.MediaType = mediatype.OCI1ImageConfig
 	}
 	oc.desc.Digest = digest.FromBytes(oc.rawBody)
 	oc.desc.Size = int64(len(oc.rawBody))
@@ -119,7 +119,7 @@ func (oc *BOCIConfig) UnmarshalJSON(data []byte) error {
 	oc.rawBody = make([]byte, len(data))
 	copy(oc.rawBody, data)
 	if oc.desc.MediaType == "" {
-		oc.desc.MediaType = types.MediaTypeOCI1ImageConfig
+		oc.desc.MediaType = mediatype.OCI1ImageConfig
 	}
 	oc.desc.Digest = digest.FromBytes(oc.rawBody)
 	oc.desc.Size = int64(len(oc.rawBody))

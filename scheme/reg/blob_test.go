@@ -19,7 +19,8 @@ import (
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/reqresp"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -237,7 +238,7 @@ func TestBlobGet(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
-		br, err := reg.BlobGet(ctx, r, types.Descriptor{Digest: d1})
+		br, err := reg.BlobGet(ctx, r, descriptor.Descriptor{Digest: d1})
 		if err != nil {
 			t.Fatalf("Failed running BlobGet: %v", err)
 		}
@@ -256,7 +257,7 @@ func TestBlobGet(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
-		br, err := reg.BlobHead(ctx, r, types.Descriptor{Digest: d1})
+		br, err := reg.BlobHead(ctx, r, descriptor.Descriptor{Digest: d1})
 		if err != nil {
 			t.Fatalf("Failed running BlobHead: %v", err)
 		}
@@ -272,7 +273,7 @@ func TestBlobGet(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
-		br, err := reg.BlobGet(ctx, r, types.Descriptor{Digest: d1, URLs: []string{tsURL.Scheme + "://" + tsURL.Host + "/external/" + d1.String()}})
+		br, err := reg.BlobGet(ctx, r, descriptor.Descriptor{Digest: d1, URLs: []string{tsURL.Scheme + "://" + tsURL.Host + "/external/" + d1.String()}})
 		if err != nil {
 			t.Fatalf("Failed running external BlobGet: %v", err)
 		}
@@ -291,7 +292,7 @@ func TestBlobGet(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
-		br, err := reg.BlobHead(ctx, r, types.Descriptor{Digest: d1, URLs: []string{tsURL.Scheme + "://" + tsURL.Host + "/external/" + d1.String()}})
+		br, err := reg.BlobHead(ctx, r, descriptor.Descriptor{Digest: d1, URLs: []string{tsURL.Scheme + "://" + tsURL.Host + "/external/" + d1.String()}})
 		if err != nil {
 			t.Fatalf("Failed running external BlobHead: %v", err)
 		}
@@ -306,12 +307,12 @@ func TestBlobGet(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
-		br, err := reg.BlobGet(ctx, r, types.Descriptor{Digest: dMissing})
+		br, err := reg.BlobGet(ctx, r, descriptor.Descriptor{Digest: dMissing})
 		if err == nil {
 			defer br.Close()
 			t.Fatalf("Unexpected success running BlobGet")
 		}
-		if !errors.Is(err, types.ErrNotFound) {
+		if !errors.Is(err, errs.ErrNotFound) {
 			t.Errorf("Error does not match \"ErrNotFound\": %v", err)
 		}
 	})
@@ -321,7 +322,7 @@ func TestBlobGet(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
-		br, err := reg.BlobGet(ctx, r, types.Descriptor{Digest: d2})
+		br, err := reg.BlobGet(ctx, r, descriptor.Descriptor{Digest: d2})
 		if err != nil {
 			t.Fatalf("Failed running BlobGet: %v", err)
 		}
@@ -340,12 +341,12 @@ func TestBlobGet(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
-		br, err := reg.BlobGet(ctx, r, types.Descriptor{Digest: d1})
+		br, err := reg.BlobGet(ctx, r, descriptor.Descriptor{Digest: d1})
 		if err == nil {
 			defer br.Close()
 			t.Fatalf("Unexpected success running BlobGet")
 		}
-		if !errors.Is(err, types.ErrHTTPUnauthorized) {
+		if !errors.Is(err, errs.ErrHTTPUnauthorized) {
 			t.Errorf("Error does not match \"ErrUnauthorized\": %v", err)
 		}
 	})
@@ -1196,7 +1197,7 @@ func TestBlobPut(t *testing.T) {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
 		br := bytes.NewReader(blob1)
-		dp, err := reg.BlobPut(ctx, r, types.Descriptor{Digest: d1, Size: int64(len(blob1))}, br)
+		dp, err := reg.BlobPut(ctx, r, descriptor.Descriptor{Digest: d1, Size: int64(len(blob1))}, br)
 		if err != nil {
 			t.Fatalf("Failed running BlobPut: %v", err)
 		}
@@ -1215,7 +1216,7 @@ func TestBlobPut(t *testing.T) {
 		}
 		br := bytes.NewReader(blob2)
 		mt := "application/vnd.example.test"
-		dp, err := reg.BlobPut(ctx, r, types.Descriptor{MediaType: mt, Digest: d2, Size: int64(len(blob2))}, br)
+		dp, err := reg.BlobPut(ctx, r, descriptor.Descriptor{MediaType: mt, Digest: d2, Size: int64(len(blob2))}, br)
 		if err != nil {
 			t.Fatalf("Failed running BlobPut: %v", err)
 		}
@@ -1236,12 +1237,12 @@ func TestBlobPut(t *testing.T) {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
 		br := bytes.NewReader(blob2)
-		_, err = reg.BlobPut(ctx, r, types.Descriptor{Digest: d2, Size: int64(len(blob2))}, io.NopCloser(br))
+		_, err = reg.BlobPut(ctx, r, descriptor.Descriptor{Digest: d2, Size: int64(len(blob2))}, io.NopCloser(br))
 		if err == nil {
 			t.Fatalf("Blob put succeeded on a gateway timeout")
 		}
-		if !errors.Is(err, types.ErrHTTPStatus) {
-			t.Errorf("unexpected err, expected %v, received %v", types.ErrHTTPStatus, err)
+		if !errors.Is(err, errs.ErrHTTPStatus) {
+			t.Errorf("unexpected err, expected %v, received %v", errs.ErrHTTPStatus, err)
 		}
 	})
 
@@ -1252,9 +1253,9 @@ func TestBlobPut(t *testing.T) {
 		}
 		br := bytes.NewReader(blob2)
 		mt := "application/vnd.example.test"
-		_, err = reg.BlobPut(ctx, r, types.Descriptor{MediaType: mt, Digest: d2Bad, Size: int64(len(blob2))}, br)
-		if err == nil || !errors.Is(err, types.ErrDigestMismatch) {
-			t.Errorf("unexpected error, expected %v, received %v", types.ErrDigestMismatch, err)
+		_, err = reg.BlobPut(ctx, r, descriptor.Descriptor{MediaType: mt, Digest: d2Bad, Size: int64(len(blob2))}, br)
+		if err == nil || !errors.Is(err, errs.ErrDigestMismatch) {
+			t.Errorf("unexpected error, expected %v, received %v", errs.ErrDigestMismatch, err)
 		}
 	})
 
@@ -1265,9 +1266,9 @@ func TestBlobPut(t *testing.T) {
 		}
 		br := bytes.NewReader(blob2)
 		mt := "application/vnd.example.test"
-		_, err = reg.BlobPut(ctx, r, types.Descriptor{MediaType: mt, Digest: d2, Size: int64(len(blob2) - 2)}, br)
-		if err == nil || !errors.Is(err, types.ErrMismatch) {
-			t.Errorf("unexpected error, expected %v, received %v", types.ErrMismatch, err)
+		_, err = reg.BlobPut(ctx, r, descriptor.Descriptor{MediaType: mt, Digest: d2, Size: int64(len(blob2) - 2)}, br)
+		if err == nil || !errors.Is(err, errs.ErrMismatch) {
+			t.Errorf("unexpected error, expected %v, received %v", errs.ErrMismatch, err)
 		}
 	})
 
@@ -1277,7 +1278,7 @@ func TestBlobPut(t *testing.T) {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
 		br := bytes.NewReader(blob3)
-		dp, err := reg.BlobPut(ctx, r, types.Descriptor{Digest: d3, Size: int64(len(blob3))}, br)
+		dp, err := reg.BlobPut(ctx, r, descriptor.Descriptor{Digest: d3, Size: int64(len(blob3))}, br)
 		if err != nil {
 			t.Fatalf("Failed running BlobPut: %v", err)
 		}
@@ -1295,7 +1296,7 @@ func TestBlobPut(t *testing.T) {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
 		br := bytes.NewReader(blob4)
-		dp, err := reg.BlobPut(ctx, r, types.Descriptor{Digest: d4, Size: int64(len(blob4))}, br)
+		dp, err := reg.BlobPut(ctx, r, descriptor.Descriptor{Digest: d4, Size: int64(len(blob4))}, br)
 		if err != nil {
 			t.Fatalf("Failed running BlobPut: %v", err)
 		}
@@ -1314,7 +1315,7 @@ func TestBlobPut(t *testing.T) {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
 		br := bytes.NewReader(blob5)
-		dp, err := reg.BlobPut(ctx, r, types.Descriptor{}, br)
+		dp, err := reg.BlobPut(ctx, r, descriptor.Descriptor{}, br)
 		if err != nil {
 			t.Fatalf("Failed running BlobPut: %v", err)
 		}
@@ -1333,7 +1334,7 @@ func TestBlobPut(t *testing.T) {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
 		br := bytes.NewReader(blob6)
-		dp, err := reg.BlobPut(ctx, r, types.Descriptor{Digest: d6, Size: int64(len(blob6))}, br)
+		dp, err := reg.BlobPut(ctx, r, descriptor.Descriptor{Digest: d6, Size: int64(len(blob6))}, br)
 		if err != nil {
 			t.Fatalf("Failed running BlobPut: %v", err)
 		}

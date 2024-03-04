@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -200,7 +200,7 @@ func TestNew(t *testing.T) {
 				WithHeaders(registryHeaders),
 				WithMT("application/unknown"),
 			},
-			err: types.ErrUnsupportedMediaType,
+			err: errs.ErrUnsupportedMediaType,
 		},
 	}
 

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 )
 
 func TestSplitCSKV(t *testing.T) {
@@ -60,22 +60,22 @@ func TestSplitCSKV(t *testing.T) {
 		{
 			name: "errEscapeKey",
 			str:  "a\\",
-			err:  types.ErrParsingFailed,
+			err:  errs.ErrParsingFailed,
 		},
 		{
 			name: "errEscapeVal",
 			str:  "a=x\\",
-			err:  types.ErrParsingFailed,
+			err:  errs.ErrParsingFailed,
 		},
 		{
 			name: "errQuoteKey",
 			str:  "a\"",
-			err:  types.ErrParsingFailed,
+			err:  errs.ErrParsingFailed,
 		},
 		{
 			name: "errQuoteVal",
 			str:  "a=b\"",
-			err:  types.ErrParsingFailed,
+			err:  errs.ErrParsingFailed,
 		},
 	}
 	for _, tc := range tt {

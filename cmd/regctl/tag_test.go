@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 )
 
 func TestTagList(t *testing.T) {
@@ -26,7 +26,7 @@ func TestTagList(t *testing.T) {
 		{
 			name:      "Invalid ref",
 			args:      []string{"tag", "ls", "invalid*ref"},
-			expectErr: types.ErrInvalidReference,
+			expectErr: errs.ErrInvalidReference,
 		},
 		{
 			name:      "Missing repo",

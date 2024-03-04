@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 )
 
 var testDigest = "sha256:15f840677a5e245d9ea199eb9b026b1539208a5183621dced7b469f6aa678115"
@@ -268,7 +268,7 @@ func TestNew(t *testing.T) {
 		{
 			name:  "OCI file with invalid digest",
 			ref:   "ocifile://path/to/file.tgz@sha256:ZZ15f840677a5e245d9ea199eb9b026b1539208a5183621dced7b469f6aa678115ZZ",
-			wantE: types.ErrInvalidReference,
+			wantE: errs.ErrInvalidReference,
 		},
 		{
 			name:       "OCI dir",
@@ -306,82 +306,82 @@ func TestNew(t *testing.T) {
 		{
 			name:  "invalid scheme",
 			ref:   "unknown://repo:tag",
-			wantE: types.ErrInvalidReference,
+			wantE: errs.ErrInvalidReference,
 		},
 		{
 			name:  "invalid host leading dash",
 			ref:   "-docker.io/project/image:tag",
-			wantE: types.ErrInvalidReference,
+			wantE: errs.ErrInvalidReference,
 		},
 		{
 			name:  "invalid host trailing dash",
 			ref:   "docker-.io/project/image:tag",
-			wantE: types.ErrInvalidReference,
+			wantE: errs.ErrInvalidReference,
 		},
 		{
 			name:  "invalid repo case",
 			ref:   "docker.io/Upper/Case/Repo:tag",
-			wantE: types.ErrInvalidReference,
+			wantE: errs.ErrInvalidReference,
 		},
 		{
 			name:  "invalid repo dash leading",
 			ref:   "project/-image:tag",
-			wantE: types.ErrInvalidReference,
+			wantE: errs.ErrInvalidReference,
 		},
 		{
 			name:  "invalid repo dash trailing",
 			ref:   "project/image-:tag",
-			wantE: types.ErrInvalidReference,
+			wantE: errs.ErrInvalidReference,
 		},
 		{
 			name:  "invalid repo triple underscore",
 			ref:   "project/image___x:tag",
-			wantE: types.ErrInvalidReference,
+			wantE: errs.ErrInvalidReference,
 		},
 		{
 			name:  "invalid repo chars",
 			ref:   "project/star*:tag",
-			wantE: types.ErrInvalidReference,
+			wantE: errs.ErrInvalidReference,
 		},
 		{
 			name:  "invalid tag chars",
 			ref:   "project/image:tag^1",
-			wantE: types.ErrInvalidReference,
+			wantE: errs.ErrInvalidReference,
 		},
 		{
 			name:  "invalid tag length",
 			ref:   "project/image:" + strings.Repeat("x", 129),
-			wantE: types.ErrInvalidReference,
+			wantE: errs.ErrInvalidReference,
 		},
 		{
 			name:  "invalid short digest",
 			ref:   "project/image@sha256:12345",
-			wantE: types.ErrInvalidReference,
+			wantE: errs.ErrInvalidReference,
 		},
 		{
 			name:  "invalid digest characters",
 			ref:   "project/image@sha256:gggg40677a5e245d9ea199eb9b026b1539208a5183621dced7b469f6aa678115",
-			wantE: types.ErrInvalidReference,
+			wantE: errs.ErrInvalidReference,
 		},
 		{
 			name:  "invalid ocidir path",
 			ref:   "ocidir://invalid*filename:tag",
-			wantE: types.ErrInvalidReference,
+			wantE: errs.ErrInvalidReference,
 		},
 		{
 			name:  "invalid ocidir tag",
 			ref:   "ocidir://filename:tag=fail",
-			wantE: types.ErrInvalidReference,
+			wantE: errs.ErrInvalidReference,
 		},
 		{
 			name:  "invalid ocidir digest",
 			ref:   "ocidir://filename@sha256:abcd",
-			wantE: types.ErrInvalidReference,
+			wantE: errs.ErrInvalidReference,
 		},
 		{
 			name:  "localhost missing repo",
 			ref:   "localhost:5000",
-			wantE: types.ErrInvalidReference,
+			wantE: errs.ErrInvalidReference,
 		},
 	}
 
@@ -436,7 +436,7 @@ func TestNewHost(t *testing.T) {
 		{
 			name:  "empty string",
 			host:  "",
-			wantE: types.ErrParsingFailed,
+			wantE: errs.ErrParsingFailed,
 		},
 		{
 			name:     "Docker Hub",
@@ -537,7 +537,7 @@ func TestNewHost(t *testing.T) {
 		{
 			name:  "OCI file with invalid digest",
 			host:  "ocifile://path/to/file.tgz@sha256:ZZ15f840677a5e245d9ea199eb9b026b1539208a5183621dced7b469f6aa678115ZZ",
-			wantE: types.ErrParsingFailed,
+			wantE: errs.ErrParsingFailed,
 		},
 		{
 			name:     "OCI dir",
@@ -566,17 +566,17 @@ func TestNewHost(t *testing.T) {
 		{
 			name:  "invalid scheme",
 			host:  "unknown://repo:tag",
-			wantE: types.ErrParsingFailed,
+			wantE: errs.ErrParsingFailed,
 		},
 		{
 			name:  "invalid host leading dash",
 			host:  "-docker.io",
-			wantE: types.ErrParsingFailed,
+			wantE: errs.ErrParsingFailed,
 		},
 		{
 			name:  "invalid host trailing dash",
 			host:  "docker-.io",
-			wantE: types.ErrParsingFailed,
+			wantE: errs.ErrParsingFailed,
 		},
 	}
 

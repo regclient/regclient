@@ -12,8 +12,8 @@ import (
 	"github.com/opencontainers/go-digest"
 
 	"github.com/regclient/regclient/internal/rwfs"
-	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/mediatype"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/ref"
 )
@@ -44,8 +44,8 @@ func TestManifest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("manifest get: %v", err)
 	}
-	if manifest.GetMediaType(ml) != types.MediaTypeOCI1ManifestList {
-		t.Errorf("manifest mt, expected %s, received %s", types.MediaTypeOCI1ManifestList, manifest.GetMediaType(ml))
+	if manifest.GetMediaType(ml) != mediatype.OCI1ManifestList {
+		t.Errorf("manifest mt, expected %s, received %s", mediatype.OCI1ManifestList, manifest.GetMediaType(ml))
 	}
 	if !ml.IsList() {
 		t.Errorf("expected manifest list")

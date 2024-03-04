@@ -14,7 +14,8 @@ import (
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/pkg/archive"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
+	"github.com/regclient/regclient/types/mediatype"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -33,14 +34,14 @@ type OptTime struct {
 var (
 	// whitelist of tar media types
 	mtWLTar = []string{
-		types.MediaTypeDocker2LayerGzip,
-		types.MediaTypeOCI1Layer,
-		types.MediaTypeOCI1LayerGzip,
-		types.MediaTypeOCI1LayerZstd,
+		mediatype.Docker2LayerGzip,
+		mediatype.OCI1Layer,
+		mediatype.OCI1LayerGzip,
+		mediatype.OCI1LayerZstd,
 	}
 	mtWLConfig = []string{
-		types.MediaTypeDocker2ImageConfig,
-		types.MediaTypeOCI1ImageConfig,
+		mediatype.Docker2ImageConfig,
+		mediatype.OCI1ImageConfig,
 	}
 )
 
@@ -54,7 +55,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 	// do I need to store a DAG in memory with pointers back to parents and modified bool, so change to digest can be rippled up and modified objects are pushed?
 
 	// pull the image metadata into a DAG
-	dm, err := dagGet(ctx, rc, rSrc, types.Descriptor{})
+	dm, err := dagGet(ctx, rc, rSrc, descriptor.Descriptor{})
 	if err != nil {
 		return rSrc, err
 	}
@@ -143,7 +144,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 				var gw *gzip.Writer
 				digRaw := digest.Canonical.Digester() // raw/compressed digest
 				digUC := digest.Canonical.Digester()  // uncompressed digest
-				if dl.desc.MediaType == types.MediaTypeDocker2LayerGzip || dl.desc.MediaType == types.MediaTypeOCI1LayerGzip {
+				if dl.desc.MediaType == mediatype.Docker2LayerGzip || dl.desc.MediaType == mediatype.OCI1LayerGzip {
 					cw := io.MultiWriter(fh, digRaw.Hash())
 					gw = gzip.NewWriter(cw)
 					defer gw.Close()

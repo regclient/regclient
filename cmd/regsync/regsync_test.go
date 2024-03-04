@@ -12,7 +12,8 @@ import (
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/internal/throttle"
 	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
@@ -98,12 +99,12 @@ func TestProcess(t *testing.T) {
 		t.Fatalf("failed to get platform ")
 	}
 	d2AMD := desc2AMD.Digest
-	desc2SBOM, err := rc.ReferrerList(ctx, r2, scheme.WithReferrerMatchOpt(types.MatchOpt{ArtifactType: "application/example.sbom"}))
+	desc2SBOM, err := rc.ReferrerList(ctx, r2, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{ArtifactType: "application/example.sbom"}))
 	if err != nil || len(desc2SBOM.Descriptors) == 0 {
 		t.Fatalf("failed to get SBOM for v2: %v", err)
 	}
 	d2SBOM := desc2SBOM.Descriptors[0].Digest
-	desc2Sig, err := rc.ReferrerList(ctx, r2, scheme.WithReferrerMatchOpt(types.MatchOpt{ArtifactType: "application/example.signature"}))
+	desc2Sig, err := rc.ReferrerList(ctx, r2, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{ArtifactType: "application/example.signature"}))
 	if err != nil || len(desc2Sig.Descriptors) == 0 {
 		t.Fatalf("failed to get signature for v2: %v", err)
 	}
@@ -580,7 +581,7 @@ func TestProcess(t *testing.T) {
 			},
 			action:  actionCopy,
 			desired: []string{},
-			expErr:  types.ErrInvalidReference,
+			expErr:  errs.ErrInvalidReference,
 		},
 		{
 			name: "InvalidTargetImage",
@@ -591,7 +592,7 @@ func TestProcess(t *testing.T) {
 			},
 			action:  actionCopy,
 			desired: []string{},
-			expErr:  types.ErrInvalidReference,
+			expErr:  errs.ErrInvalidReference,
 		},
 		{
 			name: "InvalidSourceRepository",
@@ -602,7 +603,7 @@ func TestProcess(t *testing.T) {
 			},
 			action:  actionCopy,
 			desired: []string{},
-			expErr:  types.ErrInvalidReference,
+			expErr:  errs.ErrInvalidReference,
 		},
 		{
 			name: "InvalidTargetRepository",
@@ -613,7 +614,7 @@ func TestProcess(t *testing.T) {
 			},
 			action:  actionCopy,
 			desired: []string{},
-			expErr:  types.ErrInvalidReference,
+			expErr:  errs.ErrInvalidReference,
 		},
 		{
 			name: "InvalidType",
@@ -701,7 +702,7 @@ func TestProcessRef(t *testing.T) {
 	}{
 		{
 			name:   "empty",
-			expErr: types.ErrNotFound,
+			expErr: errs.ErrNotFound,
 		},
 		{
 			name:         "check v1",

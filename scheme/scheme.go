@@ -6,8 +6,8 @@ import (
 	"io"
 
 	"github.com/regclient/regclient/internal/throttle"
-	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
+	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ping"
 	"github.com/regclient/regclient/types/ref"
@@ -18,15 +18,15 @@ import (
 // API is used to interface between different methods to store images.
 type API interface {
 	// BlobDelete removes a blob from the repository.
-	BlobDelete(ctx context.Context, r ref.Ref, d types.Descriptor) error
+	BlobDelete(ctx context.Context, r ref.Ref, d descriptor.Descriptor) error
 	// BlobGet retrieves a blob, returning a reader.
-	BlobGet(ctx context.Context, r ref.Ref, d types.Descriptor) (blob.Reader, error)
+	BlobGet(ctx context.Context, r ref.Ref, d descriptor.Descriptor) (blob.Reader, error)
 	// BlobHead verifies the existence of a blob, the reader contains the headers but no body to read.
-	BlobHead(ctx context.Context, r ref.Ref, d types.Descriptor) (blob.Reader, error)
+	BlobHead(ctx context.Context, r ref.Ref, d descriptor.Descriptor) (blob.Reader, error)
 	// BlobMount attempts to perform a server side copy of the blob.
-	BlobMount(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor) error
+	BlobMount(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d descriptor.Descriptor) error
 	// BlobPut sends a blob to the repository, returns the digest and size when successful.
-	BlobPut(ctx context.Context, r ref.Ref, d types.Descriptor, rdr io.Reader) (types.Descriptor, error)
+	BlobPut(ctx context.Context, r ref.Ref, d descriptor.Descriptor, rdr io.Reader) (descriptor.Descriptor, error)
 
 	// ManifestDelete removes a manifest, including all tags that point to that manifest.
 	ManifestDelete(ctx context.Context, r ref.Ref, opts ...ManifestOpts) error
@@ -105,15 +105,15 @@ func WithManifest(m manifest.Manifest) ManifestOpts {
 
 // ReferrerConfig is used by schemes to import [ReferrerOpts].
 type ReferrerConfig struct {
-	MatchOpt types.MatchOpt // filter/sort results
-	Platform string         // get referrers for a specific platform
+	MatchOpt descriptor.MatchOpt // filter/sort results
+	Platform string              // get referrers for a specific platform
 }
 
 // ReferrerOpts is used to set options on referrer APIs.
 type ReferrerOpts func(*ReferrerConfig)
 
-// WithReferrerMatchOpt filters results using [types.MatchOpt].
-func WithReferrerMatchOpt(mo types.MatchOpt) ReferrerOpts {
+// WithReferrerMatchOpt filters results using [descriptor.MatchOpt].
+func WithReferrerMatchOpt(mo descriptor.MatchOpt) ReferrerOpts {
 	return func(config *ReferrerConfig) {
 		config.MatchOpt = mo
 	}
@@ -167,7 +167,7 @@ func ReferrerFilter(config ReferrerConfig, rlIn referrer.ReferrerList) referrer.
 		Manifest:    rlIn.Manifest,
 		Annotations: rlIn.Annotations,
 		Tags:        rlIn.Tags,
-		Descriptors: types.DescriptorListFilter(rlIn.Descriptors, config.MatchOpt),
+		Descriptors: descriptor.DescriptorListFilter(rlIn.Descriptors, config.MatchOpt),
 	}
 }
 

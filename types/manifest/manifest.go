@@ -17,8 +17,11 @@ import (
 	digest "github.com/opencontainers/go-digest"
 
 	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/docker/schema1"
 	"github.com/regclient/regclient/types/docker/schema2"
+	"github.com/regclient/regclient/types/errs"
+	"github.com/regclient/regclient/types/mediatype"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
@@ -27,7 +30,7 @@ import (
 // Manifest interface is implemented by all supported manifests but
 // many calls are only supported by certain underlying media types.
 type Manifest interface {
-	GetDescriptor() types.Descriptor
+	GetDescriptor() descriptor.Descriptor
 	GetOrig() interface{}
 	GetRef() ref.Ref
 	IsList() bool
@@ -38,12 +41,12 @@ type Manifest interface {
 	SetOrig(interface{}) error
 
 	// Deprecated: GetConfig should be accessed using [Imager] interface.
-	GetConfig() (types.Descriptor, error)
+	GetConfig() (descriptor.Descriptor, error)
 	// Deprecated: GetLayers should be accessed using [Imager] interface.
-	GetLayers() ([]types.Descriptor, error)
+	GetLayers() ([]descriptor.Descriptor, error)
 
 	// Deprecated: GetManifestList should be accessed using [Indexer] interface.
-	GetManifestList() ([]types.Descriptor, error)
+	GetManifestList() ([]descriptor.Descriptor, error)
 
 	// Deprecated: GetConfigDigest should be replaced with [GetConfig].
 	GetConfigDigest() (digest.Digest, error)
@@ -52,7 +55,7 @@ type Manifest interface {
 	// Deprecated: GetMediaType should be replaced with GetDescriptor().MediaType, see [GetDescriptor].
 	GetMediaType() string
 	// Deprecated: GetPlatformDesc method should be replaced with [manifest.GetPlatformDesc].
-	GetPlatformDesc(p *platform.Platform) (*types.Descriptor, error)
+	GetPlatformDesc(p *platform.Platform) (*descriptor.Descriptor, error)
 	// Deprecated: GetPlatformList method should be replaced with [manifest.GetPlatformList].
 	GetPlatformList() ([]*platform.Platform, error)
 	// Deprecated: GetRateLimit method should be replaced with [manifest.GetRateLimit].
@@ -70,28 +73,28 @@ type Annotator interface {
 
 // Indexer is used by manifests that contain a manifest list.
 type Indexer interface {
-	GetManifestList() ([]types.Descriptor, error)
-	SetManifestList(dl []types.Descriptor) error
+	GetManifestList() ([]descriptor.Descriptor, error)
+	SetManifestList(dl []descriptor.Descriptor) error
 }
 
 // Imager is used by manifests packaging an image.
 type Imager interface {
-	GetConfig() (types.Descriptor, error)
-	GetLayers() ([]types.Descriptor, error)
-	SetConfig(d types.Descriptor) error
-	SetLayers(dl []types.Descriptor) error
+	GetConfig() (descriptor.Descriptor, error)
+	GetLayers() ([]descriptor.Descriptor, error)
+	SetConfig(d descriptor.Descriptor) error
+	SetLayers(dl []descriptor.Descriptor) error
 	GetSize() (int64, error)
 }
 
 // Subjecter is used by manifests that may have a subject field.
 type Subjecter interface {
-	GetSubject() (*types.Descriptor, error)
-	SetSubject(d *types.Descriptor) error
+	GetSubject() (*descriptor.Descriptor, error)
+	SetSubject(d *descriptor.Descriptor) error
 }
 
 type manifestConfig struct {
 	r      ref.Ref
-	desc   types.Descriptor
+	desc   descriptor.Descriptor
 	raw    []byte
 	orig   interface{}
 	header http.Header
@@ -113,7 +116,7 @@ func New(opts ...Opts) (Manifest, error) {
 	// extract fields from header where available
 	if mc.header != nil {
 		if c.desc.MediaType == "" {
-			c.desc.MediaType = types.MediaTypeBase(mc.header.Get("Content-Type"))
+			c.desc.MediaType = mediatype.Base(mc.header.Get("Content-Type"))
 		}
 		if c.desc.Size == 0 {
 			cl, _ := strconv.Atoi(mc.header.Get("Content-Length"))
@@ -131,7 +134,7 @@ func New(opts ...Opts) (Manifest, error) {
 }
 
 // WithDesc specifies the descriptor for the manifest.
-func WithDesc(desc types.Descriptor) Opts {
+func WithDesc(desc descriptor.Descriptor) Opts {
 	return func(mc *manifestConfig) {
 		mc.desc = desc
 	}
@@ -178,15 +181,15 @@ func GetMediaType(m Manifest) string {
 }
 
 // GetPlatformDesc returns the descriptor for a specific platform from an index.
-func GetPlatformDesc(m Manifest, p *platform.Platform) (*types.Descriptor, error) {
+func GetPlatformDesc(m Manifest, p *platform.Platform) (*descriptor.Descriptor, error) {
 	dl, err := m.GetManifestList()
 	if err != nil {
 		return nil, err
 	}
 	if p == nil {
-		return nil, fmt.Errorf("invalid input, platform is nil%.0w", types.ErrNotFound)
+		return nil, fmt.Errorf("invalid input, platform is nil%.0w", errs.ErrNotFound)
 	}
-	d, err := types.DescriptorListSearch(dl, types.MatchOpt{Platform: p})
+	d, err := descriptor.DescriptorListSearch(dl, descriptor.MatchOpt{Platform: p})
 	if err != nil {
 		return nil, fmt.Errorf("platform not found: %s%.0w", *p, err)
 	}
@@ -265,7 +268,7 @@ func HasRateLimit(m Manifest) bool {
 func OCIIndexFromAny(orig interface{}) (v1.Index, error) {
 	ociI := v1.Index{
 		Versioned: v1.IndexSchemaVersion,
-		MediaType: types.MediaTypeOCI1ManifestList,
+		MediaType: mediatype.OCI1ManifestList,
 	}
 	switch orig := orig.(type) {
 	case schema2.ManifestList:
@@ -311,7 +314,7 @@ func OCIIndexToAny(ociI v1.Index, origP interface{}) error {
 func OCIManifestFromAny(orig interface{}) (v1.Manifest, error) {
 	ociM := v1.Manifest{
 		Versioned: v1.ManifestSchemaVersion,
-		MediaType: types.MediaTypeOCI1Manifest,
+		MediaType: mediatype.OCI1Manifest,
 	}
 	switch orig := orig.(type) {
 	case schema2.Manifest:
@@ -382,14 +385,14 @@ func fromOrig(c common, orig interface{}) (Manifest, error) {
 	switch mOrig := orig.(type) {
 	case schema1.Manifest:
 		mt = mOrig.MediaType
-		c.desc.MediaType = types.MediaTypeDocker1Manifest
+		c.desc.MediaType = mediatype.Docker1Manifest
 		m = &docker1Manifest{
 			common:   c,
 			Manifest: mOrig,
 		}
 	case schema1.SignedManifest:
 		mt = mOrig.MediaType
-		c.desc.MediaType = types.MediaTypeDocker1ManifestSigned
+		c.desc.MediaType = mediatype.Docker1ManifestSigned
 		// recompute digest on the canonical data
 		c.desc.Digest = digest.FromBytes(mOrig.Canonical)
 		m = &docker1SignedManifest{
@@ -398,35 +401,35 @@ func fromOrig(c common, orig interface{}) (Manifest, error) {
 		}
 	case schema2.Manifest:
 		mt = mOrig.MediaType
-		c.desc.MediaType = types.MediaTypeDocker2Manifest
+		c.desc.MediaType = mediatype.Docker2Manifest
 		m = &docker2Manifest{
 			common:   c,
 			Manifest: mOrig,
 		}
 	case schema2.ManifestList:
 		mt = mOrig.MediaType
-		c.desc.MediaType = types.MediaTypeDocker2ManifestList
+		c.desc.MediaType = mediatype.Docker2ManifestList
 		m = &docker2ManifestList{
 			common:       c,
 			ManifestList: mOrig,
 		}
 	case v1.Manifest:
 		mt = mOrig.MediaType
-		c.desc.MediaType = types.MediaTypeOCI1Manifest
+		c.desc.MediaType = mediatype.OCI1Manifest
 		m = &oci1Manifest{
 			common:   c,
 			Manifest: mOrig,
 		}
 	case v1.Index:
 		mt = mOrig.MediaType
-		c.desc.MediaType = types.MediaTypeOCI1ManifestList
+		c.desc.MediaType = mediatype.OCI1ManifestList
 		m = &oci1Index{
 			common: c,
 			Index:  orig.(v1.Index),
 		}
 	case v1.ArtifactManifest:
 		mt = mOrig.MediaType
-		c.desc.MediaType = types.MediaTypeOCI1Artifact
+		c.desc.MediaType = mediatype.OCI1Artifact
 		m = &oci1Artifact{
 			common:           c,
 			ArtifactManifest: mOrig,
@@ -458,49 +461,49 @@ func fromCommon(c common) (Manifest, error) {
 		// extract media type from body, either explicitly or with duck typing
 		if c.desc.MediaType == "" {
 			mt := struct {
-				MediaType     string             `json:"mediaType,omitempty"`
-				SchemaVersion int                `json:"schemaVersion,omitempty"`
-				Signatures    []interface{}      `json:"signatures,omitempty"`
-				Manifests     []types.Descriptor `json:"manifests,omitempty"`
-				Layers        []types.Descriptor `json:"layers,omitempty"`
+				MediaType     string                  `json:"mediaType,omitempty"`
+				SchemaVersion int                     `json:"schemaVersion,omitempty"`
+				Signatures    []interface{}           `json:"signatures,omitempty"`
+				Manifests     []descriptor.Descriptor `json:"manifests,omitempty"`
+				Layers        []descriptor.Descriptor `json:"layers,omitempty"`
 			}{}
 			err = json.Unmarshal(c.rawBody, &mt)
 			if mt.MediaType != "" {
 				c.desc.MediaType = mt.MediaType
 			} else if mt.SchemaVersion == 1 && len(mt.Signatures) > 0 {
-				c.desc.MediaType = types.MediaTypeDocker1ManifestSigned
+				c.desc.MediaType = mediatype.Docker1ManifestSigned
 			} else if mt.SchemaVersion == 1 {
-				c.desc.MediaType = types.MediaTypeDocker1Manifest
+				c.desc.MediaType = mediatype.Docker1Manifest
 			} else if len(mt.Manifests) > 0 {
 				if strings.HasPrefix(mt.Manifests[0].MediaType, "application/vnd.docker.") {
-					c.desc.MediaType = types.MediaTypeDocker2ManifestList
+					c.desc.MediaType = mediatype.Docker2ManifestList
 				} else {
-					c.desc.MediaType = types.MediaTypeOCI1ManifestList
+					c.desc.MediaType = mediatype.OCI1ManifestList
 				}
 			} else if len(mt.Layers) > 0 {
 				if strings.HasPrefix(mt.Layers[0].MediaType, "application/vnd.docker.") {
-					c.desc.MediaType = types.MediaTypeDocker2Manifest
+					c.desc.MediaType = mediatype.Docker2Manifest
 				} else {
-					c.desc.MediaType = types.MediaTypeOCI1Manifest
+					c.desc.MediaType = mediatype.OCI1Manifest
 				}
 			}
 		}
 		// compute digest
-		if c.desc.MediaType != types.MediaTypeDocker1ManifestSigned {
+		if c.desc.MediaType != mediatype.Docker1ManifestSigned {
 			d := digest.FromBytes(c.rawBody)
 			c.desc.Digest = d
 			c.desc.Size = int64(len(c.rawBody))
 		}
 	}
 	switch c.desc.MediaType {
-	case types.MediaTypeDocker1Manifest:
+	case mediatype.Docker1Manifest:
 		var mOrig schema1.Manifest
 		if len(c.rawBody) > 0 {
 			err = json.Unmarshal(c.rawBody, &mOrig)
 			mt = mOrig.MediaType
 		}
 		m = &docker1Manifest{common: c, Manifest: mOrig}
-	case types.MediaTypeDocker1ManifestSigned:
+	case mediatype.Docker1ManifestSigned:
 		var mOrig schema1.SignedManifest
 		if len(c.rawBody) > 0 {
 			err = json.Unmarshal(c.rawBody, &mOrig)
@@ -510,35 +513,35 @@ func fromCommon(c common) (Manifest, error) {
 			c.desc.Size = int64(len(mOrig.Canonical))
 		}
 		m = &docker1SignedManifest{common: c, SignedManifest: mOrig}
-	case types.MediaTypeDocker2Manifest:
+	case mediatype.Docker2Manifest:
 		var mOrig schema2.Manifest
 		if len(c.rawBody) > 0 {
 			err = json.Unmarshal(c.rawBody, &mOrig)
 			mt = mOrig.MediaType
 		}
 		m = &docker2Manifest{common: c, Manifest: mOrig}
-	case types.MediaTypeDocker2ManifestList:
+	case mediatype.Docker2ManifestList:
 		var mOrig schema2.ManifestList
 		if len(c.rawBody) > 0 {
 			err = json.Unmarshal(c.rawBody, &mOrig)
 			mt = mOrig.MediaType
 		}
 		m = &docker2ManifestList{common: c, ManifestList: mOrig}
-	case types.MediaTypeOCI1Manifest:
+	case mediatype.OCI1Manifest:
 		var mOrig v1.Manifest
 		if len(c.rawBody) > 0 {
 			err = json.Unmarshal(c.rawBody, &mOrig)
 			mt = mOrig.MediaType
 		}
 		m = &oci1Manifest{common: c, Manifest: mOrig}
-	case types.MediaTypeOCI1ManifestList:
+	case mediatype.OCI1ManifestList:
 		var mOrig v1.Index
 		if len(c.rawBody) > 0 {
 			err = json.Unmarshal(c.rawBody, &mOrig)
 			mt = mOrig.MediaType
 		}
 		m = &oci1Index{common: c, Index: mOrig}
-	case types.MediaTypeOCI1Artifact:
+	case mediatype.OCI1Artifact:
 		var mOrig v1.ArtifactManifest
 		if len(c.rawBody) > 0 {
 			err = json.Unmarshal(c.rawBody, &mOrig)
@@ -546,7 +549,7 @@ func fromCommon(c common) (Manifest, error) {
 		}
 		m = &oci1Artifact{common: c, ArtifactManifest: mOrig}
 	default:
-		return nil, fmt.Errorf("%w: \"%s\"", types.ErrUnsupportedMediaType, c.desc.MediaType)
+		return nil, fmt.Errorf("%w: \"%s\"", errs.ErrUnsupportedMediaType, c.desc.MediaType)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshaling manifest for %s: %w", c.r.CommonName(), err)
@@ -570,7 +573,7 @@ func verifyMT(expected, received string) error {
 	return nil
 }
 
-func getPlatformList(dl []types.Descriptor) ([]*platform.Platform, error) {
+func getPlatformList(dl []descriptor.Descriptor) ([]*platform.Platform, error) {
 	var l []*platform.Platform
 	for _, d := range dl {
 		if d.Platform != nil {

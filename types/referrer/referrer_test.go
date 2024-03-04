@@ -6,8 +6,10 @@ import (
 
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/mediatype"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 )
 
@@ -121,13 +123,13 @@ const bDockerImg = `
 `
 
 var mOCIImg, mOCIImgAT, mOCIIndex, mDockerImg manifest.Manifest
-var dOCIImg = types.Descriptor{
+var dOCIImg = descriptor.Descriptor{
 	MediaType:    "application/vnd.oci.image.manifest.v1+json",
 	ArtifactType: "application/vnd.example.config.v1+json",
 	Size:         int64(len(bOCIImg)),
 	Digest:       digest.FromString(bOCIImg),
 }
-var dOCIImgAT = types.Descriptor{
+var dOCIImgAT = descriptor.Descriptor{
 	MediaType:    "application/vnd.oci.image.manifest.v1+json",
 	ArtifactType: "application/vnd.example.data",
 	Size:         int64(len(bOCIImgAT)),
@@ -137,7 +139,7 @@ var dOCIImgAT = types.Descriptor{
 		"com.example.version":  "1.0",
 	},
 }
-var dOCIIndex = types.Descriptor{
+var dOCIIndex = descriptor.Descriptor{
 	MediaType:    "application/vnd.oci.image.index.v1+json",
 	ArtifactType: "application/vnd.example.data",
 	Size:         int64(len(bOCIIndex)),
@@ -172,13 +174,13 @@ func TestEmpty(t *testing.T) {
 	t.Parallel()
 	// create an empty list and full list, test is empty
 	rlEmpty := &ReferrerList{
-		Descriptors: []types.Descriptor{},
+		Descriptors: []descriptor.Descriptor{},
 		Annotations: map[string]string{},
 		Tags:        []string{},
 	}
 	mEmpty, err := manifest.New(manifest.WithOrig(v1.Index{
 		Versioned: v1.IndexSchemaVersion,
-		MediaType: types.MediaTypeOCI1ManifestList,
+		MediaType: mediatype.OCI1ManifestList,
 	}))
 	if err != nil {
 		t.Fatalf("failed to generate index: %v", err)
@@ -189,7 +191,7 @@ func TestEmpty(t *testing.T) {
 	}
 
 	rlPopulated := &ReferrerList{
-		Descriptors: []types.Descriptor{
+		Descriptors: []descriptor.Descriptor{
 			dOCIImg,
 			dOCIImgAT,
 			dOCIIndex,
@@ -199,8 +201,8 @@ func TestEmpty(t *testing.T) {
 	}
 	mPopulated, err := manifest.New(manifest.WithOrig(v1.Index{
 		Versioned: v1.IndexSchemaVersion,
-		MediaType: types.MediaTypeOCI1ManifestList,
-		Manifests: []types.Descriptor{
+		MediaType: mediatype.OCI1ManifestList,
+		Manifests: []descriptor.Descriptor{
 			dOCIImg,
 			dOCIImgAT,
 			dOCIIndex,
@@ -241,18 +243,18 @@ func TestAdd(t *testing.T) {
 		{
 			name:        "Docker Image",
 			m:           mDockerImg,
-			expectedErr: types.ErrUnsupportedMediaType,
+			expectedErr: errs.ErrUnsupportedMediaType,
 		},
 	}
 	// add manifests (image without AT, image with AT, artifact, docker, no subject), verify list contents and error handling
 	rl := &ReferrerList{
-		Descriptors: []types.Descriptor{},
+		Descriptors: []descriptor.Descriptor{},
 		Annotations: map[string]string{},
 		Tags:        []string{},
 	}
 	m, err := manifest.New(manifest.WithOrig(v1.Index{
 		Versioned: v1.IndexSchemaVersion,
-		MediaType: types.MediaTypeOCI1ManifestList,
+		MediaType: mediatype.OCI1ManifestList,
 	}))
 	if err != nil {
 		t.Fatalf("failed to generate empty index: %v", err)
@@ -279,7 +281,7 @@ func TestAdd(t *testing.T) {
 		t.Errorf("number of descriptors, expected 3, received %d", len(rl.Descriptors))
 	}
 	for _, d := range rl.Descriptors {
-		if d.ArtifactType == types.MediaTypeOCI1Empty || d.ArtifactType == "" {
+		if d.ArtifactType == mediatype.OCI1Empty || d.ArtifactType == "" {
 			t.Errorf("unexpected artifact type: %s", d.ArtifactType)
 		}
 	}
@@ -288,7 +290,7 @@ func TestAdd(t *testing.T) {
 func TestDelete(t *testing.T) {
 	t.Parallel()
 	rl := &ReferrerList{
-		Descriptors: []types.Descriptor{
+		Descriptors: []descriptor.Descriptor{
 			dOCIImg,
 			dOCIImgAT,
 		},
@@ -297,8 +299,8 @@ func TestDelete(t *testing.T) {
 	}
 	m, err := manifest.New(manifest.WithOrig(v1.Index{
 		Versioned: v1.IndexSchemaVersion,
-		MediaType: types.MediaTypeOCI1ManifestList,
-		Manifests: []types.Descriptor{
+		MediaType: mediatype.OCI1ManifestList,
+		Manifests: []descriptor.Descriptor{
 			dOCIImg,
 			dOCIImgAT,
 			dOCIIndex,
@@ -325,7 +327,7 @@ func TestDelete(t *testing.T) {
 		{
 			name:        "OCI Image again",
 			m:           mOCIImg,
-			expectedErr: types.ErrNotFound,
+			expectedErr: errs.ErrNotFound,
 		},
 		{
 			name: "OCI Index",
@@ -334,7 +336,7 @@ func TestDelete(t *testing.T) {
 		{
 			name:        "Docker Image",
 			m:           mDockerImg,
-			expectedErr: types.ErrNotFound,
+			expectedErr: errs.ErrNotFound,
 		},
 	}
 	for _, tt := range tests {

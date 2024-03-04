@@ -18,8 +18,9 @@ import (
 
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/mediatype"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -29,7 +30,7 @@ func (o *OCIDir) ManifestDelete(ctx context.Context, r ref.Ref, opts ...scheme.M
 	defer o.mu.Unlock()
 
 	if r.Digest == "" {
-		return fmt.Errorf("digest required to delete manifest, reference %s%.0w", r.CommonName(), types.ErrMissingDigest)
+		return fmt.Errorf("digest required to delete manifest, reference %s%.0w", r.CommonName(), errs.ErrMissingDigest)
 	}
 
 	mc := scheme.ManifestConfig{}
@@ -51,7 +52,7 @@ func (o *OCIDir) ManifestDelete(ctx context.Context, r ref.Ref, opts ...scheme.M
 			if err == nil && sDesc != nil && sDesc.MediaType != "" && sDesc.Size > 0 {
 				// attempt to delete the referrer, but ignore if the referrer entry wasn't found
 				err = o.referrerDelete(ctx, r, mc.Manifest)
-				if err != nil && !errors.Is(err, types.ErrNotFound) && !errors.Is(err, fs.ErrNotExist) {
+				if err != nil && !errors.Is(err, errs.ErrNotFound) && !errors.Is(err, fs.ErrNotExist) {
 					return err
 				}
 			}
@@ -114,7 +115,7 @@ func (o *OCIDir) manifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest,
 		}
 	}
 	if desc.Digest == "" {
-		return nil, types.ErrNotFound
+		return nil, errs.ErrNotFound
 	}
 	file := path.Join(r.Path, "blobs", desc.Digest.Algorithm().String(), desc.Digest.Encoded())
 	fd, err := o.fs.Open(file)
@@ -158,13 +159,13 @@ func (o *OCIDir) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest
 		}
 	}
 	if desc.Digest == "" {
-		return nil, types.ErrNotFound
+		return nil, errs.ErrNotFound
 	}
 	// verify underlying file exists
 	file := path.Join(r.Path, "blobs", desc.Digest.Algorithm().String(), desc.Digest.Encoded())
 	fi, err := rwfs.Stat(o.fs, file)
 	if err != nil || fi.IsDir() {
-		return nil, types.ErrNotFound
+		return nil, errs.ErrNotFound
 	}
 	// if missing, set media type on desc
 	if desc.MediaType == "" {
@@ -185,9 +186,9 @@ func (o *OCIDir) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest
 			desc.MediaType = mt.MediaType
 			desc.Size = int64(len(raw))
 		} else if mt.SchemaVersion == 1 && len(mt.Signatures) > 0 {
-			desc.MediaType = types.MediaTypeDocker1ManifestSigned
+			desc.MediaType = mediatype.Docker1ManifestSigned
 		} else if mt.SchemaVersion == 1 {
-			desc.MediaType = types.MediaTypeDocker1Manifest
+			desc.MediaType = mediatype.Docker1Manifest
 			desc.Size = int64(len(raw))
 		}
 	}

@@ -18,8 +18,9 @@ import (
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/scheme/reg"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/mediatype"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 )
@@ -739,7 +740,7 @@ func TestMod(t *testing.T) {
 				WithRebase(),
 			},
 			ref:     "ocidir://testrepo:v1",
-			wantErr: types.ErrMissingAnnotation,
+			wantErr: errs.ErrMissingAnnotation,
 		},
 		{
 			name: "Rebase refs",
@@ -755,7 +756,7 @@ func TestMod(t *testing.T) {
 				WithRebaseRefs(rb2, rb3),
 			},
 			ref:     "ocidir://testrepo:v3",
-			wantErr: types.ErrMismatch,
+			wantErr: errs.ErrMismatch,
 		},
 		{
 			name: "Rebase mismatch",
@@ -763,7 +764,7 @@ func TestMod(t *testing.T) {
 				WithRebaseRefs(rb3, rb2),
 			},
 			ref:     "ocidir://testrepo:v3",
-			wantErr: types.ErrMismatch,
+			wantErr: errs.ErrMismatch,
 		},
 		{
 			name: "Rebase and backdate",
@@ -852,12 +853,12 @@ func TestMod(t *testing.T) {
 func TestInList(t *testing.T) {
 	t.Parallel()
 	t.Run("match", func(t *testing.T) {
-		if !inListStr(types.MediaTypeDocker2LayerGzip, mtWLTar) {
+		if !inListStr(mediatype.Docker2LayerGzip, mtWLTar) {
 			t.Errorf("did not find docker layer in tar whitelist")
 		}
 	})
 	t.Run("mismatch", func(t *testing.T) {
-		if inListStr(types.MediaTypeDocker2LayerGzip, mtWLConfig) {
+		if inListStr(mediatype.Docker2LayerGzip, mtWLConfig) {
 			t.Errorf("found docker layer in config whitelist")
 		}
 	})

@@ -11,8 +11,9 @@ import (
 	"github.com/opencontainers/go-digest"
 
 	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
+	"github.com/regclient/regclient/types/descriptor"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/ref"
@@ -39,8 +40,8 @@ type dagConfig struct {
 type dagManifest struct {
 	mod       changes
 	top       bool // indicates the top level manifest (needed for manifest lists)
-	origDesc  types.Descriptor
-	newDesc   types.Descriptor
+	origDesc  descriptor.Descriptor
+	newDesc   descriptor.Descriptor
 	m         manifest.Manifest
 	config    *dagOCIConfig
 	layers    []*dagLayer
@@ -50,19 +51,19 @@ type dagManifest struct {
 
 type dagOCIConfig struct {
 	modified bool
-	newDesc  types.Descriptor
+	newDesc  descriptor.Descriptor
 	oc       blob.OCIConfig
 }
 
 type dagLayer struct {
 	mod      changes
-	newDesc  types.Descriptor
+	newDesc  descriptor.Descriptor
 	ucDigest digest.Digest // uncompressed descriptor
-	desc     types.Descriptor
+	desc     descriptor.Descriptor
 	rSrc     ref.Ref
 }
 
-func dagGet(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, d types.Descriptor) (*dagManifest, error) {
+func dagGet(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, d descriptor.Descriptor) (*dagManifest, error) {
 	var err error
 	getOpts := []regclient.ManifestOpts{}
 	if d.Digest != "" {
@@ -92,7 +93,7 @@ func dagGet(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, d types.
 		// pull config
 		doc := dagOCIConfig{}
 		cd, err := mi.GetConfig()
-		if err != nil && !errors.Is(err, types.ErrUnsupportedMediaType) {
+		if err != nil && !errors.Is(err, errs.ErrUnsupportedMediaType) {
 			return nil, err
 		} else if err == nil && inListStr(cd.MediaType, mtWLConfig) {
 			oc, err := rc.BlobGetOCIConfig(ctx, rSrc, cd)

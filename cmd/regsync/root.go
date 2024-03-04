@@ -26,7 +26,8 @@ import (
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/scheme/reg"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
@@ -611,7 +612,7 @@ func (rootOpts *rootCmd) processImage(ctx context.Context, s ConfigSync, src, tg
 // process a sync step
 func (rootOpts *rootCmd) processRef(ctx context.Context, s ConfigSync, src, tgt ref.Ref, action actionType) error {
 	mSrc, err := rc.ManifestHead(ctx, src, regclient.WithManifestRequireDigest())
-	if err != nil && errors.Is(err, types.ErrUnsupportedAPI) {
+	if err != nil && errors.Is(err, errs.ErrUnsupportedAPI) {
 		mSrc, err = rc.ManifestGet(ctx, src)
 	}
 	if err != nil {
@@ -831,10 +832,10 @@ func (rootOpts *rootCmd) processRef(ctx context.Context, s ConfigSync, src, tgt 
 			for _, filter := range s.ReferrerFilters {
 				rOpts := []scheme.ReferrerOpts{}
 				if filter.ArtifactType != "" {
-					rOpts = append(rOpts, scheme.WithReferrerMatchOpt(types.MatchOpt{ArtifactType: filter.ArtifactType}))
+					rOpts = append(rOpts, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{ArtifactType: filter.ArtifactType}))
 				}
 				if filter.Annotations != nil {
-					rOpts = append(rOpts, scheme.WithReferrerMatchOpt(types.MatchOpt{Annotations: filter.Annotations}))
+					rOpts = append(rOpts, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{Annotations: filter.Annotations}))
 				}
 				opts = append(opts, regclient.ImageWithReferrers(rOpts...))
 			}

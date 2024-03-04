@@ -15,7 +15,7 @@ import (
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/reqresp"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -146,8 +146,8 @@ func TestPing(t *testing.T) {
 		result, err := reg.Ping(ctx, r)
 		if err == nil {
 			t.Fatalf("ping did not fail")
-		} else if !errors.Is(err, types.ErrHTTPUnauthorized) {
-			t.Fatalf("unexpected error, expected %v, received %v", types.ErrHTTPUnauthorized, err)
+		} else if !errors.Is(err, errs.ErrHTTPUnauthorized) {
+			t.Fatalf("unexpected error, expected %v, received %v", errs.ErrHTTPUnauthorized, err)
 		}
 		if result.Header == nil {
 			t.Errorf("headers missing")
@@ -163,8 +163,8 @@ func TestPing(t *testing.T) {
 		result, err := reg.Ping(ctx, r)
 		if err == nil {
 			t.Fatalf("ping did not fail")
-		} else if !errors.Is(err, types.ErrNotFound) {
-			t.Fatalf("unexpected error, expected %v, received %v", types.ErrNotFound, err)
+		} else if !errors.Is(err, errs.ErrNotFound) {
+			t.Fatalf("unexpected error, expected %v, received %v", errs.ErrNotFound, err)
 		}
 		if result.Header == nil {
 			t.Errorf("headers missing")

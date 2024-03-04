@@ -8,7 +8,9 @@ import (
 
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
+	"github.com/regclient/regclient/types/errs"
+	"github.com/regclient/regclient/types/mediatype"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/ref"
 )
@@ -61,29 +63,29 @@ func TestIndex(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to generate ref: %v", err)
 	}
-	descNoTag := types.Descriptor{
-		MediaType: types.MediaTypeDocker2Manifest,
+	descNoTag := descriptor.Descriptor{
+		MediaType: mediatype.Docker2Manifest,
 		Size:      1234,
 		Digest:    dig1,
 	}
-	descA := types.Descriptor{
-		MediaType: types.MediaTypeDocker2Manifest,
+	descA := descriptor.Descriptor{
+		MediaType: mediatype.Docker2Manifest,
 		Size:      1234,
 		Digest:    dig2,
 		Annotations: map[string]string{
 			aOCIRefName: "tag-a",
 		},
 	}
-	descB := types.Descriptor{
-		MediaType: types.MediaTypeDocker2Manifest,
+	descB := descriptor.Descriptor{
+		MediaType: mediatype.Docker2Manifest,
 		Size:      1234,
 		Digest:    dig2,
 		Annotations: map[string]string{
 			aOCIRefName: "tag-b",
 		},
 	}
-	descC := types.Descriptor{
-		MediaType: types.MediaTypeDocker2Manifest,
+	descC := descriptor.Descriptor{
+		MediaType: mediatype.Docker2Manifest,
 		Size:      1234,
 		Digest:    dig3,
 		Annotations: map[string]string{
@@ -94,23 +96,23 @@ func TestIndex(t *testing.T) {
 		name         string
 		index        v1.Index
 		get          ref.Ref
-		expectGet    types.Descriptor
+		expectGet    descriptor.Descriptor
 		expectGetErr error
 		set          ref.Ref
-		setDesc      types.Descriptor
+		setDesc      descriptor.Descriptor
 		expectLen    int
 	}{
 		{
 			name:         "empty",
 			get:          rA,
-			expectGetErr: types.ErrNotFound,
+			expectGetErr: errs.ErrNotFound,
 		},
 		{
 			name: "no tag",
 			index: v1.Index{
 				Versioned: v1.IndexSchemaVersion,
-				MediaType: types.MediaTypeOCI1ManifestList,
-				Manifests: []types.Descriptor{
+				MediaType: mediatype.OCI1ManifestList,
+				Manifests: []descriptor.Descriptor{
 					descNoTag,
 				},
 			},
@@ -124,8 +126,8 @@ func TestIndex(t *testing.T) {
 			name: "tag a",
 			index: v1.Index{
 				Versioned: v1.IndexSchemaVersion,
-				MediaType: types.MediaTypeOCI1ManifestList,
-				Manifests: []types.Descriptor{
+				MediaType: mediatype.OCI1ManifestList,
+				Manifests: []descriptor.Descriptor{
 					descNoTag,
 					descA,
 				},
@@ -140,8 +142,8 @@ func TestIndex(t *testing.T) {
 			name: "tag b",
 			index: v1.Index{
 				Versioned: v1.IndexSchemaVersion,
-				MediaType: types.MediaTypeOCI1ManifestList,
-				Manifests: []types.Descriptor{
+				MediaType: mediatype.OCI1ManifestList,
+				Manifests: []descriptor.Descriptor{
 					descNoTag,
 					descB,
 				},
@@ -156,8 +158,8 @@ func TestIndex(t *testing.T) {
 			name: "tag c",
 			index: v1.Index{
 				Versioned: v1.IndexSchemaVersion,
-				MediaType: types.MediaTypeOCI1ManifestList,
-				Manifests: []types.Descriptor{
+				MediaType: mediatype.OCI1ManifestList,
+				Manifests: []descriptor.Descriptor{
 					descA,
 					descC,
 				},

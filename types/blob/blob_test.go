@@ -12,7 +12,9 @@ import (
 
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
+	"github.com/regclient/regclient/types/errs"
+	"github.com/regclient/regclient/types/mediatype"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/ref"
 )
@@ -53,19 +55,19 @@ var (
 	`)
 	exLen     = int64(len(exBlob))
 	exDigest  = digest.FromBytes(exBlob)
-	exMT      = types.MediaTypeDocker2ImageConfig
+	exMT      = mediatype.Docker2ImageConfig
 	exHeaders = http.Header{
-		"Content-Type":          {types.MediaTypeDocker2ImageConfig},
+		"Content-Type":          {mediatype.Docker2ImageConfig},
 		"Content-Length":        {fmt.Sprintf("%d", exLen)},
 		"Docker-Content-Digest": {exDigest.String()},
 	}
 	exHeadersShort = http.Header{
-		"Content-Type":          {types.MediaTypeDocker2ImageConfig},
+		"Content-Type":          {mediatype.Docker2ImageConfig},
 		"Content-Length":        {fmt.Sprintf("%d", exLen-5)},
 		"Docker-Content-Digest": {exDigest.String()},
 	}
 	exHeadersLong = http.Header{
-		"Content-Type":          {types.MediaTypeDocker2ImageConfig},
+		"Content-Type":          {mediatype.Docker2ImageConfig},
 		"Content-Length":        {fmt.Sprintf("%d", exLen+5)},
 		"Docker-Content-Digest": {exDigest.String()},
 	}
@@ -76,7 +78,7 @@ var (
 		ContentLength: exLen,
 		Body:          io.NopCloser(bytes.NewReader(exBlob)),
 	}
-	exDesc = types.Descriptor{
+	exDesc = descriptor.Descriptor{
 		MediaType: exMT,
 		Digest:    exDigest,
 		Size:      exLen,
@@ -111,7 +113,7 @@ func TestCommon(t *testing.T) {
 			name: "descriptor",
 			opts: []Opts{
 				WithReader(bytes.NewReader(exBlob)),
-				WithDesc(types.Descriptor{
+				WithDesc(descriptor.Descriptor{
 					MediaType: exMT,
 					Digest:    exDigest,
 					Size:      exLen,
@@ -160,7 +162,7 @@ func TestCommon(t *testing.T) {
 			eHeaders: exHeadersShort,
 			eLen:     exLen,
 			eMT:      exMT,
-			eErr:     types.ErrSizeLimitExceeded,
+			eErr:     errs.ErrSizeLimitExceeded,
 		},
 		{
 			name: "short read",
@@ -174,7 +176,7 @@ func TestCommon(t *testing.T) {
 			eHeaders: exHeadersLong,
 			eLen:     exLen,
 			eMT:      exMT,
-			eErr:     types.ErrShortRead,
+			eErr:     errs.ErrShortRead,
 		},
 	}
 	for _, tc := range tt {
@@ -296,8 +298,8 @@ func TestReader(t *testing.T) {
 		if err == nil {
 			t.Fatalf("readall did not fail")
 		}
-		if !errors.Is(err, types.ErrSizeLimitExceeded) {
-			t.Errorf("unexpected error on readall, expected %v, received %v", types.ErrSizeLimitExceeded, err)
+		if !errors.Is(err, errs.ErrSizeLimitExceeded) {
+			t.Errorf("unexpected error on readall, expected %v, received %v", errs.ErrSizeLimitExceeded, err)
 		}
 	})
 
@@ -305,7 +307,7 @@ func TestReader(t *testing.T) {
 		// create blob
 		b := NewReader(
 			WithReader(bytes.NewReader(exBlob)),
-			WithDesc(types.Descriptor{
+			WithDesc(descriptor.Descriptor{
 				MediaType: exMT,
 				Digest:    exDigest,
 				Size:      exLen,
@@ -357,7 +359,7 @@ func TestOCI(t *testing.T) {
 		fromJSON []byte
 		wantRaw  []byte
 		wantJSON []byte
-		wantDesc types.Descriptor
+		wantDesc descriptor.Descriptor
 	}{
 		{
 			name: "RawBody",
@@ -383,7 +385,7 @@ func TestOCI(t *testing.T) {
 			opts: []Opts{
 				WithImage(ociConfig),
 			},
-			wantDesc: types.Descriptor{MediaType: types.MediaTypeOCI1ImageConfig},
+			wantDesc: descriptor.Descriptor{MediaType: mediatype.OCI1ImageConfig},
 		},
 		{
 			name: "Config with Docker Desc",
@@ -391,7 +393,7 @@ func TestOCI(t *testing.T) {
 				WithImage(ociConfig),
 				WithDesc(exDesc),
 			},
-			wantDesc: types.Descriptor{MediaType: exMT},
+			wantDesc: descriptor.Descriptor{MediaType: exMT},
 		},
 	}
 
@@ -440,7 +442,7 @@ func TestOCI(t *testing.T) {
 		// create blob
 		oc := NewOCIConfig(
 			WithRawBody(exBlob),
-			WithDesc(types.Descriptor{
+			WithDesc(descriptor.Descriptor{
 				MediaType: exMT,
 				Digest:    exDigest,
 				Size:      exLen,
@@ -493,8 +495,8 @@ func TestTarReader(t *testing.T) {
 		{
 			name: "good desc",
 			opts: []Opts{
-				WithDesc(types.Descriptor{
-					MediaType: types.MediaTypeOCI1Layer,
+				WithDesc(descriptor.Descriptor{
+					MediaType: mediatype.OCI1Layer,
 					Size:      fhSize,
 					Digest:    dig,
 				}),
@@ -503,8 +505,8 @@ func TestTarReader(t *testing.T) {
 		{
 			name: "bad desc",
 			opts: []Opts{
-				WithDesc(types.Descriptor{
-					MediaType: types.MediaTypeOCI1Layer,
+				WithDesc(descriptor.Descriptor{
+					MediaType: mediatype.OCI1Layer,
 					Size:      fhSize,
 					Digest:    digest.FromString("bad digest"),
 				}),
@@ -573,7 +575,7 @@ func TestReadFile(t *testing.T) {
 		{
 			name:      "layer2",
 			filename:  "layer2.txt",
-			expectErr: types.ErrFileDeleted,
+			expectErr: errs.ErrFileDeleted,
 		},
 		{
 			name:     "layer3",
@@ -583,12 +585,12 @@ func TestReadFile(t *testing.T) {
 		{
 			name:      "opaque dir",
 			filename:  "exdir/test.txt",
-			expectErr: types.ErrFileDeleted,
+			expectErr: errs.ErrFileDeleted,
 		},
 		{
 			name:      "missing",
 			filename:  "missing.txt",
-			expectErr: types.ErrFileNotFound,
+			expectErr: errs.ErrFileNotFound,
 		},
 		{
 			name:      "invalid",
@@ -607,7 +609,7 @@ func TestReadFile(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to open test data: %v", err)
 			}
-			btr := NewTarReader(WithReader(fh), WithDesc(types.Descriptor{Size: int64(len(fileBytes)), Digest: blobDigest, MediaType: types.MediaTypeOCI1Layer}))
+			btr := NewTarReader(WithReader(fh), WithDesc(descriptor.Descriptor{Size: int64(len(fileBytes)), Digest: blobDigest, MediaType: mediatype.OCI1Layer}))
 			defer btr.Close()
 			th, rdr, err := btr.ReadFile(tc.filename)
 			if tc.expectErr != nil {
@@ -649,12 +651,12 @@ func TestReadFile(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to open test data: %v", err)
 		}
-		btr := NewTarReader(WithReader(fh), WithDesc(types.Descriptor{Size: int64(len(fileBytes)), Digest: digest.FromString("bad digest"), MediaType: types.MediaTypeOCI1Layer}))
+		btr := NewTarReader(WithReader(fh), WithDesc(descriptor.Descriptor{Size: int64(len(fileBytes)), Digest: digest.FromString("bad digest"), MediaType: mediatype.OCI1Layer}))
 		_, _, err = btr.ReadFile("missing.txt")
 		if err == nil {
 			t.Errorf("ReadFile did not fail")
-		} else if !errors.Is(err, types.ErrDigestMismatch) {
-			t.Errorf("unexpected error, expected %v, received %v", types.ErrDigestMismatch, err)
+		} else if !errors.Is(err, errs.ErrDigestMismatch) {
+			t.Errorf("unexpected error, expected %v, received %v", errs.ErrDigestMismatch, err)
 		}
 	})
 }

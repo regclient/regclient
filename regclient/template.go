@@ -9,4 +9,7 @@ import (
 	gotemplate "text/template"
 )
 
+// TemplateFuncs adds functions to a template.
+//
+// Deprecated: replace with [gotemplate.FuncMap].
 var TemplateFuncs = gotemplate.FuncMap{}

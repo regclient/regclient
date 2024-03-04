@@ -24,6 +24,7 @@ import (
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/platform"
@@ -842,7 +843,7 @@ func (imageOpts *imageCmd) runImageCheckBase(cmd *cobra.Command, args []string) 
 	if err == nil {
 		log.Info("base image matches")
 		return nil
-	} else if errors.Is(err, types.ErrMismatch) {
+	} else if errors.Is(err, errs.ErrMismatch) {
 		log.WithFields(logrus.Fields{
 			"err": err,
 		}).Info("base image mismatch")
@@ -1200,7 +1201,7 @@ func (imageOpts *imageCmd) runImageGetFile(cmd *cobra.Command, args []string) er
 		}
 		th, rdr, err := btr.ReadFile(filename)
 		if err != nil {
-			if errors.Is(err, types.ErrFileNotFound) {
+			if errors.Is(err, errs.ErrFileNotFound) {
 				if err := btr.Close(); err != nil {
 					return err
 				}
@@ -1244,7 +1245,7 @@ func (imageOpts *imageCmd) runImageGetFile(cmd *cobra.Command, args []string) er
 		return nil
 	}
 	// all layers exhausted, not found or deleted
-	return types.ErrNotFound
+	return errs.ErrNotFound
 }
 
 func (imageOpts *imageCmd) runImageImport(cmd *cobra.Command, args []string) error {
@@ -1294,7 +1295,7 @@ func (imageOpts *imageCmd) runImageInspect(cmd *cobra.Command, args []string) er
 	}
 	mi, ok := m.(manifest.Imager)
 	if !ok {
-		return fmt.Errorf("manifest does not support image methods%.0w", types.ErrUnsupportedMediaType)
+		return fmt.Errorf("manifest does not support image methods%.0w", errs.ErrUnsupportedMediaType)
 	}
 	cd, err := mi.GetConfig()
 	if err != nil {

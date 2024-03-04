@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/regclient/regclient/internal/rwfs"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -50,7 +50,7 @@ func TestTag(t *testing.T) {
 		exTags := []string{"broken", "v0.3"}
 		rCp.Tag = "missing"
 		err := oMem.TagDelete(ctx, rCp)
-		if err == nil || !errors.Is(err, types.ErrNotFound) {
+		if err == nil || !errors.Is(err, errs.ErrNotFound) {
 			t.Errorf("deleting missing tag %s: %v", rCp.CommonName(), err)
 		}
 		rCp.Tag = "latest"
