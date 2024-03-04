@@ -21,6 +21,9 @@ import (
 	"path"
 	"regexp"
 	"strings"
+
+	"github.com/regclient/regclient/internal/strparse"
+	"github.com/regclient/regclient/types/errs"
 )
 
 var (
@@ -60,11 +63,13 @@ func (p Platform) String() string {
 
 // Parse converts a platform string into a struct
 func Parse(platStr string) (Platform, error) {
+	// args are a regclient specific way to extend the platform string
+	platArgs := strings.SplitN(platStr, ",", 2)
 	// split on slash, validate each component
-	platSplit := strings.Split(platStr, "/")
+	platSplit := strings.Split(platArgs[0], "/")
 	for i, part := range platSplit {
 		if !partRE.MatchString(part) {
-			return Platform{}, fmt.Errorf("invalid platform component %s in %s", part, platStr)
+			return Platform{}, fmt.Errorf("invalid platform component %s in %s%.0w", part, platStr, errs.ErrParsingFailed)
 		}
 		platSplit[i] = strings.ToLower(part)
 	}
@@ -77,6 +82,22 @@ func Parse(platStr string) (Platform, error) {
 	}
 	if len(platSplit) >= 3 {
 		plat.Variant = platSplit[2]
+	}
+	if len(platArgs) > 1 {
+		kvMap, err := strparse.SplitCSKV(platArgs[1])
+		if err != nil {
+			return Platform{}, fmt.Errorf("failed to split platform args in %s: %w", platStr, err)
+		}
+		for k, v := range kvMap {
+			k := strings.TrimSpace(k)
+			v := strings.TrimSpace(v)
+			switch strings.ToLower(k) {
+			case "osver", "osversion":
+				plat.OSVersion = v
+			default:
+				return Platform{}, fmt.Errorf("unsupported platform arg type, %s in %s%.0w", k, platStr, errs.ErrParsingFailed)
+			}
+		}
 	}
 	// gather local platform details
 	platLocal := Local()

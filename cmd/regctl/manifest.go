@@ -99,7 +99,10 @@ regctl manifest diff --context-full \
 regctl manifest get alpine
 
 # show the original manifest body for the local platform
-regctl manifest get alpine --format raw-body --platform local`,
+regctl manifest get alpine --format raw-body --platform local
+
+# retrieve the manifest for a specific windows version
+regctl manifest get golang --platform windows/amd64,osver=10.0.17763.4974`,
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: rootOpts.completeArgTag,
 		RunE:              manifestOpts.runManifestGet,

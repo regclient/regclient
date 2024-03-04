@@ -2,8 +2,9 @@ package platform
 
 import (
 	"errors"
-	"fmt"
 	"testing"
+
+	"github.com/regclient/regclient/types/errs"
 )
 
 func TestPlatformParse(t *testing.T) {
@@ -28,7 +29,12 @@ func TestPlatformParse(t *testing.T) {
 		{
 			name:    "wildcard",
 			parse:   "linux/*",
-			wantErr: fmt.Errorf("invalid platform component %s in %s", "*", "linux/*"),
+			wantErr: errs.ErrParsingFailed,
+		},
+		{
+			name:    "unsupported arg",
+			parse:   "linux,amd64",
+			wantErr: errs.ErrParsingFailed,
 		},
 		{
 			name:  "linux amd64",
@@ -104,6 +110,11 @@ func TestPlatformParse(t *testing.T) {
 			name:  "darwin arm64",
 			parse: "darwin/arm64",
 			goal:  Platform{OS: "darwin", Architecture: "arm64"},
+		},
+		{
+			name:  "windows amd64 with version",
+			parse: "windows/amd64,osver=10.0.17763.4974",
+			goal:  Platform{OS: "windows", Architecture: "amd64", OSVersion: "10.0.17763.4974"},
 		},
 		{
 			name:  "windows amd64",

@@ -111,7 +111,11 @@ regctl image copy registry.example.org/repo:v1.2.3 registry.example.org/repo:v1
 
 # copy an image to an OCI Layout including referrers
 regctl image copy --referrers \
-  ghcr.io/regclient/regctl:edge ocidir://regctl:edge`,
+  ghcr.io/regclient/regctl:edge ocidir://regctl:edge
+
+# copy a windows image, including foreign layers
+regctl image copy --platform windows/amd64,osver=10.0.17763.4974 --include-external \
+  golang:latest registry.example.org/library/golang:windows`,
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: rootOpts.completeArgTag,
 		RunE:              imageOpts.runImageCopy,

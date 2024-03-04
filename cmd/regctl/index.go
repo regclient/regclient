@@ -80,7 +80,13 @@ regctl index create registry.example.org/alpine:latest \
 # create a docker manifest list
 regctl index create registry.example.org/busybox:1.34 \
   --media-type application/vnd.docker.distribution.manifest.list.v2+json \
-  --ref busybox:1.34 --platform linux/amd64 --platform linux/arm64`,
+  --ref busybox:1.34 --platform linux/amd64 --platform linux/arm64
+
+# create an index of windows images
+regctl index create registry.example.org/library/golang:windows \
+  --ref golang:latest \
+	--platform windows/amd64,osver=10.0.20348.2322 \
+	--platform windows/amd64,osver=10.0.17763.5458`,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{}, // do not auto complete digests
 		RunE:      indexOpts.runIndexCreate,
