@@ -4,7 +4,7 @@ package strparse
 import (
 	"fmt"
 
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 )
 
 // SplitCSKV splits a comma separated key=value list into a map
@@ -85,7 +85,7 @@ func SplitCSKV(s string) (map[string]string, error) {
 	case "val", "key":
 		procKV()
 	default:
-		return nil, fmt.Errorf("string parsing failed, end state: %s%.0w", state, types.ErrParsingFailed)
+		return nil, fmt.Errorf("string parsing failed, end state: %s%.0w", state, errs.ErrParsingFailed)
 	}
 	return result, nil
 }

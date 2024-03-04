@@ -9,7 +9,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 )
 
 func TestRepoList(t *testing.T) {
@@ -27,7 +27,7 @@ func TestRepoList(t *testing.T) {
 		WithRetryDelay(delayInit, delayMax),
 	)
 	_, err := rc.RepoList(ctx, "registry.example.com/path")
-	if !errors.Is(err, types.ErrParsingFailed) {
-		t.Errorf("RepoList unexpected error on hostname with a path: expected %v, received %v", types.ErrParsingFailed, err)
+	if !errors.Is(err, errs.ErrParsingFailed) {
+		t.Errorf("RepoList unexpected error on hostname with a path: expected %v, received %v", errs.ErrParsingFailed, err)
 	}
 }

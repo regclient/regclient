@@ -5,19 +5,55 @@
 
 package regclient
 
-import "github.com/regclient/regclient/types"
+import "github.com/regclient/regclient/types/mediatype"
 
 var (
-	MediaTypeDocker1Manifest       = types.MediaTypeDocker1Manifest
-	MediaTypeDocker1ManifestSigned = types.MediaTypeDocker1ManifestSigned
-	MediaTypeDocker2Manifest       = types.MediaTypeDocker2Manifest
-	MediaTypeDocker2ManifestList   = types.MediaTypeDocker2ManifestList
-	MediaTypeDocker2ImageConfig    = types.MediaTypeDocker2ImageConfig
-	MediaTypeOCI1Manifest          = types.MediaTypeOCI1Manifest
-	MediaTypeOCI1ManifestList      = types.MediaTypeOCI1ManifestList
-	MediaTypeOCI1ImageConfig       = types.MediaTypeOCI1ImageConfig
-	MediaTypeDocker2Layer          = types.MediaTypeDocker2LayerGzip
-	MediaTypeOCI1Layer             = types.MediaTypeOCI1Layer
-	MediaTypeOCI1LayerGzip         = types.MediaTypeOCI1LayerGzip
-	MediaTypeBuildkitCacheConfig   = types.MediaTypeBuildkitCacheConfig
+	// MediaTypeDocker1Manifest
+	//
+	// Deprecated: replace with [mediatype.Docker1Manifest].
+	MediaTypeDocker1Manifest = mediatype.Docker1Manifest
+	// MediaTypeDocker1ManifestSigned
+	//
+	// Deprecated: replace with [mediatype.Docker1ManifestSigned]
+	MediaTypeDocker1ManifestSigned = mediatype.Docker1ManifestSigned
+	// MediaTypeDocker2Manifest
+	//
+	// Deprecated: replace with [mediatype.Docker2Manifest].
+	MediaTypeDocker2Manifest = mediatype.Docker2Manifest
+	// MediaTypeDocker2ManifestList
+	//
+	// Deprecated: replace with [mediatype.Docker2ManifestList].
+	MediaTypeDocker2ManifestList = mediatype.Docker2ManifestList
+	// MediaTypeDocker2ImageConfig
+	//
+	// Deprecated: replace with [mediatype.Docker2ImageConfig].
+	MediaTypeDocker2ImageConfig = mediatype.Docker2ImageConfig
+	// MediaTypeOCI1Manifest
+	//
+	// Deprecated: replace with [mediatype.OCI1Manifest].
+	MediaTypeOCI1Manifest = mediatype.OCI1Manifest
+	// MediaTypeOCI1ManifestList
+	//
+	// Deprecated: replace with [mediatype.OCI1ManifestList].
+	MediaTypeOCI1ManifestList = mediatype.OCI1ManifestList
+	// MediaTypeOCI1ImageConfig
+	//
+	// Deprecated: replace with [mediatype.OCI1ImageConfig].
+	MediaTypeOCI1ImageConfig = mediatype.OCI1ImageConfig
+	// MediaTypeDocker2Layer
+	//
+	// Deprecated: replace with [mediatype.Docker2Layer].
+	MediaTypeDocker2Layer = mediatype.Docker2LayerGzip
+	// MediaTypeOCI1Layer
+	//
+	// Deprecated: replace with [mediatype.OCI1Layer].
+	MediaTypeOCI1Layer = mediatype.OCI1Layer
+	// MediaTypeOCI1LayerGzip
+	//
+	// Deprecated: replace with [mediatype.OCI1LayerGzip].
+	MediaTypeOCI1LayerGzip = mediatype.OCI1LayerGzip
+	// MediaTypeBuildkitCacheConfig
+	//
+	// Deprecated: replace with [mediatype.BuildkitCacheConfig].
+	MediaTypeBuildkitCacheConfig = mediatype.BuildkitCacheConfig
 )

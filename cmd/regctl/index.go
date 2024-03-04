@@ -10,17 +10,19 @@ import (
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/docker/schema2"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/mediatype"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 )
 
 var indexKnownTypes = []string{
-	types.MediaTypeOCI1ManifestList,
-	types.MediaTypeDocker2ManifestList,
+	mediatype.OCI1ManifestList,
+	mediatype.Docker2ManifestList,
 }
 
 type indexCmd struct {
@@ -116,7 +118,7 @@ regctl index delete registry.example.org/repo:v1 \
 	indexCreateCmd.Flags().StringVar(&indexOpts.format, "format", "", "Format output with go template syntax")
 	indexCreateCmd.Flags().BoolVar(&indexOpts.incDigestTags, "digest-tags", false, "Include digest tags")
 	indexCreateCmd.Flags().BoolVar(&indexOpts.incReferrers, "referrers", false, "Include referrers")
-	indexCreateCmd.Flags().StringVarP(&indexOpts.mediaType, "media-type", "m", types.MediaTypeOCI1ManifestList, "Media-type for manifest list or OCI Index")
+	indexCreateCmd.Flags().StringVarP(&indexOpts.mediaType, "media-type", "m", mediatype.OCI1ManifestList, "Media-type for manifest list or OCI Index")
 	indexCreateCmd.Flags().StringVar(&indexOpts.subject, "subject", "", "Specify a subject tag or digest (this manifest must already exist in the repo)")
 	indexCreateCmd.Flags().StringArrayVar(&indexOpts.refs, "ref", []string{}, "References to include in new index")
 	indexCreateCmd.Flags().StringArrayVar(&indexOpts.platforms, "platform", []string{}, "Platforms to include from ref")
@@ -153,7 +155,7 @@ func (indexOpts *indexCmd) runIndexAdd(cmd *cobra.Command, args []string) error 
 	}
 	mi, ok := m.(manifest.Indexer)
 	if !ok {
-		return fmt.Errorf("current manifest is not an index/manifest list, \"%s\": %w", m.GetDescriptor().MediaType, types.ErrUnsupportedMediaType)
+		return fmt.Errorf("current manifest is not an index/manifest list, \"%s\": %w", m.GetDescriptor().MediaType, errs.ErrUnsupportedMediaType)
 	}
 	curDesc, err := mi.GetManifestList()
 	if err != nil {
@@ -199,8 +201,8 @@ func (indexOpts *indexCmd) runIndexCreate(cmd *cobra.Command, args []string) err
 	ctx := cmd.Context()
 
 	// validate media type
-	if indexOpts.mediaType != types.MediaTypeOCI1ManifestList && indexOpts.mediaType != types.MediaTypeDocker2ManifestList {
-		return fmt.Errorf("unsupported manifest media type: %s%.0w", indexOpts.mediaType, types.ErrUnsupportedMediaType)
+	if indexOpts.mediaType != mediatype.OCI1ManifestList && indexOpts.mediaType != mediatype.Docker2ManifestList {
+		return fmt.Errorf("unsupported manifest media type: %s%.0w", indexOpts.mediaType, errs.ErrUnsupportedMediaType)
 	}
 
 	// parse ref
@@ -231,8 +233,8 @@ func (indexOpts *indexCmd) runIndexCreate(cmd *cobra.Command, args []string) err
 	}
 	descList = indexDescListRmDup(descList)
 
-	var subj *types.Descriptor
-	if indexOpts.subject != "" && indexOpts.mediaType == types.MediaTypeOCI1ManifestList {
+	var subj *descriptor.Descriptor
+	if indexOpts.subject != "" && indexOpts.mediaType == mediatype.OCI1ManifestList {
 		var rSubj ref.Ref
 		dig, err := digest.Parse(indexOpts.subject)
 		if err == nil {
@@ -252,10 +254,10 @@ func (indexOpts *indexCmd) runIndexCreate(cmd *cobra.Command, args []string) err
 	// build the index
 	mOpts := []manifest.Opts{}
 	switch indexOpts.mediaType {
-	case types.MediaTypeOCI1ManifestList:
+	case mediatype.OCI1ManifestList:
 		m := v1.Index{
 			Versioned:    v1.IndexSchemaVersion,
-			MediaType:    types.MediaTypeOCI1ManifestList,
+			MediaType:    mediatype.OCI1ManifestList,
 			ArtifactType: indexOpts.artifactType,
 			Manifests:    descList,
 			Subject:      subj,
@@ -264,7 +266,7 @@ func (indexOpts *indexCmd) runIndexCreate(cmd *cobra.Command, args []string) err
 			m.Annotations = annotations
 		}
 		mOpts = append(mOpts, manifest.WithOrig(m))
-	case types.MediaTypeDocker2ManifestList:
+	case mediatype.Docker2ManifestList:
 		m := schema2.ManifestList{
 			Versioned: schema2.ManifestListSchemaVersion,
 			Manifests: descList,
@@ -321,7 +323,7 @@ func (indexOpts *indexCmd) runIndexDelete(cmd *cobra.Command, args []string) err
 	}
 	mi, ok := m.(manifest.Indexer)
 	if !ok {
-		return fmt.Errorf("current manifest is not an index/manifest list, \"%s\": %w", m.GetDescriptor().MediaType, types.ErrUnsupportedMediaType)
+		return fmt.Errorf("current manifest is not an index/manifest list, \"%s\": %w", m.GetDescriptor().MediaType, errs.ErrUnsupportedMediaType)
 	}
 	curDesc, err := mi.GetManifestList()
 	if err != nil {
@@ -387,7 +389,7 @@ func (indexOpts *indexCmd) runIndexDelete(cmd *cobra.Command, args []string) err
 	return template.Writer(cmd.OutOrStdout(), indexOpts.format, result)
 }
 
-func (indexOpts *indexCmd) indexBuildDescList(ctx context.Context, rc *regclient.RegClient, r ref.Ref) ([]types.Descriptor, error) {
+func (indexOpts *indexCmd) indexBuildDescList(ctx context.Context, rc *regclient.RegClient, r ref.Ref) ([]descriptor.Descriptor, error) {
 	imgCopyOpts := []regclient.ImageOpts{
 		regclient.ImageWithChild(),
 	}
@@ -467,7 +469,7 @@ func (indexOpts *indexCmd) indexBuildDescList(ctx context.Context, rc *regclient
 	}
 
 	// parse each digest, pull manifest, get config, append to list of descriptors
-	descList := []types.Descriptor{}
+	descList := []descriptor.Descriptor{}
 	for _, dig := range indexOpts.digests {
 		rDig := r.SetDigest(dig)
 		mDig, err := rc.ManifestHead(ctx, rDig, regclient.WithManifestRequireDigest())
@@ -526,7 +528,7 @@ func indexGetPlatform(ctx context.Context, rc *regclient.RegClient, r ref.Ref, m
 	return nil, nil
 }
 
-func indexDescListRmDup(dl []types.Descriptor) []types.Descriptor {
+func indexDescListRmDup(dl []descriptor.Descriptor) []descriptor.Descriptor {
 	i := 0
 	for i < len(dl)-1 {
 		j := len(dl) - 1

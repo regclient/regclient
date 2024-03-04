@@ -20,7 +20,7 @@ import (
 
 	"github.com/regclient/regclient/internal/diff"
 	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -224,7 +224,7 @@ func (blobOpts *blobCmd) runBlobDelete(cmd *cobra.Command, args []string) error 
 		"repository": r.Repository,
 		"digest":     args[1],
 	}).Debug("Deleting blob")
-	return rc.BlobDelete(ctx, r, types.Descriptor{Digest: d})
+	return rc.BlobDelete(ctx, r, descriptor.Descriptor{Digest: d})
 }
 
 func (blobOpts *blobCmd) runBlobDiffConfig(cmd *cobra.Command, args []string) error {
@@ -251,7 +251,7 @@ func (blobOpts *blobCmd) runBlobDiffConfig(cmd *cobra.Command, args []string) er
 	if err != nil {
 		return err
 	}
-	c1, err := rc.BlobGetOCIConfig(ctx, r1, types.Descriptor{Digest: d1})
+	c1, err := rc.BlobGetOCIConfig(ctx, r1, descriptor.Descriptor{Digest: d1})
 	if err != nil {
 		return err
 	}
@@ -264,7 +264,7 @@ func (blobOpts *blobCmd) runBlobDiffConfig(cmd *cobra.Command, args []string) er
 	if err != nil {
 		return err
 	}
-	c2, err := rc.BlobGetOCIConfig(ctx, r2, types.Descriptor{Digest: d2})
+	c2, err := rc.BlobGetOCIConfig(ctx, r2, descriptor.Descriptor{Digest: d2})
 	if err != nil {
 		return err
 	}
@@ -305,7 +305,7 @@ func (blobOpts *blobCmd) runBlobDiffLayer(cmd *cobra.Command, args []string) err
 	if err != nil {
 		return err
 	}
-	b1, err := rc.BlobGet(ctx, r1, types.Descriptor{Digest: d1})
+	b1, err := rc.BlobGet(ctx, r1, descriptor.Descriptor{Digest: d1})
 	if err != nil {
 		return err
 	}
@@ -331,7 +331,7 @@ func (blobOpts *blobCmd) runBlobDiffLayer(cmd *cobra.Command, args []string) err
 	if err != nil {
 		return err
 	}
-	b2, err := rc.BlobGet(ctx, r2, types.Descriptor{Digest: d2})
+	b2, err := rc.BlobGet(ctx, r2, descriptor.Descriptor{Digest: d2})
 	if err != nil {
 		return err
 	}
@@ -382,7 +382,7 @@ func (blobOpts *blobCmd) runBlobGet(cmd *cobra.Command, args []string) error {
 		"repository": r.Repository,
 		"digest":     args[1],
 	}).Debug("Pulling blob")
-	blob, err := rc.BlobGet(ctx, r, types.Descriptor{Digest: d})
+	blob, err := rc.BlobGet(ctx, r, descriptor.Descriptor{Digest: d})
 	if err != nil {
 		return err
 	}
@@ -424,7 +424,7 @@ func (blobOpts *blobCmd) runBlobGetFile(cmd *cobra.Command, args []string) error
 		"digest":     args[1],
 		"filename":   filename,
 	}).Debug("Get file")
-	blob, err := rc.BlobGet(ctx, r, types.Descriptor{Digest: d})
+	blob, err := rc.BlobGet(ctx, r, descriptor.Descriptor{Digest: d})
 	if err != nil {
 		return err
 	}
@@ -486,7 +486,7 @@ func (blobOpts *blobCmd) runBlobHead(cmd *cobra.Command, args []string) error {
 		"repository": r.Repository,
 		"digest":     args[1],
 	}).Debug("Blob head")
-	blob, err := rc.BlobHead(ctx, r, types.Descriptor{Digest: d})
+	blob, err := rc.BlobHead(ctx, r, descriptor.Descriptor{Digest: d})
 	if err != nil {
 		return err
 	}
@@ -518,7 +518,7 @@ func (blobOpts *blobCmd) runBlobPut(cmd *cobra.Command, args []string) error {
 		"repository": r.Repository,
 		"digest":     blobOpts.digest,
 	}).Debug("Pushing blob")
-	dOut, err := rc.BlobPut(ctx, r, types.Descriptor{Digest: digest.Digest(blobOpts.digest)}, cmd.InOrStdin())
+	dOut, err := rc.BlobPut(ctx, r, descriptor.Descriptor{Digest: digest.Digest(blobOpts.digest)}, cmd.InOrStdin())
 	if err != nil {
 		return err
 	}
@@ -556,7 +556,7 @@ func (blobOpts *blobCmd) runBlobCopy(cmd *cobra.Command, args []string) error {
 		"target": rTgt.CommonName(),
 		"digest": args[2],
 	}).Debug("Blob copy")
-	err = rc.BlobCopy(ctx, rSrc, rTgt, types.Descriptor{Digest: d})
+	err = rc.BlobCopy(ctx, rSrc, rTgt, descriptor.Descriptor{Digest: d})
 	if err != nil {
 		return err
 	}

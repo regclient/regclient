@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
@@ -97,7 +97,7 @@ func WithConfigTimestamp(optTime OptTime) Opts {
 			}
 			// offset startHistory from base image history
 			if !optTime.BaseRef.IsZero() {
-				var d types.Descriptor
+				var d descriptor.Descriptor
 				for {
 					mOpts := []regclient.ManifestOpts{}
 					if d.Digest != "" {

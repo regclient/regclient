@@ -11,8 +11,9 @@ import (
 
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/mediatype"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
@@ -75,15 +76,15 @@ func TestReferrer(t *testing.T) {
 	}
 	artifactA := v1.Manifest{
 		Versioned: v1.ManifestSchemaVersion,
-		MediaType: types.MediaTypeOCI1Manifest,
-		Config: types.Descriptor{
+		MediaType: mediatype.OCI1Manifest,
+		Config: descriptor.Descriptor{
 			MediaType: aType,
 			Size:      8,
 			Digest:    digest1,
 		},
-		Layers: []types.Descriptor{
+		Layers: []descriptor.Descriptor{
 			{
-				MediaType: types.MediaTypeOCI1LayerGzip,
+				MediaType: mediatype.OCI1LayerGzip,
 				Size:      8,
 				Digest:    digest2,
 			},
@@ -104,11 +105,11 @@ func TestReferrer(t *testing.T) {
 		timeAnnot:  "2021-02-03T04:05:06Z",
 	}
 	artifactB := v1.ArtifactManifest{
-		MediaType:    types.MediaTypeOCI1Artifact,
+		MediaType:    mediatype.OCI1Artifact,
 		ArtifactType: bType,
-		Blobs: []types.Descriptor{
+		Blobs: []descriptor.Descriptor{
 			{
-				MediaType: types.MediaTypeOCI1LayerGzip,
+				MediaType: mediatype.OCI1LayerGzip,
 				Size:      8,
 				Digest:    digest2,
 			},
@@ -125,11 +126,11 @@ func TestReferrer(t *testing.T) {
 		t.Fatalf("failed extracting raw body from artifact: %v", err)
 	}
 	artifactC := v1.ArtifactManifest{
-		MediaType:    types.MediaTypeOCI1Artifact,
+		MediaType:    mediatype.OCI1Artifact,
 		ArtifactType: cType,
-		Blobs: []types.Descriptor{
+		Blobs: []descriptor.Descriptor{
 			{
-				MediaType: types.MediaTypeOCI1LayerGzip,
+				MediaType: mediatype.OCI1LayerGzip,
 				Size:      8,
 				Digest:    digest2,
 			},
@@ -182,7 +183,7 @@ func TestReferrer(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed creating getRef: %v", err)
 		}
-		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{SortAnnotation: timeAnnot}))
+		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{SortAnnotation: timeAnnot}))
 		if err != nil {
 			t.Fatalf("Failed running ReferrerList: %v", err)
 		}
@@ -190,7 +191,7 @@ func TestReferrer(t *testing.T) {
 			t.Fatalf("descriptor list length, expected 2, received %d", len(rl.Descriptors))
 		}
 		// expecting artifact A in index 0
-		if rl.Descriptors[0].MediaType != types.MediaTypeOCI1Manifest ||
+		if rl.Descriptors[0].MediaType != mediatype.OCI1Manifest ||
 			rl.Descriptors[0].Size != int64(len(artifactABody)) ||
 			rl.Descriptors[0].Digest != artifactAM.GetDescriptor().Digest ||
 			rl.Descriptors[0].ArtifactType != aType ||
@@ -198,7 +199,7 @@ func TestReferrer(t *testing.T) {
 			t.Errorf("returned descriptor A mismatch: %v", rl.Descriptors[0])
 		}
 		// expecting artifact B in index 1
-		if rl.Descriptors[1].MediaType != types.MediaTypeOCI1Artifact ||
+		if rl.Descriptors[1].MediaType != mediatype.OCI1Artifact ||
 			rl.Descriptors[1].Size != int64(len(artifactBBody)) ||
 			rl.Descriptors[1].Digest != artifactBM.GetDescriptor().Digest ||
 			rl.Descriptors[1].ArtifactType != bType ||
@@ -208,7 +209,7 @@ func TestReferrer(t *testing.T) {
 		if len(rl.Tags) != 1 || rl.Tags[0] != tagRef {
 			t.Errorf("tag list missing entries, received: %v", rl.Tags)
 		}
-		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{SortAnnotation: timeAnnot, SortDesc: true}))
+		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{SortAnnotation: timeAnnot, SortDesc: true}))
 		if err != nil {
 			t.Fatalf("Failed running ReferrerList reverse: %v", err)
 		}
@@ -226,14 +227,14 @@ func TestReferrer(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed creating getRef: %v", err)
 		}
-		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{ArtifactType: aType}))
+		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{ArtifactType: aType}))
 		if err != nil {
 			t.Fatalf("Failed running ReferrerList: %v", err)
 		}
 		if len(rl.Descriptors) != 1 {
 			t.Fatalf("descriptor list length, expected 1, received %d", len(rl.Descriptors))
 		}
-		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{ArtifactType: "application/vnd.example.unknown"}))
+		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{ArtifactType: "application/vnd.example.unknown"}))
 		if err != nil {
 			t.Fatalf("Failed running ReferrerList: %v", err)
 		}
@@ -246,21 +247,21 @@ func TestReferrer(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed creating getRef: %v", err)
 		}
-		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{Annotations: map[string]string{extraAnnot: extraValueB}}))
+		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{Annotations: map[string]string{extraAnnot: extraValueB}}))
 		if err != nil {
 			t.Fatalf("Failed running ReferrerList: %v", err)
 		}
 		if len(rl.Descriptors) != 1 {
 			t.Fatalf("descriptor list length, expected 1, received %d", len(rl.Descriptors))
 		}
-		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{Annotations: map[string]string{extraAnnot: "unknown value"}}))
+		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{Annotations: map[string]string{extraAnnot: "unknown value"}}))
 		if err != nil {
 			t.Fatalf("Failed running ReferrerList: %v", err)
 		}
 		if len(rl.Descriptors) > 0 {
 			t.Fatalf("unexpected descriptors")
 		}
-		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(types.MatchOpt{Annotations: map[string]string{extraAnnot: ""}}))
+		rl, err = o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{Annotations: map[string]string{extraAnnot: ""}}))
 		if err != nil {
 			t.Fatalf("Failed running ReferrerList: %v", err)
 		}

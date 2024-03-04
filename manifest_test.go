@@ -18,9 +18,11 @@ import (
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/reqresp"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/docker/schema2"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/mediatype"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -35,14 +37,14 @@ func TestManifest(t *testing.T) {
 	digest1 := digest.FromString("example1")
 	digest2 := digest.FromString("example2")
 	m := schema2.Manifest{
-		Config: types.Descriptor{
-			MediaType: types.MediaTypeDocker2ImageConfig,
+		Config: descriptor.Descriptor{
+			MediaType: mediatype.Docker2ImageConfig,
 			Size:      8,
 			Digest:    digest1,
 		},
-		Layers: []types.Descriptor{
+		Layers: []descriptor.Descriptor{
 			{
-				MediaType: types.MediaTypeDocker2LayerGzip,
+				MediaType: mediatype.Docker2LayerGzip,
 				Size:      8,
 				Digest:    digest2,
 			},
@@ -67,7 +69,7 @@ func TestManifest(t *testing.T) {
 				Status: http.StatusOK,
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", mLen)},
-					"Content-Type":          []string{types.MediaTypeDocker2Manifest},
+					"Content-Type":          []string{mediatype.Docker2Manifest},
 					"Docker-Content-Digest": []string{mDigest.String()},
 				},
 				Body: mBody,
@@ -83,7 +85,7 @@ func TestManifest(t *testing.T) {
 				Status: http.StatusOK,
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", mLen)},
-					"Content-Type":          []string{types.MediaTypeDocker2Manifest},
+					"Content-Type":          []string{mediatype.Docker2Manifest},
 					"Docker-Content-Digest": []string{mDigest.String()},
 				},
 				Body: mBody,
@@ -99,7 +101,7 @@ func TestManifest(t *testing.T) {
 				Status: http.StatusOK,
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", mLen)},
-					"Content-Type":          []string{types.MediaTypeDocker2Manifest},
+					"Content-Type":          []string{mediatype.Docker2Manifest},
 					"Docker-Content-Digest": []string{mDigest.String()},
 				},
 			},
@@ -114,7 +116,7 @@ func TestManifest(t *testing.T) {
 				Status: http.StatusOK,
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", mLen)},
-					"Content-Type":          []string{types.MediaTypeDocker2Manifest},
+					"Content-Type":          []string{mediatype.Docker2Manifest},
 					"Docker-Content-Digest": []string{mDigest.String()},
 				},
 				Body: mBody,
@@ -130,7 +132,7 @@ func TestManifest(t *testing.T) {
 				Status: http.StatusOK,
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", mLen)},
-					"Content-Type":   []string{types.MediaTypeDocker2Manifest},
+					"Content-Type":   []string{mediatype.Docker2Manifest},
 				},
 			},
 		},
@@ -144,7 +146,7 @@ func TestManifest(t *testing.T) {
 				Status: http.StatusOK,
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", mLen)},
-					"Content-Type":          []string{types.MediaTypeDocker2Manifest},
+					"Content-Type":          []string{mediatype.Docker2Manifest},
 					"Docker-Content-Digest": []string{mDigest.String()},
 				},
 				Body: mBody,
@@ -223,7 +225,7 @@ func TestManifest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed running ManifestGet: %v", err)
 		}
-		if manifest.GetMediaType(mGet) != types.MediaTypeDocker2Manifest {
+		if manifest.GetMediaType(mGet) != mediatype.Docker2Manifest {
 			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mGet))
 		}
 		if mGet.GetDescriptor().Digest != mDigest {
@@ -239,7 +241,7 @@ func TestManifest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed running ManifestHead: %v", err)
 		}
-		if manifest.GetMediaType(mHead) != types.MediaTypeDocker2Manifest {
+		if manifest.GetMediaType(mHead) != mediatype.Docker2Manifest {
 			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mHead))
 		}
 		if mHead.GetDescriptor().Digest != mDigest {
@@ -255,7 +257,7 @@ func TestManifest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed running ManifestHead: %v", err)
 		}
-		if manifest.GetMediaType(mHead) != types.MediaTypeDocker2Manifest {
+		if manifest.GetMediaType(mHead) != mediatype.Docker2Manifest {
 			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mHead))
 		}
 		if mHead.GetDescriptor().Digest != mDigest {
@@ -270,8 +272,8 @@ func TestManifest(t *testing.T) {
 		mNohead, err := rc.ManifestHead(ctx, noheadRef)
 		if err == nil {
 			t.Errorf("Unexpected successful head on \"no head\" registry: %v", mNohead)
-		} else if !errors.Is(err, types.ErrUnsupportedAPI) {
-			t.Errorf("Expected error, expected %v, received %v", types.ErrUnsupportedAPI, err)
+		} else if !errors.Is(err, errs.ErrUnsupportedAPI) {
+			t.Errorf("Expected error, expected %v, received %v", errs.ErrUnsupportedAPI, err)
 		}
 	})
 	t.Run("Get No Head", func(t *testing.T) {
@@ -283,7 +285,7 @@ func TestManifest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed running ManifestGet: %v", err)
 		}
-		if manifest.GetMediaType(mNohead) != types.MediaTypeDocker2Manifest {
+		if manifest.GetMediaType(mNohead) != mediatype.Docker2Manifest {
 			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mNohead))
 		}
 		if mNohead.GetDescriptor().Digest != mDigest {
@@ -306,8 +308,8 @@ func TestManifest(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed creating getRef: %v", err)
 		}
-		d := types.Descriptor{
-			MediaType: types.MediaTypeDocker2Manifest,
+		d := descriptor.Descriptor{
+			MediaType: mediatype.Docker2Manifest,
 			Size:      int64(mLen),
 			Digest:    mDigest,
 			Data:      mBody,
@@ -329,8 +331,8 @@ func TestManifest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed creating getRef: %v", err)
 		}
-		d := types.Descriptor{
-			MediaType: types.MediaTypeDocker2Manifest,
+		d := descriptor.Descriptor{
+			MediaType: mediatype.Docker2Manifest,
 			Size:      int64(mLen),
 			Digest:    mDigest,
 			Data:      []byte("invalid data"),
@@ -346,8 +348,8 @@ func TestManifest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed creating missingRef: %v", err)
 		}
-		d := types.Descriptor{
-			MediaType: types.MediaTypeDocker2Manifest,
+		d := descriptor.Descriptor{
+			MediaType: mediatype.Docker2Manifest,
 			Size:      int64(mLen),
 			Digest:    mDigest,
 			Data:      []byte("invalid data"),
@@ -363,8 +365,8 @@ func TestManifest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed creating missingRef: %v", err)
 		}
-		d := types.Descriptor{
-			MediaType: types.MediaTypeDocker2Manifest,
+		d := descriptor.Descriptor{
+			MediaType: mediatype.Docker2Manifest,
 			Size:      int64(mLen),
 			Digest:    missingDigest,
 			Data:      []byte("invalid data"),
@@ -381,11 +383,11 @@ func TestManifest(t *testing.T) {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
 		_, err = rc.ManifestGet(ctx, r)
-		if !errors.Is(err, types.ErrInvalidReference) {
+		if !errors.Is(err, errs.ErrInvalidReference) {
 			t.Errorf("ManifestGet did not respond with invalid ref: %v", err)
 		}
 		_, err = rc.ManifestHead(ctx, r)
-		if !errors.Is(err, types.ErrInvalidReference) {
+		if !errors.Is(err, errs.ErrInvalidReference) {
 			t.Errorf("ManifestGet did not respond with invalid ref: %v", err)
 		}
 	})

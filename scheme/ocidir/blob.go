@@ -16,21 +16,22 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient/internal/rwfs"
-	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
+	"github.com/regclient/regclient/types/descriptor"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/ref"
 )
 
 // BlobDelete removes a blob from the repository.
 // This method does not verify that blobs are unused.
 // Calling the [OCIDir.Close] method to trigger the garbage collection is preferred.
-func (o *OCIDir) BlobDelete(ctx context.Context, r ref.Ref, d types.Descriptor) error {
+func (o *OCIDir) BlobDelete(ctx context.Context, r ref.Ref, d descriptor.Descriptor) error {
 	file := path.Join(r.Path, "blobs", d.Digest.Algorithm().String(), d.Digest.Encoded())
 	return o.fs.Remove(file)
 }
 
 // BlobGet retrieves a blob, returning a reader
-func (o *OCIDir) BlobGet(ctx context.Context, r ref.Ref, d types.Descriptor) (blob.Reader, error) {
+func (o *OCIDir) BlobGet(ctx context.Context, r ref.Ref, d descriptor.Descriptor) (blob.Reader, error) {
 	file := path.Join(r.Path, "blobs", d.Digest.Algorithm().String(), d.Digest.Encoded())
 	fd, err := o.fs.Open(file)
 	if err != nil {
@@ -57,7 +58,7 @@ func (o *OCIDir) BlobGet(ctx context.Context, r ref.Ref, d types.Descriptor) (bl
 }
 
 // BlobHead verifies the existence of a blob, the reader contains the headers but no body to read
-func (o *OCIDir) BlobHead(ctx context.Context, r ref.Ref, d types.Descriptor) (blob.Reader, error) {
+func (o *OCIDir) BlobHead(ctx context.Context, r ref.Ref, d descriptor.Descriptor) (blob.Reader, error) {
 	file := path.Join(r.Path, "blobs", d.Digest.Algorithm().String(), d.Digest.Encoded())
 	fd, err := o.fs.Open(file)
 	if err != nil {
@@ -79,12 +80,12 @@ func (o *OCIDir) BlobHead(ctx context.Context, r ref.Ref, d types.Descriptor) (b
 }
 
 // BlobMount attempts to perform a server side copy of the blob
-func (o *OCIDir) BlobMount(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d types.Descriptor) error {
-	return types.ErrUnsupported
+func (o *OCIDir) BlobMount(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d descriptor.Descriptor) error {
+	return errs.ErrUnsupported
 }
 
 // BlobPut sends a blob to the repository, returns the digest and size when successful
-func (o *OCIDir) BlobPut(ctx context.Context, r ref.Ref, d types.Descriptor, rdr io.Reader) (types.Descriptor, error) {
+func (o *OCIDir) BlobPut(ctx context.Context, r ref.Ref, d descriptor.Descriptor, rdr io.Reader) (descriptor.Descriptor, error) {
 	t := o.throttleGet(r, false)
 	err := t.Acquire(ctx)
 	if err != nil {

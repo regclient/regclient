@@ -17,7 +17,7 @@ import (
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/rwfs"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -72,17 +72,17 @@ func TestImageCheckBase(t *testing.T) {
 		{
 			name:      "missing annotation",
 			r:         r1,
-			expectErr: types.ErrMissingAnnotation,
+			expectErr: errs.ErrMissingAnnotation,
 		},
 		{
 			name:      "annotation v2",
 			r:         r2,
-			expectErr: types.ErrMismatch,
+			expectErr: errs.ErrMismatch,
 		},
 		{
 			name:      "annotation v3",
 			r:         r3,
-			expectErr: types.ErrMismatch,
+			expectErr: errs.ErrMismatch,
 		},
 		{
 			name: "manual v2, b1",
@@ -93,13 +93,13 @@ func TestImageCheckBase(t *testing.T) {
 			name:      "manual v2, b2",
 			r:         r2,
 			opts:      []ImageOpts{ImageWithCheckBaseRef(rb2.CommonName())},
-			expectErr: types.ErrMismatch,
+			expectErr: errs.ErrMismatch,
 		},
 		{
 			name:      "manual v2, b3",
 			r:         r2,
 			opts:      []ImageOpts{ImageWithCheckBaseRef(rb3.CommonName())},
-			expectErr: types.ErrMismatch,
+			expectErr: errs.ErrMismatch,
 		},
 		{
 			name: "manual v3, b1",
@@ -203,7 +203,7 @@ func TestCopy(t *testing.T) {
 			name:      "ocidir to read-only registry",
 			src:       "ocidir://./testdata/testrepo:v1",
 			tgt:       tsROHost + "/dest-ocidir:v1",
-			expectErr: types.ErrHTTPStatus,
+			expectErr: errs.ErrHTTPStatus,
 		},
 		{
 			name: "ocidir to ocidir",

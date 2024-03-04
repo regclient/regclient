@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 )
 
 func TestParseErr(t *testing.T) {
@@ -122,7 +122,7 @@ func TestParseGet(t *testing.T) {
 			}
 			link, err := links.Get(tt.parm, tt.val)
 			if tt.expectMissing {
-				if err == nil || !errors.Is(err, types.ErrNotFound) {
+				if err == nil || !errors.Is(err, errs.ErrNotFound) {
 					t.Errorf("did not find missing error: %v, %v", link, err)
 				}
 				return

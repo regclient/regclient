@@ -10,8 +10,9 @@ import (
 	"github.com/regclient/regclient/internal/httplink"
 	"github.com/regclient/regclient/internal/reghttp"
 	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/mediatype"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
@@ -203,7 +204,7 @@ func (reg *Reg) referrerListByAPIPage(ctx context.Context, r ref.Ref, config sch
 	}
 	ociML, ok := m.GetOrig().(v1.Index)
 	if !ok {
-		return rl, nil, fmt.Errorf("unexpected manifest type for referrers: %s, %w", m.GetDescriptor().MediaType, types.ErrUnsupportedMediaType)
+		return rl, nil, fmt.Errorf("unexpected manifest type for referrers: %s, %w", m.GetDescriptor().MediaType, errs.ErrUnsupportedMediaType)
 	}
 	rl.Manifest = m
 	rl.Descriptors = ociML.Manifests
@@ -223,11 +224,11 @@ func (reg *Reg) referrerListByTag(ctx context.Context, r ref.Ref) (referrer.Refe
 	}
 	m, err := reg.ManifestGet(ctx, rlTag)
 	if err != nil {
-		if errors.Is(err, types.ErrNotFound) {
+		if errors.Is(err, errs.ErrNotFound) {
 			// empty list, initialize a new manifest
 			rl.Manifest, err = manifest.New(manifest.WithOrig(v1.Index{
 				Versioned: v1.IndexSchemaVersion,
-				MediaType: types.MediaTypeOCI1ManifestList,
+				MediaType: mediatype.OCI1ManifestList,
 			}))
 			if err != nil {
 				return rl, err
@@ -253,7 +254,7 @@ func (reg *Reg) referrerDelete(ctx context.Context, r ref.Ref, m manifest.Manife
 	// get subject field
 	mSubject, ok := m.(manifest.Subjecter)
 	if !ok {
-		return fmt.Errorf("manifest does not support the subject field: %w", types.ErrUnsupportedMediaType)
+		return fmt.Errorf("manifest does not support the subject field: %w", errs.ErrUnsupportedMediaType)
 	}
 	subject, err := mSubject.GetSubject()
 	if err != nil {
@@ -261,7 +262,7 @@ func (reg *Reg) referrerDelete(ctx context.Context, r ref.Ref, m manifest.Manife
 	}
 	// validate/set subject descriptor
 	if subject == nil || subject.MediaType == "" || subject.Digest == "" || subject.Size <= 0 {
-		return fmt.Errorf("refers is not set%.0w", types.ErrNotFound)
+		return fmt.Errorf("refers is not set%.0w", errs.ErrNotFound)
 	}
 
 	// remove from cache
@@ -302,7 +303,7 @@ func (reg *Reg) referrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest)
 	// get subject field
 	mSubject, ok := m.(manifest.Subjecter)
 	if !ok {
-		return fmt.Errorf("manifest does not support the subject field: %w", types.ErrUnsupportedMediaType)
+		return fmt.Errorf("manifest does not support the subject field: %w", errs.ErrUnsupportedMediaType)
 	}
 	subject, err := mSubject.GetSubject()
 	if err != nil {
@@ -310,7 +311,7 @@ func (reg *Reg) referrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest)
 	}
 	// validate/set subject descriptor
 	if subject == nil || subject.MediaType == "" || subject.Digest == "" || subject.Size <= 0 {
-		return fmt.Errorf("subject is not set%.0w", types.ErrNotFound)
+		return fmt.Errorf("subject is not set%.0w", errs.ErrNotFound)
 	}
 
 	// lock to avoid internal race conditions between pulling and pushing tag

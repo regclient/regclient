@@ -14,7 +14,7 @@ import (
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/internal/diff"
 	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
@@ -374,7 +374,7 @@ func (manifestOpts *manifestCmd) runManifestPut(cmd *cobra.Command, args []strin
 		manifest.WithRaw(raw),
 	}
 	if manifestOpts.contentType != "" {
-		opts = append(opts, manifest.WithDesc(types.Descriptor{
+		opts = append(opts, manifest.WithDesc(descriptor.Descriptor{
 			MediaType: manifestOpts.contentType,
 		}))
 	}
@@ -432,8 +432,8 @@ func getManifest(ctx context.Context, rc *regclient.RegClient, r ref.Ref, pStr s
 	return m, nil
 }
 
-func getPlatformDesc(ctx context.Context, rc *regclient.RegClient, m manifest.Manifest, pStr string) (*types.Descriptor, error) {
-	var desc *types.Descriptor
+func getPlatformDesc(ctx context.Context, rc *regclient.RegClient, m manifest.Manifest, pStr string) (*descriptor.Descriptor, error) {
+	var desc *descriptor.Descriptor
 	var err error
 	if !m.IsList() {
 		return desc, fmt.Errorf("%w: manifest is not a list", ErrInvalidInput)

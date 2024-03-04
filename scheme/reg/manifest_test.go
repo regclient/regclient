@@ -18,9 +18,11 @@ import (
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/reqresp"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/docker/schema2"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/mediatype"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -37,14 +39,14 @@ func TestManifest(t *testing.T) {
 	digest1 := digest.FromString("example1")
 	digest2 := digest.FromString("example2")
 	m := schema2.Manifest{
-		Config: types.Descriptor{
-			MediaType: types.MediaTypeDocker2ImageConfig,
+		Config: descriptor.Descriptor{
+			MediaType: mediatype.Docker2ImageConfig,
 			Size:      8,
 			Digest:    digest1,
 		},
-		Layers: []types.Descriptor{
+		Layers: []descriptor.Descriptor{
 			{
-				MediaType: types.MediaTypeDocker2LayerGzip,
+				MediaType: mediatype.Docker2LayerGzip,
 				Size:      8,
 				Digest:    digest2,
 			},
@@ -68,7 +70,7 @@ func TestManifest(t *testing.T) {
 				Status: http.StatusOK,
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", mLen)},
-					"Content-Type":          []string{types.MediaTypeDocker2Manifest},
+					"Content-Type":          []string{mediatype.Docker2Manifest},
 					"Docker-Content-Digest": []string{mDigest.String()},
 				},
 				Body: mBody,
@@ -84,7 +86,7 @@ func TestManifest(t *testing.T) {
 				Status: http.StatusOK,
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", mLen)},
-					"Content-Type":          []string{types.MediaTypeDocker2Manifest},
+					"Content-Type":          []string{mediatype.Docker2Manifest},
 					"Docker-Content-Digest": []string{mDigest.String()},
 				},
 				Body: mBody,
@@ -100,7 +102,7 @@ func TestManifest(t *testing.T) {
 				Status: http.StatusOK,
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", mLen)},
-					"Content-Type":          []string{types.MediaTypeDocker2Manifest},
+					"Content-Type":          []string{mediatype.Docker2Manifest},
 					"Docker-Content-Digest": []string{mDigest.String()},
 				},
 			},
@@ -115,7 +117,7 @@ func TestManifest(t *testing.T) {
 				Status: http.StatusOK,
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", mLen)},
-					"Content-Type":          []string{types.MediaTypeDocker2Manifest},
+					"Content-Type":          []string{mediatype.Docker2Manifest},
 					"Docker-Content-Digest": []string{mDigest.String()},
 				},
 			},
@@ -130,7 +132,7 @@ func TestManifest(t *testing.T) {
 				Status: http.StatusOK,
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", mLen)},
-					"Content-Type":          []string{types.MediaTypeDocker2Manifest},
+					"Content-Type":          []string{mediatype.Docker2Manifest},
 					"Docker-Content-Digest": []string{mDigest.String()},
 				},
 				Body: mBody,
@@ -146,7 +148,7 @@ func TestManifest(t *testing.T) {
 				Status: http.StatusOK,
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", mLen+defaultManifestMaxPull)},
-					"Content-Type":          []string{types.MediaTypeDocker2Manifest},
+					"Content-Type":          []string{mediatype.Docker2Manifest},
 					"Docker-Content-Digest": []string{mDigest.String()},
 				},
 				Body: mBody,
@@ -162,7 +164,7 @@ func TestManifest(t *testing.T) {
 				Status: http.StatusOK,
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", mLen+10)},
-					"Content-Type":          []string{types.MediaTypeDocker2Manifest},
+					"Content-Type":          []string{mediatype.Docker2Manifest},
 					"Docker-Content-Digest": []string{mDigest.String()},
 				},
 				Body: mBody,
@@ -184,7 +186,7 @@ func TestManifest(t *testing.T) {
 				Method: "PUT",
 				Path:   "/v2" + repoPath + "/manifests/" + putTag,
 				Headers: http.Header{
-					"Content-Type":   []string{types.MediaTypeDocker2Manifest},
+					"Content-Type":   []string{mediatype.Docker2Manifest},
 					"Content-Length": {fmt.Sprintf("%d", mLen)},
 				},
 				Body: mBody,
@@ -254,7 +256,7 @@ func TestManifest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed running ManifestGet: %v", err)
 		}
-		if manifest.GetMediaType(mGet) != types.MediaTypeDocker2Manifest {
+		if manifest.GetMediaType(mGet) != mediatype.Docker2Manifest {
 			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mGet))
 		}
 		if mGet.GetDescriptor().Digest != mDigest {
@@ -270,7 +272,7 @@ func TestManifest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed running ManifestHead: %v", err)
 		}
-		if manifest.GetMediaType(mHead) != types.MediaTypeDocker2Manifest {
+		if manifest.GetMediaType(mHead) != mediatype.Docker2Manifest {
 			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mHead))
 		}
 		if mHead.GetDescriptor().Digest != mDigest {
@@ -285,8 +287,8 @@ func TestManifest(t *testing.T) {
 		mNohead, err := reg.ManifestHead(ctx, noheadRef)
 		if err == nil {
 			t.Errorf("Unexpected successful head on \"no head\" registry: %v", mNohead)
-		} else if !errors.Is(err, types.ErrUnsupportedAPI) {
-			t.Errorf("Expected error, expected %v, received %v", types.ErrUnsupportedAPI, err)
+		} else if !errors.Is(err, errs.ErrUnsupportedAPI) {
+			t.Errorf("Expected error, expected %v, received %v", errs.ErrUnsupportedAPI, err)
 		}
 	})
 	t.Run("Get No Head", func(t *testing.T) {
@@ -298,7 +300,7 @@ func TestManifest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed running ManifestGet: %v", err)
 		}
-		if manifest.GetMediaType(mNohead) != types.MediaTypeDocker2Manifest {
+		if manifest.GetMediaType(mNohead) != mediatype.Docker2Manifest {
 			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mNohead))
 		}
 		if mNohead.GetDescriptor().Digest != mDigest {
@@ -324,7 +326,7 @@ func TestManifest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed running ManifestGet: %v", err)
 		}
-		if manifest.GetMediaType(mGet) != types.MediaTypeDocker2Manifest {
+		if manifest.GetMediaType(mGet) != mediatype.Docker2Manifest {
 			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mGet))
 		}
 		if mGet.GetDescriptor().Digest != mDigest {
@@ -340,7 +342,7 @@ func TestManifest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed running ManifestHead: %v", err)
 		}
-		if manifest.GetMediaType(mHead) != types.MediaTypeDocker2Manifest {
+		if manifest.GetMediaType(mHead) != mediatype.Docker2Manifest {
 			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mHead))
 		}
 		if mHead.GetDescriptor().Digest != mDigest {
@@ -356,7 +358,7 @@ func TestManifest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed running ManifestGet: %v", err)
 		}
-		if manifest.GetMediaType(mGet) != types.MediaTypeDocker2Manifest {
+		if manifest.GetMediaType(mGet) != mediatype.Docker2Manifest {
 			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mGet))
 		}
 		if mGet.GetDescriptor().Digest != mDigest {
@@ -381,8 +383,8 @@ func TestManifest(t *testing.T) {
 		if err == nil {
 			t.Fatalf("ManifestGet did not fail")
 		}
-		if !errors.Is(err, types.ErrSizeLimitExceeded) {
-			t.Fatalf("unexpected error, expected %v, received %v", types.ErrSizeLimitExceeded, err)
+		if !errors.Is(err, errs.ErrSizeLimitExceeded) {
+			t.Fatalf("unexpected error, expected %v, received %v", errs.ErrSizeLimitExceeded, err)
 		}
 	})
 	t.Run("Read beyond size", func(t *testing.T) {
@@ -394,8 +396,8 @@ func TestManifest(t *testing.T) {
 		if err == nil {
 			t.Fatalf("ManifestGet did not fail")
 		}
-		if !errors.Is(err, types.ErrShortRead) && !errors.Is(err, io.ErrUnexpectedEOF) {
-			t.Fatalf("unexpected error, expected %v, received %v", types.ErrShortRead, err)
+		if !errors.Is(err, errs.ErrShortRead) && !errors.Is(err, io.ErrUnexpectedEOF) {
+			t.Fatalf("unexpected error, expected %v, received %v", errs.ErrShortRead, err)
 		}
 	})
 
@@ -431,8 +433,8 @@ func TestManifest(t *testing.T) {
 		if err == nil {
 			t.Fatalf("put manifest did not fail")
 		}
-		if !errors.Is(err, types.ErrSizeLimitExceeded) {
-			t.Errorf("unexpected error, expected %v, received %v", types.ErrSizeLimitExceeded, err)
+		if !errors.Is(err, errs.ErrSizeLimitExceeded) {
+			t.Errorf("unexpected error, expected %v, received %v", errs.ErrSizeLimitExceeded, err)
 		}
 	})
 }

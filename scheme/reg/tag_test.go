@@ -19,7 +19,8 @@ import (
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/reqresp"
 	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
+	"github.com/regclient/regclient/types/mediatype"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -188,7 +189,7 @@ func TestTag(t *testing.T) {
 				Status: http.StatusOK,
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", len(delFallbackManifest))},
-					"Content-Type":          {types.MediaTypeDocker2Manifest},
+					"Content-Type":          {mediatype.Docker2Manifest},
 					"Docker-Content-Digest": {delFallbackDigest.String()},
 				},
 			},
@@ -229,7 +230,7 @@ func TestTag(t *testing.T) {
 				Method: "PUT",
 				Path:   "/v2" + repoPath + "/manifests/" + delFallbackTag,
 				Headers: http.Header{
-					"Content-Type": {types.MediaTypeDocker2Manifest},
+					"Content-Type": {mediatype.Docker2Manifest},
 				},
 			},
 			RespEntry: reqresp.RespEntry{
@@ -347,8 +348,8 @@ func TestTag(t *testing.T) {
 		_, err = reg.TagList(ctx, listRef)
 		if err == nil {
 			t.Fatalf("tag listing succeeded on missing repo")
-		} else if !errors.Is(err, types.ErrNotFound) {
-			t.Fatalf("unexpected error: expected %v, received %v", types.ErrNotFound, err)
+		} else if !errors.Is(err, errs.ErrNotFound) {
+			t.Fatalf("unexpected error: expected %v, received %v", errs.ErrNotFound, err)
 		}
 	})
 

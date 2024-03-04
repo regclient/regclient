@@ -9,7 +9,8 @@ import (
 
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/ref"
@@ -17,11 +18,11 @@ import (
 
 // ReferrerList contains the response to a request for referrers to a subject
 type ReferrerList struct {
-	Subject     ref.Ref            `json:"subject"`               // subject queried
-	Descriptors []types.Descriptor `json:"descriptors"`           // descriptors found in Index
-	Annotations map[string]string  `json:"annotations,omitempty"` // annotations extracted from Index
-	Manifest    manifest.Manifest  `json:"-"`                     // returned OCI Index
-	Tags        []string           `json:"-"`                     // tags matched when fetching referrers
+	Subject     ref.Ref                 `json:"subject"`               // subject queried
+	Descriptors []descriptor.Descriptor `json:"descriptors"`           // descriptors found in Index
+	Annotations map[string]string       `json:"annotations,omitempty"` // annotations extracted from Index
+	Manifest    manifest.Manifest       `json:"-"`                     // returned OCI Index
+	Tags        []string                `json:"-"`                     // tags matched when fetching referrers
 }
 
 // Add appends an entry to rl.Manifest, used to modify the client managed Index
@@ -54,7 +55,7 @@ func (rl *ReferrerList) Add(m manifest.Manifest) error {
 		mDesc.ArtifactType = mOrig.ArtifactType
 	default:
 		// other types are not supported
-		return fmt.Errorf("invalid manifest for referrer \"%t\": %w", m.GetOrig(), types.ErrUnsupportedMediaType)
+		return fmt.Errorf("invalid manifest for referrer \"%t\": %w", m.GetOrig(), errs.ErrUnsupportedMediaType)
 	}
 	// append descriptor to index
 	rlM.Manifests = append(rlM.Manifests, mDesc)
@@ -86,7 +87,7 @@ func (rl *ReferrerList) Delete(m manifest.Manifest) error {
 		}
 	}
 	if !found {
-		return fmt.Errorf("subject not found in referrer list%.0w", types.ErrNotFound)
+		return fmt.Errorf("subject not found in referrer list%.0w", errs.ErrNotFound)
 	}
 	rl.Descriptors = rlM.Manifests
 	err := rl.Manifest.SetOrig(rlM)

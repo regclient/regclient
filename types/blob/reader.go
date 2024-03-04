@@ -12,7 +12,8 @@ import (
 	"github.com/opencontainers/go-digest"
 
 	"github.com/regclient/regclient/internal/limitread"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
+	"github.com/regclient/regclient/types/mediatype"
 )
 
 // Reader was previously an interface. A type alias is provided for upgrading.
@@ -45,7 +46,7 @@ func NewReader(opts ...Opts) *BReader {
 	if bc.header != nil {
 		// extract fields from header if descriptor not passed
 		if bc.desc.MediaType == "" {
-			bc.desc.MediaType = types.MediaTypeBase(bc.header.Get("Content-Type"))
+			bc.desc.MediaType = mediatype.Base(bc.header.Get("Content-Type"))
 		}
 		if bc.desc.Size == 0 {
 			cl, _ := strconv.Atoi(bc.header.Get("Content-Length"))
@@ -109,15 +110,15 @@ func (r *BReader) Read(p []byte) (int, error) {
 		if r.desc.Size == 0 {
 			r.desc.Size = r.readBytes
 		} else if r.readBytes < r.desc.Size {
-			err = fmt.Errorf("%w [expected %d, received %d]: %w", types.ErrShortRead, r.desc.Size, r.readBytes, err)
+			err = fmt.Errorf("%w [expected %d, received %d]: %w", errs.ErrShortRead, r.desc.Size, r.readBytes, err)
 		} else if r.readBytes > r.desc.Size {
-			err = fmt.Errorf("%w [expected %d, received %d]: %w", types.ErrSizeLimitExceeded, r.desc.Size, r.readBytes, err)
+			err = fmt.Errorf("%w [expected %d, received %d]: %w", errs.ErrSizeLimitExceeded, r.desc.Size, r.readBytes, err)
 		}
 		// check/save digest
 		if r.desc.Digest == "" {
 			r.desc.Digest = r.digester.Digest()
 		} else if r.desc.Digest != r.digester.Digest() {
-			err = fmt.Errorf("%w [expected %s, calculated %s]: %w", types.ErrDigestMismatch, r.desc.Digest.String(), r.digester.Digest().String(), err)
+			err = fmt.Errorf("%w [expected %s, calculated %s]: %w", errs.ErrDigestMismatch, r.desc.Digest.String(), r.digester.Digest().String(), err)
 		}
 	}
 	return size, err

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 )
 
 func TestArtifactGet(t *testing.T) {
@@ -28,12 +28,12 @@ func TestArtifactGet(t *testing.T) {
 		{
 			name:      "Invalid ref",
 			args:      []string{"artifact", "get", "invalid*ref"},
-			expectErr: types.ErrInvalidReference,
+			expectErr: errs.ErrInvalidReference,
 		},
 		{
 			name:      "Missing manifest",
 			args:      []string{"artifact", "get", "ocidir://../../testdata/testrepo:missing"},
-			expectErr: types.ErrNotFound,
+			expectErr: errs.ErrNotFound,
 		},
 		{
 			name:      "By Manifest",
@@ -88,12 +88,12 @@ func TestArtifactList(t *testing.T) {
 		{
 			name:      "Invalid ref",
 			args:      []string{"artifact", "list", "invalid*ref"},
-			expectErr: types.ErrInvalidReference,
+			expectErr: errs.ErrInvalidReference,
 		},
 		{
 			name:      "Missing manifest",
 			args:      []string{"artifact", "list", "ocidir://../../testdata/testrepo:missing"},
-			expectErr: types.ErrNotFound,
+			expectErr: errs.ErrNotFound,
 		},
 		{
 			name:        "No referrers",
@@ -176,7 +176,7 @@ func TestArtifactPut(t *testing.T) {
 		{
 			name:      "Invalid ref",
 			args:      []string{"artifact", "put", "invalid*ref"},
-			expectErr: types.ErrInvalidReference,
+			expectErr: errs.ErrInvalidReference,
 		},
 		{
 			name: "Put artifact",
@@ -265,12 +265,12 @@ func TestArtifactTree(t *testing.T) {
 		{
 			name:      "Invalid ref",
 			args:      []string{"artifact", "tree", "invalid*ref"},
-			expectErr: types.ErrInvalidReference,
+			expectErr: errs.ErrInvalidReference,
 		},
 		{
 			name:      "Missing manifest",
 			args:      []string{"artifact", "tree", "ocidir://../../testdata/testrepo:missing"},
-			expectErr: types.ErrNotFound,
+			expectErr: errs.ErrNotFound,
 		},
 		{
 			name:        "No referrers",
