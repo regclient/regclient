@@ -261,19 +261,33 @@ func DescriptorListFilter(dl []Descriptor, opt MatchOpt) []Descriptor {
 	return ret
 }
 
-// DescriptorListSearch returns the first descriptor from the list matching the search options
+// DescriptorListSearch returns the first descriptor from the list matching the search options.
 func DescriptorListSearch(dl []Descriptor, opt MatchOpt) (Descriptor, error) {
-	filter := DescriptorListFilter(dl, opt)
-	if len(filter) < 1 {
-		return Descriptor{}, errs.ErrNotFound
+	if opt.ArtifactType != "" || opt.SortAnnotation != "" || len(opt.Annotations) > 0 {
+		dl = DescriptorListFilter(dl, opt)
 	}
-	// prefer exact platform match when available
-	if opt.Platform != nil {
-		for _, d := range filter {
-			if platform.Match(*opt.Platform, *d.Platform) {
-				return d, nil
-			}
+	var ret Descriptor
+	var retPlat platform.Platform
+	if len(dl) == 0 {
+		return ret, errs.ErrNotFound
+	}
+	if opt.Platform == nil {
+		return dl[0], nil
+	}
+	found := false
+	comp := platform.NewCompare(*opt.Platform)
+	for _, d := range dl {
+		if d.Platform == nil {
+			continue
+		}
+		if comp.Better(*d.Platform, retPlat) {
+			found = true
+			ret = d
+			retPlat = *d.Platform
 		}
 	}
-	return filter[0], nil
+	if !found {
+		return ret, errs.ErrNotFound
+	}
+	return ret, nil
 }

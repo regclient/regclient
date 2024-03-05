@@ -149,3 +149,8 @@ The following functions have been added in addition to the defaults available in
    ```
 
    For `regctl`, use `regctl registry set --repo-auth gcr.io`.
+
+1. Q: How can I specify the windows OS Version as a platform?
+
+   A: The platform parsing in regclient will default to your local windows version when the OS and architecture matches.
+   For explicitly passing the OS version, a comma separated syntax is available in regclient: `windows/amd64,osver=10.0.17763.4974`.
