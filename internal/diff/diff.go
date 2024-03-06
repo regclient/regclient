@@ -51,7 +51,7 @@ func Diff(a, b []string, opts ...Opt) []string {
 	diffLines := []string{}
 	setLines := []string{}
 	ops := myersOperations(a, b)
-	sX1, sX2, sY1, sY2 := -1, -1, -1, -1
+	sX1, sX2, sY1, sY2 := 0, 0, 0, 0
 	addSet := func() {
 		if len(setLines) == 0 {
 			return
@@ -89,7 +89,7 @@ func Diff(a, b []string, opts ...Opt) []string {
 			sX1, sY1 = op.X1, op.Y1
 		} else if dX > 0 {
 			// add common lines between two diffs
-			for _, line := range a[sX2+1 : op.X1] {
+			for _, line := range a[sX2:op.X1] {
 				setLines = append(setLines, "  "+line)
 			}
 		}
