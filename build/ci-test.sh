@@ -31,12 +31,12 @@ export PATH="$PATH:${git_root}/bin"
 
 export REGCTL_CONFIG="${git_root}/.regctl_conf_ci.json"
 
-# disable TLS for tests
+# disable TLS and increase requests per sec for faster tests
 if [ "${opt_s}" = "${opt_s#*://}" ]; then
-  regctl registry set --tls=disabled "${opt_s%%/*}"
+  regctl registry set --tls=disabled --req-per-sec 1000 "${opt_s%%/*}"
 fi
 if [ "${opt_t}" = "${opt_t#*://}" ]; then
-  regctl registry set --tls=disabled "${opt_t%%/*}"
+  regctl registry set --tls=disabled --req-per-sec 1000 "${opt_t%%/*}"
 fi
 
 regctl image copy --digest-tags --referrers "${opt_s}:v1" "${opt_t}:v1"

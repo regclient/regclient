@@ -49,6 +49,8 @@ ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 		$(SYFT_CONTAINER)
 endif
 STATICCHECK_VER?=v0.4.7
+CI_DISTRIBUTION_VER?=2.8.3
+CI_ZOT_VER?=v2.0.1
 
 .PHONY: .FORCE
 .FORCE:
@@ -136,12 +138,15 @@ test-docker-%:
 	docker buildx build --platform="$(TEST_PLATFORMS)" -f build/Dockerfile.$*.buildkit .
 	docker buildx build --platform="$(TEST_PLATFORMS)" -f build/Dockerfile.$*.buildkit --target release-alpine .
 
+.PHONY: ci
+ci: ci-distribution ci-zot ## Run CI tests against self hosted registries
+
 .PHONY: ci-distribution
 ci-distribution:
 	docker run --rm -d -p 5000 \
 		--label regclient-ci=true --name regclient-ci-distribution \
 		-e "REGISTRY_STORAGE_DELETE_ENABLED=true" \
-		docker.io/registry:2.8.2
+		docker.io/library/registry:$(CI_DISTRIBUTION_VER)
 	./build/ci-test.sh -t localhost:$$(docker port regclient-ci-distribution 5000 | head -1 | cut -f2 -d:)/test-ci
 	docker stop regclient-ci-distribution
 
@@ -150,7 +155,7 @@ ci-zot:
 	docker run --rm -d -p 5000 \
 		--label regclient-ci=true --name regclient-ci-zot \
 		-v "$$(pwd)/build/zot-config.json:/etc/zot/config.json:ro" \
-		ghcr.io/project-zot/zot-linux-amd64:v2.0.0-rc5
+		ghcr.io/project-zot/zot-linux-amd64:$(CI_ZOT_VER)
 	./build/ci-test.sh -t localhost:$$(docker port regclient-ci-zot 5000 | head -1 | cut -f2 -d:)/test-ci
 	docker stop regclient-ci-zot
 
