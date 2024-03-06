@@ -37,6 +37,8 @@ files:
       - makefile-syft-version
       - makefile-syft-version2
       - makefile-syft-digest
+      - makefile-ci-distribution
+      - makefile-ci-zot
   "go.mod":
     scans:
       - go-mod-golang-release
@@ -154,6 +156,18 @@ scans:
     source: "registry-golang-oldest"
     args:
       regexp: '^go (?P<Version>[0-9\.]+)\s*$'
+  makefile-ci-distribution:
+    type: "regexp"
+    source: "registry-tag-arg-semver"
+    args:
+      regexp: '^CI_DISTRIBUTION_VER\?=(?P<Version>v?[0-9\.]+)\s*$'
+      repo: "docker.io/library/registry"
+  makefile-ci-zot:
+    type: "regexp"
+    source: "registry-tag-arg-semver"
+    args:
+      regexp: '^CI_ZOT_VER\?=(?P<Version>v?[0-9\.]+)\s*$'
+      repo: "ghcr.io/project-zot/zot-linux-amd64"
   makefile-gomajor:
     type: "regexp"
     source: "git-tag-semver"
