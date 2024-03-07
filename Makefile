@@ -87,9 +87,10 @@ lint-goimports: $(GOPATH)/bin/goimports
 		exit 1; \
 	fi
 
+# excluding types/platform pending resultion to https://github.com/securego/gosec/issues/1116
 .PHONY: lint-gosec
 lint-gosec: $(GOPATH)/bin/gosec .FORCE ## Run gosec
-	$(GOPATH)/bin/gosec -terse ./...
+	$(GOPATH)/bin/gosec -terse -exclude-dir types/platform ./...
 
 .PHONY: lint-md
 lint-md: .FORCE ## Run linting for markdown
