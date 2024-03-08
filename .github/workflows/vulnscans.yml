@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  govunlcheck:
-    name: Go Vuln Check
+  vulnerability-scans:
+    name: Run vulnerability scans
     runs-on: ubuntu-latest
     env:
       RELEASE_GO_VER: "1.22"
@@ -25,6 +25,7 @@ jobs:
         go-version: "${{ env.RELEASE_GO_VER }}"
         check-latest: true
 
+    # intentionally not pinned to always run the latest scanner
     - name: "Install govulncheck"
       run: |
         go install golang.org/x/vuln/cmd/govulncheck@latest
@@ -33,10 +34,12 @@ jobs:
       run: |
         govulncheck ./...
 
-    - name: "Install OSV Scanner"
-      run: |
-        go install github.com/google/osv-scanner/cmd/osv-scanner@latest
+    # TODO: reenable after 1.7.2 or later is released
+    # intentionally not pinned to always run the latest scanner
+    # - name: "Install OSV Scanner"
+    #   run: |
+    #     go install github.com/google/osv-scanner/cmd/osv-scanner@latest
 
-    - name: "Run OSV Scanner"
-      run: |
-        osv-scanner scan -r --experimental-licenses="Apache-2.0,BSD-3-Clause,MIT,CC-BY-SA-4.0,UNKNOWN" .
+    # - name: "Run OSV Scanner"
+    #   run: |
+    #     osv-scanner scan --config .osv-scanner.toml -r --experimental-licenses="Apache-2.0,BSD-3-Clause,MIT,CC-BY-SA-4.0,UNKNOWN" .
