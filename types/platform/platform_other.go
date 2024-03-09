@@ -12,9 +12,6 @@ func Local() Platform {
 		Architecture: runtime.GOARCH,
 		Variant:      cpuVariant(),
 	}
-	switch plat.OS {
-	case "macos":
-		plat.OS = "darwin"
-	}
+	plat.normalize()
 	return plat
 }

@@ -101,7 +101,6 @@ func Parse(platStr string) (Platform, error) {
 	}
 	// gather local platform details
 	platLocal := Local()
-	platLocal.normalize()
 	// normalize and extrapolate missing fields
 	switch plat.OS {
 	case "local", "":
