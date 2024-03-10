@@ -151,6 +151,10 @@ func TestMod(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to parse platform specific descriptor: %v", err)
 	}
+	plat, err := platform.Parse("linux/amd64/v3")
+	if err != nil {
+		t.Fatalf("failed to parse the platform: %v", err)
+	}
 
 	// define tests
 	tests := []struct {
@@ -415,6 +419,13 @@ func TestMod(t *testing.T) {
 			},
 			ref:      "ocidir://testrepo:v1",
 			wantSame: true,
+		},
+		{
+			name: "Config Platform",
+			opts: []Opts{
+				WithConfigPlatform(plat),
+			},
+			ref: "ocidir://testrepo:v1",
 		},
 		{
 			name: "Expose Port",
