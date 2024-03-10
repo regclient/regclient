@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/tar"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -236,6 +237,10 @@ regctl image mod alpine:3.5 --to-oci --create registry.example.org/alpine:3.5
 regctl image mod registry.example.org/repo:v1 --create v1-mod \
   --time "set=2021-02-03T04:05:06Z,base-ref=alpine:3"
 
+# set the entrypoint to be bash and unset the default command
+regctl image mod registry.example.org/repo:v1 --create v1-bash \
+  --config-entrypoint '["bash"]' --config-cmd ""
+
 # Rebase an older regctl image, copying to the local registry.
 # This uses annotations that were included in the original image build.
 regctl image mod registry.example.org/regctl:v0.5.1-alpine \
@@ -402,6 +407,34 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 			return nil
 		},
 	}, "buildarg-rm-regex", "", `delete a build arg with a regex value`)
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "string",
+		f: func(val string) error {
+			vSlice := []string{}
+			err := json.Unmarshal([]byte(val), &vSlice)
+			if err != nil && val != "" {
+				vSlice = []string{"/bin/sh", "-c", val}
+			}
+			imageOpts.modOpts = append(imageOpts.modOpts,
+				mod.WithConfigCmd(vSlice),
+			)
+			return nil
+		},
+	}, "config-cmd", "", `set command in the config (json array or string, empty string to delete)`)
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "string",
+		f: func(val string) error {
+			vSlice := []string{}
+			err := json.Unmarshal([]byte(val), &vSlice)
+			if err != nil && val != "" {
+				vSlice = []string{"/bin/sh", "-c", val}
+			}
+			imageOpts.modOpts = append(imageOpts.modOpts,
+				mod.WithConfigEntrypoint(vSlice),
+			)
+			return nil
+		},
+	}, "config-entrypoint", "", `set entrypoint in the config (json array or string, empty string to delete)`)
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {

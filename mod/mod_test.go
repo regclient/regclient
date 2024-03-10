@@ -708,6 +708,42 @@ func TestMod(t *testing.T) {
 			ref: "ocidir://testrepo:v1",
 		},
 		{
+			name: "Remove Command",
+			opts: []Opts{
+				WithConfigCmd([]string{}),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Set Command",
+			opts: []Opts{
+				WithConfigCmd([]string{"/app", "-v"}),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Set Command Shell",
+			opts: []Opts{
+				WithConfigCmd([]string{"/bin/sh", "-c", "/app -v"}),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Remove Entrypoint",
+			opts: []Opts{
+				WithConfigEntrypoint([]string{}),
+			},
+			ref:      "ocidir://testrepo:v1",
+			wantSame: true,
+		},
+		{
+			name: "Set Entrypoint",
+			opts: []Opts{
+				WithConfigEntrypoint([]string{"/app", "-v"}),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
 			name: "Build arg rm",
 			opts: []Opts{
 				WithBuildArgRm("arg_label", regexp.MustCompile("arg_for_[a-z]*")),
