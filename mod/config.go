@@ -54,6 +54,23 @@ func WithBuildArgRm(arg string, value *regexp.Regexp) Opts {
 	}
 }
 
+// WithConfigPlatform sets the platform in the config.
+func WithConfigPlatform(p platform.Platform) Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
+			oc := doc.oc.GetConfig()
+			if platform.Match(oc.Platform, p) {
+				return nil
+			}
+			oc.Platform = p
+			doc.oc.SetConfig(oc)
+			doc.modified = true
+			return nil
+		})
+		return nil
+	}
+}
+
 // WithConfigTimestamp sets the timestamp on the config entries based on options.
 func WithConfigTimestamp(optTime OptTime) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {

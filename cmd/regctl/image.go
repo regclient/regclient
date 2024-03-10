@@ -405,6 +405,19 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
+			p, err := platform.Parse(val)
+			if err != nil {
+				return err
+			}
+			imageOpts.modOpts = append(imageOpts.modOpts,
+				mod.WithConfigPlatform(p),
+			)
+			return nil
+		},
+	}, "config-platform", "", `set platform on the config (not recommended for an index of multiple images)`)
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "string",
+		f: func(val string) error {
 			ot, otherFields, err := imageParseOptTime(val)
 			if err != nil {
 				return err
