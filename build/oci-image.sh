@@ -117,13 +117,13 @@ fi
 for digest in $(regctl manifest get ocidir://output/${image}:${release} --format '{{range .Manifests}}{{printf "%s\n" .Digest}}{{end}}'); do
   echo "Attaching SBOMs for ${image}:${release}@${digest}"
   regctl image copy ocidir://output/${image}@${digest} ocidir://output/${image}-sbom -v warn >/dev/null
-  syft packages -q "oci-dir:output/${image}-sbom" --source-name "docker:docker.io/regclient/${image}@${digest}" -o cyclonedx-json \
+  syft scan -q "oci-dir:output/${image}-sbom" --source-name "docker:docker.io/regclient/${image}@${digest}" -o cyclonedx-json \
     | regctl artifact put --subject "ocidir://output/${image}@${digest}" \
         --artifact-type application/vnd.cyclonedx+json \
         -m application/vnd.cyclonedx+json \
         --annotation "org.opencontainers.image.created=${now_date}" \
         --annotation "org.opencontainers.image.description=CycloneDX JSON SBOM"
-  syft packages -q "oci-dir:output/${image}-sbom" --source-name "docker:docker.io/regclient/${image}@${digest}" -o spdx-json \
+  syft scan -q "oci-dir:output/${image}-sbom" --source-name "docker:docker.io/regclient/${image}@${digest}" -o spdx-json \
     | regctl artifact put --subject "ocidir://output/${image}@${digest}" \
         --artifact-type application/spdx+json \
         -m application/spdx+json \
