@@ -177,14 +177,14 @@ jobs:
                         --format '{{range .Manifests}}{{printf "%s\n" .Digest}}{{end}}'); do
           echo "Attaching SBOMs for ${{matrix.image}}@${digest}"
           regctl image copy ocidir://output/${{matrix.image}}@${digest} ocidir://output/${{matrix.image}}-sbom -v warn >/dev/null
-          ${{steps.syft.outputs.cmd}} packages -q "oci-dir:output/${{matrix.image}}-sbom" \
+          ${{steps.syft.outputs.cmd}} scan -q "oci-dir:output/${{matrix.image}}-sbom" \
               --source-name "docker:docker.io/regclient/${{matrix.image}}@${digest}" -o cyclonedx-json \
             | regctl artifact put --subject "ocidir://output/${{matrix.image}}@${digest}" \
                 --artifact-type application/vnd.cyclonedx+json \
                 -m application/vnd.cyclonedx+json \
                 --annotation "org.opencontainers.image.created=${now_date}" \
                 --annotation "org.opencontainers.image.description=CycloneDX JSON SBOM"
-          ${{steps.syft.outputs.cmd}} packages -q "oci-dir:output/${{matrix.image}}-sbom" \
+          ${{steps.syft.outputs.cmd}} scan -q "oci-dir:output/${{matrix.image}}-sbom" \
               --source-name "docker:docker.io/regclient/${{matrix.image}}@${digest}" -o spdx-json \
             | regctl artifact put --subject "ocidir://output/${{matrix.image}}@${digest}" \
                 --artifact-type application/spdx+json \
