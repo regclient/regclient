@@ -978,7 +978,7 @@ func (imageOpts *imageCmd) runImageCopy(cmd *cobra.Command, args []string) error
 					ticker.Stop()
 					return
 				case <-ticker.C:
-					progress.display(cmd.ErrOrStderr(), false)
+					progress.display(false)
 				}
 			}
 		}()
@@ -987,7 +987,7 @@ func (imageOpts *imageCmd) runImageCopy(cmd *cobra.Command, args []string) error
 	err = rc.ImageCopy(ctx, rSrc, rTgt, opts...)
 	if progress != nil {
 		close(done)
-		progress.display(cmd.ErrOrStderr(), true)
+		progress.display(true)
 	}
 	if err != nil {
 		return err
@@ -1049,7 +1049,7 @@ func (ip *imageProgress) callback(kind types.CallbackKind, instance string, stat
 	}
 }
 
-func (ip *imageProgress) display(w io.Writer, final bool) {
+func (ip *imageProgress) display(final bool) {
 	ip.mu.Lock()
 	defer ip.mu.Unlock()
 	if !ip.changed && !final {

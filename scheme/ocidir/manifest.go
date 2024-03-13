@@ -98,7 +98,7 @@ func (o *OCIDir) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest,
 	return o.manifestGet(ctx, r)
 }
 
-func (o *OCIDir) manifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest, error) {
+func (o *OCIDir) manifestGet(_ context.Context, r ref.Ref) (manifest.Manifest, error) {
 	index, err := o.readIndex(r, true)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read oci index: %w", err)

@@ -309,7 +309,7 @@ func (reg *Reg) tagListOCI(ctx context.Context, r ref.Ref, config scheme.TagConf
 	return tl, nil
 }
 
-func (reg *Reg) tagListLink(ctx context.Context, r ref.Ref, config scheme.TagConfig, link *url.URL) (*tag.List, error) {
+func (reg *Reg) tagListLink(ctx context.Context, r ref.Ref, _ scheme.TagConfig, link *url.URL) (*tag.List, error) {
 	headers := http.Header{
 		"Accept": []string{"application/json"},
 	}

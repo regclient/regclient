@@ -1583,7 +1583,7 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, r ref.Ref
 }
 
 // imageImportOCIPushManifests uploads manifests after OCI blobs were successfully loaded.
-func (rc *RegClient) imageImportOCIPushManifests(ctx context.Context, r ref.Ref, trd *tarReadData) error {
+func (rc *RegClient) imageImportOCIPushManifests(_ context.Context, _ ref.Ref, trd *tarReadData) error {
 	// run finish handlers in reverse order to upload nested manifests
 	for i := len(trd.finish) - 1; i >= 0; i-- {
 		err := trd.finish[i]()

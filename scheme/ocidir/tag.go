@@ -21,7 +21,7 @@ func (o *OCIDir) TagDelete(ctx context.Context, r ref.Ref) error {
 	return o.tagDelete(ctx, r)
 }
 
-func (o *OCIDir) tagDelete(ctx context.Context, r ref.Ref) error {
+func (o *OCIDir) tagDelete(_ context.Context, r ref.Ref) error {
 	if r.Tag == "" {
 		return errs.ErrMissingTag
 	}
