@@ -708,6 +708,21 @@ func TestMod(t *testing.T) {
 			ref: "ocidir://testrepo:v1",
 		},
 		{
+			name: "Remove data config",
+			opts: []Opts{
+				WithData(0),
+			},
+			ref: "ocidir://testrepo:a-example",
+		},
+		{
+			name: "Keep data config",
+			opts: []Opts{
+				WithData(4),
+			},
+			ref:      "ocidir://testrepo:a-example",
+			wantSame: true,
+		},
+		{
 			name: "Remove Command",
 			opts: []Opts{
 				WithConfigCmd([]string{}),
