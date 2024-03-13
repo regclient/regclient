@@ -173,7 +173,7 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rT
 				}
 				// set data field
 				d.Data = mBytes
-			} else if d.Size > mc.maxDataSize && len(d.Data) > 0 {
+			} else if mc.maxDataSize >= 0 && d.Size > mc.maxDataSize && len(d.Data) > 0 {
 				// strip data fields if above max size
 				d.Data = []byte{}
 			}
@@ -258,7 +258,7 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rT
 				}
 				// set data field
 				d.Data = bBytes
-			} else if d.Size > mc.maxDataSize && len(d.Data) > 0 {
+			} else if mc.maxDataSize >= 0 && d.Size > mc.maxDataSize && len(d.Data) > 0 {
 				// strip data fields if above max size
 				d.Data = []byte{}
 			}
@@ -327,9 +327,10 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rT
 			dm.config.oc.SetConfig(oc)
 			dm.config.modified = true
 		}
+		var cBytes []byte
 		if dm.config != nil {
 			dm.config.newDesc = dm.config.oc.GetDescriptor()
-			cBytes, err := dm.config.oc.RawBody()
+			cBytes, err = dm.config.oc.RawBody()
 			if err != nil {
 				return err
 			}
@@ -349,23 +350,35 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rT
 					return err
 				}
 			}
-			// handle config data field
-			if ociM.Config.Size <= mc.maxDataSize || (mc.maxDataSize < 0 && len(ociM.Config.Data) > 0) {
-				if !bytes.Equal(ociM.Config.Data, cBytes) {
-					ociM.Config.Data = cBytes
-					changed = true
-				}
-			} else if ociM.Config.Size > mc.maxDataSize && len(ociM.Config.Data) > 0 {
-				// strip data fields if above max size
-				ociM.Config.Data = []byte{}
-				changed = true
-			}
 		}
 		if dm.config == nil && ociM.Config.Digest != "" && !ref.EqualRepository(rSrc, rTgt) {
 			err = rc.BlobCopy(ctx, rSrc, rTgt, ociM.Config)
 			if err != nil {
 				return err
 			}
+		}
+		// handle config data field
+		if ociM.Config.Size <= mc.maxDataSize || (mc.maxDataSize < 0 && len(ociM.Config.Data) > 0) {
+			// if config was not loaded into memory (e.g. artifact), load it now
+			if cBytes == nil {
+				cRdr, err := rc.BlobGet(ctx, rTgt, ociM.Config)
+				if err != nil {
+					return err
+				}
+				cBytes, err = io.ReadAll(cRdr)
+				_ = cRdr.Close()
+				if err != nil {
+					return err
+				}
+			}
+			if !bytes.Equal(ociM.Config.Data, cBytes) {
+				ociM.Config.Data = cBytes
+				changed = true
+			}
+		} else if mc.maxDataSize >= 0 && ociM.Config.Size > mc.maxDataSize && len(ociM.Config.Data) > 0 {
+			// strip data fields if above max size
+			ociM.Config.Data = []byte{}
+			changed = true
 		}
 
 		if changed {
