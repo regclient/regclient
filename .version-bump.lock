@@ -6,12 +6,12 @@
 {"name":"gha-uses-semver","key":"docker/build-push-action","version":"v5.3.0"}
 {"name":"gha-uses-semver","key":"docker/login-action","version":"v3.1.0"}
 {"name":"gha-uses-semver","key":"docker/setup-buildx-action","version":"v3.2.0"}
-{"name":"gha-uses-semver","key":"github/codeql-action","version":"v3.24.8"}
+{"name":"gha-uses-semver","key":"github/codeql-action","version":"v3.24.9"}
 {"name":"gha-uses-semver","key":"ossf/scorecard-action","version":"v2.3.1"}
 {"name":"gha-uses-semver","key":"sigstore/cosign-installer","version":"v3.4.0"}
 {"name":"gha-uses-semver","key":"softprops/action-gh-release","version":"v2.0.4"}
 {"name":"git-commit","key":"https://github.com/GoogleCloudPlatform/docker-credential-gcr.git:master","version":"62afb2723512fd6572c6300024e0c94f734b0ae3"}
-{"name":"git-commit","key":"https://github.com/awslabs/amazon-ecr-credential-helper.git:main","version":"a1a918375412b0df060ac6899dc39fc648db0bd4"}
+{"name":"git-commit","key":"https://github.com/awslabs/amazon-ecr-credential-helper.git:main","version":"1fd604ae58de3526cbf497b11f8de4083aa3b14f"}
 {"name":"git-commit","key":"https://github.com/grafi-tt/lunajson.git:master","version":"3d10600874527d71519b33ecbb314eb93ccd1df6"}
 {"name":"git-commit","key":"https://github.com/kikito/semver.lua.git:master","version":"af495adc857d51fd1507a112be18523828a1da0d"}
 {"name":"git-tag-semver","key":"github.com/GoogleCloudPlatform/docker-credential-gcr","version":"v2.1.22"}
@@ -60,6 +60,7 @@
 {"name":"github-commit-match","key":"github/codeql-action:v3.24.5","version":"47b3d888fe66b639e431abf22ebca059152f1eea"}
 {"name":"github-commit-match","key":"github/codeql-action:v3.24.6","version":"8a470fddafa5cbb6266ee11b37ef4d8aae19c571"}
 {"name":"github-commit-match","key":"github/codeql-action:v3.24.8","version":"05963f47d870e2cb19a537396c1f668a348c7d8f"}
+{"name":"github-commit-match","key":"github/codeql-action:v3.24.9","version":"1b1aada464948af03b950897e5eb522f92603cc2"}
 {"name":"github-commit-match","key":"ossf/scorecard-action:v2.3.1","version":"0864cf19026789058feabb7e87baa5f140aac736"}
 {"name":"github-commit-match","key":"regclient/actions:main","version":"d8097ee5dd5cdf150516315919b58509fc7f4cfa"}
 {"name":"github-commit-match","key":"sigstore/cosign-installer:v3.2.0","version":"1fc5bd396d372bee37d608f955b336615edf79c8"}
