@@ -194,29 +194,20 @@ jobs:
           rm -r output/${{matrix.image}}-sbom
         done
 
-    - name: Push
+    - name: Push and Sign
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       id: push
       run: |
         # loop over the tags
         image_hub="${{ steps.prep.outputs.image_hub }}"
         for tag in $(echo ${{ steps.prep.outputs.tags }} | tr , ' '); do
-          if [ "$(regctl image digest "ocidir://output/${{matrix.image}}:${{matrix.type}}")" = "$(regctl image digest "${tag}" 2>/dev/null || true)" ]; then
+          digest="$(regctl image digest "ocidir://output/${{matrix.image}}:${{matrix.type}}")"
+          if [ "${digest}" = "$(regctl image digest "${tag}" 2>/dev/null || true)" ]; then
             # image already pushed, don't add referrers to reproducible builds
             echo "Skipping ${tag}"
           else
             echo "Pushing ${tag}"
-            # TODO: push referrers to Hub once this is fixed: https://github.com/docker/hub-feedback/issues/2307
-            if [ "$tag" != "${tag#$image_hub}" ]; then
-              regctl image copy "ocidir://output/${{matrix.image}}:${{matrix.type}}" "${tag}"
-            else
-              regctl image copy --referrers "ocidir://output/${{matrix.image}}:${{matrix.type}}" "${tag}"
-            fi
+            regctl image copy --referrers "ocidir://output/${{matrix.image}}:${{matrix.type}}@${digest}" "${tag}"
+            cosign sign -y -r "${tag}@${digest}"
           fi
         done
-
-    - name: Sign the container image
-      if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
-      run: |
-        cosign sign -y -r ${{ steps.prep.outputs.image_hub }}@${{ steps.mutate.outputs.digest }}
-        cosign sign -y -r ${{ steps.prep.outputs.image_ghcr }}@${{ steps.mutate.outputs.digest }}
