@@ -31,7 +31,7 @@ import (
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/auth"
 	"github.com/regclient/regclient/internal/throttle"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/warning"
 )
 
@@ -266,7 +266,7 @@ func (resp *clientResp) Next() error {
 			if err != nil {
 				return err
 			}
-			return types.ErrAllRequestsFailed
+			return errs.ErrAllRequestsFailed
 		}
 		if curHost >= len(hosts) {
 			curHost = 0
@@ -295,14 +295,14 @@ func (resp *clientResp) Next() error {
 			var err error
 			if !okAPI {
 				dropHost = true
-				return fmt.Errorf("failed looking up api \"%s\" for host \"%s\": %w", h.config.API, h.config.Name, types.ErrAPINotFound)
+				return fmt.Errorf("failed looking up api \"%s\" for host \"%s\": %w", h.config.API, h.config.Name, errs.ErrAPINotFound)
 			}
 			if api.Method == "HEAD" && h.config.APIOpts != nil {
 				var disableHead bool
 				disableHead, err = strconv.ParseBool(h.config.APIOpts["disableHead"])
 				if err == nil && disableHead {
 					dropHost = true
-					return fmt.Errorf("head requests disabled for host \"%s\": %w", h.config.Name, types.ErrUnsupportedAPI)
+					return fmt.Errorf("head requests disabled for host \"%s\": %w", h.config.Name, errs.ErrUnsupportedAPI)
 				}
 			}
 
@@ -349,7 +349,7 @@ func (resp *clientResp) Next() error {
 				}).Warn("Sleeping for backoff")
 				select {
 				case <-resp.ctx.Done():
-					return types.ErrCanceled
+					return errs.ErrCanceled
 				case <-time.After(sleepTime):
 				}
 			}
@@ -402,7 +402,7 @@ func (resp *clientResp) Next() error {
 				// add auth headers
 				err = hAuth.UpdateRequest(httpReq)
 				if err != nil {
-					if errors.Is(err, types.ErrHTTPUnauthorized) {
+					if errors.Is(err, errs.ErrHTTPUnauthorized) {
 						dropHost = true
 					} else {
 						backoff = true
@@ -453,7 +453,7 @@ func (resp *clientResp) Next() error {
 						err = fmt.Errorf("authentication handler unavailable")
 					}
 					if err != nil {
-						if errors.Is(err, types.ErrEmptyChallenge) || errors.Is(err, types.ErrNoNewChallenge) || errors.Is(err, types.ErrHTTPUnauthorized) {
+						if errors.Is(err, errs.ErrEmptyChallenge) || errors.Is(err, errs.ErrNoNewChallenge) || errors.Is(err, errs.ErrHTTPUnauthorized) {
 							c.log.WithFields(logrus.Fields{
 								"URL": u.String(),
 								"Err": err,
@@ -535,7 +535,7 @@ func (resp *clientResp) Next() error {
 			}
 		}
 		// when error does not allow retries, abort with the last known err value
-		if err != nil && errors.Is(loopErr, types.ErrNotRetryable) {
+		if err != nil && errors.Is(loopErr, errs.ErrNotRetryable) {
 			return err
 		}
 		err = loopErr
@@ -556,7 +556,7 @@ func (resp *clientResp) Read(b []byte) (int, error) {
 		return 0, io.EOF
 	}
 	if resp.resp == nil {
-		return 0, types.ErrNotFound
+		return 0, errs.ErrNotFound
 	}
 	// perform the read
 	i, err := resp.reader.Read(b)
@@ -595,7 +595,7 @@ func (resp *clientResp) Read(b []byte) (int, error) {
 			}).Warn("Digest mismatch")
 			_ = resp.backoffSet()
 			resp.done = true
-			return i, fmt.Errorf("%w, expected %s, computed %s", types.ErrDigestMismatch,
+			return i, fmt.Errorf("%w, expected %s, computed %s", errs.ErrDigestMismatch,
 				resp.digest.String(), resp.digester.Digest().String())
 		}
 	}
@@ -612,7 +612,7 @@ func (resp *clientResp) Close() error {
 		resp.throttle = nil
 	}
 	if resp.resp == nil {
-		return types.ErrNotFound
+		return errs.ErrNotFound
 	}
 	if !resp.done {
 		resp.backoffClear()
@@ -695,7 +695,7 @@ func (resp *clientResp) backoffSet() error {
 	ch.backoffUntil = time.Now().Add(sleepTime)
 
 	if ch.backoffCur >= c.retryLimit {
-		return fmt.Errorf("%w: backoffs %d", types.ErrBackoffLimit, ch.backoffCur)
+		return fmt.Errorf("%w: backoffs %d", errs.ErrBackoffLimit, ch.backoffCur)
 	}
 
 	return nil
@@ -831,15 +831,15 @@ func (ch *clientHost) AuthCreds() func(h string) auth.Cred {
 func HTTPError(statusCode int) error {
 	switch statusCode {
 	case 401:
-		return fmt.Errorf("%w [http %d]", types.ErrHTTPUnauthorized, statusCode)
+		return fmt.Errorf("%w [http %d]", errs.ErrHTTPUnauthorized, statusCode)
 	case 403:
-		return fmt.Errorf("%w [http %d]", types.ErrHTTPUnauthorized, statusCode)
+		return fmt.Errorf("%w [http %d]", errs.ErrHTTPUnauthorized, statusCode)
 	case 404:
-		return fmt.Errorf("%w [http %d]", types.ErrNotFound, statusCode)
+		return fmt.Errorf("%w [http %d]", errs.ErrNotFound, statusCode)
 	case 429:
-		return fmt.Errorf("%w [http %d]", types.ErrHTTPRateLimit, statusCode)
+		return fmt.Errorf("%w [http %d]", errs.ErrHTTPRateLimit, statusCode)
 	default:
-		return fmt.Errorf("%w: %s [http %d]", types.ErrHTTPStatus, http.StatusText(statusCode), statusCode)
+		return fmt.Errorf("%w: %s [http %d]", errs.ErrHTTPStatus, http.StatusText(statusCode), statusCode)
 	}
 }
 
@@ -858,7 +858,7 @@ func makeRootPool(rootCAPool [][]byte, rootCADirs []string, hostname string, hos
 		files, err := os.ReadDir(hostDir)
 		if err != nil {
 			if !os.IsNotExist(err) {
-				return nil, fmt.Errorf("failed to read directory %s: %v", hostDir, err)
+				return nil, fmt.Errorf("failed to read directory %s: %w", hostDir, err)
 			}
 			continue
 		}
@@ -871,7 +871,7 @@ func makeRootPool(rootCAPool [][]byte, rootCADirs []string, hostname string, hos
 				//#nosec G304 file from a known directory and extension read by the user running the command on their own host
 				cert, err := os.ReadFile(f)
 				if err != nil {
-					return nil, fmt.Errorf("failed to read %s: %v", f, err)
+					return nil, fmt.Errorf("failed to read %s: %w", f, err)
 				}
 				if ok := pool.AppendCertsFromPEM(cert); !ok {
 					return nil, fmt.Errorf("failed to import cert from %s", f)

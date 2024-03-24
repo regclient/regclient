@@ -12,10 +12,10 @@ import (
 
 	"github.com/regclient/regclient/internal/limitread"
 	"github.com/regclient/regclient/internal/reghttp"
-	"github.com/regclient/regclient/internal/wraperr"
 	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/mediatype"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -23,7 +23,7 @@ import (
 // This will implicitly delete all tags pointing to that manifest.
 func (reg *Reg) ManifestDelete(ctx context.Context, r ref.Ref, opts ...scheme.ManifestOpts) error {
 	if r.Digest == "" {
-		return wraperr.New(fmt.Errorf("digest required to delete manifest, reference %s", r.CommonName()), types.ErrMissingDigest)
+		return fmt.Errorf("digest required to delete manifest, reference %s%.0w", r.CommonName(), errs.ErrMissingDigest)
 	}
 
 	mc := scheme.ManifestConfig{}
@@ -44,7 +44,7 @@ func (reg *Reg) ManifestDelete(ctx context.Context, r ref.Ref, opts ...scheme.Ma
 			if err == nil && sDesc != nil && sDesc.MediaType != "" && sDesc.Size > 0 {
 				// attempt to delete the referrer, but ignore if the referrer entry wasn't found
 				err = reg.referrerDelete(ctx, r, mc.Manifest)
-				if err != nil && !errors.Is(err, types.ErrNotFound) {
+				if err != nil && !errors.Is(err, errs.ErrNotFound) {
 					return err
 				}
 			}
@@ -89,19 +89,19 @@ func (reg *Reg) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest, 
 	} else if r.Tag != "" {
 		tagOrDigest = r.Tag
 	} else {
-		return nil, wraperr.New(fmt.Errorf("reference missing tag and digest: %s", r.CommonName()), types.ErrMissingTagOrDigest)
+		return nil, fmt.Errorf("reference missing tag and digest: %s%.0w", r.CommonName(), errs.ErrMissingTagOrDigest)
 	}
 
 	// build/send request
 	headers := http.Header{
 		"Accept": []string{
-			types.MediaTypeOCI1ManifestList,
-			types.MediaTypeOCI1Manifest,
-			types.MediaTypeDocker2ManifestList,
-			types.MediaTypeDocker2Manifest,
-			types.MediaTypeDocker1ManifestSigned,
-			types.MediaTypeDocker1Manifest,
-			types.MediaTypeOCI1Artifact,
+			mediatype.OCI1ManifestList,
+			mediatype.OCI1Manifest,
+			mediatype.Docker2ManifestList,
+			mediatype.Docker2Manifest,
+			mediatype.Docker1ManifestSigned,
+			mediatype.Docker1Manifest,
+			mediatype.OCI1Artifact,
 		},
 	}
 	req := &reghttp.Req{
@@ -127,7 +127,7 @@ func (reg *Reg) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest, 
 	// limit length
 	size, _ := strconv.Atoi(resp.HTTPResponse().Header.Get("Content-Length"))
 	if size > 0 && reg.manifestMaxPull > 0 && int64(size) > reg.manifestMaxPull {
-		return nil, fmt.Errorf("manifest too large, received %d, limit %d: %s%.0w", size, reg.manifestMaxPull, r.CommonName(), types.ErrSizeLimitExceeded)
+		return nil, fmt.Errorf("manifest too large, received %d, limit %d: %s%.0w", size, reg.manifestMaxPull, r.CommonName(), errs.ErrSizeLimitExceeded)
 	}
 	rdr := &limitread.LimitRead{
 		Reader: resp,
@@ -166,19 +166,19 @@ func (reg *Reg) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest,
 	} else if r.Tag != "" {
 		tagOrDigest = r.Tag
 	} else {
-		return nil, wraperr.New(fmt.Errorf("reference missing tag and digest: %s", r.CommonName()), types.ErrMissingTagOrDigest)
+		return nil, fmt.Errorf("reference missing tag and digest: %s%.0w", r.CommonName(), errs.ErrMissingTagOrDigest)
 	}
 
 	// build/send request
 	headers := http.Header{
 		"Accept": []string{
-			types.MediaTypeOCI1ManifestList,
-			types.MediaTypeOCI1Manifest,
-			types.MediaTypeDocker2ManifestList,
-			types.MediaTypeDocker2Manifest,
-			types.MediaTypeDocker1ManifestSigned,
-			types.MediaTypeDocker1Manifest,
-			types.MediaTypeOCI1Artifact,
+			mediatype.OCI1ManifestList,
+			mediatype.OCI1Manifest,
+			mediatype.Docker2ManifestList,
+			mediatype.Docker2Manifest,
+			mediatype.Docker1ManifestSigned,
+			mediatype.Docker1Manifest,
+			mediatype.OCI1Artifact,
 		},
 	}
 	req := &reghttp.Req{
@@ -218,7 +218,7 @@ func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest,
 		reg.log.WithFields(logrus.Fields{
 			"ref": r.Reference,
 		}).Warn("Manifest put requires a tag")
-		return types.ErrMissingTag
+		return errs.ErrMissingTag
 	}
 
 	// create the request body
@@ -233,7 +233,7 @@ func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest,
 
 	// limit length
 	if reg.manifestMaxPush > 0 && int64(len(mj)) > reg.manifestMaxPush {
-		return fmt.Errorf("manifest too large, calculated %d, limit %d: %s%.0w", len(mj), reg.manifestMaxPush, r.CommonName(), types.ErrSizeLimitExceeded)
+		return fmt.Errorf("manifest too large, calculated %d, limit %d: %s%.0w", len(mj), reg.manifestMaxPush, r.CommonName(), errs.ErrSizeLimitExceeded)
 	}
 
 	// build/send request

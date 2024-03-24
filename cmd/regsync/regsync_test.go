@@ -12,7 +12,8 @@ import (
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/internal/throttle"
 	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
@@ -26,8 +27,7 @@ func TestProcess(t *testing.T) {
 	fsMem := rwfs.MemNew()
 	err := rwfs.CopyRecursive(fsOS, "../../testdata", fsMem, ".")
 	if err != nil {
-		t.Errorf("failed to setup memfs copy: %v", err)
-		return
+		t.Fatalf("failed to setup memfs copy: %v", err)
 	}
 	// setup various globals normally done by loadConf
 	rc = regclient.New(regclient.WithFS(fsMem))
@@ -40,94 +40,93 @@ func TestProcess(t *testing.T) {
 	confRdr := bytes.NewReader([]byte(confBytes))
 	conf, err = ConfigLoadReader(confRdr)
 	if err != nil {
-		t.Errorf("failed parsing config: %v", err)
-		return
+		t.Fatalf("failed parsing config: %v", err)
 	}
 	pAMD, err := platform.Parse("linux/amd64")
 	if err != nil {
-		t.Errorf("failed to parse amd platform: %v", err)
+		t.Fatalf("failed to parse amd platform: %v", err)
 	}
 	pARM, err := platform.Parse("linux/arm64")
 	if err != nil {
-		t.Errorf("failed to parse arm platform: %v", err)
+		t.Fatalf("failed to parse arm platform: %v", err)
 	}
 	r1, err := ref.New("ocidir://testrepo:v1")
 	if err != nil {
-		t.Errorf("failed to parse v1 reference: %v", err)
+		t.Fatalf("failed to parse v1 reference: %v", err)
 	}
 	r2, err := ref.New("ocidir://testrepo:v2")
 	if err != nil {
-		t.Errorf("failed to parse v2 reference: %v", err)
+		t.Fatalf("failed to parse v2 reference: %v", err)
 	}
 	r3, err := ref.New("ocidir://testrepo:v3")
 	if err != nil {
-		t.Errorf("failed to parse v3 reference: %v", err)
+		t.Fatalf("failed to parse v3 reference: %v", err)
 	}
 	rMirror, err := ref.New("ocidir://testrepo:mirror")
 	if err != nil {
-		t.Errorf("failed to parse mirror reference: %v", err)
+		t.Fatalf("failed to parse mirror reference: %v", err)
 	}
 	rChild, err := ref.New("ocidir://testrepo:child")
 	if err != nil {
-		t.Errorf("failed to parse child reference: %v", err)
+		t.Fatalf("failed to parse child reference: %v", err)
 	}
 	rLoop, err := ref.New("ocidir://testrepo:loop")
 	if err != nil {
-		t.Errorf("failed to parse loop reference: %v", err)
+		t.Fatalf("failed to parse loop reference: %v", err)
 	}
 	m1, err := rc.ManifestGet(ctx, r1)
 	if err != nil {
-		t.Errorf("failed to get manifest v1: %v", err)
+		t.Fatalf("failed to get manifest v1: %v", err)
 	}
 	d1 := m1.GetDescriptor().Digest
 	desc1AMD, err := manifest.GetPlatformDesc(m1, &pAMD)
 	if err != nil {
-		t.Errorf("failed to get platform ")
+		t.Fatalf("failed to get platform ")
 	}
 	d1AMD := desc1AMD.Digest
 	desc1ARM, err := manifest.GetPlatformDesc(m1, &pARM)
 	if err != nil {
-		t.Errorf("failed to get platform ")
+		t.Fatalf("failed to get platform ")
 	}
 	d1ARM := desc1ARM.Digest
 	m2, err := rc.ManifestGet(ctx, r2)
 	if err != nil {
-		t.Errorf("failed to get manifest v2: %v", err)
+		t.Fatalf("failed to get manifest v2: %v", err)
 	}
 	d2 := m2.GetDescriptor().Digest
 	desc2AMD, err := manifest.GetPlatformDesc(m2, &pAMD)
 	if err != nil {
-		t.Errorf("failed to get platform ")
+		t.Fatalf("failed to get platform ")
 	}
 	d2AMD := desc2AMD.Digest
-	desc2SBOM, err := rc.ReferrerList(ctx, r2, scheme.WithReferrerMatchOpt(types.MatchOpt{ArtifactType: "application/example.sbom"}))
+	desc2SBOM, err := rc.ReferrerList(ctx, r2, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{ArtifactType: "application/example.sbom"}))
 	if err != nil || len(desc2SBOM.Descriptors) == 0 {
-		t.Errorf("failed to get SBOM for v2: %v", err)
+		t.Fatalf("failed to get SBOM for v2: %v", err)
 	}
 	d2SBOM := desc2SBOM.Descriptors[0].Digest
-	desc2Sig, err := rc.ReferrerList(ctx, r2, scheme.WithReferrerMatchOpt(types.MatchOpt{ArtifactType: "application/example.signature"}))
+	desc2Sig, err := rc.ReferrerList(ctx, r2, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{ArtifactType: "application/example.signature"}))
 	if err != nil || len(desc2Sig.Descriptors) == 0 {
-		t.Errorf("failed to get signature for v2: %v", err)
+		t.Fatalf("failed to get signature for v2: %v", err)
 	}
 	d2Sig := desc2Sig.Descriptors[0].Digest
 	m3, err := rc.ManifestGet(ctx, r3)
 	if err != nil {
-		t.Errorf("failed to get manifest v3: %v", err)
+		t.Fatalf("failed to get manifest v3: %v", err)
 	}
 	d3 := m3.GetDescriptor().Digest
 	mMirror, err := rc.ManifestGet(ctx, rMirror)
 	if err != nil {
-		t.Errorf("failed to get manifest vMirror: %v", err)
+		t.Fatalf("failed to get manifest vMirror: %v", err)
 	}
 	dMirror := mMirror.GetDescriptor().Digest
 	mChild, err := rc.ManifestGet(ctx, rChild)
 	if err != nil {
-		t.Errorf("failed to get manifest vChild: %v", err)
+		t.Fatalf("failed to get manifest vChild: %v", err)
 	}
 	dChild := mChild.GetDescriptor().Digest
 	mLoop, err := rc.ManifestGet(ctx, rLoop)
 	if err != nil {
-		t.Errorf("failed to get manifest vLoop: %v", err)
+		t.Fatalf("failed to get manifest vLoop: %v", err)
 	}
 	dLoop := mLoop.GetDescriptor().Digest
 
@@ -582,7 +581,7 @@ func TestProcess(t *testing.T) {
 			},
 			action:  actionCopy,
 			desired: []string{},
-			expErr:  types.ErrInvalidReference,
+			expErr:  errs.ErrInvalidReference,
 		},
 		{
 			name: "InvalidTargetImage",
@@ -593,7 +592,7 @@ func TestProcess(t *testing.T) {
 			},
 			action:  actionCopy,
 			desired: []string{},
-			expErr:  types.ErrInvalidReference,
+			expErr:  errs.ErrInvalidReference,
 		},
 		{
 			name: "InvalidSourceRepository",
@@ -604,7 +603,7 @@ func TestProcess(t *testing.T) {
 			},
 			action:  actionCopy,
 			desired: []string{},
-			expErr:  types.ErrInvalidReference,
+			expErr:  errs.ErrInvalidReference,
 		},
 		{
 			name: "InvalidTargetRepository",
@@ -615,7 +614,7 @@ func TestProcess(t *testing.T) {
 			},
 			action:  actionCopy,
 			desired: []string{},
-			expErr:  types.ErrInvalidReference,
+			expErr:  errs.ErrInvalidReference,
 		},
 		{
 			name: "InvalidType",
@@ -645,15 +644,13 @@ func TestProcess(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("unexpected error on process: %v", err)
-				return
+				t.Fatalf("unexpected error on process: %v", err)
 			}
 			// validate tags and files exist/don't exist
 			for _, exist := range tc.exists {
 				r, err := ref.New(exist)
 				if err != nil {
-					t.Errorf("cannot parse ref %s: %v", exist, err)
-					continue
+					t.Fatalf("cannot parse ref %s: %v", exist, err)
 				}
 				_, err = rc.ManifestHead(ctx, r)
 				if err != nil {
@@ -683,8 +680,7 @@ func TestProcessRef(t *testing.T) {
 	fsMem := rwfs.MemNew()
 	err := rwfs.CopyRecursive(fsOS, "../../testdata", fsMem, ".")
 	if err != nil {
-		t.Errorf("failed to setup memfs copy: %v", err)
-		return
+		t.Fatalf("failed to setup memfs copy: %v", err)
 	}
 	// setup various globals normally done by loadConf
 	rc = regclient.New(regclient.WithFS(fsMem))
@@ -706,7 +702,7 @@ func TestProcessRef(t *testing.T) {
 	}{
 		{
 			name:   "empty",
-			expErr: types.ErrNotFound,
+			expErr: errs.ErrNotFound,
 		},
 		{
 			name:         "check v1",
@@ -736,13 +732,11 @@ func TestProcessRef(t *testing.T) {
 			rootOpts := rootCmd{}
 			src, err := ref.New(cs.Source)
 			if err != nil {
-				t.Errorf("failed to create src ref: %v", err)
-				return
+				t.Fatalf("failed to create src ref: %v", err)
 			}
 			tgt, err := ref.New(cs.Target)
 			if err != nil {
-				t.Errorf("failed to create tgt ref: %v", err)
-				return
+				t.Fatalf("failed to create tgt ref: %v", err)
 			}
 			src.Tag = tc.src
 			tgt.Tag = tc.tgt
@@ -757,17 +751,16 @@ func TestProcessRef(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("unexpected error on process: %v", err)
-				return
+				t.Fatalf("unexpected error on process: %v", err)
 			}
 			if tc.checkTgtEq || tc.checkTgtDiff {
 				mSrc, err := rc.ManifestHead(ctx, src)
 				if err != nil {
-					t.Errorf("error fetching src: %v", err)
+					t.Fatalf("error fetching src: %v", err)
 				}
 				mTgt, err := rc.ManifestHead(ctx, tgt)
 				if err != nil && tc.checkTgtEq {
-					t.Errorf("error fetching tgt: %v", err)
+					t.Fatalf("error fetching tgt: %v", err)
 				}
 				if tc.checkTgtEq {
 					if mTgt == nil || mSrc.GetDescriptor().Digest != mTgt.GetDescriptor().Digest {
@@ -828,8 +821,7 @@ func TestConfigRead(t *testing.T) {
   `))
 	c, err := ConfigLoadReader(cRead)
 	if err != nil {
-		t.Errorf("Filed to load reader: %v", err)
-		return
+		t.Fatalf("Filed to load reader: %v", err)
 	}
 	if c.Sync[1].Target != "registry:5000/hub/alpine" {
 		t.Errorf("template sync-hub mismatch, expected: %s, received: %s", "registry:5000/hub/alpine", c.Sync[1].Target)

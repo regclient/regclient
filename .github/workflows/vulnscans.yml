@@ -13,11 +13,11 @@ jobs:
     name: Go Vuln Check
     runs-on: ubuntu-latest
     env:
-      RELEASE_GO_VER: "1.21"
+      RELEASE_GO_VER: "1.22"
 
     steps:
     - name: Check out code
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633 # v4.1.2
 
     - name: "Set up Go"
       uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0
@@ -39,4 +39,4 @@ jobs:
 
     - name: "Run OSV Scanner"
       run: |
-        osv-scanner -r .
+        osv-scanner scan -r --experimental-licenses="Apache-2.0,BSD-3-Clause,MIT,CC-BY-SA-4.0,UNKNOWN" .

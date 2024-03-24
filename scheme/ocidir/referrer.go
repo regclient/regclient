@@ -6,8 +6,9 @@ import (
 	"fmt"
 
 	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/mediatype"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
@@ -66,11 +67,11 @@ func (o *OCIDir) referrerList(ctx context.Context, r ref.Ref, opts ...scheme.Ref
 	}
 	m, err := o.manifestGet(ctx, rlTag)
 	if err != nil {
-		if errors.Is(err, types.ErrNotFound) {
+		if errors.Is(err, errs.ErrNotFound) {
 			// empty list, initialize a new manifest
 			rl.Manifest, err = manifest.New(manifest.WithOrig(v1.Index{
 				Versioned: v1.IndexSchemaVersion,
-				MediaType: types.MediaTypeOCI1ManifestList,
+				MediaType: mediatype.OCI1ManifestList,
 			}))
 			if err != nil {
 				return rl, err
@@ -98,7 +99,7 @@ func (o *OCIDir) referrerDelete(ctx context.Context, r ref.Ref, m manifest.Manif
 	// get refers field
 	mSubject, ok := m.(manifest.Subjecter)
 	if !ok {
-		return fmt.Errorf("manifest does not support subject: %w", types.ErrUnsupportedMediaType)
+		return fmt.Errorf("manifest does not support subject: %w", errs.ErrUnsupportedMediaType)
 	}
 	subject, err := mSubject.GetSubject()
 	if err != nil {
@@ -106,7 +107,7 @@ func (o *OCIDir) referrerDelete(ctx context.Context, r ref.Ref, m manifest.Manif
 	}
 	// validate/set subject descriptor
 	if subject == nil || subject.MediaType == "" || subject.Digest == "" || subject.Size <= 0 {
-		return fmt.Errorf("subject is not set%.0w", types.ErrNotFound)
+		return fmt.Errorf("subject is not set%.0w", errs.ErrNotFound)
 	}
 
 	// get descriptor for subject
@@ -142,7 +143,7 @@ func (o *OCIDir) referrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 	// get subject field
 	mSubject, ok := m.(manifest.Subjecter)
 	if !ok {
-		return fmt.Errorf("manifest does not support subject: %w", types.ErrUnsupportedMediaType)
+		return fmt.Errorf("manifest does not support subject: %w", errs.ErrUnsupportedMediaType)
 	}
 	subject, err := mSubject.GetSubject()
 	if err != nil {
@@ -150,7 +151,7 @@ func (o *OCIDir) referrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 	}
 	// validate/set subject descriptor
 	if subject == nil || subject.MediaType == "" || subject.Digest == "" || subject.Size <= 0 {
-		return fmt.Errorf("subject is not set%.0w", types.ErrNotFound)
+		return fmt.Errorf("subject is not set%.0w", errs.ErrNotFound)
 	}
 
 	// get descriptor for subject

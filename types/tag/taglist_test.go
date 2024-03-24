@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -20,8 +20,7 @@ func TestNew(t *testing.T) {
 	registryTags := []string{"cache", "edge", "edge-alpine", "alpine", "latest"}
 	reqURL, err := url.Parse("http://localhost:5000/v2/regclient/test/tag/list")
 	if err != nil {
-		t.Errorf("failed to parse URL: %v", err)
-		return
+		t.Fatalf("failed to parse URL: %v", err)
 	}
 	registryRef, _ := ref.New("localhost:5000/regclient/test")
 	registryRepoName := "regclient/test"
@@ -201,7 +200,7 @@ func TestNew(t *testing.T) {
 				WithHeaders(registryHeaders),
 				WithMT("application/unknown"),
 			},
-			err: types.ErrUnsupportedMediaType,
+			err: errs.ErrUnsupportedMediaType,
 		},
 	}
 
@@ -215,8 +214,7 @@ func TestNew(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("error creating tag list: %v", err)
-				return
+				t.Fatalf("error creating tag list: %v", err)
 			}
 			raw, err := tl.RawBody()
 			if err != nil {
@@ -229,8 +227,7 @@ func TestNew(t *testing.T) {
 			}
 			tags, err := tl.GetTags()
 			if err != nil {
-				t.Errorf("error from GetTags: %v", err)
-				return
+				t.Fatalf("error from GetTags: %v", err)
 			}
 			if cmpSliceString(tt.tags, tags) == false {
 				t.Errorf("unexpected tag list: expected %v, received %v", tt.tags, tags)
@@ -252,20 +249,17 @@ func TestAppend(t *testing.T) {
 		WithTags(expectTags[:3]),
 	)
 	if err != nil {
-		t.Errorf("failed to build tag list 1: %v", err)
-		return
+		t.Fatalf("failed to build tag list 1: %v", err)
 	}
 	tl2, err := New(
 		WithTags(expectTags[3:]),
 	)
 	if err != nil {
-		t.Errorf("failed to build tag list 1: %v", err)
-		return
+		t.Fatalf("failed to build tag list 1: %v", err)
 	}
 	err = tl1.Append(tl2)
 	if err != nil {
-		t.Errorf("failed to append tags: %v", err)
-		return
+		t.Fatalf("failed to append tags: %v", err)
 	}
 	if !cmpSliceString(tl1.Tags, expectTags) {
 		t.Errorf("tags mismatch, expected: %v, received %v", expectTags, tl1.Tags)

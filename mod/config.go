@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
@@ -48,6 +48,59 @@ func WithBuildArgRm(arg string, value *regexp.Regexp) Opts {
 				doc.oc.SetConfig(oc)
 				doc.modified = true
 			}
+			return nil
+		})
+		return nil
+	}
+}
+
+// WithConfigCmd sets the command in the config.
+// For running a shell command, the `cmd` value should be `[]string{"/bin/sh", "-c", command}`.
+func WithConfigCmd(cmd []string) Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
+			oc := doc.oc.GetConfig()
+			if eqStrSlice(cmd, oc.Config.Cmd) {
+				return nil
+			}
+			oc.Config.Cmd = cmd
+			doc.oc.SetConfig(oc)
+			doc.modified = true
+			return nil
+		})
+		return nil
+	}
+}
+
+// WithConfigEntrypoint sets the entrypoint in the config.
+// For running a shell command, the `entrypoint` value should be `[]string{"/bin/sh", "-c", command}`.
+func WithConfigEntrypoint(entrypoint []string) Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
+			oc := doc.oc.GetConfig()
+			if eqStrSlice(entrypoint, oc.Config.Entrypoint) {
+				return nil
+			}
+			oc.Config.Entrypoint = entrypoint
+			doc.oc.SetConfig(oc)
+			doc.modified = true
+			return nil
+		})
+		return nil
+	}
+}
+
+// WithConfigPlatform sets the platform in the config.
+func WithConfigPlatform(p platform.Platform) Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
+			oc := doc.oc.GetConfig()
+			if platform.Match(oc.Platform, p) {
+				return nil
+			}
+			oc.Platform = p
+			doc.oc.SetConfig(oc)
+			doc.modified = true
 			return nil
 		})
 		return nil
@@ -97,7 +150,7 @@ func WithConfigTimestamp(optTime OptTime) Opts {
 			}
 			// offset startHistory from base image history
 			if !optTime.BaseRef.IsZero() {
-				var d types.Descriptor
+				var d descriptor.Descriptor
 				for {
 					mOpts := []regclient.ManifestOpts{}
 					if d.Digest != "" {

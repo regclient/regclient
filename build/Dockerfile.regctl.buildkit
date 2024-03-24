@@ -2,8 +2,8 @@
 
 ARG REGISTRY=docker.io
 ARG ALPINE_VER=3.19.1@sha256:c5b1261d6d3e43071626931fc004f70149baeba2c8ec672bd4f27761f8e1ad6b
-ARG GO_VER=1.21.6-alpine@sha256:a6a7f1fcf12f5efa9e04b1e75020931a616cd707f14f62ab5262bfbe109aa84a
-ARG ECR_HELPER_VER=0f6c181233865d1585d593575d290b54aed444ad
+ARG GO_VER=1.22.1-alpine@sha256:0466223b8544fb7d4ff04748acc4d75a608234bf4e79563bff208d2060c0dd79
+ARG ECR_HELPER_VER=1fd604ae58de3526cbf497b11f8de4083aa3b14f
 ARG GCR_HELPER_VER=v2.1.22
 
 FROM --platform=$BUILDPLATFORM ${REGISTRY}/library/golang:${GO_VER} as golang
@@ -71,18 +71,19 @@ CMD [ "regctl", "--help" ]
 
 ARG BUILD_DATE
 ARG VCS_REF
+ARG VCS_VERSION=(devel)
 LABEL maintainer="" \
       org.opencontainers.image.created=$BUILD_DATE \
-      org.opencontainers.image.authors="Regclient contributors" \
+      org.opencontainers.image.authors="regclient contributors" \
       org.opencontainers.image.url="https://github.com/regclient/regclient" \
       org.opencontainers.image.documentation="https://github.com/regclient/regclient" \
       org.opencontainers.image.source="https://github.com/regclient/regclient" \
-      org.opencontainers.image.version="latest" \
+      org.opencontainers.image.version=$VCS_VERSION \
       org.opencontainers.image.revision=$VCS_REF \
-      org.opencontainers.image.vendor="" \
+      org.opencontainers.image.vendor="regclient" \
       org.opencontainers.image.licenses="Apache 2.0" \
       org.opencontainers.image.title="regctl" \
-      org.opencontainers.image.description=""
+      org.opencontainers.image.description="regclient/regctl CLI for managing registry content (alpine)"
 
 FROM scratch as release-scratch
 ADD  build/root.tgz /
@@ -95,15 +96,16 @@ ENTRYPOINT [ "/regctl" ]
 
 ARG BUILD_DATE
 ARG VCS_REF
+ARG VCS_VERSION=(devel)
 LABEL maintainer="" \
       org.opencontainers.image.created=$BUILD_DATE \
-      org.opencontainers.image.authors="Regclient contributors" \
+      org.opencontainers.image.authors="regclient contributors" \
       org.opencontainers.image.url="https://github.com/regclient/regclient" \
       org.opencontainers.image.documentation="https://github.com/regclient/regclient" \
       org.opencontainers.image.source="https://github.com/regclient/regclient" \
-      org.opencontainers.image.version="latest" \
+      org.opencontainers.image.version=$VCS_VERSION \
       org.opencontainers.image.revision=$VCS_REF \
-      org.opencontainers.image.vendor="" \
+      org.opencontainers.image.vendor="regclient" \
       org.opencontainers.image.licenses="Apache 2.0" \
       org.opencontainers.image.title="regctl" \
-      org.opencontainers.image.description=""
+      org.opencontainers.image.description="regclient/regctl CLI for managing registry content (scratch)"

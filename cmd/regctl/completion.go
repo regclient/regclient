@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/mediatype"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -107,12 +107,12 @@ func completeArgPlatform(cmd *cobra.Command, args []string, toComplete string) (
 
 func completeArgMediaTypeManifest(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	return []string{
-		types.MediaTypeDocker2Manifest,
-		types.MediaTypeDocker2ManifestList,
-		types.MediaTypeOCI1Manifest,
-		types.MediaTypeOCI1ManifestList,
-		types.MediaTypeDocker1Manifest,
-		types.MediaTypeDocker1ManifestSigned,
+		mediatype.Docker2Manifest,
+		mediatype.Docker2ManifestList,
+		mediatype.OCI1Manifest,
+		mediatype.OCI1ManifestList,
+		mediatype.Docker1Manifest,
+		mediatype.Docker1ManifestSigned,
 	}, cobra.ShellCompDirectiveNoFileComp
 }
 

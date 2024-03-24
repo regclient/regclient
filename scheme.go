@@ -5,14 +5,14 @@ import (
 	"fmt"
 
 	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/ref"
 )
 
 func (rc *RegClient) schemeGet(scheme string) (scheme.API, error) {
 	s, ok := rc.schemes[scheme]
 	if !ok {
-		return nil, fmt.Errorf("%w: unknown scheme \"%s\"", types.ErrNotImplemented, scheme)
+		return nil, fmt.Errorf("%w: unknown scheme \"%s\"", errs.ErrNotImplemented, scheme)
 	}
 	return s, nil
 }

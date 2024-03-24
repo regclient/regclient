@@ -8,7 +8,8 @@ import (
 	"strings"
 
 	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
+	"github.com/regclient/regclient/types/mediatype"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/regclient/regclient/types/tag"
 )
@@ -20,9 +21,9 @@ func (o *OCIDir) TagDelete(ctx context.Context, r ref.Ref) error {
 	return o.tagDelete(ctx, r)
 }
 
-func (o *OCIDir) tagDelete(ctx context.Context, r ref.Ref) error {
+func (o *OCIDir) tagDelete(_ context.Context, r ref.Ref) error {
 	if r.Tag == "" {
-		return types.ErrMissingTag
+		return errs.ErrMissingTag
 	}
 	// get index
 	index, err := o.readIndex(r, true)
@@ -38,7 +39,7 @@ func (o *OCIDir) tagDelete(ctx context.Context, r ref.Ref) error {
 		}
 	}
 	if !changed {
-		return fmt.Errorf("failed deleting %s: %w", r.CommonName(), types.ErrNotFound)
+		return fmt.Errorf("failed deleting %s: %w", r.CommonName(), errs.ErrNotFound)
 	}
 	// push manifest back out
 	err = o.writeIndex(r, index, true)
@@ -83,7 +84,7 @@ func (o *OCIDir) TagList(ctx context.Context, r ref.Ref, opts ...scheme.TagOpts)
 	t, err := tag.New(
 		tag.WithRaw(ib),
 		tag.WithRef(r),
-		tag.WithMT(types.MediaTypeOCI1ManifestList),
+		tag.WithMT(mediatype.OCI1ManifestList),
 		tag.WithLayoutIndex(index),
 		tag.WithTags(tl),
 	)

@@ -9,9 +9,11 @@ import (
 
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/docker/schema1"
 	"github.com/regclient/regclient/types/docker/schema2"
+	"github.com/regclient/regclient/types/errs"
+	"github.com/regclient/regclient/types/mediatype"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
@@ -418,7 +420,7 @@ func TestNew(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to unmarshal OCI Artifact json: %v", err)
 	}
-	manifestInvalid.MediaType = types.MediaTypeOCI1Manifest
+	manifestInvalid.MediaType = mediatype.OCI1Manifest
 	err = json.Unmarshal(rawDockerSchema1Signed, &manifestDockerSchema1Signed)
 	if err != nil {
 		t.Fatalf("failed to unmarshal docker schema1 signed json: %v", err)
@@ -427,20 +429,20 @@ func TestNew(t *testing.T) {
 		name        string
 		opts        []Opts
 		wantR       ref.Ref
-		wantDesc    types.Descriptor
+		wantDesc    descriptor.Descriptor
 		wantE       error
 		isSet       bool
 		testAnnot   bool
 		hasAnnot    bool
 		testPlat    string
-		wantPlat    types.Descriptor
+		wantPlat    descriptor.Descriptor
 		wantSize    int64
 		testSubject bool
 		hasSubject  bool
 	}{
 		{
 			name:  "empty",
-			wantE: fmt.Errorf("%w: \"%s\"", types.ErrUnsupportedMediaType, ""),
+			wantE: fmt.Errorf("%w: \"%s\"", errs.ErrUnsupportedMediaType, ""),
 		},
 		{
 			name: "Docker Schema 2 Manifest",
@@ -449,8 +451,8 @@ func TestNew(t *testing.T) {
 				WithRaw(rawDockerSchema2),
 			},
 			wantR: r,
-			wantDesc: types.Descriptor{
-				MediaType: types.MediaTypeDocker2Manifest,
+			wantDesc: descriptor.Descriptor{
+				MediaType: mediatype.Docker2Manifest,
 				Size:      int64(len(rawDockerSchema2)),
 				Digest:    digestDockerSchema2,
 			},
@@ -464,15 +466,15 @@ func TestNew(t *testing.T) {
 		{
 			name: "Docker Schema 2 Manifest full desc",
 			opts: []Opts{
-				WithDesc(types.Descriptor{
-					MediaType: types.MediaTypeDocker2Manifest,
+				WithDesc(descriptor.Descriptor{
+					MediaType: mediatype.Docker2Manifest,
 					Digest:    digestDockerSchema2,
 					Size:      int64(len(rawDockerSchema2)),
 				}),
 				WithRaw(rawDockerSchema2),
 			},
-			wantDesc: types.Descriptor{
-				MediaType: types.MediaTypeDocker2Manifest,
+			wantDesc: descriptor.Descriptor{
+				MediaType: mediatype.Docker2Manifest,
 				Size:      int64(len(rawDockerSchema2)),
 				Digest:    digestDockerSchema2,
 			},
@@ -499,7 +501,7 @@ func TestNew(t *testing.T) {
 			testSubject: true,
 			hasAnnot:    true,
 			testPlat:    "linux/amd64",
-			wantPlat: types.Descriptor{
+			wantPlat: descriptor.Descriptor{
 				MediaType: "application/vnd.docker.distribution.manifest.v2+json",
 				Digest:    "sha256:41b9947d8f19e154a5415c88ef71b851d37fa3ceb1de56ffe88d1b616ce503d9",
 				Size:      1152,
@@ -517,7 +519,7 @@ func TestNew(t *testing.T) {
 			testSubject: true,
 			hasAnnot:    true,
 			testPlat:    "darwin/arm64",
-			wantPlat: types.Descriptor{
+			wantPlat: descriptor.Descriptor{
 				MediaType: "application/vnd.docker.distribution.manifest.v2+json",
 				Digest:    "sha256:b302f648065bb2ba542dc75167db065781f296ef72bb504585d652b27b5079ad",
 				Size:      1152,
@@ -529,7 +531,7 @@ func TestNew(t *testing.T) {
 				WithRef(r),
 				WithRaw(rawOCI1Artifact),
 				WithHeader(http.Header{
-					"Content-Type":          []string{types.MediaTypeOCI1Artifact},
+					"Content-Type":          []string{mediatype.OCI1Artifact},
 					"Docker-Content-Digest": []string{digestOCIArtifact.String()},
 				}),
 			},
@@ -548,8 +550,8 @@ func TestNew(t *testing.T) {
 				WithRaw(rawOCIImage),
 			},
 			wantR: r,
-			wantDesc: types.Descriptor{
-				MediaType: types.MediaTypeOCI1Manifest,
+			wantDesc: descriptor.Descriptor{
+				MediaType: mediatype.OCI1Manifest,
 				Size:      int64(len(rawOCIImage)),
 				Digest:    digestOCIImage,
 			},
@@ -568,8 +570,8 @@ func TestNew(t *testing.T) {
 				WithRaw(rawOCIIndex),
 			},
 			wantR: r,
-			wantDesc: types.Descriptor{
-				MediaType: types.MediaTypeOCI1ManifestList,
+			wantDesc: descriptor.Descriptor{
+				MediaType: mediatype.OCI1ManifestList,
 				Size:      int64(len(rawOCIIndex)),
 				Digest:    digestOCIIndex,
 			},
@@ -585,13 +587,13 @@ func TestNew(t *testing.T) {
 			opts: []Opts{
 				WithRef(r),
 				WithHeader(http.Header{
-					"Content-Type":          []string{types.MediaTypeDocker2Manifest},
+					"Content-Type":          []string{mediatype.Docker2Manifest},
 					"Content-Length":        []string{fmt.Sprintf("%d", len(rawDockerSchema2))},
 					"Docker-Content-Digest": []string{digestDockerSchema2.String()},
 				}),
 			},
-			wantDesc: types.Descriptor{
-				MediaType: types.MediaTypeDocker2Manifest,
+			wantDesc: descriptor.Descriptor{
+				MediaType: mediatype.Docker2Manifest,
 				Size:      int64(len(rawDockerSchema2)),
 				Digest:    digestDockerSchema2,
 			},
@@ -602,13 +604,13 @@ func TestNew(t *testing.T) {
 			opts: []Opts{
 				WithRef(r),
 				WithHeader(http.Header{
-					"Content-Type":          []string{types.MediaTypeDocker1Manifest},
+					"Content-Type":          []string{mediatype.Docker1Manifest},
 					"Content-Length":        []string{fmt.Sprintf("%d", len(rawDockerSchema2))},
 					"Docker-Content-Digest": []string{digestDockerSchema2.String()},
 				}),
 			},
-			wantDesc: types.Descriptor{
-				MediaType: types.MediaTypeDocker1Manifest,
+			wantDesc: descriptor.Descriptor{
+				MediaType: mediatype.Docker1Manifest,
 				Size:      int64(len(rawDockerSchema2)),
 				Digest:    digestDockerSchema2,
 			},
@@ -619,13 +621,13 @@ func TestNew(t *testing.T) {
 			opts: []Opts{
 				WithRef(r),
 				WithHeader(http.Header{
-					"Content-Type":          []string{types.MediaTypeDocker1ManifestSigned},
+					"Content-Type":          []string{mediatype.Docker1ManifestSigned},
 					"Content-Length":        []string{fmt.Sprintf("%d", len(rawDockerSchema2))},
 					"Docker-Content-Digest": []string{digestDockerSchema2.String()},
 				}),
 			},
-			wantDesc: types.Descriptor{
-				MediaType: types.MediaTypeDocker1ManifestSigned,
+			wantDesc: descriptor.Descriptor{
+				MediaType: mediatype.Docker1ManifestSigned,
 				Size:      int64(len(rawDockerSchema2)),
 				Digest:    digestDockerSchema2,
 			},
@@ -636,13 +638,13 @@ func TestNew(t *testing.T) {
 			opts: []Opts{
 				WithRef(r),
 				WithHeader(http.Header{
-					"Content-Type":          []string{types.MediaTypeDocker2Manifest},
+					"Content-Type":          []string{mediatype.Docker2Manifest},
 					"Content-Length":        []string{fmt.Sprintf("%d", len(rawDockerSchema2))},
 					"Docker-Content-Digest": []string{digestDockerSchema2.String()},
 				}),
 			},
-			wantDesc: types.Descriptor{
-				MediaType: types.MediaTypeDocker2Manifest,
+			wantDesc: descriptor.Descriptor{
+				MediaType: mediatype.Docker2Manifest,
 				Size:      int64(len(rawDockerSchema2)),
 				Digest:    digestDockerSchema2,
 			},
@@ -653,13 +655,13 @@ func TestNew(t *testing.T) {
 			opts: []Opts{
 				WithRef(r),
 				WithHeader(http.Header{
-					"Content-Type":          []string{types.MediaTypeDocker2ManifestList},
+					"Content-Type":          []string{mediatype.Docker2ManifestList},
 					"Content-Length":        []string{fmt.Sprintf("%d", len(rawDockerSchema2))},
 					"Docker-Content-Digest": []string{digestDockerSchema2.String()},
 				}),
 			},
-			wantDesc: types.Descriptor{
-				MediaType: types.MediaTypeDocker2ManifestList,
+			wantDesc: descriptor.Descriptor{
+				MediaType: mediatype.Docker2ManifestList,
 				Size:      int64(len(rawDockerSchema2)),
 				Digest:    digestDockerSchema2,
 			},
@@ -670,13 +672,13 @@ func TestNew(t *testing.T) {
 			opts: []Opts{
 				WithRef(r),
 				WithHeader(http.Header{
-					"Content-Type":          []string{types.MediaTypeOCI1Manifest},
+					"Content-Type":          []string{mediatype.OCI1Manifest},
 					"Content-Length":        []string{fmt.Sprintf("%d", len(rawDockerSchema2))},
 					"Docker-Content-Digest": []string{digestDockerSchema2.String()},
 				}),
 			},
-			wantDesc: types.Descriptor{
-				MediaType: types.MediaTypeOCI1Manifest,
+			wantDesc: descriptor.Descriptor{
+				MediaType: mediatype.OCI1Manifest,
 				Size:      int64(len(rawDockerSchema2)),
 				Digest:    digestDockerSchema2,
 			},
@@ -687,13 +689,13 @@ func TestNew(t *testing.T) {
 			opts: []Opts{
 				WithRef(r),
 				WithHeader(http.Header{
-					"Content-Type":          []string{types.MediaTypeOCI1ManifestList},
+					"Content-Type":          []string{mediatype.OCI1ManifestList},
 					"Content-Length":        []string{fmt.Sprintf("%d", len(rawDockerSchema2))},
 					"Docker-Content-Digest": []string{digestDockerSchema2.String()},
 				}),
 			},
-			wantDesc: types.Descriptor{
-				MediaType: types.MediaTypeOCI1ManifestList,
+			wantDesc: descriptor.Descriptor{
+				MediaType: mediatype.OCI1ManifestList,
 				Size:      int64(len(rawDockerSchema2)),
 				Digest:    digestDockerSchema2,
 			},
@@ -704,13 +706,13 @@ func TestNew(t *testing.T) {
 			opts: []Opts{
 				WithRef(r),
 				WithHeader(http.Header{
-					"Content-Type":          []string{types.MediaTypeOCI1Artifact},
+					"Content-Type":          []string{mediatype.OCI1Artifact},
 					"Content-Length":        []string{fmt.Sprintf("%d", len(rawDockerSchema2))},
 					"Docker-Content-Digest": []string{digestDockerSchema2.String()},
 				}),
 			},
-			wantDesc: types.Descriptor{
-				MediaType: types.MediaTypeOCI1Artifact,
+			wantDesc: descriptor.Descriptor{
+				MediaType: mediatype.OCI1Artifact,
 				Size:      int64(len(rawDockerSchema2)),
 				Digest:    digestDockerSchema2,
 			},
@@ -731,8 +733,8 @@ func TestNew(t *testing.T) {
 			name: "Docker Schema 1 Signed Manifest",
 			opts: []Opts{
 				WithRaw(rawDockerSchema1Signed),
-				WithDesc(types.Descriptor{
-					MediaType: types.MediaTypeDocker1ManifestSigned,
+				WithDesc(descriptor.Descriptor{
+					MediaType: mediatype.Docker1ManifestSigned,
 					Digest:    digestDockerSchema1Signed,
 					Size:      int64(len(rawDockerSchema1Signed)),
 				}),
@@ -757,8 +759,8 @@ func TestNew(t *testing.T) {
 			opts: []Opts{
 				WithRef(r),
 				WithRaw(rawAmbiguousOCI),
-				WithDesc(types.Descriptor{
-					MediaType: types.MediaTypeOCI1Manifest,
+				WithDesc(descriptor.Descriptor{
+					MediaType: mediatype.OCI1Manifest,
 				}),
 			},
 			wantE: nil,
@@ -769,8 +771,8 @@ func TestNew(t *testing.T) {
 			opts: []Opts{
 				WithRef(r),
 				WithRaw(rawAmbiguousOCI),
-				WithDesc(types.Descriptor{
-					MediaType: types.MediaTypeOCI1ManifestList,
+				WithDesc(descriptor.Descriptor{
+					MediaType: mediatype.OCI1ManifestList,
 				}),
 			},
 			wantE: nil,
@@ -781,30 +783,30 @@ func TestNew(t *testing.T) {
 			opts: []Opts{
 				WithRef(r),
 				WithRaw(rawOCIImage),
-				WithDesc(types.Descriptor{
-					MediaType: types.MediaTypeOCI1ManifestList,
+				WithDesc(descriptor.Descriptor{
+					MediaType: mediatype.OCI1ManifestList,
 				}),
 			},
-			wantE: fmt.Errorf("manifest contains an unexpected media type: expected %s, received %s", types.MediaTypeOCI1ManifestList, types.MediaTypeOCI1Manifest),
+			wantE: fmt.Errorf("manifest contains an unexpected media type: expected %s, received %s", mediatype.OCI1ManifestList, mediatype.OCI1Manifest),
 		},
 		{
 			name: "Invalid OCI Image",
 			opts: []Opts{
 				WithRef(r),
 				WithRaw(rawOCIIndex),
-				WithDesc(types.Descriptor{
-					MediaType: types.MediaTypeOCI1Manifest,
+				WithDesc(descriptor.Descriptor{
+					MediaType: mediatype.OCI1Manifest,
 				}),
 			},
-			wantE: fmt.Errorf("manifest contains an unexpected media type: expected %s, received %s", types.MediaTypeOCI1Manifest, types.MediaTypeOCI1ManifestList),
+			wantE: fmt.Errorf("manifest contains an unexpected media type: expected %s, received %s", mediatype.OCI1Manifest, mediatype.OCI1ManifestList),
 		},
 		{
 			name: "Invalid digest",
 			opts: []Opts{
 				WithRef(r),
 				WithRaw(rawDockerSchema2),
-				WithDesc(types.Descriptor{
-					MediaType: types.MediaTypeDocker2Manifest,
+				WithDesc(descriptor.Descriptor{
+					MediaType: mediatype.Docker2Manifest,
 					Digest:    digestInvalid,
 					Size:      int64(len(rawDockerSchema2)),
 				}),
@@ -816,13 +818,13 @@ func TestNew(t *testing.T) {
 			opts: []Opts{
 				WithRef(r),
 				WithRaw(rawOCIImage),
-				WithDesc(types.Descriptor{
-					MediaType: types.MediaTypeOCI1ManifestList,
+				WithDesc(descriptor.Descriptor{
+					MediaType: mediatype.OCI1ManifestList,
 					Digest:    digestOCIImage,
 					Size:      int64(len(rawOCIImage)),
 				}),
 			},
-			wantE: fmt.Errorf("manifest contains an unexpected media type: expected %s, received %s", types.MediaTypeOCI1ManifestList, types.MediaTypeOCI1Manifest),
+			wantE: fmt.Errorf("manifest contains an unexpected media type: expected %s, received %s", mediatype.OCI1ManifestList, mediatype.OCI1Manifest),
 		},
 		{
 			name: "Docker Schema2 Orig",
@@ -860,7 +862,7 @@ func TestNew(t *testing.T) {
 			opts: []Opts{
 				WithOrig(manifestInvalid),
 			},
-			wantE: fmt.Errorf("manifest contains an unexpected media type: expected %s, received %s", types.MediaTypeDocker2Manifest, types.MediaTypeOCI1Manifest),
+			wantE: fmt.Errorf("manifest contains an unexpected media type: expected %s, received %s", mediatype.Docker2Manifest, mediatype.OCI1Manifest),
 		},
 		{
 			name: "OCI Image without mediaType",
@@ -869,8 +871,8 @@ func TestNew(t *testing.T) {
 			},
 			wantE: nil,
 			isSet: true,
-			wantDesc: types.Descriptor{
-				MediaType: types.MediaTypeOCI1Manifest,
+			wantDesc: descriptor.Descriptor{
+				MediaType: mediatype.OCI1Manifest,
 				Size:      int64(len(rawOCIImageDuck)),
 				Digest:    digestOCIImageDuck,
 			},
@@ -882,8 +884,8 @@ func TestNew(t *testing.T) {
 			},
 			wantE: nil,
 			isSet: true,
-			wantDesc: types.Descriptor{
-				MediaType: types.MediaTypeOCI1ManifestList,
+			wantDesc: descriptor.Descriptor{
+				MediaType: mediatype.OCI1ManifestList,
 				Size:      int64(len(rawOCIIndexDuck)),
 				Digest:    digestOCIIndexDuck,
 			},
@@ -895,8 +897,8 @@ func TestNew(t *testing.T) {
 		// - test if manifest is set
 		// - test raw body
 	}
-	subDesc := types.Descriptor{
-		MediaType: types.MediaTypeOCI1Manifest,
+	subDesc := descriptor.Descriptor{
+		MediaType: mediatype.OCI1Manifest,
 		Size:      1234,
 		Digest:    digest.FromString("test referrer"),
 	}
@@ -912,8 +914,7 @@ func TestNew(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("failed running New: %v", err)
-				return
+				t.Fatalf("failed running New: %v", err)
 			}
 			// MarshalPretty succeeds even if manifest is not set (it shows available metadata)
 			if mp, ok := m.(interface{ MarshalPretty() ([]byte, error) }); ok {
@@ -940,32 +941,32 @@ func TestNew(t *testing.T) {
 				if m.IsSet() {
 					t.Errorf("manifest reports it is set")
 				}
-				if _, err := m.RawBody(); !errors.Is(err, types.ErrManifestNotSet) && !errors.Is(err, types.ErrUnsupportedMediaType) {
+				if _, err := m.RawBody(); !errors.Is(err, errs.ErrManifestNotSet) && !errors.Is(err, errs.ErrUnsupportedMediaType) {
 					t.Errorf("RawBody did not return ManifestNotSet: %v", err)
 				}
-				if _, err := m.MarshalJSON(); !errors.Is(err, types.ErrManifestNotSet) && !errors.Is(err, types.ErrUnsupportedMediaType) {
+				if _, err := m.MarshalJSON(); !errors.Is(err, errs.ErrManifestNotSet) && !errors.Is(err, errs.ErrUnsupportedMediaType) {
 					t.Errorf("MarshalJSON did not return ManifestNotSet: %v", err)
 				}
 				if ma, ok := m.(Annotator); ok {
-					if _, err := ma.GetAnnotations(); !errors.Is(err, types.ErrManifestNotSet) && !errors.Is(err, types.ErrUnsupportedMediaType) {
+					if _, err := ma.GetAnnotations(); !errors.Is(err, errs.ErrManifestNotSet) && !errors.Is(err, errs.ErrUnsupportedMediaType) {
 						t.Errorf("GetAnnotations did not return ManifestNotSet: %v", err)
 					}
 				}
 				if mi, ok := m.(Indexer); ok {
-					if _, err := mi.GetManifestList(); !errors.Is(err, types.ErrManifestNotSet) && !errors.Is(err, types.ErrUnsupportedMediaType) {
+					if _, err := mi.GetManifestList(); !errors.Is(err, errs.ErrManifestNotSet) && !errors.Is(err, errs.ErrUnsupportedMediaType) {
 						t.Errorf("GetManifestList did not return ManifestNotSet: %v", err)
 					}
 				}
 				if mi, ok := m.(Imager); ok {
-					if _, err := mi.GetConfig(); !errors.Is(err, types.ErrManifestNotSet) && !errors.Is(err, types.ErrUnsupportedMediaType) {
+					if _, err := mi.GetConfig(); !errors.Is(err, errs.ErrManifestNotSet) && !errors.Is(err, errs.ErrUnsupportedMediaType) {
 						t.Errorf("GetConfig did not return ManifestNotSet: %v", err)
 					}
-					if _, err := mi.GetLayers(); !errors.Is(err, types.ErrManifestNotSet) && !errors.Is(err, types.ErrUnsupportedMediaType) {
+					if _, err := mi.GetLayers(); !errors.Is(err, errs.ErrManifestNotSet) && !errors.Is(err, errs.ErrUnsupportedMediaType) {
 						t.Errorf("GetLayers did not return ManifestNotSet: %v", err)
 					}
 				}
 				if ms, ok := m.(Subjecter); ok {
-					if _, err := ms.GetSubject(); !errors.Is(err, types.ErrManifestNotSet) && !errors.Is(err, types.ErrUnsupportedMediaType) {
+					if _, err := ms.GetSubject(); !errors.Is(err, errs.ErrManifestNotSet) && !errors.Is(err, errs.ErrUnsupportedMediaType) {
 						t.Errorf("GetSubject did not return ManifestNotSet: %v", err)
 					}
 				}
@@ -974,32 +975,32 @@ func TestNew(t *testing.T) {
 				if !m.IsSet() {
 					t.Errorf("manifest reports it is not set")
 				}
-				if _, err := m.RawBody(); errors.Is(err, types.ErrManifestNotSet) {
+				if _, err := m.RawBody(); errors.Is(err, errs.ErrManifestNotSet) {
 					t.Errorf("RawBody returned ManifestNotSet: %v", err)
 				}
-				if _, err := m.MarshalJSON(); errors.Is(err, types.ErrManifestNotSet) {
+				if _, err := m.MarshalJSON(); errors.Is(err, errs.ErrManifestNotSet) {
 					t.Errorf("MarshalJSON returned ManifestNotSet: %v", err)
 				}
 				if ma, ok := m.(Annotator); ok {
-					if _, err := ma.GetAnnotations(); errors.Is(err, types.ErrManifestNotSet) {
+					if _, err := ma.GetAnnotations(); errors.Is(err, errs.ErrManifestNotSet) {
 						t.Errorf("GetAnnotations returned ManifestNotSet: %v", err)
 					}
 				}
 				if mi, ok := m.(Indexer); ok {
-					if _, err := mi.GetManifestList(); errors.Is(err, types.ErrManifestNotSet) {
+					if _, err := mi.GetManifestList(); errors.Is(err, errs.ErrManifestNotSet) {
 						t.Errorf("GetManifestList returned ManifestNotSet: %v", err)
 					}
 				}
 				if mi, ok := m.(Imager); ok {
-					if _, err := mi.GetConfig(); errors.Is(err, types.ErrManifestNotSet) {
+					if _, err := mi.GetConfig(); errors.Is(err, errs.ErrManifestNotSet) {
 						t.Errorf("GetConfig returned ManifestNotSet: %v", err)
 					}
-					if _, err := mi.GetLayers(); errors.Is(err, types.ErrManifestNotSet) {
+					if _, err := mi.GetLayers(); errors.Is(err, errs.ErrManifestNotSet) {
 						t.Errorf("GetLayers returned ManifestNotSet: %v", err)
 					}
 				}
 				if ms, ok := m.(Subjecter); ok {
-					if _, err := ms.GetSubject(); errors.Is(err, types.ErrManifestNotSet) {
+					if _, err := ms.GetSubject(); errors.Is(err, errs.ErrManifestNotSet) {
 						t.Errorf("GetSubject returned ManifestNotSet: %v", err)
 					}
 				}
@@ -1079,7 +1080,7 @@ func TestNew(t *testing.T) {
 func TestModify(t *testing.T) {
 	t.Parallel()
 	addDigest := digest.FromString("new layer digest")
-	addDesc := types.Descriptor{
+	addDesc := descriptor.Descriptor{
 		Digest: addDigest,
 		Size:   42,
 		Annotations: map[string]string{
@@ -1091,22 +1092,22 @@ func TestModify(t *testing.T) {
 	tests := []struct {
 		name     string
 		opts     []Opts
-		addDesc  types.Descriptor
-		origDesc types.Descriptor
+		addDesc  descriptor.Descriptor
+		origDesc descriptor.Descriptor
 	}{
 		{
 			name: "Docker Schema 2 Manifest",
 			opts: []Opts{
-				WithDesc(types.Descriptor{
-					MediaType: types.MediaTypeDocker2Manifest,
+				WithDesc(descriptor.Descriptor{
+					MediaType: mediatype.Docker2Manifest,
 					Digest:    digestDockerSchema2,
 					Size:      int64(len(rawDockerSchema2)),
 				}),
 				WithRaw(rawDockerSchema2),
 			},
 			addDesc: addDesc,
-			origDesc: types.Descriptor{
-				MediaType: types.MediaTypeDocker2Manifest,
+			origDesc: descriptor.Descriptor{
+				MediaType: mediatype.Docker2Manifest,
 				Digest:    digestDockerSchema2,
 				Size:      int64(len(rawDockerSchema2)),
 			},
@@ -1114,16 +1115,16 @@ func TestModify(t *testing.T) {
 		{
 			name: "Docker Schema 2 List",
 			opts: []Opts{
-				WithDesc(types.Descriptor{
-					MediaType: types.MediaTypeDocker2ManifestList,
+				WithDesc(descriptor.Descriptor{
+					MediaType: mediatype.Docker2ManifestList,
 					Digest:    digestDockerSchema2List,
 					Size:      int64(len(rawDockerSchema2List)),
 				}),
 				WithRaw(rawDockerSchema2List),
 			},
 			addDesc: addDesc,
-			origDesc: types.Descriptor{
-				MediaType: types.MediaTypeDocker2ManifestList,
+			origDesc: descriptor.Descriptor{
+				MediaType: mediatype.Docker2ManifestList,
 				Digest:    digestDockerSchema2List,
 				Size:      int64(len(rawDockerSchema2List)),
 			},
@@ -1132,15 +1133,15 @@ func TestModify(t *testing.T) {
 			name: "OCI Image",
 			opts: []Opts{
 				WithRaw(rawOCIImage),
-				WithDesc(types.Descriptor{
-					MediaType: types.MediaTypeOCI1Manifest,
+				WithDesc(descriptor.Descriptor{
+					MediaType: mediatype.OCI1Manifest,
 					Digest:    digestOCIImage,
 					Size:      int64(len(rawOCIImage)),
 				}),
 			},
 			addDesc: addDesc,
-			origDesc: types.Descriptor{
-				MediaType: types.MediaTypeOCI1Manifest,
+			origDesc: descriptor.Descriptor{
+				MediaType: mediatype.OCI1Manifest,
 				Digest:    digestOCIImage,
 				Size:      int64(len(rawOCIImage)),
 			},
@@ -1149,15 +1150,15 @@ func TestModify(t *testing.T) {
 			name: "OCI Index",
 			opts: []Opts{
 				WithRaw(rawOCIIndex),
-				WithDesc(types.Descriptor{
-					MediaType: types.MediaTypeOCI1ManifestList,
+				WithDesc(descriptor.Descriptor{
+					MediaType: mediatype.OCI1ManifestList,
 					Digest:    digestOCIIndex,
 					Size:      int64(len(rawOCIIndex)),
 				}),
 			},
 			addDesc: addDesc,
-			origDesc: types.Descriptor{
-				MediaType: types.MediaTypeOCI1ManifestList,
+			origDesc: descriptor.Descriptor{
+				MediaType: mediatype.OCI1ManifestList,
 				Digest:    digestOCIIndex,
 				Size:      int64(len(rawOCIIndex)),
 			},
@@ -1171,39 +1172,33 @@ func TestModify(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m, err := New(tt.opts...)
 			if err != nil {
-				t.Errorf("error creating manifest: %v", err)
-				return
+				t.Fatalf("error creating manifest: %v", err)
 			}
 			orig := m.GetOrig()
 			if m.IsList() {
 				ociI, err := OCIIndexFromAny(orig)
 				if err != nil {
-					t.Errorf("error converting to index: %v", err)
-					return
+					t.Fatalf("error converting to index: %v", err)
 				}
 				ociI.Manifests = append(ociI.Manifests, tt.addDesc)
 				err = OCIIndexToAny(ociI, &orig)
 				if err != nil {
-					t.Errorf("error converting back to orig: %v", err)
-					return
+					t.Fatalf("error converting back to orig: %v", err)
 				}
 			} else {
 				ociM, err := OCIManifestFromAny(orig)
 				if err != nil {
-					t.Errorf("error converting to index: %v", err)
-					return
+					t.Fatalf("error converting to index: %v", err)
 				}
 				ociM.Layers = append(ociM.Layers, tt.addDesc)
 				err = OCIManifestToAny(ociM, &orig)
 				if err != nil {
-					t.Errorf("error converting back to orig: %v", err)
-					return
+					t.Fatalf("error converting back to orig: %v", err)
 				}
 			}
 			err = m.SetOrig(orig)
 			if err != nil {
-				t.Errorf("error setting orig: %v", err)
-				return
+				t.Fatalf("error setting orig: %v", err)
 			}
 			raw, _ := m.RawBody()
 			t.Logf("raw manifest: %s", string(raw))
@@ -1224,23 +1219,19 @@ func TestModify(t *testing.T) {
 	var manifestOCIIndex v1.Index
 	err := json.Unmarshal(rawDockerSchema2, &manifestDockerSchema2)
 	if err != nil {
-		t.Errorf("failed to unmarshal docker schema2 json: %v", err)
-		return
+		t.Fatalf("failed to unmarshal docker schema2 json: %v", err)
 	}
 	err = json.Unmarshal(rawDockerSchema2List, &manifestDockerSchema2List)
 	if err != nil {
-		t.Errorf("failed to unmarshal docker schema2 list json: %v", err)
-		return
+		t.Fatalf("failed to unmarshal docker schema2 list json: %v", err)
 	}
 	err = json.Unmarshal(rawOCIImage, &manifestOCIImage)
 	if err != nil {
-		t.Errorf("failed to unmarshal OCI image json: %v", err)
-		return
+		t.Fatalf("failed to unmarshal OCI image json: %v", err)
 	}
 	err = json.Unmarshal(rawOCIIndex, &manifestOCIIndex)
 	if err != nil {
-		t.Errorf("failed to unmarshal OCI index json: %v", err)
-		return
+		t.Fatalf("failed to unmarshal OCI index json: %v", err)
 	}
 	if manifestDockerSchema2.Annotations == nil || manifestDockerSchema2.Annotations["org.example.test"] != "hello world" {
 		t.Errorf("annotation missing from docker manifest")
@@ -1309,7 +1300,7 @@ func TestModify(t *testing.T) {
 func TestSet(t *testing.T) {
 	t.Parallel()
 	addDigest := digest.FromString("new digest")
-	addDesc := types.Descriptor{
+	addDesc := descriptor.Descriptor{
 		Digest: addDigest,
 		Size:   42,
 		Annotations: map[string]string{
@@ -1329,21 +1320,21 @@ func TestSet(t *testing.T) {
 		{
 			name: "Docker Schema 1",
 			opts: []Opts{
-				WithDesc(types.Descriptor{
-					MediaType: types.MediaTypeDocker1ManifestSigned,
+				WithDesc(descriptor.Descriptor{
+					MediaType: mediatype.Docker1ManifestSigned,
 					Digest:    digestDockerSchema1Signed,
 					Size:      int64(len(rawDockerSchema1Signed)),
 				}),
 				WithRaw(rawDockerSchema1Signed),
 			},
 			expectImage: true,
-			expectErr:   types.ErrUnsupportedMediaType,
+			expectErr:   errs.ErrUnsupportedMediaType,
 		},
 		{
 			name: "Docker Schema 2 Manifest",
 			opts: []Opts{
-				WithDesc(types.Descriptor{
-					MediaType: types.MediaTypeDocker2Manifest,
+				WithDesc(descriptor.Descriptor{
+					MediaType: mediatype.Docker2Manifest,
 					Digest:    digestDockerSchema2,
 					Size:      int64(len(rawDockerSchema2)),
 				}),
@@ -1355,8 +1346,8 @@ func TestSet(t *testing.T) {
 		{
 			name: "Docker Schema 2 List",
 			opts: []Opts{
-				WithDesc(types.Descriptor{
-					MediaType: types.MediaTypeDocker2ManifestList,
+				WithDesc(descriptor.Descriptor{
+					MediaType: mediatype.Docker2ManifestList,
 					Digest:    digestDockerSchema2List,
 					Size:      int64(len(rawDockerSchema2List)),
 				}),
@@ -1369,8 +1360,8 @@ func TestSet(t *testing.T) {
 			name: "OCI Image",
 			opts: []Opts{
 				WithRaw(rawOCIImage),
-				WithDesc(types.Descriptor{
-					MediaType: types.MediaTypeOCI1Manifest,
+				WithDesc(descriptor.Descriptor{
+					MediaType: mediatype.OCI1Manifest,
 					Digest:    digestOCIImage,
 					Size:      int64(len(rawOCIImage)),
 				}),
@@ -1382,8 +1373,8 @@ func TestSet(t *testing.T) {
 			name: "OCI Index",
 			opts: []Opts{
 				WithRaw(rawOCIIndex),
-				WithDesc(types.Descriptor{
-					MediaType: types.MediaTypeOCI1ManifestList,
+				WithDesc(descriptor.Descriptor{
+					MediaType: mediatype.OCI1ManifestList,
 					Digest:    digestOCIIndex,
 					Size:      int64(len(rawOCIIndex)),
 				}),
@@ -1400,8 +1391,7 @@ func TestSet(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m, err := New(tt.opts...)
 			if err != nil {
-				t.Errorf("error creating manifest: %v", err)
-				return
+				t.Fatalf("error creating manifest: %v", err)
 			}
 			if mi, ok := m.(Imager); ok {
 				if !tt.expectImage {

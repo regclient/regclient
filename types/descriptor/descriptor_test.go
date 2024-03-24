@@ -1,4 +1,4 @@
-package types
+package descriptor
 
 import (
 	"bytes"
@@ -9,6 +9,8 @@ import (
 
 	"github.com/opencontainers/go-digest"
 
+	"github.com/regclient/regclient/types/errs"
+	"github.com/regclient/regclient/types/mediatype"
 	"github.com/regclient/regclient/types/platform"
 )
 
@@ -23,36 +25,36 @@ func TestDescriptorData(t *testing.T) {
 		{
 			name: "No Data",
 			d: Descriptor{
-				MediaType: MediaTypeDocker2LayerGzip,
+				MediaType: mediatype.Docker2LayerGzip,
 				Size:      941,
 				Digest:    digest.Digest("sha256:f6e2d7fa40092cf3d9817bf6ff54183d68d108a47fdf5a5e476c612626c80e14"),
 			},
-			wantErr: ErrParsingFailed,
+			wantErr: errs.ErrParsingFailed,
 		},
 		{
 			name: "Bad Digest",
 			d: Descriptor{
-				MediaType: MediaTypeOCI1LayerGzip,
+				MediaType: mediatype.OCI1LayerGzip,
 				Size:      10,
 				Digest:    digest.Digest("sha256:e4a380728755139f156563e8b795581d5915dcc947fe937c524c6d52fd604b99"),
 				Data:      []byte("example data"),
 			},
-			wantErr: ErrParsingFailed,
+			wantErr: errs.ErrParsingFailed,
 		},
 		{
 			name: "Bad Size",
 			d: Descriptor{
-				MediaType: MediaTypeOCI1LayerGzip,
+				MediaType: mediatype.OCI1LayerGzip,
 				Size:      1000,
 				Digest:    digest.Digest("sha256:44752f37272e944fd2c913a35342eaccdd1aaf189bae50676b301ab213fc5061"),
 				Data:      []byte("example data"),
 			},
-			wantErr: ErrParsingFailed,
+			wantErr: errs.ErrParsingFailed,
 		},
 		{
 			name: "Good data",
 			d: Descriptor{
-				MediaType: MediaTypeOCI1LayerGzip,
+				MediaType: mediatype.OCI1LayerGzip,
 				Size:      12,
 				Digest:    digest.Digest("sha256:44752f37272e944fd2c913a35342eaccdd1aaf189bae50676b301ab213fc5061"),
 				Data:      []byte("example data"),
@@ -98,7 +100,7 @@ func TestDescriptorEq(t *testing.T) {
 		{
 			name: "empty d1",
 			d2: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 			},
@@ -108,7 +110,7 @@ func TestDescriptorEq(t *testing.T) {
 		{
 			name: "empty d2",
 			d1: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 			},
@@ -118,12 +120,12 @@ func TestDescriptorEq(t *testing.T) {
 		{
 			name: "same simple manifest",
 			d1: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 			},
 			d2: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 			},
@@ -133,12 +135,12 @@ func TestDescriptorEq(t *testing.T) {
 		{
 			name: "converting OCI media type",
 			d1: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 			},
 			d2: Descriptor{
-				MediaType: MediaTypeOCI1Manifest,
+				MediaType: mediatype.OCI1Manifest,
 				Size:      1234,
 				Digest:    digA,
 			},
@@ -148,12 +150,12 @@ func TestDescriptorEq(t *testing.T) {
 		{
 			name: "different media type",
 			d1: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 			},
 			d2: Descriptor{
-				MediaType: MediaTypeDocker2ManifestList,
+				MediaType: mediatype.Docker2ManifestList,
 				Size:      1234,
 				Digest:    digA,
 			},
@@ -163,12 +165,12 @@ func TestDescriptorEq(t *testing.T) {
 		{
 			name: "different size",
 			d1: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 			},
 			d2: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      4321,
 				Digest:    digA,
 			},
@@ -178,12 +180,12 @@ func TestDescriptorEq(t *testing.T) {
 		{
 			name: "different digest",
 			d1: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 			},
 			d2: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digB,
 			},
@@ -193,7 +195,7 @@ func TestDescriptorEq(t *testing.T) {
 		{
 			name: "annotation eq",
 			d1: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 				Annotations: map[string]string{
@@ -202,7 +204,7 @@ func TestDescriptorEq(t *testing.T) {
 				},
 			},
 			d2: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 				Annotations: map[string]string{
@@ -216,7 +218,7 @@ func TestDescriptorEq(t *testing.T) {
 		{
 			name: "annotation diff",
 			d1: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 				Annotations: map[string]string{
@@ -225,7 +227,7 @@ func TestDescriptorEq(t *testing.T) {
 				},
 			},
 			d2: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 				Annotations: map[string]string{
@@ -239,7 +241,7 @@ func TestDescriptorEq(t *testing.T) {
 		{
 			name: "annotation missing",
 			d1: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 				Annotations: map[string]string{
@@ -248,7 +250,7 @@ func TestDescriptorEq(t *testing.T) {
 				},
 			},
 			d2: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 			},
@@ -258,7 +260,7 @@ func TestDescriptorEq(t *testing.T) {
 		{
 			name: "urls eq",
 			d1: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 				URLs: []string{
@@ -267,7 +269,7 @@ func TestDescriptorEq(t *testing.T) {
 				},
 			},
 			d2: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 				URLs: []string{
@@ -281,7 +283,7 @@ func TestDescriptorEq(t *testing.T) {
 		{
 			name: "urls diff",
 			d1: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 				URLs: []string{
@@ -290,7 +292,7 @@ func TestDescriptorEq(t *testing.T) {
 				},
 			},
 			d2: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 				URLs: []string{
@@ -304,7 +306,7 @@ func TestDescriptorEq(t *testing.T) {
 		{
 			name: "urls missing",
 			d1: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 				URLs: []string{
@@ -313,7 +315,7 @@ func TestDescriptorEq(t *testing.T) {
 				},
 			},
 			d2: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 			},
@@ -323,7 +325,7 @@ func TestDescriptorEq(t *testing.T) {
 		{
 			name: "platform eq",
 			d1: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 				Platform: &platform.Platform{
@@ -332,7 +334,7 @@ func TestDescriptorEq(t *testing.T) {
 				},
 			},
 			d2: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 				Platform: &platform.Platform{
@@ -346,7 +348,7 @@ func TestDescriptorEq(t *testing.T) {
 		{
 			name: "platform diff",
 			d1: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 				Platform: &platform.Platform{
@@ -355,7 +357,7 @@ func TestDescriptorEq(t *testing.T) {
 				},
 			},
 			d2: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 				Platform: &platform.Platform{
@@ -369,7 +371,7 @@ func TestDescriptorEq(t *testing.T) {
 		{
 			name: "platform missing",
 			d1: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 				Platform: &platform.Platform{
@@ -378,7 +380,7 @@ func TestDescriptorEq(t *testing.T) {
 				},
 			},
 			d2: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 			},
@@ -388,13 +390,13 @@ func TestDescriptorEq(t *testing.T) {
 		{
 			name: "artifactType eq",
 			d1: Descriptor{
-				MediaType:    MediaTypeDocker2Manifest,
+				MediaType:    mediatype.Docker2Manifest,
 				Size:         1234,
 				Digest:       digA,
 				ArtifactType: "application/vnd.example.test",
 			},
 			d2: Descriptor{
-				MediaType:    MediaTypeDocker2Manifest,
+				MediaType:    mediatype.Docker2Manifest,
 				Size:         1234,
 				Digest:       digA,
 				ArtifactType: "application/vnd.example.test",
@@ -405,13 +407,13 @@ func TestDescriptorEq(t *testing.T) {
 		{
 			name: "artifactType diff",
 			d1: Descriptor{
-				MediaType:    MediaTypeDocker2Manifest,
+				MediaType:    mediatype.Docker2Manifest,
 				Size:         1234,
 				Digest:       digA,
 				ArtifactType: "application/vnd.example.test",
 			},
 			d2: Descriptor{
-				MediaType:    MediaTypeDocker2Manifest,
+				MediaType:    mediatype.Docker2Manifest,
 				Size:         1234,
 				Digest:       digA,
 				ArtifactType: "application/vnd.example.test2",
@@ -422,13 +424,13 @@ func TestDescriptorEq(t *testing.T) {
 		{
 			name: "artifactType missing",
 			d1: Descriptor{
-				MediaType:    MediaTypeDocker2Manifest,
+				MediaType:    mediatype.Docker2Manifest,
 				Size:         1234,
 				Digest:       digA,
 				ArtifactType: "application/vnd.example.test",
 			},
 			d2: Descriptor{
-				MediaType: MediaTypeDocker2Manifest,
+				MediaType: mediatype.Docker2Manifest,
 				Size:      1234,
 				Digest:    digA,
 			},
@@ -463,7 +465,7 @@ func TestDataJSON(t *testing.T) {
 				"digest":    "sha256:f6e2d7fa40092cf3d9817bf6ff54183d68d108a47fdf5a5e476c612626c80e14",
 				"size":      941
 			}`),
-			wantErr: ErrParsingFailed,
+			wantErr: errs.ErrParsingFailed,
 		},
 		{
 			name: "Bad Data",
@@ -483,7 +485,7 @@ func TestDataJSON(t *testing.T) {
 				"size":      10,
 				"data":      "ZXhhbXBsZSBkYXRh"
 			}`),
-			wantErr: ErrParsingFailed,
+			wantErr: errs.ErrParsingFailed,
 		},
 		{
 			name: "Bad Size",
@@ -493,7 +495,7 @@ func TestDataJSON(t *testing.T) {
 				"size":      1000,
 				"data":      "ZXhhbXBsZSBkYXRh"
 			}`),
-			wantErr: ErrParsingFailed,
+			wantErr: errs.ErrParsingFailed,
 		},
 		{
 			name: "Good data",
@@ -526,8 +528,7 @@ func TestDataJSON(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("received error %v", err)
-				return
+				t.Fatalf("received error %v", err)
 			}
 			if !bytes.Equal(out, tt.wantData) {
 				t.Errorf("data mismatch, expected %s, received %s", string(tt.wantData), string(out))
@@ -539,7 +540,7 @@ func TestDataJSON(t *testing.T) {
 func TestDescriptorSearch(t *testing.T) {
 	t.Parallel()
 	dAMD64 := Descriptor{
-		MediaType: MediaTypeOCI1Manifest,
+		MediaType: mediatype.OCI1Manifest,
 		Size:      12345,
 		Digest:    EmptyDigest,
 		Platform: &platform.Platform{
@@ -548,7 +549,7 @@ func TestDescriptorSearch(t *testing.T) {
 		},
 	}
 	dAMD64Win := Descriptor{
-		MediaType: MediaTypeOCI1Manifest,
+		MediaType: mediatype.OCI1Manifest,
 		Size:      12345,
 		Digest:    EmptyDigest,
 		Platform: &platform.Platform{
@@ -557,7 +558,7 @@ func TestDescriptorSearch(t *testing.T) {
 		},
 	}
 	dARM64 := Descriptor{
-		MediaType: MediaTypeOCI1Manifest,
+		MediaType: mediatype.OCI1Manifest,
 		Size:      12345,
 		Digest:    EmptyDigest,
 		Platform: &platform.Platform{
@@ -566,7 +567,7 @@ func TestDescriptorSearch(t *testing.T) {
 		},
 	}
 	dAnnotations := Descriptor{
-		MediaType: MediaTypeOCI1Manifest,
+		MediaType: mediatype.OCI1Manifest,
 		Size:      12345,
 		Digest:    EmptyDigest,
 		Platform: &platform.Platform{
@@ -580,7 +581,7 @@ func TestDescriptorSearch(t *testing.T) {
 		},
 	}
 	dAnnotations2 := Descriptor{
-		MediaType: MediaTypeOCI1Manifest,
+		MediaType: mediatype.OCI1Manifest,
 		Size:      12345,
 		Digest:    EmptyDigest,
 		Platform: &platform.Platform{
@@ -594,7 +595,7 @@ func TestDescriptorSearch(t *testing.T) {
 		},
 	}
 	dArtifact := Descriptor{
-		MediaType:    MediaTypeOCI1Manifest,
+		MediaType:    mediatype.OCI1Manifest,
 		Size:         12345,
 		Digest:       EmptyDigest,
 		ArtifactType: "application/example.artifact",
@@ -604,7 +605,7 @@ func TestDescriptorSearch(t *testing.T) {
 		},
 	}
 	dArtifact2 := Descriptor{
-		MediaType:    MediaTypeOCI1Manifest,
+		MediaType:    mediatype.OCI1Manifest,
 		Size:         12345,
 		Digest:       EmptyDigest,
 		ArtifactType: "application/example.artifact",
@@ -615,7 +616,7 @@ func TestDescriptorSearch(t *testing.T) {
 		},
 	}
 	dArtifact3 := Descriptor{
-		MediaType:    MediaTypeOCI1Manifest,
+		MediaType:    mediatype.OCI1Manifest,
 		Size:         12345,
 		Digest:       EmptyDigest,
 		ArtifactType: "application/example.artifact",
@@ -643,7 +644,7 @@ func TestDescriptorSearch(t *testing.T) {
 	}{
 		{
 			name: "empty",
-			err:  ErrNotFound,
+			err:  errs.ErrNotFound,
 		},
 		{
 			name: "amd64",
@@ -702,7 +703,7 @@ func TestDescriptorSearch(t *testing.T) {
 					Architecture: "amd64",
 				},
 			},
-			err: ErrNotFound,
+			err: errs.ErrNotFound,
 		},
 		{
 			name: "artifact",
@@ -777,8 +778,7 @@ func TestDescriptorSearch(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("unexpected error, received %v", err)
-				return
+				t.Fatalf("unexpected error, received %v", err)
 			}
 			if !tc.expect.Equal(result) {
 				t.Errorf("unexpected result, expected %v, received %v", tc.expect, result)

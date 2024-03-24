@@ -1,50 +1,91 @@
 package types
 
-import "strings"
+import (
+	"github.com/regclient/regclient/types/mediatype"
+)
 
 const (
 	// MediaTypeDocker1Manifest deprecated media type for docker schema1 manifests.
-	MediaTypeDocker1Manifest = "application/vnd.docker.distribution.manifest.v1+json"
+	//
+	// Deprecated: replace with [mediatype.Docker1Manifest].
+	MediaTypeDocker1Manifest = mediatype.Docker1Manifest
 	// MediaTypeDocker1ManifestSigned is a deprecated schema1 manifest with jws signing.
-	MediaTypeDocker1ManifestSigned = "application/vnd.docker.distribution.manifest.v1+prettyjws"
+	//
+	// Deprecated: replace with [mediatype.Docker1ManifestSigned].
+	MediaTypeDocker1ManifestSigned = mediatype.Docker1ManifestSigned
 	// MediaTypeDocker2Manifest is the media type when pulling manifests from a v2 registry.
-	MediaTypeDocker2Manifest = "application/vnd.docker.distribution.manifest.v2+json"
+	//
+	// Deprecated: replace with [mediatype.Docker2Manifest].
+	MediaTypeDocker2Manifest = mediatype.Docker2Manifest
 	// MediaTypeDocker2ManifestList is the media type when pulling a manifest list from a v2 registry.
-	MediaTypeDocker2ManifestList = "application/vnd.docker.distribution.manifest.list.v2+json"
+	//
+	// Deprecated: replace with [mediatype.Docker2ManifestList].
+	MediaTypeDocker2ManifestList = mediatype.Docker2ManifestList
 	// MediaTypeDocker2ImageConfig is for the configuration json object media type.
-	MediaTypeDocker2ImageConfig = "application/vnd.docker.container.image.v1+json"
+	//
+	// Deprecated: replace with [mediatype.Docker2ImageConfig].
+	MediaTypeDocker2ImageConfig = mediatype.Docker2ImageConfig
 	// MediaTypeOCI1Artifact EXPERIMENTAL OCI v1 artifact media type.
-	MediaTypeOCI1Artifact = "application/vnd.oci.artifact.manifest.v1+json"
+	//
+	// Deprecated: replace with [mediatype.OCI1Artifact].
+	MediaTypeOCI1Artifact = mediatype.OCI1Artifact
 	// MediaTypeOCI1Manifest OCI v1 manifest media type.
-	MediaTypeOCI1Manifest = "application/vnd.oci.image.manifest.v1+json"
+	//
+	// Deprecated: replace with [mediatype.OCI1Manifest].
+	MediaTypeOCI1Manifest = mediatype.OCI1Manifest
 	// MediaTypeOCI1ManifestList OCI v1 manifest list media type.
-	MediaTypeOCI1ManifestList = "application/vnd.oci.image.index.v1+json"
+	//
+	// Deprecated: replace with [mediatype.OCI1ManifestList].
+	MediaTypeOCI1ManifestList = mediatype.OCI1ManifestList
 	// MediaTypeOCI1ImageConfig OCI v1 configuration json object media type.
-	MediaTypeOCI1ImageConfig = "application/vnd.oci.image.config.v1+json"
+	//
+	// Deprecated: replace with [mediatype.OCI1ImageConfig].
+	MediaTypeOCI1ImageConfig = mediatype.OCI1ImageConfig
 	// MediaTypeDocker2LayerGzip is the default compressed layer for docker schema2.
-	MediaTypeDocker2LayerGzip = "application/vnd.docker.image.rootfs.diff.tar.gzip"
+	//
+	// Deprecated: replace with [mediatype.Docker2LayerGzip].
+	MediaTypeDocker2LayerGzip = mediatype.Docker2LayerGzip
 	// MediaTypeDocker2ForeignLayer is the default compressed layer for foreign layers in docker schema2.
-	MediaTypeDocker2ForeignLayer = "application/vnd.docker.image.rootfs.foreign.diff.tar.gzip"
+	//
+	// Deprecated: replace with [mediatype.Docker2ForeignLayer].
+	MediaTypeDocker2ForeignLayer = mediatype.Docker2ForeignLayer
 	// MediaTypeOCI1Layer is the uncompressed layer for OCIv1.
-	MediaTypeOCI1Layer = "application/vnd.oci.image.layer.v1.tar"
+	//
+	// Deprecated: replace with [mediatype.OCI1Layer].
+	MediaTypeOCI1Layer = mediatype.OCI1Layer
 	// MediaTypeOCI1LayerGzip is the gzip compressed layer for OCI v1.
-	MediaTypeOCI1LayerGzip = "application/vnd.oci.image.layer.v1.tar+gzip"
+	//
+	// Deprecated: replace with [mediatype.OCI1LayerGzip].
+	MediaTypeOCI1LayerGzip = mediatype.OCI1LayerGzip
 	// MediaTypeOCI1LayerZstd is the zstd compressed layer for OCI v1.
-	MediaTypeOCI1LayerZstd = "application/vnd.oci.image.layer.v1.tar+zstd"
+	//
+	// Deprecated: replace with [mediatype.OCI1LayerZstd].
+	MediaTypeOCI1LayerZstd = mediatype.OCI1LayerZstd
 	// MediaTypeOCI1ForeignLayer is the foreign layer for OCI v1.
-	MediaTypeOCI1ForeignLayer = "application/vnd.oci.image.layer.nondistributable.v1.tar"
+	//
+	// Deprecated: replace with [mediatype.OCI1ForeignLayer].
+	MediaTypeOCI1ForeignLayer = mediatype.OCI1ForeignLayer
 	// MediaTypeOCI1ForeignLayerGzip is the gzip compressed foreign layer for OCI v1.
-	MediaTypeOCI1ForeignLayerGzip = "application/vnd.oci.image.layer.nondistributable.v1.tar+gzip"
+	//
+	// Deprecated: replace with [mediatype.OCI1ForeignLayerGzip].
+	MediaTypeOCI1ForeignLayerGzip = mediatype.OCI1ForeignLayerGzip
 	// MediaTypeOCI1ForeignLayerZstd is the zstd compressed foreign layer for OCI v1.
-	MediaTypeOCI1ForeignLayerZstd = "application/vnd.oci.image.layer.nondistributable.v1.tar+zstd"
+	//
+	// Deprecated: replace with [mediatype.OCI1ForeignLayerZstd].
+	MediaTypeOCI1ForeignLayerZstd = mediatype.OCI1ForeignLayerZstd
 	// MediaTypeOCI1Empty is used for blobs containing the empty JSON data `{}`.
-	MediaTypeOCI1Empty = "application/vnd.oci.empty.v1+json"
+	//
+	// Deprecated: replace with [mediatype.OCI1Empty].
+	MediaTypeOCI1Empty = mediatype.OCI1Empty
 	// MediaTypeBuildkitCacheConfig is used by buildkit cache images.
-	MediaTypeBuildkitCacheConfig = "application/vnd.buildkit.cacheconfig.v0"
+	//
+	// Deprecated: replace with [mediatype.BuildkitCacheConfig].
+	MediaTypeBuildkitCacheConfig = mediatype.BuildkitCacheConfig
 )
 
-// MediaTypeBase cleans the Content-Type header to return only the lower case base media type.
-func MediaTypeBase(orig string) string {
-	base, _, _ := strings.Cut(orig, ";")
-	return strings.TrimSpace(strings.ToLower(base))
-}
+var (
+	// Base cleans the Content-Type header to return only the lower case base media type.
+	//
+	// Deprecated: replace with [mediatype.Base].
+	MediaTypeBase = mediatype.Base
+)

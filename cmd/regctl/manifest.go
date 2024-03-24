@@ -14,7 +14,7 @@ import (
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/internal/diff"
 	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
@@ -55,44 +55,88 @@ manifest. You must specify a digest, not a tag on this command (e.g.
 image_name@sha256:1234abc...). It is up to the registry whether the delete
 API is supported. Additionally, registries may garbage collect the filesystem
 layers (blobs) separately or not at all. See also the "tag delete" command.`,
+		Example: `
+# delete a manifest by digest
+regctl manifest delete registry.example.org/repo@sha256:fab3c890d0480549d05d2ff3d746f42e360b7f0e3fe64bdf39fc572eab94911b
+
+# delete the digest referenced by a tag (this is unsafe)
+regctl manifest delete registry.example.org/repo:v1.2.3 --force-tag-dereference
+
+# delete the digest and all manifests with a subject referencing the digest
+regctl manifest delete --referrers \
+  registry.example.org/repo@sha256:fab3c890d0480549d05d2ff3d746f42e360b7f0e3fe64bdf39fc572eab94911b`,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{}, // do not auto complete digests
 		RunE:      manifestOpts.runManifestDelete,
 	}
 
 	var manifestDiffCmd = &cobra.Command{
-		Use:               "diff <image_ref> <image_ref>",
-		Short:             "compare manifests",
+		Use:   "diff <image_ref> <image_ref>",
+		Short: "compare manifests",
+		Long:  `Show the differences between two image manifests`,
+		Example: `
+# compare the scratch and alpine images
+regctl manifest diff \
+  ghcr.io/regclient/regctl:latest \
+	ghcr.io/regclient/regctl:alpine
+
+# compare two digests and show the full context
+regctl manifest diff --context-full \
+  ghcr.io/regclient/regctl@sha256:9b7057d06ce061cefc7a0b7cb28cad626164e6629a1a4f09cee4b4d400c9aef0 \
+  ghcr.io/regclient/regctl@sha256:4d113b278bd425d094848ba5d7b4d6baca13a2a9d20d265b32bc12020d501002`,
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: rootOpts.completeArgTag,
 		RunE:              manifestOpts.runManifestDiff,
 	}
 
 	var manifestGetCmd = &cobra.Command{
-		Use:               "get <image_ref>",
-		Aliases:           []string{"pull"},
-		Short:             "retrieve manifest or manifest list",
-		Long:              `Shows the manifest or manifest list of the specified image.`,
+		Use:     "get <image_ref>",
+		Aliases: []string{"pull"},
+		Short:   "retrieve manifest or manifest list",
+		Long:    `Shows the manifest or manifest list of the specified image.`,
+		Example: `
+# retrieve the manifest (pretty formatting)
+regctl manifest get alpine
+
+# show the original manifest body for the local platform
+regctl manifest get alpine --format raw-body --platform local
+
+# retrieve the manifest for a specific windows version
+regctl manifest get golang --platform windows/amd64,osver=10.0.17763.4974`,
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: rootOpts.completeArgTag,
 		RunE:              manifestOpts.runManifestGet,
 	}
 
 	var manifestHeadCmd = &cobra.Command{
-		Use:               "head <image_ref>",
-		Aliases:           []string{"digest"},
-		Short:             "http head request for manifest",
-		Long:              `Shows the digest or headers from an http manifest head request.`,
+		Use:     "head <image_ref>",
+		Aliases: []string{"digest"},
+		Short:   "http head request for manifest",
+		Long:    `Shows the digest or headers from an http manifest head request.`,
+		Example: `
+# show the digest for an image
+regctl manifest head alpine
+
+# show the digest for a specific platform
+regctl manifest head alpine --platform linux/arm64
+
+# show all headers for the request
+regctl manifest head alpine --format raw-headers`,
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: rootOpts.completeArgTag,
 		RunE:              manifestOpts.runManifestHead,
 	}
 
 	var manifestPutCmd = &cobra.Command{
-		Use:               "put <image_ref>",
-		Aliases:           []string{"push"},
-		Short:             "push manifest or manifest list",
-		Long:              `Pushes a manifest or manifest list to a repository.`,
+		Use:     "put <image_ref>",
+		Aliases: []string{"push"},
+		Short:   "push manifest or manifest list",
+		Long:    `Pushes a manifest or manifest list to a repository.`,
+		Example: `
+# push an image manifest
+regctl manifest put \
+  --content-type application/vnd.oci.image.manifest.v1+json \
+  registry.example.org/repo:v1 <manifest.json`,
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: rootOpts.completeArgTag,
 		RunE:              manifestOpts.runManifestPut,
@@ -333,7 +377,7 @@ func (manifestOpts *manifestCmd) runManifestPut(cmd *cobra.Command, args []strin
 		manifest.WithRaw(raw),
 	}
 	if manifestOpts.contentType != "" {
-		opts = append(opts, manifest.WithDesc(types.Descriptor{
+		opts = append(opts, manifest.WithDesc(descriptor.Descriptor{
 			MediaType: manifestOpts.contentType,
 		}))
 	}
@@ -391,8 +435,8 @@ func getManifest(ctx context.Context, rc *regclient.RegClient, r ref.Ref, pStr s
 	return m, nil
 }
 
-func getPlatformDesc(ctx context.Context, rc *regclient.RegClient, m manifest.Manifest, pStr string) (*types.Descriptor, error) {
-	var desc *types.Descriptor
+func getPlatformDesc(ctx context.Context, rc *regclient.RegClient, m manifest.Manifest, pStr string) (*descriptor.Descriptor, error) {
+	var desc *descriptor.Descriptor
 	var err error
 	if !m.IsList() {
 		return desc, fmt.Errorf("%w: manifest is not a list", ErrInvalidInput)

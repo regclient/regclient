@@ -12,7 +12,7 @@ import (
 
 	"github.com/regclient/regclient/internal/limitread"
 	"github.com/regclient/regclient/pkg/archive"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 )
 
 // TarReader was previously an interface. A type alias is provided for upgrading.
@@ -98,7 +98,7 @@ func (tr *BTarReader) RawBody() ([]byte, error) {
 		dig := tr.digester.Digest()
 		tr.digester = nil
 		if tr.desc.Digest.String() != "" && dig != tr.desc.Digest {
-			return b, fmt.Errorf("%w, expected %s, received %s", types.ErrDigestMismatch, tr.desc.Digest.String(), dig.String())
+			return b, fmt.Errorf("%w, expected %s, received %s", errs.ErrDigestMismatch, tr.desc.Digest.String(), dig.String())
 		}
 		tr.desc.Digest = dig
 	}
@@ -150,18 +150,18 @@ func (tr *BTarReader) ReadFile(filename string) (*tar.Header, io.Reader, error) 
 	}
 	// EOF encountered
 	if whiteout {
-		return nil, nil, types.ErrFileDeleted
+		return nil, nil, errs.ErrFileDeleted
 	}
 	if tr.digester != nil {
 		_, _ = io.Copy(io.Discard, tr.reader) // process/digest any trailing bytes from reader
 		dig := tr.digester.Digest()
 		tr.digester = nil
 		if tr.desc.Digest.String() != "" && dig != tr.desc.Digest {
-			return nil, nil, fmt.Errorf("%w, expected %s, received %s", types.ErrDigestMismatch, tr.desc.Digest.String(), dig.String())
+			return nil, nil, fmt.Errorf("%w, expected %s, received %s", errs.ErrDigestMismatch, tr.desc.Digest.String(), dig.String())
 		}
 		tr.desc.Digest = dig
 	}
-	return nil, nil, types.ErrFileNotFound
+	return nil, nil, errs.ErrFileNotFound
 }
 
 func tarCmpWhiteout(whFile, tgtFile string) bool {

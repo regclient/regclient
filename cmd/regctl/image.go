@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/tar"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -24,6 +25,7 @@ import (
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/platform"
@@ -77,6 +79,9 @@ If the digest is not available, layers of each manifest are compared.
 If the layers match, the config (history and roots) are optionally compared.	
 If the base image does not match, the command exits with a non-zero status.
 Use "-v info" to see more details.`,
+		Example: `
+# report if base image has changed using annotations
+regctl image check-base ghcr.io/regclient/regctl:alpine -v info`,
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: rootOpts.completeArgTag,
 		RunE:              imageOpts.runImageCheckBase,
@@ -89,6 +94,29 @@ Use "-v info" to see more details.`,
 that do not exist at the target. In the same registry it attempts to mount
 the layers between repositories. And within the same repository it only
 sends the manifest with the new tag.`,
+		Example: `
+# copy an image
+regctl image copy \
+  ghcr.io/regclient/regctl:edge registry.example.org/regclient/regctl:edge
+
+# copy an image with signatures
+regctl image copy --digest-tags \
+  ghcr.io/regclient/regctl:edge registry.example.org/regclient/regctl:edge
+
+# copy only the local platform image
+regctl image copy --platform local \
+  ghcr.io/regclient/regctl:edge registry.example.org/regclient/regctl:edge
+
+# retag an image
+regctl image copy registry.example.org/repo:v1.2.3 registry.example.org/repo:v1
+
+# copy an image to an OCI Layout including referrers
+regctl image copy --referrers \
+  ghcr.io/regclient/regctl:edge ocidir://regctl:edge
+
+# copy a windows image, including foreign layers
+regctl image copy --platform windows/amd64,osver=10.0.17763.4974 --include-external \
+  golang:latest registry.example.org/library/golang:windows`,
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: rootOpts.completeArgTag,
 		RunE:              imageOpts.runImageCopy,
@@ -102,13 +130,23 @@ manifest. You must specify a digest, not a tag on this command (e.g.
 image_name@sha256:1234abc...). It is up to the registry whether the delete
 API is supported. Additionally, registries may garbage collect the filesystem
 layers (blobs) separately or not at all. See also the "tag delete" command.`,
+		Example: `
+# delete a specific image
+regctl image delete registry.example.org/repo@sha256:fab3c890d0480549d05d2ff3d746f42e360b7f0e3fe64bdf39fc572eab94911b
+
+# delete a specific image by tag (including all other tags to the same image)
+regctl image delete --force-tag-dereference registry.example.org/repo:v123`,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{}, // do not auto complete digests
 		RunE:      manifestOpts.runManifestDelete,
 	}
 	var imageDigestCmd = &cobra.Command{
-		Use:               "digest <image_ref>",
-		Short:             "show digest for pinning, same as \"manifest digest\"",
+		Use:   "digest <image_ref>",
+		Short: "show digest for pinning, same as \"manifest digest\"",
+		Long:  `show digest for pinning, same as "manifest digest"`,
+		Example: `
+# get the digest for the latest regctl image
+regctl image digest ghcr.io/regclient/regctl`,
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: rootOpts.completeArgTag,
 		RunE:              manifestOpts.runManifestHead,
@@ -118,17 +156,22 @@ layers (blobs) separately or not at all. See also the "tag delete" command.`,
 		Short: "export image",
 		Long: `Exports an image into a tar file that can be later loaded into a docker
 engine with "docker load". The tar file is output to stdout by default.
-Compression is typically not useful since layers are already compressed.
-Example usage: regctl image export registry:5000/yourimg:v1 >yourimg-v1.tar`,
+Compression is typically not useful since layers are already compressed.`,
+		Example: `
+# export an image
+regctl image export registry.example.org/repo:v1 >image-v1.tar`,
 		Args:              cobra.RangeArgs(1, 2),
 		ValidArgsFunction: rootOpts.completeArgTag,
 		RunE:              imageOpts.runImageExport,
 	}
 	var imageGetFileCmd = &cobra.Command{
-		Use:               "get-file <image_ref> <filename> [out-file]",
-		Aliases:           []string{"cat"},
-		Short:             "get a file from an image",
-		Long:              `Go through each of the image layers searching for the requested file.`,
+		Use:     "get-file <image_ref> <filename> [out-file]",
+		Aliases: []string{"cat"},
+		Short:   "get a file from an image",
+		Long:    `Go through each of the image layers searching for the requested file.`,
+		Example: `
+# get the alpine-release file from the latest alpine image
+regctl image get-file --platform local alpine /etc/alpine-release`,
 		Args:              cobra.RangeArgs(2, 3),
 		ValidArgsFunction: completeArgList([]completeFunc{rootOpts.completeArgTag, completeArgNone, completeArgNone}),
 		RunE:              imageOpts.runImageGetFile,
@@ -139,6 +182,9 @@ Example usage: regctl image export registry:5000/yourimg:v1 >yourimg-v1.tar`,
 		Long: `Imports an image from a tar file. This must be either a docker formatted tar
 from "docker save" or an OCI Layout compatible tar. The output from
 "regctl image export" can be used. Stdin is not permitted for the tar file.`,
+		Example: `
+# import an image saved from docker
+regctl image import registry.example.org/repo:v1 image-v1.tar`,
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: completeArgList([]completeFunc{rootOpts.completeArgTag, completeArgDefault}),
 		RunE:              imageOpts.runImageImport,
@@ -149,14 +195,20 @@ from "docker save" or an OCI Layout compatible tar. The output from
 		Short:   "inspect image",
 		Long: `Shows the config json for an image and is equivalent to pulling the image
 in docker, and inspecting it, but without pulling any of the image layers.`,
+		Example: `
+# return the image config for the nginx image
+regctl image inspect --platform local nginx`,
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: rootOpts.completeArgTag,
 		RunE:              imageOpts.runImageInspect,
 	}
 	var imageManifestCmd = &cobra.Command{
-		Use:               "manifest <image_ref>",
-		Short:             "show manifest or manifest list, same as \"manifest get\"",
-		Long:              `Shows the manifest or manifest list of the specified image.`,
+		Use:   "manifest <image_ref>",
+		Short: "show manifest or manifest list, same as \"manifest get\"",
+		Long:  `Shows the manifest or manifest list of the specified image.`,
+		Example: `
+# return the manifest of the golang image
+regctl image manifest golang`,
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: rootOpts.completeArgTag,
 		RunE:              manifestOpts.runManifestGet,
@@ -172,18 +224,44 @@ For time options, the value is a comma separated list of key/value pairs:
   after=${time_in_rfc3339}: adjust any time after this
   base-ref=${image}: image to lookup base layers, which are skipped
   base-layers=${count}: number of layers to skip changing (from the base image)
-  * set or from-label is required in the time options
-`,
+  Note: set or from-label is required in the time options`,
+		Example: `
+# add an annotation to all images, replacing the v1 tag with the new image
+regctl image mod registry.example.org/repo:v1 \
+  --replace --annotation '[*]org.opencontainers.image.created=2021-02-03T05:06:07Z
+
+# convert an image to the OCI media types, copying to local registry
+regctl image mod alpine:3.5 --to-oci --create registry.example.org/alpine:3.5
+
+# set the timestamp on the config and layers, ignoring the alpine base image layers
+regctl image mod registry.example.org/repo:v1 --create v1-mod \
+  --time "set=2021-02-03T04:05:06Z,base-ref=alpine:3"
+
+# set the entrypoint to be bash and unset the default command
+regctl image mod registry.example.org/repo:v1 --create v1-bash \
+  --config-entrypoint '["bash"]' --config-cmd ""
+
+# Rebase an older regctl image, copying to the local registry.
+# This uses annotations that were included in the original image build.
+regctl image mod registry.example.org/regctl:v0.5.1-alpine \
+  --rebase --create v0.5.1-alpine-rebase`,
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: rootOpts.completeArgTag,
 		RunE:              imageOpts.runImageMod,
 	}
 	var imageRateLimitCmd = &cobra.Command{
-		Use:   "ratelimit <image_ref>",
-		Short: "show the current rate limit",
+		Use:     "ratelimit <image_ref>",
+		Aliases: []string{"rate-limit"},
+		Short:   "show the current rate limit",
 		Long: `Shows the rate limit using an http head request against the image manifest.
 If Set is false, the Remain value was not provided.
 The other values may be 0 if not provided by the registry.`,
+		Example: `
+# return the current rate limit for pulling the alpine image
+regctl image ratelimit alpine
+
+# return the number of pulls remaining
+regctl image ratelimit alpine --format '{{.Remain}}'`,
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: rootOpts.completeArgTag,
 		RunE:              imageOpts.runImageRateLimit,
@@ -237,7 +315,7 @@ The other values may be 0 if not provided by the registry.`,
 	_ = imageManifestCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 	_ = imageManifestCmd.Flags().MarkHidden("list")
 
-	imageModCmd.Flags().StringVarP(&imageOpts.create, "create", "", "", "Create tag")
+	imageModCmd.Flags().StringVarP(&imageOpts.create, "create", "", "", "Create image or tag")
 	imageModCmd.Flags().BoolVarP(&imageOpts.replace, "replace", "", false, "Replace tag (ignored when \"create\" is used)")
 	// most image mod flags are order dependent, so they are added using VarP/VarPF to append to modOpts
 	imageModCmd.Flags().VarP(&modFlagFunc{
@@ -263,7 +341,7 @@ The other values may be 0 if not provided by the registry.`,
 			}
 			r, err := ref.New(vs[0])
 			if err != nil {
-				return fmt.Errorf("invalid image reference: %v", err)
+				return fmt.Errorf("invalid image reference: %w", err)
 			}
 			d := digest.Digest("")
 			if len(vs) == 1 {
@@ -273,20 +351,34 @@ The other values may be 0 if not provided by the registry.`,
 				}
 				d, err = digest.Parse(r.Digest)
 				if err != nil {
-					return fmt.Errorf("invalid digest: %v", err)
+					return fmt.Errorf("invalid digest: %w", err)
 				}
 				r.Digest = ""
 			} else {
 				// parse separate ref and digest
 				d, err = digest.Parse(vs[1])
 				if err != nil {
-					return fmt.Errorf("invalid digest: %v", err)
+					return fmt.Errorf("invalid digest: %w", err)
 				}
 			}
 			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithAnnotationOCIBase(r, d))
 			return nil
 		},
 	}, "annotation-base", "", `set base image annotations (image/name:tag,sha256:digest)`)
+	flagAnnotationPromote := imageModCmd.Flags().VarPF(&modFlagFunc{
+		t: "bool",
+		f: func(val string) error {
+			b, err := strconv.ParseBool(val)
+			if err != nil {
+				return fmt.Errorf("unable to parse value %s: %w", val, err)
+			}
+			if b {
+				imageOpts.modOpts = append(imageOpts.modOpts, mod.WithAnnotationPromoteCommon())
+			}
+			return nil
+		},
+	}, "annotation-promote", "", `promote common annotations from child images to index`)
+	flagAnnotationPromote.NoOptDefVal = "true"
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
@@ -315,6 +407,47 @@ The other values may be 0 if not provided by the registry.`,
 			return nil
 		},
 	}, "buildarg-rm-regex", "", `delete a build arg with a regex value`)
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "string",
+		f: func(val string) error {
+			vSlice := []string{}
+			err := json.Unmarshal([]byte(val), &vSlice)
+			if err != nil && val != "" {
+				vSlice = []string{"/bin/sh", "-c", val}
+			}
+			imageOpts.modOpts = append(imageOpts.modOpts,
+				mod.WithConfigCmd(vSlice),
+			)
+			return nil
+		},
+	}, "config-cmd", "", `set command in the config (json array or string, empty string to delete)`)
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "string",
+		f: func(val string) error {
+			vSlice := []string{}
+			err := json.Unmarshal([]byte(val), &vSlice)
+			if err != nil && val != "" {
+				vSlice = []string{"/bin/sh", "-c", val}
+			}
+			imageOpts.modOpts = append(imageOpts.modOpts,
+				mod.WithConfigEntrypoint(vSlice),
+			)
+			return nil
+		},
+	}, "config-entrypoint", "", `set entrypoint in the config (json array or string, empty string to delete)`)
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "string",
+		f: func(val string) error {
+			p, err := platform.Parse(val)
+			if err != nil {
+				return err
+			}
+			imageOpts.modOpts = append(imageOpts.modOpts,
+				mod.WithConfigPlatform(p),
+			)
+			return nil
+		},
+	}, "config-platform", "", `set platform on the config (not recommended for an index of multiple images)`)
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
@@ -760,7 +893,7 @@ func (imageOpts *imageCmd) runImageCheckBase(cmd *cobra.Command, args []string) 
 	if err == nil {
 		log.Info("base image matches")
 		return nil
-	} else if errors.Is(err, types.ErrMismatch) {
+	} else if errors.Is(err, errs.ErrMismatch) {
 		log.WithFields(logrus.Fields{
 			"err": err,
 		}).Info("base image mismatch")
@@ -845,7 +978,7 @@ func (imageOpts *imageCmd) runImageCopy(cmd *cobra.Command, args []string) error
 					ticker.Stop()
 					return
 				case <-ticker.C:
-					progress.display(cmd.ErrOrStderr(), false)
+					progress.display(false)
 				}
 			}
 		}()
@@ -854,7 +987,7 @@ func (imageOpts *imageCmd) runImageCopy(cmd *cobra.Command, args []string) error
 	err = rc.ImageCopy(ctx, rSrc, rTgt, opts...)
 	if progress != nil {
 		close(done)
-		progress.display(cmd.ErrOrStderr(), true)
+		progress.display(true)
 	}
 	if err != nil {
 		return err
@@ -916,7 +1049,7 @@ func (ip *imageProgress) callback(kind types.CallbackKind, instance string, stat
 	}
 }
 
-func (ip *imageProgress) display(w io.Writer, final bool) {
+func (ip *imageProgress) display(final bool) {
 	ip.mu.Lock()
 	defer ip.mu.Unlock()
 	if !ip.changed && !final {
@@ -1118,7 +1251,7 @@ func (imageOpts *imageCmd) runImageGetFile(cmd *cobra.Command, args []string) er
 		}
 		th, rdr, err := btr.ReadFile(filename)
 		if err != nil {
-			if errors.Is(err, types.ErrFileNotFound) {
+			if errors.Is(err, errs.ErrFileNotFound) {
 				if err := btr.Close(); err != nil {
 					return err
 				}
@@ -1162,7 +1295,7 @@ func (imageOpts *imageCmd) runImageGetFile(cmd *cobra.Command, args []string) er
 		return nil
 	}
 	// all layers exhausted, not found or deleted
-	return types.ErrNotFound
+	return errs.ErrNotFound
 }
 
 func (imageOpts *imageCmd) runImageImport(cmd *cobra.Command, args []string) error {
@@ -1212,7 +1345,7 @@ func (imageOpts *imageCmd) runImageInspect(cmd *cobra.Command, args []string) er
 	}
 	mi, ok := m.(manifest.Imager)
 	if !ok {
-		return fmt.Errorf("manifest does not support image methods%.0w", types.ErrUnsupportedMediaType)
+		return fmt.Errorf("manifest does not support image methods%.0w", errs.ErrUnsupportedMediaType)
 	}
 	cd, err := mi.GetConfig()
 	if err != nil {

@@ -20,7 +20,7 @@ import (
 
 	"github.com/regclient/regclient/internal/diff"
 	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -47,18 +47,44 @@ func NewBlobCmd(rootOpts *rootCmd) *cobra.Command {
 		Aliases: []string{"layer"},
 		Short:   "manage image blobs/layers",
 	}
+	var blobDeleteCmd = &cobra.Command{
+		Use:     "delete <repository> <digest>",
+		Aliases: []string{"del", "rm"},
+		Short:   "delete a blob",
+		Long: `Delete a blob from the registry. This is rarely needed since registries should
+have their own garbage collection algorithms and may clean unreferenced blobs
+automatically. This command is useful for repairing a corrupt registry. The
+blob or layer digest can be found in the image manifest.`,
+		Example: `
+# delete a blob
+regctl blob delete registry.example.org/repo \
+  sha256:a58ecd4f0c864650a4286c3c2d49c7219a3f2fc8d7a0bf478aa9834acfe14ae7`,
+		Args:      cobra.ExactArgs(2),
+		ValidArgs: []string{}, // do not auto complete repository or digest
+		RunE:      blobOpts.runBlobDelete,
+	}
 	var blobDiffConfigCmd = &cobra.Command{
-		Use:       "diff-config <repository> <digest> <repository> <digest>",
-		Short:     "diff two image configs",
-		Long:      `This returns the difference between two configs, comparing the contents of each config json.`,
+		Use:   "diff-config <repository> <digest> <repository> <digest>",
+		Short: "diff two image configs",
+		Long:  `This returns the difference between two configs, comparing the contents of each config json.`,
+		Example: `
+# compare two versions of busybox
+regctl blob diff-config \
+  busybox sha256:0c00acac9c2794adfa8bb7b13ef38504300b505a043bf68dff7a00068dcc732b \
+  busybox sha256:3f57d9401f8d42f986df300f0c69192fc41da28ccc8d797829467780db3dd741`,
 		Args:      cobra.ExactArgs(4),
 		ValidArgs: []string{}, // do not auto complete repository or digest
 		RunE:      blobOpts.runBlobDiffConfig,
 	}
 	var blobDiffLayerCmd = &cobra.Command{
-		Use:       "diff-layer <repository> <digest> <repository> <digest>",
-		Short:     "diff two tar layers",
-		Long:      `This returns the difference between two layers, comparing the contents of each tar.`,
+		Use:   "diff-layer <repository> <digest> <repository> <digest>",
+		Short: "diff two tar layers",
+		Long:  `This returns the difference between two layers, comparing the contents of each tar.`,
+		Example: `
+# compare two versions of busybox, ignoring timestamp changes
+regctl blob diff-layer \
+  busybox sha256:2354422721e449fa3fa83b84465b9d5bb65ac5415ec93c06f598854312e8957e \
+  busybox sha256:9ad63333ebc97e32b987ae66aa3cff81300e4c2e6d2f2395cef8a3ae18b249fe --ignore-timestamp`,
 		Args:      cobra.ExactArgs(4),
 		ValidArgs: []string{}, // do not auto complete repository or digest
 		RunE:      blobOpts.runBlobDiffLayer,
@@ -70,24 +96,38 @@ func NewBlobCmd(rootOpts *rootCmd) *cobra.Command {
 		Long: `Download a blob from the registry. The output is the blob itself which may
 be a compressed tar file, a json config, or any other blob supported by the
 registry. The blob or layer digest can be found in the image manifest.`,
+		Example: `
+# inspect the layer contents of a busybox image
+regctl blob get busybox \
+  sha256:a58ecd4f0c864650a4286c3c2d49c7219a3f2fc8d7a0bf478aa9834acfe14ae7 \
+  | tar -tvzf -`,
 		Args:      cobra.ExactArgs(2),
 		ValidArgs: []string{}, // do not auto complete repository or digest
 		RunE:      blobOpts.runBlobGet,
 	}
 	var blobGetFileCmd = &cobra.Command{
-		Use:       "get-file <repository> <digest> <file> [out-file]",
-		Aliases:   []string{"cat"},
-		Short:     "get a file from a layer",
-		Long:      `This returns a requested file from a layer.`,
+		Use:     "get-file <repository> <digest> <file> [out-file]",
+		Aliases: []string{"cat"},
+		Short:   "get a file from a layer",
+		Long:    `This returns a requested file from a layer.`,
+		Example: `
+# retrieve the contents of /etc/alpine-release
+regctl blob get-file alpine \
+  sha256:9123ac7c32f74759e6283f04dbf571f18246abe5bb2c779efcb32cd50f3ff13c \
+  /etc/alpine-release`,
 		Args:      cobra.RangeArgs(3, 4),
 		ValidArgs: []string{}, // do not auto complete repository, digest, or filenames
 		RunE:      blobOpts.runBlobGetFile,
 	}
 	var blobHeadCmd = &cobra.Command{
-		Use:       "head <repository> <digest>",
-		Aliases:   []string{"digest"},
-		Short:     "http head request for a blob",
-		Long:      `Shows the headers for a blob head request.`,
+		Use:     "head <repository> <digest>",
+		Aliases: []string{"digest"},
+		Short:   "http head request for a blob",
+		Long:    `Shows the headers for a blob head request.`,
+		Example: `
+# verify the existence of a blob
+regctl blob head alpine \
+  sha256:9123ac7c32f74759e6283f04dbf571f18246abe5bb2c779efcb32cd50f3ff13c`,
 		Args:      cobra.ExactArgs(2),
 		ValidArgs: []string{}, // do not auto complete repository or digest
 		RunE:      blobOpts.runBlobHead,
@@ -98,6 +138,9 @@ registry. The blob or layer digest can be found in the image manifest.`,
 		Short:   "upload a blob/layer",
 		Long: `Upload a blob to a repository. Stdin must be the blob contents. The output
 is the digest of the blob.`,
+		Example: `
+# push a blob
+regctl blob put registry.example.org/repo <layer.tgz`,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{}, // do not auto complete repository
 		RunE:      blobOpts.runBlobPut,
@@ -109,6 +152,10 @@ is the digest of the blob.`,
 		Long: `Copy a blob between repositories. This works in the same registry only. It
 attempts to mount the layers between repositories. And within the same repository
 it only sends the manifest with the new tag.`,
+		Example: `
+# copy a blob
+regctl blob copy alpine registry.example.org/library/alpine \
+  sha256:9123ac7c32f74759e6283f04dbf571f18246abe5bb2c779efcb32cd50f3ff13c`,
 		Args:      cobra.ExactArgs(3),
 		ValidArgs: []string{}, // do not auto complete repository or digest
 		RunE:      blobOpts.runBlobCopy,
@@ -147,6 +194,7 @@ it only sends the manifest with the new tag.`,
 	_ = blobPutCmd.RegisterFlagCompletionFunc("digest", completeArgNone)
 	_ = blobPutCmd.Flags().MarkHidden("content-type")
 
+	blobTopCmd.AddCommand(blobDeleteCmd)
 	blobTopCmd.AddCommand(blobDiffConfigCmd)
 	blobTopCmd.AddCommand(blobDiffLayerCmd)
 	blobTopCmd.AddCommand(blobGetCmd)
@@ -156,6 +204,27 @@ it only sends the manifest with the new tag.`,
 	blobTopCmd.AddCommand(blobCopyCmd)
 
 	return blobTopCmd
+}
+
+func (blobOpts *blobCmd) runBlobDelete(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	r, err := ref.New(args[0])
+	if err != nil {
+		return err
+	}
+	d, err := digest.Parse(args[1])
+	if err != nil {
+		return err
+	}
+	rc := blobOpts.rootOpts.newRegClient()
+	defer rc.Close(ctx, r)
+
+	log.WithFields(logrus.Fields{
+		"host":       r.Registry,
+		"repository": r.Repository,
+		"digest":     args[1],
+	}).Debug("Deleting blob")
+	return rc.BlobDelete(ctx, r, descriptor.Descriptor{Digest: d})
 }
 
 func (blobOpts *blobCmd) runBlobDiffConfig(cmd *cobra.Command, args []string) error {
@@ -182,7 +251,7 @@ func (blobOpts *blobCmd) runBlobDiffConfig(cmd *cobra.Command, args []string) er
 	if err != nil {
 		return err
 	}
-	c1, err := rc.BlobGetOCIConfig(ctx, r1, types.Descriptor{Digest: d1})
+	c1, err := rc.BlobGetOCIConfig(ctx, r1, descriptor.Descriptor{Digest: d1})
 	if err != nil {
 		return err
 	}
@@ -195,7 +264,7 @@ func (blobOpts *blobCmd) runBlobDiffConfig(cmd *cobra.Command, args []string) er
 	if err != nil {
 		return err
 	}
-	c2, err := rc.BlobGetOCIConfig(ctx, r2, types.Descriptor{Digest: d2})
+	c2, err := rc.BlobGetOCIConfig(ctx, r2, descriptor.Descriptor{Digest: d2})
 	if err != nil {
 		return err
 	}
@@ -236,7 +305,7 @@ func (blobOpts *blobCmd) runBlobDiffLayer(cmd *cobra.Command, args []string) err
 	if err != nil {
 		return err
 	}
-	b1, err := rc.BlobGet(ctx, r1, types.Descriptor{Digest: d1})
+	b1, err := rc.BlobGet(ctx, r1, descriptor.Descriptor{Digest: d1})
 	if err != nil {
 		return err
 	}
@@ -262,7 +331,7 @@ func (blobOpts *blobCmd) runBlobDiffLayer(cmd *cobra.Command, args []string) err
 	if err != nil {
 		return err
 	}
-	b2, err := rc.BlobGet(ctx, r2, types.Descriptor{Digest: d2})
+	b2, err := rc.BlobGet(ctx, r2, descriptor.Descriptor{Digest: d2})
 	if err != nil {
 		return err
 	}
@@ -313,7 +382,7 @@ func (blobOpts *blobCmd) runBlobGet(cmd *cobra.Command, args []string) error {
 		"repository": r.Repository,
 		"digest":     args[1],
 	}).Debug("Pulling blob")
-	blob, err := rc.BlobGet(ctx, r, types.Descriptor{Digest: d})
+	blob, err := rc.BlobGet(ctx, r, descriptor.Descriptor{Digest: d})
 	if err != nil {
 		return err
 	}
@@ -355,7 +424,7 @@ func (blobOpts *blobCmd) runBlobGetFile(cmd *cobra.Command, args []string) error
 		"digest":     args[1],
 		"filename":   filename,
 	}).Debug("Get file")
-	blob, err := rc.BlobGet(ctx, r, types.Descriptor{Digest: d})
+	blob, err := rc.BlobGet(ctx, r, descriptor.Descriptor{Digest: d})
 	if err != nil {
 		return err
 	}
@@ -417,7 +486,7 @@ func (blobOpts *blobCmd) runBlobHead(cmd *cobra.Command, args []string) error {
 		"repository": r.Repository,
 		"digest":     args[1],
 	}).Debug("Blob head")
-	blob, err := rc.BlobHead(ctx, r, types.Descriptor{Digest: d})
+	blob, err := rc.BlobHead(ctx, r, descriptor.Descriptor{Digest: d})
 	if err != nil {
 		return err
 	}
@@ -449,7 +518,7 @@ func (blobOpts *blobCmd) runBlobPut(cmd *cobra.Command, args []string) error {
 		"repository": r.Repository,
 		"digest":     blobOpts.digest,
 	}).Debug("Pushing blob")
-	dOut, err := rc.BlobPut(ctx, r, types.Descriptor{Digest: digest.Digest(blobOpts.digest)}, cmd.InOrStdin())
+	dOut, err := rc.BlobPut(ctx, r, descriptor.Descriptor{Digest: digest.Digest(blobOpts.digest)}, cmd.InOrStdin())
 	if err != nil {
 		return err
 	}
@@ -487,7 +556,7 @@ func (blobOpts *blobCmd) runBlobCopy(cmd *cobra.Command, args []string) error {
 		"target": rTgt.CommonName(),
 		"digest": args[2],
 	}).Debug("Blob copy")
-	err = rc.BlobCopy(ctx, rSrc, rTgt, types.Descriptor{Digest: d})
+	err = rc.BlobCopy(ctx, rSrc, rTgt, descriptor.Descriptor{Digest: d})
 	if err != nil {
 		return err
 	}

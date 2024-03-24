@@ -116,6 +116,12 @@ regctl index add \
   --desc-annotation "type=sig" \
   ocidir://testrepo:ai
 
+# create a standalone artifact with a data field on the config
+echo example | regctl artifact put \
+  --artifact-type application/example -m application/example \
+  ocidir://testrepo:a-example
+regctl image mod --data-max 3 --replace ocidir://testrepo:a-example
+
 # create a digest tag from v3 pointing to v1
 v1_dig="$(regctl image digest ocidir://testrepo:v1)"
 v1_dig=${v1_dig#*:}

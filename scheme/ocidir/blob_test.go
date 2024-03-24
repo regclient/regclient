@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/regclient/regclient/internal/rwfs"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
 )
@@ -24,54 +24,44 @@ func TestBlob(t *testing.T) {
 	rs := "ocidir://testdata/regctl:latest"
 	rl, err := ref.New(rs)
 	if err != nil {
-		t.Errorf("failed to parse ref %s: %v", rs, err)
-		return
+		t.Fatalf("failed to parse ref %s: %v", rs, err)
 	}
 	ml, err := o.ManifestGet(ctx, rl)
 	if err != nil {
-		t.Errorf("manifest get: %v", err)
-		return
+		t.Fatalf("manifest get: %v", err)
 	}
 	if !ml.IsList() {
-		t.Errorf("expected manifest list")
-		return
+		t.Fatalf("expected manifest list")
 	}
 	mli, ok := ml.(manifest.Indexer)
 	if !ok {
-		t.Errorf("manifest doesn't support index methods")
-		return
+		t.Fatalf("manifest doesn't support index methods")
 	}
 	dl, err := mli.GetManifestList()
 	if err != nil || len(dl) < 1 {
-		t.Errorf("descriptor list (%d): %v", len(dl), err)
-		return
+		t.Fatalf("descriptor list (%d): %v", len(dl), err)
 	}
 	rs = fmt.Sprintf("%s@%s", rs, dl[0].Digest)
 	r, err := ref.New(rs)
 	if err != nil {
-		t.Errorf("failed to parse ref %s: %v", rs, err)
-		return
+		t.Fatalf("failed to parse ref %s: %v", rs, err)
 	}
 	m, err := o.ManifestGet(ctx, r)
 	if err != nil {
-		t.Errorf("manifest get: %v", err)
-		return
+		t.Fatalf("manifest get: %v", err)
 	}
 	mi, ok := m.(manifest.Imager)
 	if !ok {
-		t.Errorf("manifest doesn't support image methods")
-		return
+		t.Fatalf("manifest doesn't support image methods")
 	}
 	cd, err := mi.GetConfig()
 	if err != nil {
-		t.Errorf("config digest: %v", err)
-		return
+		t.Fatalf("config digest: %v", err)
 	}
 	// blob head
 	bh, err := o.BlobHead(ctx, r, cd)
 	if err != nil {
-		t.Errorf("blob head: %v", err)
-		return
+		t.Fatalf("blob head: %v", err)
 	}
 	err = bh.Close()
 	if err != nil {
@@ -80,13 +70,11 @@ func TestBlob(t *testing.T) {
 	// blob get
 	bg, err := o.BlobGet(ctx, r, cd)
 	if err != nil {
-		t.Errorf("blob get: %v", err)
-		return
+		t.Fatalf("blob get: %v", err)
 	}
 	bBytes, err := io.ReadAll(bg)
 	if err != nil {
-		t.Errorf("blob readall: %v", err)
-		return
+		t.Fatalf("blob readall: %v", err)
 	}
 	if bg.GetDescriptor().Digest != cd.Digest {
 		t.Errorf("blob digest mismatch, expected %s, received %s", cd.Digest.String(), bg.GetDescriptor().Digest.String())
@@ -106,12 +94,11 @@ func TestBlob(t *testing.T) {
 	// toOCIConfig
 	bg, err = o.BlobGet(ctx, r, cd)
 	if err != nil {
-		t.Errorf("blob get 2: %v", err)
-		return
+		t.Fatalf("blob get 2: %v", err)
 	}
 	ociConf, err := bg.ToOCIConfig()
 	if err != nil {
-		t.Errorf("to oci config: %v", err)
+		t.Fatalf("to oci config: %v", err)
 	}
 	if ociConf.GetDescriptor().Digest != cd.Digest {
 		t.Errorf("config digest mismatch, expected %s, received %s", cd.Digest.String(), ociConf.GetDescriptor().Digest.String())
@@ -123,8 +110,7 @@ func TestBlob(t *testing.T) {
 	bRdr := bytes.NewReader(bBytes)
 	bpd, err := om.BlobPut(ctx, r, cd, bRdr)
 	if err != nil {
-		t.Errorf("blob put: %v", err)
-		return
+		t.Fatalf("blob put: %v", err)
 	}
 	if bpd.Size != int64(len(bBytes)) {
 		t.Errorf("blob put length, expected %d, received %d", len(bBytes), bpd.Size)
@@ -134,22 +120,29 @@ func TestBlob(t *testing.T) {
 	}
 	fd, err := fm.Open(fmt.Sprintf("testdata/regctl/blobs/%s/%s", cd.Digest.Algorithm().String(), cd.Digest.Encoded()))
 	if err != nil {
-		t.Errorf("blob put open file: %v", err)
+		t.Fatalf("blob put open file: %v", err)
 	}
-	defer fd.Close()
 	fBytes, err := io.ReadAll(fd)
+	_ = fd.Close()
 	if err != nil {
-		t.Errorf("blob put readall: %v", err)
+		t.Fatalf("blob put readall: %v", err)
 	}
 	if !bytes.Equal(fBytes, bBytes) {
 		t.Errorf("blob put bytes, expected %s, saw %s", string(bBytes), string(fBytes))
 	}
-
+	// blob delete (from memfs)
+	err = om.BlobDelete(ctx, r, cd)
+	if err != nil {
+		t.Errorf("failed to delete blob: %v", err)
+	}
+	_, err = fm.Stat(fmt.Sprintf("testdata/regctl/blobs/%s/%s", cd.Digest.Algorithm().String(), cd.Digest.Encoded()))
+	if err == nil {
+		t.Errorf("stat of a deleted blob did not fail")
+	}
 	// concurrent blob put, without the descriptor to test for races
 	rPut, err := ref.New(fmt.Sprintf("%s@%s", "ocidir://testdata/put:latest", dl[0].Digest))
 	if err != nil {
-		t.Errorf("failed to parse ref: %v", err)
-		return
+		t.Fatalf("failed to parse ref: %v", err)
 	}
 	count := 5
 	var wg sync.WaitGroup
@@ -158,7 +151,7 @@ func TestBlob(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			bRdr := bytes.NewReader(bBytes)
-			bpd, err := om.BlobPut(ctx, rPut, types.Descriptor{}, bRdr)
+			bpd, err := om.BlobPut(ctx, rPut, descriptor.Descriptor{}, bRdr)
 			if err != nil {
 				t.Errorf("blob put: %v", err)
 				return
@@ -174,12 +167,12 @@ func TestBlob(t *testing.T) {
 	wg.Wait()
 	fd, err = fm.Open(fmt.Sprintf("testdata/put/blobs/%s/%s", cd.Digest.Algorithm().String(), cd.Digest.Encoded()))
 	if err != nil {
-		t.Errorf("blob put open file: %v", err)
+		t.Fatalf("blob put open file: %v", err)
 	}
-	defer fd.Close()
 	fBytes, err = io.ReadAll(fd)
+	_ = fd.Close()
 	if err != nil {
-		t.Errorf("blob put readall: %v", err)
+		t.Fatalf("blob put readall: %v", err)
 	}
 	if !bytes.Equal(fBytes, bBytes) {
 		t.Errorf("blob put bytes, expected %s, saw %s", string(bBytes), string(fBytes))

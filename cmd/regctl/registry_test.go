@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -88,16 +87,14 @@ func TestRegistry(t *testing.T) {
 		},
 		// query good and bad to ensure user is set
 		{
-			name:        "query good host",
-			args:        []string{"registry", "config", tsGoodHost},
-			expectOut:   `"user": "testgooduser",`,
-			outContains: true,
+			name:      "query good host",
+			args:      []string{"registry", "config", tsGoodHost, "--format", "{{.User}}"},
+			expectOut: `testgooduser`,
 		},
 		{
-			name:        "query bad host",
-			args:        []string{"registry", "config", tsBadHost},
-			expectOut:   `"user": "testbaduser",`,
-			outContains: true,
+			name:      "query bad host",
+			args:      []string{"registry", "config", tsBadHost, "--format", "{{.User}}"},
+			expectOut: `testbaduser`,
 		},
 		// logout
 		{
@@ -114,18 +111,14 @@ func TestRegistry(t *testing.T) {
 		},
 		// verify logout
 		{
-			name: "check logout on good host",
-			args: []string{"registry", "config", tsGoodHost},
-			expectOut: fmt.Sprintf(`"hostname": "%s",
-  "credHost": "",`, tsGoodHost),
-			outContains: true,
+			name:      "check logout on good host",
+			args:      []string{"registry", "config", tsGoodHost, "--format", "{{.User}}"},
+			expectOut: ``,
 		},
 		{
-			name: "check logout on bad host",
-			args: []string{"registry", "config", tsBadHost},
-			expectOut: fmt.Sprintf(`"hostname": "%s",
-  "credHost": "",`, tsBadHost),
-			outContains: true,
+			name:      "check logout on bad host",
+			args:      []string{"registry", "config", tsBadHost, "--format", "{{.User}}"},
+			expectOut: ``,
 		},
 	}
 	for _, tc := range tt {
@@ -140,8 +133,7 @@ func TestRegistry(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("returned unexpected error: %v", err)
-				return
+				t.Fatalf("returned unexpected error: %v", err)
 			}
 			if (!tc.outContains && out != tc.expectOut) || (tc.outContains && !strings.Contains(out, tc.expectOut)) {
 				t.Errorf("unexpected output, expected %s, received %s", tc.expectOut, out)

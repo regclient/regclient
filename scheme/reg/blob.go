@@ -19,8 +19,9 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient/internal/reghttp"
-	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
+	"github.com/regclient/regclient/types/descriptor"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -29,7 +30,7 @@ var (
 )
 
 // BlobDelete removes a blob from the repository
-func (reg *Reg) BlobDelete(ctx context.Context, r ref.Ref, d types.Descriptor) error {
+func (reg *Reg) BlobDelete(ctx context.Context, r ref.Ref, d descriptor.Descriptor) error {
 	req := &reghttp.Req{
 		Host: r.Registry,
 		APIs: map[string]reghttp.ReqAPI{
@@ -51,7 +52,7 @@ func (reg *Reg) BlobDelete(ctx context.Context, r ref.Ref, d types.Descriptor) e
 }
 
 // BlobGet retrieves a blob from the repository, returning a blob reader
-func (reg *Reg) BlobGet(ctx context.Context, r ref.Ref, d types.Descriptor) (blob.Reader, error) {
+func (reg *Reg) BlobGet(ctx context.Context, r ref.Ref, d descriptor.Descriptor) (blob.Reader, error) {
 	// build/send request
 	req := &reghttp.Req{
 		Host: r.Registry,
@@ -99,7 +100,7 @@ func (reg *Reg) BlobGet(ctx context.Context, r ref.Ref, d types.Descriptor) (blo
 	b := blob.NewReader(
 		blob.WithRef(r),
 		blob.WithReader(resp),
-		blob.WithDesc(types.Descriptor{
+		blob.WithDesc(descriptor.Descriptor{
 			Digest: d.Digest,
 		}),
 		blob.WithResp(resp.HTTPResponse()),
@@ -108,7 +109,7 @@ func (reg *Reg) BlobGet(ctx context.Context, r ref.Ref, d types.Descriptor) (blo
 }
 
 // BlobHead is used to verify if a blob exists and is accessible
-func (reg *Reg) BlobHead(ctx context.Context, r ref.Ref, d types.Descriptor) (blob.Reader, error) {
+func (reg *Reg) BlobHead(ctx context.Context, r ref.Ref, d descriptor.Descriptor) (blob.Reader, error) {
 	// build/send request
 	req := &reghttp.Req{
 		Host: r.Registry,
@@ -156,7 +157,7 @@ func (reg *Reg) BlobHead(ctx context.Context, r ref.Ref, d types.Descriptor) (bl
 
 	b := blob.NewReader(
 		blob.WithRef(r),
-		blob.WithDesc(types.Descriptor{
+		blob.WithDesc(descriptor.Descriptor{
 			Digest: d.Digest,
 		}),
 		blob.WithResp(resp.HTTPResponse()),
@@ -165,11 +166,11 @@ func (reg *Reg) BlobHead(ctx context.Context, r ref.Ref, d types.Descriptor) (bl
 }
 
 // BlobMount attempts to perform a server side copy/mount of the blob between repositories
-func (reg *Reg) BlobMount(ctx context.Context, rSrc ref.Ref, rTgt ref.Ref, d types.Descriptor) error {
-	_, uuid, err := reg.blobMount(ctx, rTgt, d, rSrc)
+func (reg *Reg) BlobMount(ctx context.Context, rSrc ref.Ref, rTgt ref.Ref, d descriptor.Descriptor) error {
+	putURL, _, err := reg.blobMount(ctx, rTgt, d, rSrc)
 	// if mount fails and returns an upload location, cancel that upload
 	if err != nil {
-		_ = reg.blobUploadCancel(ctx, rTgt, uuid)
+		_ = reg.blobUploadCancel(ctx, rTgt, putURL)
 	}
 	return err
 }
@@ -181,7 +182,7 @@ func (reg *Reg) BlobMount(ctx context.Context, rSrc ref.Ref, rTgt ref.Ref, d typ
 // This will attempt an anonymous blob mount first which some registries may support.
 // It will then try doing a full put of the blob without chunking (most widely supported).
 // If the full put fails, it will fall back to a chunked upload (useful for flaky networks).
-func (reg *Reg) BlobPut(ctx context.Context, r ref.Ref, d types.Descriptor, rdr io.Reader) (types.Descriptor, error) {
+func (reg *Reg) BlobPut(ctx context.Context, r ref.Ref, d descriptor.Descriptor, rdr io.Reader) (descriptor.Descriptor, error) {
 	var putURL *url.URL
 	var err error
 	validDesc := (d.Digest != "" && d.Size > 0) || (d.Size == 0 && d.Digest == zeroDig)
@@ -192,7 +193,7 @@ func (reg *Reg) BlobPut(ctx context.Context, r ref.Ref, d types.Descriptor, rdr 
 		if err == nil {
 			return d, nil
 		}
-		if err != types.ErrMountReturnedLocation {
+		if err != errs.ErrMountReturnedLocation {
 			putURL = nil
 		}
 	}
@@ -223,15 +224,21 @@ func (reg *Reg) BlobPut(ctx context.Context, r ref.Ref, d types.Descriptor, rdr 
 		// on failure, attempt to seek back to start to perform a chunked upload
 		rdrSeek, ok := rdr.(io.ReadSeeker)
 		if !ok {
+			_ = reg.blobUploadCancel(ctx, r, putURL)
 			return d, err
 		}
 		offset, errR := rdrSeek.Seek(0, io.SeekStart)
 		if errR != nil || offset != 0 {
+			_ = reg.blobUploadCancel(ctx, r, putURL)
 			return d, err
 		}
 	}
 	// send a chunked upload if full upload not possible or too large
-	return reg.blobPutUploadChunked(ctx, r, d, putURL, rdr)
+	d, err = reg.blobPutUploadChunked(ctx, r, d, putURL, rdr)
+	if err != nil {
+		_ = reg.blobUploadCancel(ctx, r, putURL)
+	}
+	return d, err
 }
 
 func (reg *Reg) blobGetUploadURL(ctx context.Context, r ref.Ref) (*url.URL, error) {
@@ -283,7 +290,7 @@ func (reg *Reg) blobGetUploadURL(ctx context.Context, r ref.Ref) (*url.URL, erro
 	// Extract the location into a new putURL based on whether it's relative, fqdn with a scheme, or without a scheme.
 	location := resp.HTTPResponse().Header.Get("Location")
 	if location == "" {
-		return nil, fmt.Errorf("failed to send blob post, ref %s: %w", r.CommonName(), types.ErrMissingLocation)
+		return nil, fmt.Errorf("failed to send blob post, ref %s: %w", r.CommonName(), errs.ErrMissingLocation)
 	}
 	reg.log.WithFields(logrus.Fields{
 		"location": location,
@@ -301,7 +308,7 @@ func (reg *Reg) blobGetUploadURL(ctx context.Context, r ref.Ref) (*url.URL, erro
 	return putURL, nil
 }
 
-func (reg *Reg) blobMount(ctx context.Context, rTgt ref.Ref, d types.Descriptor, rSrc ref.Ref) (*url.URL, string, error) {
+func (reg *Reg) blobMount(ctx context.Context, rTgt ref.Ref, d descriptor.Descriptor, rSrc ref.Ref) (*url.URL, string, error) {
 	// build/send request
 	query := url.Values{}
 	query.Set("mount", d.Digest.String())
@@ -372,14 +379,14 @@ func (reg *Reg) blobMount(ctx context.Context, rTgt ref.Ref, d types.Descriptor,
 				"err":      err,
 			}).Warn("Mount location header failed to parse")
 		} else {
-			return putURL, uuid, types.ErrMountReturnedLocation
+			return putURL, uuid, errs.ErrMountReturnedLocation
 		}
 	}
 	// all other responses unhandled
 	return nil, "", fmt.Errorf("failed to mount blob, digest %s, ref %s: %w", d.Digest.String(), rTgt.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
 }
 
-func (reg *Reg) blobPutUploadFull(ctx context.Context, r ref.Ref, d types.Descriptor, putURL *url.URL, rdr io.Reader) error {
+func (reg *Reg) blobPutUploadFull(ctx context.Context, r ref.Ref, d descriptor.Descriptor, putURL *url.URL, rdr io.Reader) error {
 	// append digest to request to use the monolithic upload option
 	if putURL.RawQuery != "" {
 		putURL.RawQuery = putURL.RawQuery + "&digest=" + url.QueryEscape(d.Digest.String())
@@ -394,12 +401,11 @@ func (reg *Reg) blobPutUploadFull(ctx context.Context, r ref.Ref, d types.Descri
 		if readOnce {
 			rdrSeek, ok := rdr.(io.ReadSeeker)
 			if !ok {
-				return nil, fmt.Errorf("blob source is not a seeker%.0w", types.ErrNotRetryable)
+				return nil, fmt.Errorf("blob source is not a seeker%.0w", errs.ErrNotRetryable)
 			}
 			_, err := rdrSeek.Seek(0, io.SeekStart)
 			if err != nil {
-				// TODO: after Go 1.19 support is dropped, convert this to multiple errors with %w%.0w
-				return nil, fmt.Errorf("seek on blob source failed: %v%.0w", err, types.ErrNotRetryable)
+				return nil, fmt.Errorf("seek on blob source failed: %w%.0w", err, errs.ErrNotRetryable)
 			}
 		}
 		readOnce = true
@@ -440,7 +446,7 @@ func (reg *Reg) blobPutUploadFull(ctx context.Context, r ref.Ref, d types.Descri
 	return nil
 }
 
-func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, d types.Descriptor, putURL *url.URL, rdr io.Reader) (types.Descriptor, error) {
+func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, d descriptor.Descriptor, putURL *url.URL, rdr io.Reader) (descriptor.Descriptor, error) {
 	host := reg.hostGet(r.Registry)
 	bufSize := host.BlobChunk
 	if bufSize <= 0 {
@@ -529,7 +535,7 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, d types.Des
 				NoMirrors: true,
 			}
 			resp, err := reg.reghttp.Do(ctx, req)
-			if err != nil && !errors.Is(err, types.ErrHTTPStatus) && !errors.Is(err, types.ErrNotFound) {
+			if err != nil && !errors.Is(err, errs.ErrHTTPStatus) && !errors.Is(err, errs.ErrNotFound) {
 				return d, fmt.Errorf("failed to send blob (chunk), ref %s: http do: %w", r.CommonName(), err)
 			}
 			err = resp.Close()
@@ -591,10 +597,10 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, d types.Des
 	// compute digest
 	dOut := digester.Digest()
 	if d.Digest != "" && dOut != d.Digest {
-		return d, fmt.Errorf("%w, expected %s, computed %s", types.ErrDigestMismatch, d.Digest.String(), dOut.String())
+		return d, fmt.Errorf("%w, expected %s, computed %s", errs.ErrDigestMismatch, d.Digest.String(), dOut.String())
 	}
 	if d.Size != 0 && chunkStart != d.Size {
-		return d, fmt.Errorf("blob content size does not match descriptor, expected %d, received %d%.0w", d.Size, chunkStart, types.ErrMismatch)
+		return d, fmt.Errorf("blob content size does not match descriptor, expected %d, received %d%.0w", d.Size, chunkStart, errs.ErrMismatch)
 	}
 	d.Digest = dOut
 	d.Size = chunkStart
@@ -636,10 +642,10 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, d types.Des
 	return d, nil
 }
 
-// TODO: just take a putURL rather than the uuid and call a delete on that url
-func (reg *Reg) blobUploadCancel(ctx context.Context, r ref.Ref, uuid string) error {
-	if uuid == "" {
-		return fmt.Errorf("failed to cancel upload %s: uuid undefined", r.CommonName())
+// blobUploadCancel stops an upload, releasing resources on the server.
+func (reg *Reg) blobUploadCancel(ctx context.Context, r ref.Ref, putURL *url.URL) error {
+	if putURL == nil {
+		return fmt.Errorf("failed to cancel upload %s: url undefined", r.CommonName())
 	}
 	req := &reghttp.Req{
 		Host:      r.Registry,
@@ -648,7 +654,7 @@ func (reg *Reg) blobUploadCancel(ctx context.Context, r ref.Ref, uuid string) er
 			"": {
 				Method:     "DELETE",
 				Repository: r.Repository,
-				Path:       "blobs/uploads/" + uuid,
+				DirectURL:  putURL,
 			},
 		},
 	}
@@ -678,7 +684,7 @@ func (reg *Reg) blobUploadStatus(ctx context.Context, r ref.Ref, putURL *url.URL
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get upload status: %v", err)
+		return nil, fmt.Errorf("failed to get upload status: %w", err)
 	}
 	defer resp.Close()
 	if resp.HTTPResponse().StatusCode != 204 {

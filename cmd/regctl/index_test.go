@@ -14,8 +14,7 @@ func TestIndex(t *testing.T) {
 	// create index with 2 platforms from test repo
 	out, err := cobraTest(t, nil, "index", "create", "--ref", srcRef, "--platform", "linux/amd64", "--platform", "linux/arm/v7", latestRef)
 	if err != nil {
-		t.Errorf("failed to run index create: %v", err)
-		return
+		t.Fatalf("failed to run index create: %v", err)
 	}
 	if out != "" {
 		t.Errorf("unexpected output: %s", out)
@@ -41,8 +40,7 @@ func TestIndex(t *testing.T) {
 	// add artifact with referrers
 	out, err = cobraTest(t, nil, "index", "add", "--ref", srcRef, "--platform", "linux/arm64", "--referrers", "--digest-tags", latestRef)
 	if err != nil {
-		t.Errorf("failed to run index add: %v", err)
-		return
+		t.Fatalf("failed to run index add: %v", err)
 	}
 	if out != "" {
 		t.Errorf("unexpected output: %s", out)
@@ -64,8 +62,7 @@ func TestIndex(t *testing.T) {
 	testArtifactType := "application/example.test"
 	out, err = cobraTest(t, nil, "index", "create", artifactRef, "--subject", "latest", "--artifact-type", testArtifactType, "--ref", srcRef)
 	if err != nil {
-		t.Errorf("failed to run index create for artifact: %v", err)
-		return
+		t.Fatalf("failed to run index create for artifact: %v", err)
 	}
 	if out != "" {
 		t.Errorf("unexpected output: %s", out)

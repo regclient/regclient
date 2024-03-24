@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 )
 
 func TestNew(t *testing.T) {
@@ -56,7 +56,7 @@ func TestNew(t *testing.T) {
 				WithHeaders(registryHeaders),
 				WithMT("application/unknown"),
 			},
-			err: types.ErrUnsupportedMediaType,
+			err: errs.ErrUnsupportedMediaType,
 		},
 	}
 
@@ -70,13 +70,11 @@ func TestNew(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("error creating tag list: %v", err)
-				return
+				t.Fatalf("error creating tag list: %v", err)
 			}
 			raw, err := rl.RawBody()
 			if err != nil {
-				t.Errorf("error from RawBody: %v", err)
-				return
+				t.Fatalf("error from RawBody: %v", err)
 			}
 			if !bytes.Equal(tt.raw, raw) {
 				t.Errorf("unexpected raw body: expected %s, received %s", tt.raw, raw)

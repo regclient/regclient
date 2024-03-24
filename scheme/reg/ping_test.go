@@ -15,7 +15,7 @@ import (
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/reqresp"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -126,8 +126,7 @@ func TestPing(t *testing.T) {
 	t.Run("Okay", func(t *testing.T) {
 		r, err := ref.NewHost(tsOkayHost)
 		if err != nil {
-			t.Errorf("failed to create ref \"%s\": %v", tsOkayHost, err)
-			return
+			t.Fatalf("failed to create ref \"%s\": %v", tsOkayHost, err)
 		}
 		result, err := reg.Ping(ctx, r)
 		if err != nil {
@@ -142,15 +141,13 @@ func TestPing(t *testing.T) {
 	t.Run("Unauth", func(t *testing.T) {
 		r, err := ref.NewHost(tsUnauthHost)
 		if err != nil {
-			t.Errorf("failed to create ref \"%s\": %v", tsUnauthHost, err)
-			return
+			t.Fatalf("failed to create ref \"%s\": %v", tsUnauthHost, err)
 		}
 		result, err := reg.Ping(ctx, r)
 		if err == nil {
-			t.Errorf("ping did not fail")
-			return
-		} else if !errors.Is(err, types.ErrHTTPUnauthorized) {
-			t.Errorf("unexpected error, expected %v, received %v", types.ErrHTTPUnauthorized, err)
+			t.Fatalf("ping did not fail")
+		} else if !errors.Is(err, errs.ErrHTTPUnauthorized) {
+			t.Fatalf("unexpected error, expected %v, received %v", errs.ErrHTTPUnauthorized, err)
 		}
 		if result.Header == nil {
 			t.Errorf("headers missing")
@@ -161,16 +158,13 @@ func TestPing(t *testing.T) {
 	t.Run("NotFound", func(t *testing.T) {
 		r, err := ref.NewHost(tsNotFoundHost)
 		if err != nil {
-			t.Errorf("failed to create ref \"%s\": %v", tsNotFoundHost, err)
-			return
+			t.Fatalf("failed to create ref \"%s\": %v", tsNotFoundHost, err)
 		}
 		result, err := reg.Ping(ctx, r)
 		if err == nil {
-			t.Errorf("ping did not fail")
-			return
-		} else if !errors.Is(err, types.ErrNotFound) {
-			t.Errorf("unexpected error, expected %v, received %v", types.ErrNotFound, err)
-			return
+			t.Fatalf("ping did not fail")
+		} else if !errors.Is(err, errs.ErrNotFound) {
+			t.Fatalf("unexpected error, expected %v, received %v", errs.ErrNotFound, err)
 		}
 		if result.Header == nil {
 			t.Errorf("headers missing")

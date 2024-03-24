@@ -11,8 +11,9 @@ import (
 	"github.com/opencontainers/go-digest"
 
 	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
+	"github.com/regclient/regclient/types/descriptor"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/ref"
@@ -33,13 +34,14 @@ type dagConfig struct {
 	stepsLayerFile []func(context.Context, *regclient.RegClient, ref.Ref, ref.Ref, *dagLayer, *tar.Header, io.Reader) (*tar.Header, io.Reader, changes, error)
 	maxDataSize    int64
 	rTgt           ref.Ref
+	forceLayerWalk bool
 }
 
 type dagManifest struct {
 	mod       changes
 	top       bool // indicates the top level manifest (needed for manifest lists)
-	origDesc  types.Descriptor
-	newDesc   types.Descriptor
+	origDesc  descriptor.Descriptor
+	newDesc   descriptor.Descriptor
 	m         manifest.Manifest
 	config    *dagOCIConfig
 	layers    []*dagLayer
@@ -49,18 +51,19 @@ type dagManifest struct {
 
 type dagOCIConfig struct {
 	modified bool
-	newDesc  types.Descriptor
+	newDesc  descriptor.Descriptor
 	oc       blob.OCIConfig
 }
 
 type dagLayer struct {
 	mod      changes
-	newDesc  types.Descriptor
+	newDesc  descriptor.Descriptor
 	ucDigest digest.Digest // uncompressed descriptor
-	desc     types.Descriptor
+	desc     descriptor.Descriptor
+	rSrc     ref.Ref
 }
 
-func dagGet(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, d types.Descriptor) (*dagManifest, error) {
+func dagGet(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, d descriptor.Descriptor) (*dagManifest, error) {
 	var err error
 	getOpts := []regclient.ManifestOpts{}
 	if d.Digest != "" {
@@ -90,7 +93,7 @@ func dagGet(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, d types.
 		// pull config
 		doc := dagOCIConfig{}
 		cd, err := mi.GetConfig()
-		if err != nil && !errors.Is(err, types.ErrUnsupportedMediaType) {
+		if err != nil && !errors.Is(err, errs.ErrUnsupportedMediaType) {
 			return nil, err
 		} else if err == nil && inListStr(cd.MediaType, mtWLConfig) {
 			oc, err := rc.BlobGetOCIConfig(ctx, rSrc, cd)
@@ -170,7 +173,7 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rT
 				}
 				// set data field
 				d.Data = mBytes
-			} else if d.Size > mc.maxDataSize && len(d.Data) > 0 {
+			} else if mc.maxDataSize >= 0 && d.Size > mc.maxDataSize && len(d.Data) > 0 {
 				// strip data fields if above max size
 				d.Data = []byte{}
 			}
@@ -255,7 +258,7 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rT
 				}
 				// set data field
 				d.Data = bBytes
-			} else if d.Size > mc.maxDataSize && len(d.Data) > 0 {
+			} else if mc.maxDataSize >= 0 && d.Size > mc.maxDataSize && len(d.Data) > 0 {
 				// strip data fields if above max size
 				d.Data = []byte{}
 			}
@@ -324,9 +327,10 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rT
 			dm.config.oc.SetConfig(oc)
 			dm.config.modified = true
 		}
+		var cBytes []byte
 		if dm.config != nil {
 			dm.config.newDesc = dm.config.oc.GetDescriptor()
-			cBytes, err := dm.config.oc.RawBody()
+			cBytes, err = dm.config.oc.RawBody()
 			if err != nil {
 				return err
 			}
@@ -346,23 +350,35 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rT
 					return err
 				}
 			}
-			// handle config data field
-			if ociM.Config.Size <= mc.maxDataSize || (mc.maxDataSize < 0 && len(ociM.Config.Data) > 0) {
-				if !bytes.Equal(ociM.Config.Data, cBytes) {
-					ociM.Config.Data = cBytes
-					changed = true
-				}
-			} else if ociM.Config.Size > mc.maxDataSize && len(ociM.Config.Data) > 0 {
-				// strip data fields if above max size
-				ociM.Config.Data = []byte{}
-				changed = true
-			}
 		}
 		if dm.config == nil && ociM.Config.Digest != "" && !ref.EqualRepository(rSrc, rTgt) {
 			err = rc.BlobCopy(ctx, rSrc, rTgt, ociM.Config)
 			if err != nil {
 				return err
 			}
+		}
+		// handle config data field
+		if ociM.Config.Size <= mc.maxDataSize || (mc.maxDataSize < 0 && len(ociM.Config.Data) > 0) {
+			// if config was not loaded into memory (e.g. artifact), load it now
+			if cBytes == nil {
+				cRdr, err := rc.BlobGet(ctx, rTgt, ociM.Config)
+				if err != nil {
+					return err
+				}
+				cBytes, err = io.ReadAll(cRdr)
+				_ = cRdr.Close()
+				if err != nil {
+					return err
+				}
+			}
+			if !bytes.Equal(ociM.Config.Data, cBytes) {
+				ociM.Config.Data = cBytes
+				changed = true
+			}
+		} else if mc.maxDataSize >= 0 && ociM.Config.Size > mc.maxDataSize && len(ociM.Config.Data) > 0 {
+			// strip data fields if above max size
+			ociM.Config.Data = []byte{}
+			changed = true
 		}
 
 		if changed {
@@ -383,29 +399,32 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rT
 	if dm.mod == replaced || dm.mod == added {
 		dm.newDesc = dm.m.GetDescriptor()
 	}
-	for i := range dm.referrers {
-		if dm.referrers[i].mod == deleted || !(dm.mod == replaced || dm.mod == added || dm.referrers[i].mod == added) {
-			continue
+	if ref.EqualRepository(rSrc, rTgt) {
+		// only update referrers when modifying a manifest in the same repository
+		for i := range dm.referrers {
+			if dm.referrers[i].mod == deleted || !(dm.mod == replaced || dm.mod == added || dm.referrers[i].mod == added) {
+				continue
+			}
+			sm, ok := dm.referrers[i].m.(manifest.Subjecter)
+			if !ok {
+				return fmt.Errorf("referrer does not support subject field, mt=%s", dm.referrers[i].m.GetDescriptor().MediaType)
+			}
+			d := dm.m.GetDescriptor()
+			err = sm.SetSubject(&d)
+			if err != nil {
+				return fmt.Errorf("failed to set subject: %w", err)
+			}
+			if dm.referrers[i].mod == unchanged {
+				dm.referrers[i].mod = replaced
+			}
+			dm.referrers[i].newDesc = dm.referrers[i].m.GetDescriptor()
 		}
-		sm, ok := dm.referrers[i].m.(manifest.Subjecter)
-		if !ok {
-			return fmt.Errorf("referrer does not support subject field, mt=%s", dm.referrers[i].m.GetDescriptor().MediaType)
-		}
-		d := dm.m.GetDescriptor()
-		err = sm.SetSubject(&d)
-		if err != nil {
-			return fmt.Errorf("failed to set subject: %w", err)
-		}
-		if dm.referrers[i].mod == unchanged {
-			dm.referrers[i].mod = replaced
-		}
-		dm.referrers[i].newDesc = dm.referrers[i].m.GetDescriptor()
-	}
-	// recursively push referrers
-	for _, child := range dm.referrers {
-		err = dagPut(ctx, rc, mc, rSrc, rTgt, child)
-		if err != nil {
-			return err
+		// recursively push referrers
+		for _, child := range dm.referrers {
+			err = dagPut(ctx, rc, mc, rSrc, rTgt, child)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	// push manifest
@@ -418,7 +437,11 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rT
 		}
 		if rPut.Tag == "" {
 			// push by digest
-			rPut.Digest = dm.newDesc.Digest.String()
+			if dm.newDesc.Digest != "" {
+				rPut.Digest = dm.newDesc.Digest.String()
+			} else {
+				rPut.Digest = dm.origDesc.Digest.String()
+			}
 		} else {
 			// push by tag
 			rPut.Digest = ""

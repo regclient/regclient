@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/repo"
 )
 
@@ -19,7 +19,7 @@ type repoLister interface {
 func (rc *RegClient) RepoList(ctx context.Context, hostname string, opts ...scheme.RepoOpts) (*repo.RepoList, error) {
 	i := strings.Index(hostname, "/")
 	if i > 0 {
-		return nil, fmt.Errorf("invalid hostname: %s%.0w", hostname, types.ErrParsingFailed)
+		return nil, fmt.Errorf("invalid hostname: %s%.0w", hostname, errs.ErrParsingFailed)
 	}
 	schemeAPI, err := rc.schemeGet("reg")
 	if err != nil {
@@ -27,7 +27,7 @@ func (rc *RegClient) RepoList(ctx context.Context, hostname string, opts ...sche
 	}
 	rl, ok := schemeAPI.(repoLister)
 	if !ok {
-		return nil, types.ErrNotImplemented
+		return nil, errs.ErrNotImplemented
 	}
 	return rl.RepoList(ctx, hostname, opts...)
 }

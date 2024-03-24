@@ -9,6 +9,11 @@ files:
       - git-tag-gcr
       - git-commit-lunajson
       - git-commit-semver
+  "build/oci-image.sh":
+    scans:
+      - shell-alpine-tag
+      - shell-alpine-tag-comment
+      - shell-alpine-digest
   ".github/workflows/*.yml":
     scans:
       - gha-golang-matrix
@@ -18,6 +23,9 @@ files:
       - gha-uses-commit
       - gha-syft-version
       - gha-cosign-version
+      - gha-alpine-tag
+      - gha-alpine-tag-comment
+      - gha-alpine-digest
   "Makefile":
     scans:
       - makefile-gomajor
@@ -29,6 +37,8 @@ files:
       - makefile-syft-version
       - makefile-syft-version2
       - makefile-syft-digest
+      - makefile-ci-distribution
+      - makefile-ci-zot
   "go.mod":
     scans:
       - go-mod-golang-release
@@ -38,13 +48,13 @@ scans:
     type: "regexp"
     source: "registry-tag-arg-semver"
     args:
-      regexp: '^ARG ALPINE_VER=(?P<Version>[\d+\.\d+\.\d+]+)@(?P<SHA>sha256:[0-9a-f]+)\s*$'
+      regexp: '^ARG ALPINE_VER=(?P<Version>\d+\.\d+\.\d+)@(?P<SHA>sha256:[0-9a-f]+)\s*$'
       repo: "docker.io/library/alpine"
   docker-arg-alpine-digest:
     type: "regexp"
-    source: "registry-digest-arg"
+    source: "registry-digest-arg-match"
     args:
-      regexp: '^ARG ALPINE_VER=(?P<Tag>[\d+\.\d+\.\d+]+)@(?P<Version>sha256:[0-9a-f]+)\s*$'
+      regexp: '^ARG ALPINE_VER=(?P<Tag>\d+\.\d+\.\d+)@(?P<Version>sha256:[0-9a-f]+)\s*$'
       image: "docker.io/library/alpine"
   docker-arg-go-tag:
     type: "regexp"
@@ -54,7 +64,7 @@ scans:
       repo: "docker.io/library/golang"
   docker-arg-go-digest:
     type: "regexp"
-    source: "registry-digest-arg"
+    source: "registry-digest-arg-match"
     args:
       regexp: '^ARG GO_VER=(?P<Tag>[a-z0-9\-\.]+)@(?P<Version>sha256:[0-9a-f]+)\s*$'
       image: "docker.io/library/golang"
@@ -123,11 +133,41 @@ scans:
     args:
       regexp: '^\s*cosign-release: "(?P<Version>v[0-9\.]+)"\s*$'
       repo: "github.com/sigstore/cosign"
+  gha-alpine-tag:
+    type: "regexp"
+    source: "registry-tag-arg-semver-major"
+    args:
+      regexp: '^\s*ALPINE_NAME: "alpine:(?P<Version>\d+)"\s*$'
+      repo: "docker.io/library/alpine"
+  gha-alpine-tag-comment:
+    type: "regexp"
+    source: "registry-tag-arg-semver"
+    args:
+      regexp: '^\s*ALPINE_DIGEST: "(?P<Digest>sha256:[0-9a-f]+)"\s*#\s*(?P<Version>\d+\.\d+\.\d+)\s*$'
+      repo: "docker.io/library/alpine"
+  gha-alpine-digest:
+    type: "regexp"
+    source: "registry-digest-arg-match"
+    args:
+      regexp: '^\s*ALPINE_DIGEST: "(?P<Version>sha256:[0-9a-f]+)"\s*#\s*(?P<Tag>\d+\.\d+\.\d+)\s*$'
+      image: "docker.io/library/alpine"
   go-mod-golang-release:
     type: "regexp"
     source: "registry-golang-oldest"
     args:
       regexp: '^go (?P<Version>[0-9\.]+)\s*$'
+  makefile-ci-distribution:
+    type: "regexp"
+    source: "registry-tag-arg-semver"
+    args:
+      regexp: '^CI_DISTRIBUTION_VER\?=(?P<Version>v?[0-9\.]+)\s*$'
+      repo: "docker.io/library/registry"
+  makefile-ci-zot:
+    type: "regexp"
+    source: "registry-tag-arg-semver"
+    args:
+      regexp: '^CI_ZOT_VER\?=(?P<Version>v?[0-9\.]+)\s*$'
+      repo: "ghcr.io/project-zot/zot-linux-amd64"
   makefile-gomajor:
     type: "regexp"
     source: "git-tag-semver"
@@ -180,6 +220,24 @@ scans:
     source: "registry-digest-match"
     args:
       regexp: '^SYFT_CONTAINER\?=(?P<Image>[^:]*):(?P<Tag>v[0-9\.]+)@(?P<Version>sha256:[0-9a-f]+)\s*$'
+  shell-alpine-tag:
+    type: "regexp"
+    source: "registry-tag-arg-semver-major"
+    args:
+      regexp: '^\s*ALPINE_NAME="alpine:(?P<Version>\d+)"\s*$'
+      repo: "docker.io/library/alpine"
+  shell-alpine-tag-comment:
+    type: "regexp"
+    source: "registry-tag-arg-semver"
+    args:
+      regexp: '^\s*ALPINE_DIGEST="(?P<Digest>sha256:[0-9a-f]+)"\s*#\s*(?P<Version>\d+\.\d+\.\d+)\s*$'
+      repo: "docker.io/library/alpine"
+  shell-alpine-digest:
+    type: "regexp"
+    source: "registry-digest-arg-match"
+    args:
+      regexp: '^\s*ALPINE_DIGEST="(?P<Version>sha256:[0-9a-f]+)"\s*#\s*(?P<Tag>\d+\.\d+\.\d+)\s*$'
+      image: "docker.io/library/alpine"
 
 sources:
   registry-tag-arg-semver:
@@ -192,6 +250,17 @@ sources:
       expr: '^v?[0-9]+\.[0-9]+\.[0-9]+$'
     sort:
       method: "semver"
+  registry-tag-arg-semver-major:
+    type: "registry"
+    key: "{{ .ScanArgs.repo }}"
+    args:
+      type: "tag"
+      repo: "{{ .ScanArgs.repo }}"
+    filter:
+      expr: '^v?[0-9]+\.[0-9]+\.[0-9]+$'
+    sort:
+      method: "semver"
+    template: '{{ index ( split .Version "." ) 0 }}'
   registry-tag-match-semver:
     type: "registry"
     key: "{{ .ScanMatch.Repo }}"
@@ -202,7 +271,7 @@ sources:
       expr: '^v?[0-9]+\.[0-9]+\.[0-9]+$'
     sort:
       method: "semver"
-  registry-digest-arg:
+  registry-digest-arg-match:
     type: "registry"
     key: "{{ .ScanArgs.image }}:{{.ScanMatch.Tag}}"
     args:

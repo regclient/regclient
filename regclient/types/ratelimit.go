@@ -10,4 +10,6 @@ import (
 )
 
 // RateLimit is returned from some http requests
+//
+// Deprecated: replace with [types.RateLimit].
 type RateLimit = topTypes.RateLimit

@@ -17,7 +17,7 @@ import (
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/reqresp"
 	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 )
 
 func TestRepo(t *testing.T) {
@@ -169,8 +169,7 @@ func TestRepo(t *testing.T) {
 		host := u.Host
 		rl, err := reg.RepoList(ctx, host)
 		if err != nil {
-			t.Errorf("error listing repos: %v", err)
-			return
+			t.Fatalf("error listing repos: %v", err)
 		}
 		rlRepos, err := rl.GetRepos()
 		if err != nil {
@@ -185,8 +184,7 @@ func TestRepo(t *testing.T) {
 		host := u.Host
 		rl, err := reg.RepoList(ctx, host)
 		if err != nil {
-			t.Errorf("error listing repos: %v", err)
-			return
+			t.Fatalf("error listing repos: %v", err)
 		}
 		rlRepos, err := rl.GetRepos()
 		if err != nil {
@@ -201,8 +199,7 @@ func TestRepo(t *testing.T) {
 		host := u.Host
 		rl, err := reg.RepoList(ctx, host, scheme.WithRepoLimit(partialLen))
 		if err != nil {
-			t.Errorf("error listing repos: %v", err)
-			return
+			t.Fatalf("error listing repos: %v", err)
 		}
 		rlRepos, err := rl.GetRepos()
 		if err != nil {
@@ -213,8 +210,7 @@ func TestRepo(t *testing.T) {
 
 		rl, err = reg.RepoList(ctx, host, scheme.WithRepoLast(rlRepos[len(rlRepos)-1]))
 		if err != nil {
-			t.Errorf("error listing repos: %v", err)
-			return
+			t.Fatalf("error listing repos: %v", err)
 		}
 		rlRepos, err = rl.GetRepos()
 		if err != nil {
@@ -231,8 +227,8 @@ func TestRepo(t *testing.T) {
 		_, err := reg.RepoList(ctx, host)
 		if err == nil {
 			t.Errorf("unexpected success listing repos on disabled registry")
-		} else if !errors.Is(err, types.ErrHTTPStatus) {
-			t.Errorf("unexpected error: expected %v, received %v", types.ErrHTTPStatus, err)
+		} else if !errors.Is(err, errs.ErrHTTPStatus) {
+			t.Errorf("unexpected error: expected %v, received %v", errs.ErrHTTPStatus, err)
 		}
 	})
 	// test with unknown media-type header
@@ -242,8 +238,8 @@ func TestRepo(t *testing.T) {
 		_, err := reg.RepoList(ctx, host)
 		if err == nil {
 			t.Errorf("unexpected success listing repos on unknown-mt registry")
-		} else if !errors.Is(err, types.ErrUnsupportedMediaType) {
-			t.Errorf("unexpected error: expected %v, received %v", types.ErrUnsupportedMediaType, err)
+		} else if !errors.Is(err, errs.ErrUnsupportedMediaType) {
+			t.Errorf("unexpected error: expected %v, received %v", errs.ErrUnsupportedMediaType, err)
 		}
 	})
 	// test with parsing errors
@@ -261,8 +257,7 @@ func TestRepo(t *testing.T) {
 		host := u.Host
 		rl, err := reg.RepoList(ctx, host+"/path")
 		if err != nil {
-			t.Errorf("error listing repos: %v", err)
-			return
+			t.Fatalf("error listing repos: %v", err)
 		}
 		rlRepos, err := rl.GetRepos()
 		if err != nil {

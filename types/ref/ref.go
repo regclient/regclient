@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 )
 
 const (
@@ -74,9 +74,9 @@ func New(parse string) (Ref, error) {
 		matchRef := refRE.FindStringSubmatch(tail)
 		if matchRef == nil || len(matchRef) < 5 {
 			if refRE.FindStringSubmatch(strings.ToLower(tail)) != nil {
-				return Ref{}, fmt.Errorf("%w \"%s\", repo must be lowercase", types.ErrInvalidReference, tail)
+				return Ref{}, fmt.Errorf("%w \"%s\", repo must be lowercase", errs.ErrInvalidReference, tail)
 			}
-			return Ref{}, fmt.Errorf("%w \"%s\"", types.ErrInvalidReference, tail)
+			return Ref{}, fmt.Errorf("%w \"%s\"", errs.ErrInvalidReference, tail)
 		}
 		ret.Registry = matchRef[1]
 		ret.Repository = matchRef[2]
@@ -100,13 +100,13 @@ func New(parse string) (Ref, error) {
 			ret.Tag = "latest"
 		}
 		if ret.Repository == "" {
-			return Ref{}, fmt.Errorf("%w \"%s\"", types.ErrInvalidReference, tail)
+			return Ref{}, fmt.Errorf("%w \"%s\"", errs.ErrInvalidReference, tail)
 		}
 
 	case "ocidir", "ocifile":
 		matchPath := ocidirRE.FindStringSubmatch(tail)
 		if matchPath == nil || len(matchPath) < 2 || matchPath[1] == "" {
-			return Ref{}, fmt.Errorf("%w, invalid path for scheme \"%s\": %s", types.ErrInvalidReference, scheme, tail)
+			return Ref{}, fmt.Errorf("%w, invalid path for scheme \"%s\": %s", errs.ErrInvalidReference, scheme, tail)
 		}
 		ret.Path = matchPath[1]
 		if len(matchPath) > 2 && matchPath[2] != "" {
@@ -117,7 +117,7 @@ func New(parse string) (Ref, error) {
 		}
 
 	default:
-		return Ref{}, fmt.Errorf("%w, unknown scheme \"%s\" in \"%s\"", types.ErrInvalidReference, scheme, parse)
+		return Ref{}, fmt.Errorf("%w, unknown scheme \"%s\" in \"%s\"", errs.ErrInvalidReference, scheme, parse)
 	}
 	return ret, nil
 }
@@ -141,22 +141,22 @@ func NewHost(parse string) (Ref, error) {
 		ret.Scheme = "reg"
 		matchReg := registryRE.FindStringSubmatch(tail)
 		if matchReg == nil || len(matchReg) < 2 {
-			return Ref{}, fmt.Errorf("%w \"%s\"", types.ErrParsingFailed, tail)
+			return Ref{}, fmt.Errorf("%w \"%s\"", errs.ErrParsingFailed, tail)
 		}
 		ret.Registry = matchReg[1]
 		if ret.Registry == "" {
-			return Ref{}, fmt.Errorf("%w \"%s\"", types.ErrParsingFailed, tail)
+			return Ref{}, fmt.Errorf("%w \"%s\"", errs.ErrParsingFailed, tail)
 		}
 
 	case "ocidir", "ocifile":
 		matchPath := ocidirRE.FindStringSubmatch(tail)
 		if matchPath == nil || len(matchPath) < 2 || matchPath[1] == "" {
-			return Ref{}, fmt.Errorf("%w, invalid path for scheme \"%s\": %s", types.ErrParsingFailed, scheme, tail)
+			return Ref{}, fmt.Errorf("%w, invalid path for scheme \"%s\": %s", errs.ErrParsingFailed, scheme, tail)
 		}
 		ret.Path = matchPath[1]
 
 	default:
-		return Ref{}, fmt.Errorf("%w, unknown scheme \"%s\" in \"%s\"", types.ErrParsingFailed, scheme, parse)
+		return Ref{}, fmt.Errorf("%w, unknown scheme \"%s\" in \"%s\"", errs.ErrParsingFailed, scheme, parse)
 	}
 	return ret, nil
 }

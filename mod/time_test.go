@@ -13,8 +13,7 @@ func TestTimeNow(t *testing.T) {
 		if envIsSet {
 			err := os.Unsetenv(epocEnv)
 			if err != nil {
-				t.Errorf("failed to unset %s", epocEnv)
-				return
+				t.Fatalf("failed to unset %s", epocEnv)
 			}
 			defer os.Setenv(epocEnv, curEnv)
 		}

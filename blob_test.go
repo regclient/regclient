@@ -13,13 +13,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/opencontainers/go-digest"
 	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/reqresp"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -183,18 +183,16 @@ func TestBlobGet(t *testing.T) {
 	t.Run("Get", func(t *testing.T) {
 		ref, err := ref.New(tsURL.Host + blobRepo)
 		if err != nil {
-			t.Errorf("Failed creating ref: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
-		br, err := rc.BlobGet(ctx, ref, types.Descriptor{Digest: d1, Size: int64(len(blob1))})
+		br, err := rc.BlobGet(ctx, ref, descriptor.Descriptor{Digest: d1, Size: int64(len(blob1))})
 		if err != nil {
-			t.Errorf("Failed running BlobGet: %v", err)
-			return
+			t.Fatalf("Failed running BlobGet: %v", err)
 		}
 		defer br.Close()
 		brBlob, err := io.ReadAll(br)
 		if err != nil {
-			t.Errorf("Failed reading blob: %v", err)
-			return
+			t.Fatalf("Failed reading blob: %v", err)
 		}
 		if !bytes.Equal(blob1, brBlob) {
 			t.Errorf("Blob does not match")
@@ -205,23 +203,21 @@ func TestBlobGet(t *testing.T) {
 	t.Run("Data", func(t *testing.T) {
 		ref, err := ref.New(tsURL.Host + blobRepo + "/data")
 		if err != nil {
-			t.Errorf("Failed creating ref: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
-		desc := types.Descriptor{
+		desc := descriptor.Descriptor{
 			Digest: d1,
 			Size:   int64(len(blob1)),
 			Data:   blob1,
 		}
 		br, err := rc.BlobGet(ctx, ref, desc)
 		if err != nil {
-			t.Errorf("Failed running BlobGet: %v", err)
-			return
+			t.Fatalf("Failed running BlobGet: %v", err)
 		}
 		defer br.Close()
 		brBlob, err := io.ReadAll(br)
 		if err != nil {
-			t.Errorf("Failed reading blob: %v", err)
-			return
+			t.Fatalf("Failed reading blob: %v", err)
 		}
 		if !bytes.Equal(blob1, brBlob) {
 			t.Errorf("Blob does not match")
@@ -231,12 +227,11 @@ func TestBlobGet(t *testing.T) {
 	t.Run("Head", func(t *testing.T) {
 		ref, err := ref.New(tsURL.Host + blobRepo)
 		if err != nil {
-			t.Errorf("Failed creating ref: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
-		br, err := rc.BlobHead(ctx, ref, types.Descriptor{Digest: d1})
+		br, err := rc.BlobHead(ctx, ref, descriptor.Descriptor{Digest: d1})
 		if err != nil {
-			t.Errorf("Failed running BlobHead: %v", err)
-			return
+			t.Fatalf("Failed running BlobHead: %v", err)
 		}
 		defer br.Close()
 		if br.GetDescriptor().Size != int64(blobLen) {
@@ -247,15 +242,14 @@ func TestBlobGet(t *testing.T) {
 	t.Run("Missing", func(t *testing.T) {
 		ref, err := ref.New(tsURL.Host + blobRepo)
 		if err != nil {
-			t.Errorf("Failed creating ref: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
-		br, err := rc.BlobGet(ctx, ref, types.Descriptor{Digest: dMissing})
+		br, err := rc.BlobGet(ctx, ref, descriptor.Descriptor{Digest: dMissing})
 		if err == nil {
 			defer br.Close()
-			t.Errorf("Unexpected success running BlobGet")
-			return
+			t.Fatalf("Unexpected success running BlobGet")
 		}
-		if !errors.Is(err, types.ErrNotFound) {
+		if !errors.Is(err, errs.ErrNotFound) {
 			t.Errorf("Error does not match \"ErrNotFound\": %v", err)
 		}
 	})
@@ -263,18 +257,16 @@ func TestBlobGet(t *testing.T) {
 	t.Run("Retry", func(t *testing.T) {
 		ref, err := ref.New(tsURL.Host + blobRepo)
 		if err != nil {
-			t.Errorf("Failed creating ref: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
-		br, err := rc.BlobGet(ctx, ref, types.Descriptor{Digest: d2})
+		br, err := rc.BlobGet(ctx, ref, descriptor.Descriptor{Digest: d2})
 		if err != nil {
-			t.Errorf("Failed running BlobGet: %v", err)
-			return
+			t.Fatalf("Failed running BlobGet: %v", err)
 		}
 		defer br.Close()
 		brBlob, err := io.ReadAll(br)
 		if err != nil {
-			t.Errorf("Failed reading blob: %v", err)
-			return
+			t.Fatalf("Failed reading blob: %v", err)
 		}
 		if !bytes.Equal(blob2, brBlob) {
 			t.Errorf("Blob does not match")
@@ -284,15 +276,14 @@ func TestBlobGet(t *testing.T) {
 	t.Run("Forbidden", func(t *testing.T) {
 		ref, err := ref.New(tsURL.Host + privateRepo)
 		if err != nil {
-			t.Errorf("Failed creating ref: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
-		br, err := rc.BlobGet(ctx, ref, types.Descriptor{Digest: d1})
+		br, err := rc.BlobGet(ctx, ref, descriptor.Descriptor{Digest: d1})
 		if err == nil {
-			defer br.Close()
-			t.Errorf("Unexpected success running BlobGet")
-			return
+			br.Close()
+			t.Fatalf("Unexpected success running BlobGet")
 		}
-		if !errors.Is(err, types.ErrHTTPUnauthorized) {
+		if !errors.Is(err, errs.ErrHTTPUnauthorized) {
 			t.Errorf("Error does not match \"ErrUnauthorized\": %v", err)
 		}
 	})
@@ -311,11 +302,11 @@ func TestBlobPut(t *testing.T) {
 	blobLen := 1024  // must be blobChunk < blobLen <= blobChunk * 2
 	blobLen3 := 1000 // blob without a full final chunk
 	d1, blob1 := reqresp.NewRandomBlob(blobLen, seed)
-	uuid1 := uuid.New()
 	d2, blob2 := reqresp.NewRandomBlob(blobLen, seed+1)
-	uuid2 := uuid.New()
 	d3, blob3 := reqresp.NewRandomBlob(blobLen3, seed+2)
-	uuid3 := uuid.New()
+	uuid1 := reqresp.NewRandomID(seed + 3)
+	uuid2 := reqresp.NewRandomID(seed + 4)
+	uuid3 := reqresp.NewRandomID(seed + 5)
 	// dMissing := digest.FromBytes([]byte("missing"))
 	// define req/resp entries
 	rrs := []reqresp.ReqResp{
@@ -333,7 +324,7 @@ func TestBlobPut(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Location":       {uuid1.String()},
+					"Location":       {uuid1},
 				},
 			},
 		},
@@ -342,7 +333,7 @@ func TestBlobPut(t *testing.T) {
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "PUT for d1",
 				Method: "PUT",
-				Path:   "/v2" + blobRepo + "/blobs/uploads/" + uuid1.String(),
+				Path:   "/v2" + blobRepo + "/blobs/uploads/" + uuid1,
 				Query: map[string][]string{
 					"digest": {d1.String()},
 				},
@@ -376,7 +367,7 @@ func TestBlobPut(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Location":       {uuid2.String()},
+					"Location":       {uuid2},
 				},
 			},
 		},
@@ -386,7 +377,7 @@ func TestBlobPut(t *testing.T) {
 				DelOnUse: false,
 				Name:     "PUT for patched d2",
 				Method:   "PUT",
-				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2.String(),
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2,
 				Query: map[string][]string{
 					"digest": {d2.String()},
 					"chunk":  {"3"},
@@ -411,7 +402,7 @@ func TestBlobPut(t *testing.T) {
 		// 		DelOnUse: true,
 		// 		Name:     "PATCH 2 fail for d2",
 		// 		Method:   "PATCH",
-		// 		Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2.String(),
+		// 		Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2,
 		// 		Query: map[string][]string{
 		// 			"chunk": {"2"},
 		// 		},
@@ -435,7 +426,7 @@ func TestBlobPut(t *testing.T) {
 				DelOnUse: false,
 				Name:     "PATCH 2 for d2",
 				Method:   "PATCH",
-				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2.String(),
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2,
 				Query: map[string][]string{
 					"chunk": {"2"},
 				},
@@ -451,7 +442,7 @@ func TestBlobPut(t *testing.T) {
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
 					"Range":          {fmt.Sprintf("bytes=0-%d", blobLen-1)},
-					"Location":       {uuid2.String() + "?chunk=3"},
+					"Location":       {uuid2 + "?chunk=3"},
 				},
 			},
 		},
@@ -461,7 +452,7 @@ func TestBlobPut(t *testing.T) {
 				DelOnUse: false,
 				Name:     "PATCH 1 for d2",
 				Method:   "PATCH",
-				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2.String(),
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2,
 				Query:    map[string][]string{},
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", blobChunk)},
@@ -475,7 +466,7 @@ func TestBlobPut(t *testing.T) {
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
 					"Range":          {fmt.Sprintf("bytes=0-%d", blobChunk-1)},
-					"Location":       {uuid2.String() + "?chunk=2"},
+					"Location":       {uuid2 + "?chunk=2"},
 				},
 			},
 		},
@@ -485,7 +476,7 @@ func TestBlobPut(t *testing.T) {
 				DelOnUse: false,
 				Name:     "PUT for d2",
 				Method:   "PUT",
-				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2.String(),
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid2,
 				Query: map[string][]string{
 					"digest": {d2.String()},
 				},
@@ -517,7 +508,7 @@ func TestBlobPut(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Location":       {uuid3.String()},
+					"Location":       {uuid3},
 				},
 			},
 		},
@@ -527,7 +518,7 @@ func TestBlobPut(t *testing.T) {
 				DelOnUse: false,
 				Name:     "PUT for patched d3",
 				Method:   "PUT",
-				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3.String(),
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3,
 				Query: map[string][]string{
 					"digest": {d3.String()},
 					"chunk":  {"3"},
@@ -552,7 +543,7 @@ func TestBlobPut(t *testing.T) {
 		// 		DelOnUse: true,
 		// 		Name:     "PATCH 2 fail for d3",
 		// 		Method:   "PATCH",
-		// 		Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3.String(),
+		// 		Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3,
 		// 		Query: map[string][]string{
 		// 			"chunk": {"2"},
 		// 		},
@@ -576,7 +567,7 @@ func TestBlobPut(t *testing.T) {
 				DelOnUse: false,
 				Name:     "PATCH 2 for d3",
 				Method:   "PATCH",
-				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3.String(),
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3,
 				Query: map[string][]string{
 					"chunk": {"2"},
 				},
@@ -592,7 +583,7 @@ func TestBlobPut(t *testing.T) {
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
 					"Range":          {fmt.Sprintf("bytes=0-%d", blobLen3-1)},
-					"Location":       {uuid3.String() + "?chunk=3"},
+					"Location":       {uuid3 + "?chunk=3"},
 				},
 			},
 		},
@@ -602,7 +593,7 @@ func TestBlobPut(t *testing.T) {
 				DelOnUse: false,
 				Name:     "PATCH 1 for d3",
 				Method:   "PATCH",
-				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3.String(),
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3,
 				Query:    map[string][]string{},
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", blobChunk)},
@@ -616,7 +607,7 @@ func TestBlobPut(t *testing.T) {
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", 0)},
 					"Range":          {fmt.Sprintf("bytes=0-%d", blobChunk-1)},
-					"Location":       {uuid3.String() + "?chunk=2"},
+					"Location":       {uuid3 + "?chunk=2"},
 				},
 			},
 		},
@@ -626,7 +617,7 @@ func TestBlobPut(t *testing.T) {
 				DelOnUse: false,
 				Name:     "PUT for d3",
 				Method:   "PUT",
-				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3.String(),
+				Path:     "/v2" + blobRepo + "/blobs/uploads/" + uuid3,
 				Query: map[string][]string{
 					"digest": {d3.String()},
 				},
@@ -679,13 +670,12 @@ func TestBlobPut(t *testing.T) {
 	t.Run("Put", func(t *testing.T) {
 		ref, err := ref.New(tsURL.Host + blobRepo)
 		if err != nil {
-			t.Errorf("Failed creating ref: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
 		br := bytes.NewReader(blob1)
-		dp, err := rc.BlobPut(ctx, ref, types.Descriptor{Digest: d1, Size: int64(len(blob1))}, br)
+		dp, err := rc.BlobPut(ctx, ref, descriptor.Descriptor{Digest: d1, Size: int64(len(blob1))}, br)
 		if err != nil {
-			t.Errorf("Failed running BlobPut: %v", err)
-			return
+			t.Fatalf("Failed running BlobPut: %v", err)
 		}
 		if dp.Digest.String() != d1.String() {
 			t.Errorf("Digest mismatch, expected %s, received %s", d1.String(), dp.Digest.String())
@@ -699,13 +689,12 @@ func TestBlobPut(t *testing.T) {
 	t.Run("Retry", func(t *testing.T) {
 		ref, err := ref.New(tsURL.Host + blobRepo)
 		if err != nil {
-			t.Errorf("Failed creating ref: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
 		br := bytes.NewReader(blob2)
-		dp, err := rc.BlobPut(ctx, ref, types.Descriptor{Digest: d2, Size: int64(len(blob2))}, br)
+		dp, err := rc.BlobPut(ctx, ref, descriptor.Descriptor{Digest: d2, Size: int64(len(blob2))}, br)
 		if err != nil {
-			t.Errorf("Failed running BlobPut: %v", err)
-			return
+			t.Fatalf("Failed running BlobPut: %v", err)
 		}
 		if dp.Digest.String() != d2.String() {
 			t.Errorf("Digest mismatch, expected %s, received %s", d2.String(), dp.Digest.String())
@@ -719,13 +708,12 @@ func TestBlobPut(t *testing.T) {
 	t.Run("PartialChunk", func(t *testing.T) {
 		ref, err := ref.New(tsURL.Host + blobRepo)
 		if err != nil {
-			t.Errorf("Failed creating ref: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
 		br := bytes.NewReader(blob3)
-		dp, err := rc.BlobPut(ctx, ref, types.Descriptor{Digest: d3, Size: int64(len(blob3))}, br)
+		dp, err := rc.BlobPut(ctx, ref, descriptor.Descriptor{Digest: d3, Size: int64(len(blob3))}, br)
 		if err != nil {
-			t.Errorf("Failed running BlobPut: %v", err)
-			return
+			t.Fatalf("Failed running BlobPut: %v", err)
 		}
 		if dp.Digest.String() != d3.String() {
 			t.Errorf("Digest mismatch, expected %s, received %s", d3.String(), dp.Digest.String())
@@ -750,9 +738,9 @@ func TestBlobCopy(t *testing.T) {
 	d1, blob1 := reqresp.NewRandomBlob(blobLen, seed)
 	d2, blob2 := reqresp.NewRandomBlob(blobLen, seed+1)
 	d3, blob3 := reqresp.NewRandomBlob(blobLen, seed+2)
-	uuid1 := uuid.New()
-	uuid2 := uuid.New()
-	uuid3 := uuid.New()
+	uuid1 := reqresp.NewRandomID(seed + 3)
+	uuid2 := reqresp.NewRandomID(seed + 4)
+	uuid3 := reqresp.NewRandomID(seed + 5)
 
 	// define req/resp entries
 	rrs := []reqresp.ReqResp{
@@ -816,7 +804,7 @@ func TestBlobCopy(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Location":       {uuid1.String()},
+					"Location":       {uuid1},
 				},
 			},
 		},
@@ -825,7 +813,7 @@ func TestBlobCopy(t *testing.T) {
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "PUT for repo b - d1",
 				Method: "PUT",
-				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid1.String(),
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid1,
 				Query: map[string][]string{
 					"digest": {d1.String()},
 				},
@@ -844,6 +832,16 @@ func TestBlobCopy(t *testing.T) {
 					"Location":              {"/v2" + blobRepoB + "/blobs/" + d1.String()},
 					"Docker-Content-Digest": {d1.String()},
 				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "DELETE for repo b - d1",
+				Method: "DELETE",
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid1,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusAccepted,
 			},
 		},
 		// head
@@ -960,8 +958,18 @@ func TestBlobCopy(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Location":       {uuid2.String()},
+					"Location":       {uuid2},
 				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "DELETE for repo b - d2",
+				Method: "DELETE",
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid2,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusAccepted,
 			},
 		},
 		// upload blob
@@ -969,7 +977,7 @@ func TestBlobCopy(t *testing.T) {
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "PUT for repo b - d2",
 				Method: "PUT",
-				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid2.String(),
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid2,
 				Query: map[string][]string{
 					"digest": {d2.String()},
 				},
@@ -1048,8 +1056,18 @@ func TestBlobCopy(t *testing.T) {
 				Status: http.StatusAccepted,
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Location":       {uuid3.String()},
+					"Location":       {uuid3},
 				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "DELETE for repo b - d3",
+				Method: "DELETE",
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid3,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusAccepted,
 			},
 		},
 		// upload blob
@@ -1057,7 +1075,7 @@ func TestBlobCopy(t *testing.T) {
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "PUT for repo b - d3",
 				Method: "PUT",
-				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid3.String(),
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid3,
 				Query: map[string][]string{
 					"digest": {d3.String()},
 				},
@@ -1081,7 +1099,7 @@ func TestBlobCopy(t *testing.T) {
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "PUT for repo b - d3 fail",
 				Method: "PUT",
-				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid3.String(),
+				Path:   "/v2" + blobRepoB + "/blobs/uploads/" + uuid3,
 				Query: map[string][]string{
 					"digest": {d3.String()},
 				},
@@ -1137,50 +1155,50 @@ func TestBlobCopy(t *testing.T) {
 
 	refA, err := ref.New(tsURL.Host + blobRepoA)
 	if err != nil {
-		t.Errorf("Failed creating ref: %v", err)
+		t.Fatalf("Failed creating ref: %v", err)
 	}
 	refB, err := ref.New(tsURL.Host + blobRepoB)
 	if err != nil {
-		t.Errorf("Failed creating ref: %v", err)
+		t.Fatalf("Failed creating ref: %v", err)
 	}
 
 	// same repo
 	t.Run("Copy Same Repo", func(t *testing.T) {
-		err = rc.BlobCopy(ctx, refA, refA, types.Descriptor{Digest: d1})
+		err = rc.BlobCopy(ctx, refA, refA, descriptor.Descriptor{Digest: d1})
 		if err != nil {
-			t.Errorf("Failed to copy d1 from repo a to a: %v", err)
+			t.Fatalf("Failed to copy d1 from repo a to a: %v", err)
 		}
 	})
 
 	// copy blob
 	t.Run("Copy Diff Repo", func(t *testing.T) {
-		err = rc.BlobCopy(ctx, refA, refB, types.Descriptor{Digest: d1})
+		err = rc.BlobCopy(ctx, refA, refB, descriptor.Descriptor{Digest: d1})
 		if err != nil {
-			t.Errorf("Failed to copy d1 from repo a to b: %v", err)
+			t.Fatalf("Failed to copy d1 from repo a to b: %v", err)
 		}
 	})
 
 	// blob exists
 	t.Run("Copy Existing Blob", func(t *testing.T) {
-		err = rc.BlobCopy(ctx, refA, refB, types.Descriptor{Digest: d1})
+		err = rc.BlobCopy(ctx, refA, refB, descriptor.Descriptor{Digest: d1})
 		if err != nil {
-			t.Errorf("Failed to copy d1 from repo a to b: %v", err)
+			t.Fatalf("Failed to copy d1 from repo a to b: %v", err)
 		}
 	})
 
 	// copy fails on get, retry succeeds
 	t.Run("Copy Flaky Get", func(t *testing.T) {
-		err = rc.BlobCopy(ctx, refA, refB, types.Descriptor{Digest: d2})
+		err = rc.BlobCopy(ctx, refA, refB, descriptor.Descriptor{Digest: d2})
 		if err != nil {
-			t.Errorf("Failed to copy d2 from repo a to b: %v", err)
+			t.Fatalf("Failed to copy d2 from repo a to b: %v", err)
 		}
 	})
 
 	// copy fails on put, retry succeeds
 	t.Run("Copy Flaky Put", func(t *testing.T) {
-		err = rc.BlobCopy(ctx, refA, refB, types.Descriptor{Digest: d3})
+		err = rc.BlobCopy(ctx, refA, refB, descriptor.Descriptor{Digest: d3})
 		if err != nil {
-			t.Errorf("Failed to copy d3 from repo a to b: %v", err)
+			t.Fatalf("Failed to copy d3 from repo a to b: %v", err)
 		}
 	})
 

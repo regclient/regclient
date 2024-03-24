@@ -13,19 +13,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/opencontainers/go-digest"
 	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/reqresp"
 	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
+	"github.com/regclient/regclient/types/mediatype"
 	"github.com/regclient/regclient/types/ref"
 )
 
 func TestTag(t *testing.T) {
 	t.Parallel()
+	seed := time.Now().UTC().Unix()
+	t.Logf("Using seed %d", seed)
 	repoPath := "/proj"
 	repoPath2 := "/proj2"
 	pageLen := 2
@@ -44,7 +46,7 @@ func TestTag(t *testing.T) {
 	delFallbackTag := "del-fallback"
 	delFallbackManifest := "digest for del-fallback"
 	delFallbackDigest := digest.FromString(delFallbackManifest)
-	uuid1 := uuid.New()
+	uuid1 := reqresp.NewRandomID(seed)
 	ctx := context.Background()
 	rrs := []reqresp.ReqResp{
 		{
@@ -187,7 +189,7 @@ func TestTag(t *testing.T) {
 				Status: http.StatusOK,
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", len(delFallbackManifest))},
-					"Content-Type":          {types.MediaTypeDocker2Manifest},
+					"Content-Type":          {mediatype.Docker2Manifest},
 					"Docker-Content-Digest": {delFallbackDigest.String()},
 				},
 			},
@@ -203,7 +205,7 @@ func TestTag(t *testing.T) {
 				Headers: http.Header{
 					"Content-Length": {"0"},
 					"Range":          {"bytes=0-0"},
-					"Location":       {uuid1.String()},
+					"Location":       {uuid1},
 				},
 			},
 		},
@@ -212,13 +214,13 @@ func TestTag(t *testing.T) {
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "PUT for fallback blob",
 				Method: "PUT",
-				Path:   "/v2" + repoPath + "/blobs/uploads/" + uuid1.String(),
+				Path:   "/v2" + repoPath + "/blobs/uploads/" + uuid1,
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusCreated,
 				Headers: http.Header{
 					"Content-Length": {"0"},
-					"Location":       {"/v2" + repoPath + "/blobs/" + uuid1.String()},
+					"Location":       {"/v2" + repoPath + "/blobs/" + uuid1},
 				},
 			},
 		},
@@ -228,7 +230,7 @@ func TestTag(t *testing.T) {
 				Method: "PUT",
 				Path:   "/v2" + repoPath + "/manifests/" + delFallbackTag,
 				Headers: http.Header{
-					"Content-Type": {types.MediaTypeDocker2Manifest},
+					"Content-Type": {mediatype.Docker2Manifest},
 				},
 			},
 			RespEntry: reqresp.RespEntry{
@@ -268,18 +270,16 @@ func TestTag(t *testing.T) {
 	t.Run("List", func(t *testing.T) {
 		listRef, err := ref.New(tsURL.Host + repoPath)
 		if err != nil {
-			t.Errorf("failed creating getRef: %v", err)
+			t.Fatalf("failed creating getRef: %v", err)
 		}
 
 		tl, err := reg.TagList(ctx, listRef)
 		if err != nil {
-			t.Errorf("failed to list tags: %v", err)
-			return
+			t.Fatalf("failed to list tags: %v", err)
 		}
 		tags, err := tl.GetTags()
 		if err != nil {
-			t.Errorf("failed to extract tag list: %v", err)
-			return
+			t.Fatalf("failed to extract tag list: %v", err)
 		}
 		if !stringSliceCmp(tags, listTagList) {
 			t.Errorf("returned list mismatch, expected %v, received %v", listTagList, tags)
@@ -289,19 +289,17 @@ func TestTag(t *testing.T) {
 	t.Run("Pagination", func(t *testing.T) {
 		listRef, err := ref.New(tsURL.Host + repoPath)
 		if err != nil {
-			t.Errorf("failed creating getRef: %v", err)
+			t.Fatalf("failed creating getRef: %v", err)
 		}
 		// page 1
 		tl, err := reg.TagList(ctx, listRef,
 			scheme.WithTagLimit(pageLen))
 		if err != nil {
-			t.Errorf("failed to list tags: %v", err)
-			return
+			t.Fatalf("failed to list tags: %v", err)
 		}
 		tags, err := tl.GetTags()
 		if err != nil {
-			t.Errorf("failed to extract tag list: %v", err)
-			return
+			t.Fatalf("failed to extract tag list: %v", err)
 		}
 		if !stringSliceCmp(tags, listTagList[:pageLen]) {
 			t.Errorf("returned list mismatch, expected %v, received %v", listTagList[:pageLen], tags)
@@ -312,13 +310,11 @@ func TestTag(t *testing.T) {
 			scheme.WithTagLimit(pageLen),
 			scheme.WithTagLast(tags[len(tags)-1]))
 		if err != nil {
-			t.Errorf("failed to list tags: %v", err)
-			return
+			t.Fatalf("failed to list tags: %v", err)
 		}
 		tags, err = tl.GetTags()
 		if err != nil {
-			t.Errorf("failed to extract tag list: %v", err)
-			return
+			t.Fatalf("failed to extract tag list: %v", err)
 		}
 		if !stringSliceCmp(tags, listTagList[pageLen:]) {
 			t.Errorf("returned list mismatch, expected %v, received %v", listTagList[:pageLen], tags)
@@ -328,18 +324,16 @@ func TestTag(t *testing.T) {
 	t.Run("Pagination automatic", func(t *testing.T) {
 		listRef, err := ref.New(tsURL.Host + repoPath2)
 		if err != nil {
-			t.Errorf("failed creating getRef: %v", err)
+			t.Fatalf("failed creating getRef: %v", err)
 		}
 		// page 1
 		tl, err := reg.TagList(ctx, listRef)
 		if err != nil {
-			t.Errorf("failed to list tags: %v", err)
-			return
+			t.Fatalf("failed to list tags: %v", err)
 		}
 		tags, err := tl.GetTags()
 		if err != nil {
-			t.Errorf("failed to extract tag list: %v", err)
-			return
+			t.Fatalf("failed to extract tag list: %v", err)
 		}
 		if !stringSliceCmp(tags, listTagList) {
 			t.Errorf("returned list mismatch, expected %v, received %v", listTagList, tags)
@@ -349,15 +343,13 @@ func TestTag(t *testing.T) {
 	t.Run("Missing", func(t *testing.T) {
 		listRef, err := ref.New(tsURL.Host + missingRepo)
 		if err != nil {
-			t.Errorf("failed creating getRef: %v", err)
+			t.Fatalf("failed creating getRef: %v", err)
 		}
 		_, err = reg.TagList(ctx, listRef)
 		if err == nil {
-			t.Errorf("tag listing succeeded on missing repo")
-			return
-		} else if !errors.Is(err, types.ErrNotFound) {
-			t.Errorf("unexpected error: expected %v, received %v", types.ErrNotFound, err)
-			return
+			t.Fatalf("tag listing succeeded on missing repo")
+		} else if !errors.Is(err, errs.ErrNotFound) {
+			t.Fatalf("unexpected error: expected %v, received %v", errs.ErrNotFound, err)
 		}
 	})
 
@@ -369,8 +361,7 @@ func TestTag(t *testing.T) {
 		}
 		err = reg.TagDelete(ctx, delRef)
 		if err != nil {
-			t.Errorf("failed to delete tag: %v", err)
-			return
+			t.Fatalf("failed to delete tag: %v", err)
 		}
 	})
 
@@ -382,8 +373,7 @@ func TestTag(t *testing.T) {
 		}
 		err = reg.TagDelete(ctx, delRef)
 		if err != nil {
-			t.Errorf("failed to delete tag: %v", err)
-			return
+			t.Fatalf("failed to delete tag: %v", err)
 		}
 	})
 }

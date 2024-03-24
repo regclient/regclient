@@ -9,7 +9,7 @@ import (
 
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -19,14 +19,14 @@ type Common = *BCommon
 // BCommon is a common struct for all blobs which includes various shared methods.
 type BCommon struct {
 	r         ref.Ref
-	desc      types.Descriptor
+	desc      descriptor.Descriptor
 	blobSet   bool
 	rawHeader http.Header
 	resp      *http.Response
 }
 
 // GetDescriptor returns the descriptor associated with the blob.
-func (c *BCommon) GetDescriptor() types.Descriptor {
+func (c *BCommon) GetDescriptor() descriptor.Descriptor {
 	return c.desc
 }
 

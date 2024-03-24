@@ -36,19 +36,18 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 	t.Run("curdir", func(t *testing.T) {
 		fh, err := rwfs.Open(".")
 		if err != nil {
-			t.Errorf("open: %v", err)
-			return
+			t.Fatalf("open: %v", err)
 		}
 		fi, err := fh.Stat()
 		if err != nil {
-			t.Errorf("stat: %v", err)
+			t.Fatalf("stat: %v", err)
 		}
 		if !fi.IsDir() {
 			t.Errorf("is not a directory")
 		}
 		b, err := io.ReadAll(fh)
 		if err == nil {
-			t.Errorf("readall on directory succeeded")
+			t.Fatalf("readall on directory succeeded")
 		}
 		err = fh.Close()
 		if err != nil {
@@ -84,8 +83,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		// create a file in the root dir
 		fh, err := rwfs.Create(exRootFile)
 		if err != nil {
-			t.Errorf("create %s: %v", exRootFile, err)
-			return
+			t.Fatalf("create %s: %v", exRootFile, err)
 		}
 		i, err := fh.Write(exRootTxt)
 		if err != nil {
@@ -102,8 +100,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		// create a file one level down
 		fh, err = rwfs.Create(exSubFile1)
 		if err != nil {
-			t.Errorf("create %s: %v", exSubFile1, err)
-			return
+			t.Fatalf("create %s: %v", exSubFile1, err)
 		}
 		i, err = fh.Write(exSubTxt1)
 		if err != nil {
@@ -120,8 +117,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		// create a file more than one level down
 		fh, err = rwfs.Create(exNestedFile)
 		if err != nil {
-			t.Errorf("create %s: %v", exNestedFile, err)
-			return
+			t.Fatalf("create %s: %v", exNestedFile, err)
 		}
 		i, err = fh.Write(exNestedTxt1)
 		if err != nil {
@@ -150,8 +146,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		// recreate a file that exists
 		fh, err = rwfs.Create(exNestedFile)
 		if err != nil {
-			t.Errorf("create again %s: %v", exNestedFile, err)
-			return
+			t.Fatalf("create again %s: %v", exNestedFile, err)
 		}
 		i, err = fh.Write(exNestedTxt2)
 		if err != nil {
@@ -177,13 +172,11 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		// open, read, and cmp contents
 		fh, err := rwfs.Open(exRootFile)
 		if err != nil {
-			t.Errorf("open %s: %v", exRootFile, err)
-			return
+			t.Fatalf("open %s: %v", exRootFile, err)
 		}
 		b, err := io.ReadAll(fh)
 		if err != nil {
-			t.Errorf("readall %s: %v", exRootFile, err)
-			return
+			t.Fatalf("readall %s: %v", exRootFile, err)
 		}
 		if !bytes.Equal(exRootTxt, b) {
 			t.Errorf("contents mismatch %s, expected %s, received %s", exRootFile, string(exRootTxt), string(b))
@@ -196,8 +189,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		// verify ReadFile works
 		b, err = ReadFile(rwfs, exNestedFile)
 		if err != nil {
-			t.Errorf("readfile %s: %v", exNestedFile, err)
-			return
+			t.Fatalf("readfile %s: %v", exNestedFile, err)
 		}
 		if !bytes.Equal(exNestedTxt2, b) {
 			t.Errorf("contents mismatch %s, expected %s, received %s", exNestedFile, string(exNestedTxt2), string(b))
@@ -206,13 +198,11 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		// verify open with a subdir
 		fh, err = rwfs.Open(exSubFile1)
 		if err != nil {
-			t.Errorf("open %s: %v", exSubFile1, err)
-			return
+			t.Fatalf("open %s: %v", exSubFile1, err)
 		}
 		b, err = io.ReadAll(fh)
 		if err != nil {
-			t.Errorf("readall %s: %v", exSubFile1, err)
-			return
+			t.Fatalf("readall %s: %v", exSubFile1, err)
 		}
 		if !bytes.Equal(exSubTxt1, b) {
 			t.Errorf("contents mismatch %s, expected %s, received %s", exSubFile1, string(exSubTxt1), string(b))
@@ -273,11 +263,11 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		// read file
 		fh, err = rwfs.OpenFile(exSubFile2, O_RDONLY, 0666)
 		if err != nil {
-			t.Errorf("read-only %s: %v", exSubFile2, err)
+			t.Fatalf("read-only %s: %v", exSubFile2, err)
 		}
 		b, err := io.ReadAll(fh)
 		if err != nil {
-			t.Errorf("readall %s: %v", exSubFile2, err)
+			t.Fatalf("readall %s: %v", exSubFile2, err)
 		}
 		if !bytes.Equal(b, exSubTxt2) {
 			t.Errorf("readall %s: expected %s, received %s", exSubFile2, string(exSubTxt2), string(b))
@@ -287,11 +277,11 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		// read-write file, read first
 		fh, err = rwfs.OpenFile(exSubFile2, O_RDWR, 0666)
 		if err != nil {
-			t.Errorf("read-write %s: %v", exSubFile2, err)
+			t.Fatalf("read-write %s: %v", exSubFile2, err)
 		}
 		b, err = io.ReadAll(fh)
 		if err != nil {
-			t.Errorf("readall %s: %v", exSubFile2, err)
+			t.Fatalf("readall %s: %v", exSubFile2, err)
 		}
 		if !bytes.Equal(b, exSubTxt2) {
 			t.Errorf("contents after append, expect %s, received %s", string(exSubTxt2), string(b))
@@ -303,7 +293,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		fh.Close()
 		b, err = fs.ReadFile(rwfs, exSubFile2)
 		if err != nil {
-			t.Errorf("readfile %s: %v", exSubFile2, err)
+			t.Fatalf("readfile %s: %v", exSubFile2, err)
 		}
 		exB := append(exSubTxt2, []byte("append string")...)
 		if !bytes.Equal(b, exB) {
@@ -313,7 +303,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		// read-write file, w/o reading
 		fh, err = rwfs.OpenFile(exSubFile2, O_RDWR, 0666)
 		if err != nil {
-			t.Errorf("read-write %s: %v", exSubFile2, err)
+			t.Fatalf("read-write %s: %v", exSubFile2, err)
 		}
 		_, err = fh.Write([]byte("replace string"))
 		if err != nil {
@@ -322,7 +312,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		fh.Close()
 		b, err = fs.ReadFile(rwfs, exSubFile2)
 		if err != nil {
-			t.Errorf("readfile %s: %v", exSubFile2, err)
+			t.Fatalf("readfile %s: %v", exSubFile2, err)
 		}
 		copy(exB, []byte("replace string"))
 		if !bytes.Equal(b, exB) {
@@ -332,7 +322,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		// read-write file+append
 		fh, err = rwfs.OpenFile(exSubFile2, O_RDWR|O_APPEND, 0666)
 		if err != nil {
-			t.Errorf("read-write %s: %v", exSubFile2, err)
+			t.Fatalf("read-write %s: %v", exSubFile2, err)
 		}
 		_, err = fh.Write([]byte("append again string"))
 		if err != nil {
@@ -341,7 +331,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		fh.Close()
 		b, err = fs.ReadFile(rwfs, exSubFile2)
 		if err != nil {
-			t.Errorf("readfile %s: %v", exSubFile2, err)
+			t.Fatalf("readfile %s: %v", exSubFile2, err)
 		}
 		exB = append(exB, []byte("append again string")...)
 		if !bytes.Equal(b, exB) {
@@ -351,7 +341,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		// read-write file+truncate
 		fh, err = rwfs.OpenFile(exSubFile2, O_RDWR|O_TRUNC, 0666)
 		if err != nil {
-			t.Errorf("read-write %s: %v", exSubFile2, err)
+			t.Fatalf("read-write %s: %v", exSubFile2, err)
 		}
 		_, err = fh.Write([]byte(exSubTxt2))
 		if err != nil {
@@ -360,7 +350,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		fh.Close()
 		b, err = fs.ReadFile(rwfs, exSubFile2)
 		if err != nil {
-			t.Errorf("readfile %s: %v", exSubFile2, err)
+			t.Fatalf("readfile %s: %v", exSubFile2, err)
 		}
 		if !bytes.Equal(b, exSubTxt2) {
 			t.Errorf("contents after truncate, expect %s, received %s", string(exSubTxt2), string(b))
@@ -376,7 +366,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		// write existing file with create
 		fh, err = rwfs.OpenFile(exSubFile2, O_WRONLY|O_CREATE, 0666)
 		if err != nil {
-			t.Errorf("write %s: %v", exSubFile2, err)
+			t.Fatalf("write %s: %v", exSubFile2, err)
 		}
 		_, err = fh.Write([]byte("replace"))
 		if err != nil {
@@ -385,7 +375,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		fh.Close()
 		b, err = fs.ReadFile(rwfs, exSubFile2)
 		if err != nil {
-			t.Errorf("readfile %s: %v", exSubFile2, err)
+			t.Fatalf("readfile %s: %v", exSubFile2, err)
 		}
 		exB = append([]byte{}, exSubTxt2...)
 		copy(exB, []byte("replace"))
@@ -396,7 +386,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		// write existing file with create+append
 		fh, err = rwfs.OpenFile(exSubFile2, O_WRONLY|O_CREATE|O_APPEND, 0666)
 		if err != nil {
-			t.Errorf("write %s: %v", exSubFile2, err)
+			t.Fatalf("write %s: %v", exSubFile2, err)
 		}
 		_, err = fh.Write([]byte("append string"))
 		if err != nil {
@@ -405,7 +395,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		fh.Close()
 		b, err = fs.ReadFile(rwfs, exSubFile2)
 		if err != nil {
-			t.Errorf("readfile %s: %v", exSubFile2, err)
+			t.Fatalf("readfile %s: %v", exSubFile2, err)
 		}
 		exB = append(exB, []byte("append string")...)
 		if !bytes.Equal(b, exB) {
@@ -415,7 +405,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		// write existing file with create+truncate
 		fh, err = rwfs.OpenFile(exSubFile2, O_WRONLY|O_CREATE|O_TRUNC, 0666)
 		if err != nil {
-			t.Errorf("write %s: %v", exSubFile2, err)
+			t.Fatalf("write %s: %v", exSubFile2, err)
 		}
 		_, err = fh.Write([]byte(exSubTxt2))
 		if err != nil {
@@ -424,7 +414,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		fh.Close()
 		b, err = fs.ReadFile(rwfs, exSubFile2)
 		if err != nil {
-			t.Errorf("readfile %s: %v", exSubFile2, err)
+			t.Fatalf("readfile %s: %v", exSubFile2, err)
 		}
 		if !bytes.Equal(b, exSubTxt2) {
 			t.Errorf("contents after truncate, expect %s, received %s", string(exSubTxt2), string(b))
@@ -439,7 +429,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		// write new file create+exclusive
 		fh, err = rwfs.OpenFile(exSubFile3, O_WRONLY|O_CREATE|O_EXCL, 0666)
 		if err != nil {
-			t.Errorf("write new file with create failed: %v", err)
+			t.Fatalf("write new file with create failed: %v", err)
 		}
 		_, err = fh.Write(exSubTxt3)
 		if err != nil {
@@ -453,8 +443,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 	t.Run("readdir", func(t *testing.T) {
 		dl, err := fs.ReadDir(rwfs, ".")
 		if err != nil {
-			t.Errorf("readdir %s: %v", ".", err)
-			return
+			t.Fatalf("readdir %s: %v", ".", err)
 		}
 		if len(dl) != 3 {
 			t.Errorf("too many entries in %s, expected %d, received %d", ".", 3, len(dl))
@@ -503,8 +492,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 
 		dl, err = fs.ReadDir(rwfs, exNestedDir)
 		if err != nil {
-			t.Errorf("readdir %s: %v", exNestedDir, err)
-			return
+			t.Fatalf("readdir %s: %v", exNestedDir, err)
 		}
 		if len(dl) != 2 {
 			t.Errorf("too many entries in %s, expected %d, received %d", exNestedDir, 2, len(dl))
@@ -549,7 +537,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		}
 		fi, err := Stat(rwfs, "copy/dir/file")
 		if err != nil {
-			t.Errorf("file not copied: %v", err)
+			t.Fatalf("file not copied: %v", err)
 		}
 		if fi.IsDir() {
 			t.Errorf("file appears to be a directory")
@@ -561,7 +549,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		}
 		fi, err = Stat(rwfs, exNestedFile)
 		if err != nil {
-			t.Errorf("file not copied: %v", err)
+			t.Fatalf("file not copied: %v", err)
 		}
 		if fi.IsDir() {
 			t.Errorf("file appears to be a directory")
@@ -579,7 +567,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		}
 		fi, err := Stat(rwfs, "renamed")
 		if err != nil {
-			t.Errorf("renamed folder not found: %v", err)
+			t.Fatalf("renamed folder not found: %v", err)
 		}
 		if !fi.IsDir() {
 			t.Errorf("renamed folder is not a directory")
@@ -590,7 +578,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 		}
 		fi, err = Stat(rwfs, "nested")
 		if err != nil {
-			t.Errorf("nested not recreated after rename: %v", err)
+			t.Fatalf("nested not recreated after rename: %v", err)
 		}
 		if !fi.IsDir() {
 			t.Errorf("nested is not a directory after rename")
@@ -604,8 +592,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 	t.Run("StatFile", func(t *testing.T) {
 		fi, err := Stat(rwfs, exNestedFile)
 		if err != nil {
-			t.Errorf("failed to stat file: %v", err)
-			return
+			t.Fatalf("failed to stat file: %v", err)
 		}
 		if fi.IsDir() {
 			t.Errorf("file stat indicates it is a directory")
@@ -614,8 +601,7 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 	t.Run("StatDir", func(t *testing.T) {
 		fi, err := Stat(rwfs, exNestedDir)
 		if err != nil {
-			t.Errorf("failed to stat directory: %v", err)
-			return
+			t.Fatalf("failed to stat directory: %v", err)
 		}
 		if !fi.IsDir() {
 			t.Errorf("directory stat indicates it is not a directory")
@@ -653,17 +639,16 @@ func testRWFS(t *testing.T, rwfs RWFS) {
 	t.Run("CreateTemp", func(t *testing.T) {
 		err := MkdirAll(rwfs, "tempdir", 0700)
 		if err != nil {
-			t.Errorf("failed creating tempdir: %v", err)
+			t.Fatalf("failed creating tempdir: %v", err)
 		}
 		fh, err := CreateTemp(rwfs, "tempdir", "tempfile")
 		if err != nil {
-			t.Errorf("failed creating temp file: %v", err)
-			return
+			t.Fatalf("failed creating temp file: %v", err)
 		}
 		defer fh.Close()
 		fhStat, err := fh.Stat()
 		if err != nil {
-			t.Errorf("stat failed: %v", err)
+			t.Fatalf("stat failed: %v", err)
 		}
 		tmpName := filepath.Join("tempdir", fhStat.Name())
 		defer rwfs.Remove(tmpName)

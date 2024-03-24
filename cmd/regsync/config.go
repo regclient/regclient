@@ -10,16 +10,16 @@ import (
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/mediatype"
 )
 
 // delay checking for at least 5 minutes when rate limit is exceeded
 var rateLimitRetryMin = time.Minute * 5
 var defaultMediaTypes = []string{
-	types.MediaTypeDocker2Manifest,
-	types.MediaTypeDocker2ManifestList,
-	types.MediaTypeOCI1Manifest,
-	types.MediaTypeOCI1ManifestList,
+	mediatype.Docker2Manifest,
+	mediatype.Docker2ManifestList,
+	mediatype.OCI1Manifest,
+	mediatype.OCI1ManifestList,
 }
 
 // Config is parsed configuration file for regsync

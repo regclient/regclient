@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/regclient/regclient/types/tag"
 )
@@ -18,7 +18,7 @@ import (
 // 3. Delete the digest for that new manifest that is only used by that tag.
 func (rc *RegClient) TagDelete(ctx context.Context, r ref.Ref) error {
 	if !r.IsSet() {
-		return fmt.Errorf("ref is not set: %s%.0w", r.CommonName(), types.ErrInvalidReference)
+		return fmt.Errorf("ref is not set: %s%.0w", r.CommonName(), errs.ErrInvalidReference)
 	}
 	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {
@@ -30,7 +30,7 @@ func (rc *RegClient) TagDelete(ctx context.Context, r ref.Ref) error {
 // TagList returns a tag list from a repository
 func (rc *RegClient) TagList(ctx context.Context, r ref.Ref, opts ...scheme.TagOpts) (*tag.List, error) {
 	if !r.IsSetRepo() {
-		return nil, fmt.Errorf("ref is not set: %s%.0w", r.CommonName(), types.ErrInvalidReference)
+		return nil, fmt.Errorf("ref is not set: %s%.0w", r.CommonName(), errs.ErrInvalidReference)
 	}
 	schemeAPI, err := rc.schemeGet(r.Scheme)
 	if err != nil {

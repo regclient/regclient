@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 )
 
 func TestArtifactGet(t *testing.T) {
@@ -28,12 +28,12 @@ func TestArtifactGet(t *testing.T) {
 		{
 			name:      "Invalid ref",
 			args:      []string{"artifact", "get", "invalid*ref"},
-			expectErr: types.ErrInvalidReference,
+			expectErr: errs.ErrInvalidReference,
 		},
 		{
 			name:      "Missing manifest",
 			args:      []string{"artifact", "get", "ocidir://../../testdata/testrepo:missing"},
-			expectErr: types.ErrNotFound,
+			expectErr: errs.ErrNotFound,
 		},
 		{
 			name:      "By Manifest",
@@ -63,8 +63,7 @@ func TestArtifactGet(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("returned unexpected error: %v", err)
-				return
+				t.Fatalf("returned unexpected error: %v", err)
 			}
 			if (!tc.outContains && out != tc.expectOut) || (tc.outContains && !strings.Contains(out, tc.expectOut)) {
 				t.Errorf("unexpected output, expected %s, received %s", tc.expectOut, out)
@@ -89,12 +88,12 @@ func TestArtifactList(t *testing.T) {
 		{
 			name:      "Invalid ref",
 			args:      []string{"artifact", "list", "invalid*ref"},
-			expectErr: types.ErrInvalidReference,
+			expectErr: errs.ErrInvalidReference,
 		},
 		{
 			name:      "Missing manifest",
 			args:      []string{"artifact", "list", "ocidir://../../testdata/testrepo:missing"},
-			expectErr: types.ErrNotFound,
+			expectErr: errs.ErrNotFound,
 		},
 		{
 			name:        "No referrers",
@@ -138,8 +137,7 @@ func TestArtifactList(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("returned unexpected error: %v", err)
-				return
+				t.Fatalf("returned unexpected error: %v", err)
 			}
 			if (!tc.outContains && out != tc.expectOut) || (tc.outContains && !strings.Contains(out, tc.expectOut)) {
 				t.Errorf("unexpected output, expected %s, received %s", tc.expectOut, out)
@@ -154,8 +152,12 @@ func TestArtifactPut(t *testing.T) {
 	testConfName := filepath.Join(testDir, "exConf")
 	err := os.WriteFile(testConfName, []byte(`{"hello": "world"}`), 0600)
 	if err != nil {
-		t.Errorf("failed creating test conf: %v", err)
-		return
+		t.Fatalf("failed creating test conf: %v", err)
+	}
+	testFileName := filepath.Join(testDir, "exFile")
+	err = os.WriteFile(testFileName, []byte(`example test file`), 0600)
+	if err != nil {
+		t.Fatalf("failed creating test conf: %v", err)
 	}
 
 	tt := []struct {
@@ -174,7 +176,7 @@ func TestArtifactPut(t *testing.T) {
 		{
 			name:      "Invalid ref",
 			args:      []string{"artifact", "put", "invalid*ref"},
-			expectErr: types.ErrInvalidReference,
+			expectErr: errs.ErrInvalidReference,
 		},
 		{
 			name: "Put artifact",
@@ -197,18 +199,28 @@ func TestArtifactPut(t *testing.T) {
 			in:   testData,
 		},
 		{
+			name: "Put artifact example conf data and file",
+			args: []string{"artifact", "put", "--artifact-type", "", "--config-type", "application/vnd.example", "--config-file", testConfName, "--file", testFileName, "ocidir://" + testDir + ":put-example-file-data"},
+			in:   testData,
+		},
+		{
+			name: "Put artifact example conf data and file stripped",
+			args: []string{"artifact", "put", "--artifact-type", "", "--config-type", "application/vnd.example", "--config-file", testConfName, "--file", testFileName, "--file-title", "--strip-dirs", "ocidir://" + testDir + ":put-example-file-data"},
+			in:   testData,
+		},
+		{
 			name: "Put subject",
-			args: []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--config-file", "", "--subject", "ocidir://" + testDir + ":put-example-at"},
+			args: []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--subject", "ocidir://" + testDir + ":put-example-at"},
 			in:   testData,
 		},
 		{
 			name: "Put create index",
-			args: []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--config-file", "", "--annotation", "test=a", "--platform", "linux/amd64", "--index", "ocidir://" + testDir + ":index"},
+			args: []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--annotation", "test=a", "--platform", "linux/amd64", "--index", "ocidir://" + testDir + ":index"},
 			in:   testData,
 		},
 		{
 			name: "Put append index",
-			args: []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--config-file", "", "--annotation", "test=b", "--platform", "linux/arm64", "--index", "ocidir://" + testDir + ":index"},
+			args: []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--annotation", "test=b", "--platform", "linux/arm64", "--index", "ocidir://" + testDir + ":index"},
 			in:   testData,
 		},
 	}
@@ -228,8 +240,7 @@ func TestArtifactPut(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("returned unexpected error: %v", err)
-				return
+				t.Fatalf("returned unexpected error: %v", err)
 			}
 			if (!tc.outContains && out != tc.expectOut) || (tc.outContains && !strings.Contains(out, tc.expectOut)) {
 				t.Errorf("unexpected output, expected %s, received %s", tc.expectOut, out)
@@ -254,12 +265,12 @@ func TestArtifactTree(t *testing.T) {
 		{
 			name:      "Invalid ref",
 			args:      []string{"artifact", "tree", "invalid*ref"},
-			expectErr: types.ErrInvalidReference,
+			expectErr: errs.ErrInvalidReference,
 		},
 		{
 			name:      "Missing manifest",
 			args:      []string{"artifact", "tree", "ocidir://../../testdata/testrepo:missing"},
-			expectErr: types.ErrNotFound,
+			expectErr: errs.ErrNotFound,
 		},
 		{
 			name:        "No referrers",
@@ -308,8 +319,7 @@ func TestArtifactTree(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("returned unexpected error: %v", err)
-				return
+				t.Fatalf("returned unexpected error: %v", err)
 			}
 			if (!tc.outContains && out != tc.expectOut) || (tc.outContains && !strings.Contains(out, tc.expectOut)) {
 				t.Errorf("unexpected output, expected %s, received %s", tc.expectOut, out)

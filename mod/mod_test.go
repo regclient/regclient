@@ -4,16 +4,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http/httptest"
+	"net/url"
 	"regexp"
 	"testing"
 	"time"
 
+	"github.com/olareg/olareg"
+	oConfig "github.com/olareg/olareg/config"
 	"github.com/opencontainers/go-digest"
 
 	"github.com/regclient/regclient"
+	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/rwfs"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/scheme/reg"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/mediatype"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 )
@@ -26,64 +33,127 @@ func TestMod(t *testing.T) {
 	fsMem := rwfs.MemNew()
 	err := rwfs.CopyRecursive(fsOS, "../testdata", fsMem, ".")
 	if err != nil {
-		t.Errorf("failed to setup memfs copy: %v", err)
-		return
+		t.Fatalf("failed to setup memfs copy: %v", err)
 	}
-	tTime, err := time.Parse(time.RFC3339, "2020-01-01T00:00:00Z")
+	baseTime, err := time.Parse(time.RFC3339, "2020-01-01T00:00:00Z")
 	if err != nil {
-		t.Errorf("failed to parse test time: %v", err)
+		t.Fatalf("failed to parse test time: %v", err)
+	}
+	oldTime, err := time.Parse(time.RFC3339, "1999-01-01T00:00:00Z")
+	if err != nil {
+		t.Fatalf("failed to parse test time: %v", err)
 	}
 	bDig := digest.FromString("digest for base image")
 	bRef, err := ref.New("base:latest")
 	if err != nil {
-		t.Errorf("failed to parse base image: %v", err)
+		t.Fatalf("failed to parse base image: %v", err)
 	}
-	// create regclient
-	rc := regclient.New(regclient.WithFS(fsMem))
+	bTrue := true
+	regSrc := olareg.New(oConfig.Config{
+		Storage: oConfig.ConfigStorage{
+			StoreType: oConfig.StoreMem,
+			RootDir:   "../testdata",
+			ReadOnly:  &bTrue,
+		},
+	})
+	tSrc := httptest.NewServer(regSrc)
+	tSrcURL, _ := url.Parse(tSrc.URL)
+	tSrcHost := tSrcURL.Host
+	t.Cleanup(func() {
+		tSrc.Close()
+		_ = regSrc.Close()
+	})
+	regTgt := olareg.New(oConfig.Config{
+		Storage: oConfig.ConfigStorage{
+			StoreType: oConfig.StoreMem,
+		},
+	})
+	tTgt := httptest.NewServer(regTgt)
+	tTgtURL, _ := url.Parse(tTgt.URL)
+	tTgtHost := tTgtURL.Host
+	t.Cleanup(func() {
+		tTgt.Close()
+		_ = regTgt.Close()
+	})
 
-	rTgt1, err := ref.New("ocidir://tgtrepo:v1")
+	// create regclient
+	rcHosts := []config.Host{
+		{
+			Name:      tSrcHost,
+			Hostname:  tSrcHost,
+			TLS:       config.TLSDisabled,
+			ReqPerSec: 1000,
+		},
+		{
+			Name:      tTgtHost,
+			Hostname:  tTgtHost,
+			TLS:       config.TLSDisabled,
+			ReqPerSec: 1000,
+		},
+	}
+	delayInit, _ := time.ParseDuration("0.05s")
+	delayMax, _ := time.ParseDuration("0.10s")
+	rc := regclient.New(
+		regclient.WithFS(fsMem),
+		regclient.WithConfigHost(rcHosts...),
+		regclient.WithRegOpts(reg.WithDelay(delayInit, delayMax)),
+	)
+
+	rTgt1, err := ref.New(tTgtHost + "/tgtrepo1:v1")
 	if err != nil {
-		t.Errorf("failed to parse ref: %v", err)
+		t.Fatalf("failed to parse ref: %v", err)
+	}
+	rTgt2, err := ref.New(tTgtHost + "/tgtrepo2:v2")
+	if err != nil {
+		t.Fatalf("failed to parse ref: %v", err)
+	}
+	rTgt3, err := ref.New(tTgtHost + "/tgtrepo3:v3")
+	if err != nil {
+		t.Fatalf("failed to parse ref: %v", err)
 	}
 	rb1, err := ref.New("ocidir://testrepo:b1")
 	if err != nil {
-		t.Errorf("failed to parse ref: %v", err)
+		t.Fatalf("failed to parse ref: %v", err)
 	}
 	rb2, err := ref.New("ocidir://testrepo:b2")
 	if err != nil {
-		t.Errorf("failed to parse ref: %v", err)
+		t.Fatalf("failed to parse ref: %v", err)
 	}
 	rb3, err := ref.New("ocidir://testrepo:b3")
 	if err != nil {
-		t.Errorf("failed to parse ref: %v", err)
+		t.Fatalf("failed to parse ref: %v", err)
 	}
 	// r1, err := ref.New("ocidir://testrepo:v1")
 	// if err != nil {
-	// 	t.Errorf("failed to parse ref: %v", err)
+	// 	t.Fatalf("failed to parse ref: %v", err)
 	// }
 	// r2, err := ref.New("ocidir://testrepo:v2")
 	// if err != nil {
-	// 	t.Errorf("failed to parse ref: %v", err)
+	// 	t.Fatalf("failed to parse ref: %v", err)
 	// }
 	r3, err := ref.New("ocidir://testrepo:v3")
 	if err != nil {
-		t.Errorf("failed to parse ref: %v", err)
+		t.Fatalf("failed to parse ref: %v", err)
 	}
 	m3, err := rc.ManifestGet(ctx, r3)
 	if err != nil {
-		t.Errorf("failed to retrieve v3 ref: %v", err)
+		t.Fatalf("failed to retrieve v3 ref: %v", err)
 	}
 	pAMD, err := platform.Parse("linux/amd64")
 	if err != nil {
-		t.Errorf("failed to parse platform: %v", err)
+		t.Fatalf("failed to parse platform: %v", err)
 	}
 	m3DescAmd, err := manifest.GetPlatformDesc(m3, &pAMD)
 	if err != nil {
-		t.Errorf("failed to get amd64 descriptor: %v", err)
+		t.Fatalf("failed to get amd64 descriptor: %v", err)
 	}
 	r3amd, err := ref.New(fmt.Sprintf("ocidir://testrepo@%s", m3DescAmd.Digest.String()))
 	if err != nil {
-		t.Errorf("failed to parse platform specific descriptor: %v", err)
+		t.Fatalf("failed to parse platform specific descriptor: %v", err)
+	}
+	plat, err := platform.Parse("linux/amd64/v3")
+	if err != nil {
+		t.Fatalf("failed to parse the platform: %v", err)
 	}
 
 	// define tests
@@ -262,14 +332,14 @@ func TestMod(t *testing.T) {
 		{
 			name: "Config Time",
 			opts: []Opts{
-				WithConfigTimestampMax(tTime),
+				WithConfigTimestampMax(baseTime),
 			},
 			ref: "ocidir://testrepo:v1",
 		},
 		{
 			name: "Config Time Artifact",
 			opts: []Opts{
-				WithConfigTimestampMax(tTime),
+				WithConfigTimestampMax(baseTime),
 			},
 			ref:      "ocidir://testrepo:a1",
 			wantSame: true,
@@ -294,7 +364,7 @@ func TestMod(t *testing.T) {
 			name: "Config Time Set",
 			opts: []Opts{
 				WithConfigTimestamp(OptTime{
-					Set: tTime,
+					Set: baseTime,
 				}),
 			},
 			ref: "ocidir://testrepo:v1",
@@ -303,7 +373,7 @@ func TestMod(t *testing.T) {
 			name: "Config Time Base Ref",
 			opts: []Opts{
 				WithConfigTimestamp(OptTime{
-					Set:     tTime,
+					Set:     baseTime,
 					BaseRef: rb1,
 				}),
 			},
@@ -313,7 +383,7 @@ func TestMod(t *testing.T) {
 			name: "Config Time Base Count",
 			opts: []Opts{
 				WithConfigTimestamp(OptTime{
-					Set:        tTime,
+					Set:        baseTime,
 					BaseLayers: 1,
 				}),
 			},
@@ -333,7 +403,7 @@ func TestMod(t *testing.T) {
 			name: "Config Time Artifact",
 			opts: []Opts{
 				WithConfigTimestamp(OptTime{
-					Set: tTime,
+					Set: baseTime,
 				}),
 			},
 			ref:      "ocidir://testrepo:a1",
@@ -343,12 +413,19 @@ func TestMod(t *testing.T) {
 			name: "Config Time After Unchanged",
 			opts: []Opts{
 				WithConfigTimestamp(OptTime{
-					Set:   tTime,
+					Set:   baseTime,
 					After: time.Now(),
 				}),
 			},
 			ref:      "ocidir://testrepo:v1",
 			wantSame: true,
+		},
+		{
+			name: "Config Platform",
+			opts: []Opts{
+				WithConfigPlatform(plat),
+			},
+			ref: "ocidir://testrepo:v1",
 		},
 		{
 			name: "Expose Port",
@@ -399,7 +476,7 @@ func TestMod(t *testing.T) {
 		{
 			name: "Layer Timestamp",
 			opts: []Opts{
-				WithLayerTimestampMax(tTime),
+				WithLayerTimestampMax(baseTime),
 			},
 			ref: "ocidir://testrepo:v1",
 		},
@@ -414,7 +491,7 @@ func TestMod(t *testing.T) {
 		{
 			name: "Layer Timestamp Artifact",
 			opts: []Opts{
-				WithLayerTimestampMax(tTime),
+				WithLayerTimestampMax(baseTime),
 			},
 			ref:      "ocidir://testrepo:a1",
 			wantSame: true,
@@ -448,7 +525,7 @@ func TestMod(t *testing.T) {
 			name: "Layer Timestamp",
 			opts: []Opts{
 				WithLayerTimestamp(OptTime{
-					Set: tTime,
+					Set: baseTime,
 				}),
 			},
 			ref: "ocidir://testrepo:v1",
@@ -457,7 +534,7 @@ func TestMod(t *testing.T) {
 			name: "Layer Timestamp After Unchanged",
 			opts: []Opts{
 				WithLayerTimestamp(OptTime{
-					Set:   tTime,
+					Set:   baseTime,
 					After: time.Now(),
 				}),
 			},
@@ -468,7 +545,7 @@ func TestMod(t *testing.T) {
 			name: "Layer Timestamp Base Ref",
 			opts: []Opts{
 				WithLayerTimestamp(OptTime{
-					Set:     tTime,
+					Set:     baseTime,
 					BaseRef: rb1,
 				}),
 			},
@@ -478,7 +555,7 @@ func TestMod(t *testing.T) {
 			name: "Layer Timestamp Base Ref Same",
 			opts: []Opts{
 				WithLayerTimestamp(OptTime{
-					Set:     tTime,
+					Set:     baseTime,
 					BaseRef: r3,
 				}),
 			},
@@ -489,7 +566,7 @@ func TestMod(t *testing.T) {
 			name: "Layer Timestamp Base Count Same",
 			opts: []Opts{
 				WithLayerTimestamp(OptTime{
-					Set:        tTime,
+					Set:        baseTime,
 					BaseLayers: 99,
 				}),
 			},
@@ -500,7 +577,7 @@ func TestMod(t *testing.T) {
 			name: "Layer Timestamp Base Count",
 			opts: []Opts{
 				WithLayerTimestamp(OptTime{
-					Set:        tTime,
+					Set:        baseTime,
 					BaseLayers: 1,
 				}),
 			},
@@ -510,8 +587,8 @@ func TestMod(t *testing.T) {
 			name: "Layer Timestamp Artifact",
 			opts: []Opts{
 				WithLayerTimestamp(OptTime{
-					Set:   tTime,
-					After: tTime,
+					Set:   baseTime,
+					After: baseTime,
 				}),
 			},
 			ref:      "ocidir://testrepo:a1",
@@ -520,7 +597,7 @@ func TestMod(t *testing.T) {
 		{
 			name: "Layer File Tar Time Max",
 			opts: []Opts{
-				WithFileTarTimeMax("/dir/layer.tar", tTime),
+				WithFileTarTimeMax("/dir/layer.tar", baseTime),
 			},
 			ref: "ocidir://testrepo:v3",
 		},
@@ -536,7 +613,7 @@ func TestMod(t *testing.T) {
 			name: "Layer File Tar Time",
 			opts: []Opts{
 				WithFileTarTime("/dir/layer.tar", OptTime{
-					Set:     tTime,
+					Set:     baseTime,
 					BaseRef: rb1,
 				}),
 			},
@@ -546,8 +623,8 @@ func TestMod(t *testing.T) {
 			name: "Layer File Tar Time After",
 			opts: []Opts{
 				WithFileTarTime("/dir/layer.tar", OptTime{
-					Set:   tTime,
-					After: tTime,
+					Set:   baseTime,
+					After: baseTime,
 				}),
 			},
 			ref: "ocidir://testrepo:v3",
@@ -556,7 +633,7 @@ func TestMod(t *testing.T) {
 			name: "Layer File Tar Time Same Base",
 			opts: []Opts{
 				WithFileTarTime("/dir/layer.tar", OptTime{
-					Set:     tTime,
+					Set:     baseTime,
 					BaseRef: r3,
 				}),
 			},
@@ -631,6 +708,57 @@ func TestMod(t *testing.T) {
 			ref: "ocidir://testrepo:v1",
 		},
 		{
+			name: "Remove data config",
+			opts: []Opts{
+				WithData(0),
+			},
+			ref: "ocidir://testrepo:a-example",
+		},
+		{
+			name: "Keep data config",
+			opts: []Opts{
+				WithData(4),
+			},
+			ref:      "ocidir://testrepo:a-example",
+			wantSame: true,
+		},
+		{
+			name: "Remove Command",
+			opts: []Opts{
+				WithConfigCmd([]string{}),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Set Command",
+			opts: []Opts{
+				WithConfigCmd([]string{"/app", "-v"}),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Set Command Shell",
+			opts: []Opts{
+				WithConfigCmd([]string{"/bin/sh", "-c", "/app -v"}),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Remove Entrypoint",
+			opts: []Opts{
+				WithConfigEntrypoint([]string{}),
+			},
+			ref:      "ocidir://testrepo:v1",
+			wantSame: true,
+		},
+		{
+			name: "Set Entrypoint",
+			opts: []Opts{
+				WithConfigEntrypoint([]string{"/app", "-v"}),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
 			name: "Build arg rm",
 			opts: []Opts{
 				WithBuildArgRm("arg_label", regexp.MustCompile("arg_for_[a-z]*")),
@@ -656,6 +784,7 @@ func TestMod(t *testing.T) {
 			name: "Rebase with annotations v2",
 			opts: []Opts{
 				WithRebase(),
+				WithRefTgt(rTgt2),
 			},
 			ref: "ocidir://testrepo:v2",
 		},
@@ -663,6 +792,7 @@ func TestMod(t *testing.T) {
 			name: "Rebase with annotations v3",
 			opts: []Opts{
 				WithRebase(),
+				WithRefTgt(rTgt2),
 			},
 			ref: "ocidir://testrepo:v3",
 		},
@@ -672,12 +802,13 @@ func TestMod(t *testing.T) {
 				WithRebase(),
 			},
 			ref:     "ocidir://testrepo:v1",
-			wantErr: types.ErrMissingAnnotation,
+			wantErr: errs.ErrMissingAnnotation,
 		},
 		{
 			name: "Rebase refs",
 			opts: []Opts{
 				WithRebaseRefs(rb1, rb2),
+				WithRefTgt(rTgt2),
 			},
 			ref: "ocidir://testrepo:v2",
 		},
@@ -687,7 +818,7 @@ func TestMod(t *testing.T) {
 				WithRebaseRefs(rb2, rb3),
 			},
 			ref:     "ocidir://testrepo:v3",
-			wantErr: types.ErrMismatch,
+			wantErr: errs.ErrMismatch,
 		},
 		{
 			name: "Rebase mismatch",
@@ -695,20 +826,59 @@ func TestMod(t *testing.T) {
 				WithRebaseRefs(rb3, rb2),
 			},
 			ref:     "ocidir://testrepo:v3",
-			wantErr: types.ErrMismatch,
+			wantErr: errs.ErrMismatch,
+		},
+		{
+			name: "Rebase and backdate",
+			opts: []Opts{
+				WithRefTgt(rTgt3),
+				WithRebase(),
+				WithLayerTimestamp(OptTime{
+					Set: oldTime,
+				}),
+			},
+			ref: "ocidir://testrepo:v2",
+		},
+		{
+			name: "Pull up labels and common annotations v1",
+			opts: []Opts{
+				WithManifestToOCIReferrers(),
+				WithLabelToAnnotation(),
+				WithAnnotationPromoteCommon(),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Setup Annotations v2",
+			opts: []Opts{
+				WithAnnotation("[*]common", "annotation on all images"),
+				WithAnnotation("[linux/amd64,linux/arm64,linux/arm/v7]child", "annotation on all child images"),
+				WithAnnotation("[linux/amd64]unique", "amd64"),
+				WithAnnotation("[linux/arm64]unique", "arm64"),
+				WithAnnotation("[linux/arm/v7]unique", "arm/v7"),
+				WithAnnotation("[linux/amd64]amd64only", "value for amd64"),
+				WithRefTgt(rTgt2),
+			},
+			ref: "ocidir://testrepo:v2",
+		},
+		{
+			name: "Pull up common annotations v2",
+			opts: []Opts{
+				WithAnnotationPromoteCommon(),
+			},
+			ref: rTgt2.CommonName(),
 		},
 	}
 
 	// run tests
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, err := ref.New(tt.ref)
+			rSrc, err := ref.New(tt.ref)
 			if err != nil {
-				t.Errorf("failed creating ref: %v", err)
-				return
+				t.Fatalf("failed creating ref: %v", err)
 			}
 			// run mod with opts
-			rMod, err := Apply(ctx, rc, r, tt.opts...)
+			rMod, err := Apply(ctx, rc, rSrc, tt.opts...)
 			if tt.wantErr != nil {
 				if err == nil {
 					t.Errorf("ModImage did not fail")
@@ -717,27 +887,24 @@ func TestMod(t *testing.T) {
 				}
 				return
 			} else if err != nil {
-				t.Errorf("unexpected error: %v", err)
-				return
+				t.Fatalf("unexpected error: %v", err)
 			}
 
-			mSrc, err := rc.ManifestHead(ctx, r, regclient.WithManifestRequireDigest())
+			mSrc, err := rc.ManifestHead(ctx, rSrc, regclient.WithManifestRequireDigest())
 			if err != nil {
-				t.Errorf("failed to get manifest from src: %v", err)
-				return
+				t.Fatalf("failed to get manifest from src: %v", err)
 			}
 			mTgt, err := rc.ManifestHead(ctx, rMod, regclient.WithManifestRequireDigest())
 			if err != nil {
-				t.Errorf("failed to get manifest from mod \"%s\": %v", rMod.CommonName(), err)
-				return
+				t.Fatalf("failed to get manifest from mod \"%s\": %v", rMod.CommonName(), err)
 			}
 
 			if tt.wantSame {
-				if !mSrc.GetDescriptor().Equal(mTgt.GetDescriptor()) {
+				if mSrc.GetDescriptor().Digest != mTgt.GetDescriptor().Digest {
 					t.Errorf("digest changed")
 				}
 			} else {
-				if mSrc.GetDescriptor().Equal(mTgt.GetDescriptor()) {
+				if mSrc.GetDescriptor().Digest == mTgt.GetDescriptor().Digest {
 					t.Errorf("digest did not change")
 				}
 			}
@@ -748,12 +915,12 @@ func TestMod(t *testing.T) {
 func TestInList(t *testing.T) {
 	t.Parallel()
 	t.Run("match", func(t *testing.T) {
-		if !inListStr(types.MediaTypeDocker2LayerGzip, mtWLTar) {
+		if !inListStr(mediatype.Docker2LayerGzip, mtWLTar) {
 			t.Errorf("did not find docker layer in tar whitelist")
 		}
 	})
 	t.Run("mismatch", func(t *testing.T) {
-		if inListStr(types.MediaTypeDocker2LayerGzip, mtWLConfig) {
+		if inListStr(mediatype.Docker2LayerGzip, mtWLConfig) {
 			t.Errorf("found docker layer in config whitelist")
 		}
 	})

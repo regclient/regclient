@@ -7,7 +7,7 @@ import (
 
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/ref"
 )
@@ -15,7 +15,7 @@ import (
 // Blob interface is used for returning blobs.
 type Blob interface {
 	// GetDescriptor returns the descriptor associated with the blob.
-	GetDescriptor() types.Descriptor
+	GetDescriptor() descriptor.Descriptor
 	// RawBody returns the raw content of the blob.
 	RawBody() ([]byte, error)
 	// RawHeaders returns the headers received from the registry.
@@ -38,7 +38,7 @@ type Blob interface {
 }
 
 type blobConfig struct {
-	desc    types.Descriptor
+	desc    descriptor.Descriptor
 	header  http.Header
 	image   *v1.Image
 	r       ref.Ref
@@ -51,7 +51,7 @@ type blobConfig struct {
 type Opts func(*blobConfig)
 
 // WithDesc specifies the descriptor associated with the blob.
-func WithDesc(d types.Descriptor) Opts {
+func WithDesc(d descriptor.Descriptor) Opts {
 	return func(bc *blobConfig) {
 		bc.desc = d
 	}

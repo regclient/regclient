@@ -12,16 +12,14 @@ func TestDocker(t *testing.T) {
 	// cannot run cred helper in parallel because of OS working directory race conditions
 	pwd, err := os.Getwd()
 	if err != nil {
-		t.Errorf("failed to get working dir: %v", err)
-		return
+		t.Fatalf("failed to get working dir: %v", err)
 	}
 	curPath := os.Getenv("PATH")
 	t.Setenv("PATH", filepath.Join(pwd, "testdata")+string(os.PathListSeparator)+curPath)
 	t.Setenv(dockerEnv, "testdata")
 	hosts, err := DockerLoad()
 	if err != nil {
-		t.Errorf("error loading docker credentials: %v", err)
-		return
+		t.Fatalf("error loading docker credentials: %v", err)
 	}
 	hostMap := map[string]*Host{}
 	for _, h := range hosts {
@@ -91,8 +89,7 @@ func TestDocker(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			h, ok := hostMap[tt.hostname]
 			if !ok {
-				t.Errorf("host not found: %s", tt.hostname)
-				return
+				t.Fatalf("host not found: %s", tt.hostname)
 			}
 			if tt.expectUser != h.User {
 				t.Errorf("user mismatch, expect %s, received %s", tt.expectUser, h.User)

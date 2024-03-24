@@ -9,11 +9,20 @@ VCS_REF?=$(shell git rev-list -1 HEAD)
 ifneq ($(shell git status --porcelain 2>/dev/null),)
   VCS_REF := $(VCS_REF)-dirty
 endif
+VCS_VERSION?=$(shell vcs_describe="$$(git describe --all)"; \
+  vcs_version="(devel)"; \
+  if [ "$${vcs_describe}" != "$${vcs_describe#tags/}" ]; then \
+    vcs_version="$${vcs_describe#tags/}"; \
+  elif [ "$${vcs_describe}" != "$${vcs_describe#heads/}" ]; then \
+    vcs_version="$${vcs_describe#heads/}"; \
+    if [ "main" = "$${vcs_version}" ]; then vcs_version=edge; fi; \
+  fi; \
+  echo "$${vcs_version}" | sed -r 's#/+#-#g')
 VCS_TAG?=$(shell git describe --tags --abbrev=0 2>/dev/null || true)
 LD_FLAGS?=-s -w -extldflags -static -buildid= -X \"github.com/regclient/regclient/internal/version.vcsTag=$(VCS_TAG)\"
 GO_BUILD_FLAGS?=-trimpath -ldflags "$(LD_FLAGS)" -tags nolegacy
 DOCKERFILE_EXT?=$(shell if docker build --help 2>/dev/null | grep -q -- '--progress'; then echo ".buildkit"; fi)
-DOCKER_ARGS?=--build-arg "VCS_REF=$(VCS_REF)"
+DOCKER_ARGS?=--build-arg "VCS_REF=$(VCS_REF)" --build-arg "VCS_VERSION=$(VCS_VERSION)"
 GOPATH?=$(shell go env GOPATH)
 PWD:=$(shell pwd)
 VER_BUMP?=$(shell command -v version-bump 2>/dev/null)
@@ -26,20 +35,22 @@ ifeq "$(strip $(VER_BUMP))" ''
 endif
 MARKDOWN_LINT_VER?=v0.12.1
 GOMAJOR_VER?=v0.10.1
-GOSEC_VER?=v2.18.2
-GO_VULNCHECK_VER?=v1.0.3
-OSV_SCANNER_VER?=v1.6.2
+GOSEC_VER?=v2.19.0
+GO_VULNCHECK_VER?=v1.0.4
+OSV_SCANNER_VER?=v1.7.1
 SYFT?=$(shell command -v syft 2>/dev/null)
 SYFT_CMD_VER:=$(shell [ -x "$(SYFT)" ] && echo "v$$($(SYFT) version | awk '/^Version: / {print $$2}')" || echo "0")
-SYFT_VERSION?=v0.103.1
-SYFT_CONTAINER?=anchore/syft:v0.103.1@sha256:96c56b2554079d90e5fc8999278638ecca6454713fceebd26321d0698975b243
+SYFT_VERSION?=v1.0.1
+SYFT_CONTAINER?=anchore/syft:v1.0.1@sha256:d49defada853900861d55491ba549ab334148d51b11f23942abecb39ea83d4db
 ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 	SYFT=docker run --rm \
 		-v "$(shell pwd)/:$(shell pwd)/" -w "$(shell pwd)" \
 		-u "$(shell id -u):$(shell id -g)" \
 		$(SYFT_CONTAINER)
 endif
-STATICCHECK_VER?=v0.4.6
+STATICCHECK_VER?=v0.4.7
+CI_DISTRIBUTION_VER?=2.8.3
+CI_ZOT_VER?=v2.0.2
 
 .PHONY: .FORCE
 .FORCE:
@@ -76,9 +87,10 @@ lint-goimports: $(GOPATH)/bin/goimports
 		exit 1; \
 	fi
 
+# excluding types/platform pending resultion to https://github.com/securego/gosec/issues/1116
 .PHONY: lint-gosec
 lint-gosec: $(GOPATH)/bin/gosec .FORCE ## Run gosec
-	$(GOPATH)/bin/gosec -terse ./...
+	$(GOPATH)/bin/gosec -terse -exclude-dir types/platform ./...
 
 .PHONY: lint-md
 lint-md: .FORCE ## Run linting for markdown
@@ -90,7 +102,7 @@ vulnerability-scan: osv-scanner vulncheck-go ## Run all vulnerability scanners
 
 .PHONY: osv-scanner
 osv-scanner: $(GOPATH)/bin/osv-scanner .FORCE ## Run OSV Scanner
-	$(GOPATH)/bin/osv-scanner scan -r .
+	$(GOPATH)/bin/osv-scanner scan -r --experimental-licenses="Apache-2.0,BSD-3-Clause,MIT,CC-BY-SA-4.0,UNKNOWN" .
 
 .PHONY: vulncheck-go
 vulncheck-go: $(GOPATH)/bin/govulncheck .FORCE ## Run govulncheck
@@ -127,12 +139,15 @@ test-docker-%:
 	docker buildx build --platform="$(TEST_PLATFORMS)" -f build/Dockerfile.$*.buildkit .
 	docker buildx build --platform="$(TEST_PLATFORMS)" -f build/Dockerfile.$*.buildkit --target release-alpine .
 
+.PHONY: ci
+ci: ci-distribution ci-zot ## Run CI tests against self hosted registries
+
 .PHONY: ci-distribution
 ci-distribution:
 	docker run --rm -d -p 5000 \
 		--label regclient-ci=true --name regclient-ci-distribution \
 		-e "REGISTRY_STORAGE_DELETE_ENABLED=true" \
-		docker.io/registry:2.8.2
+		docker.io/library/registry:$(CI_DISTRIBUTION_VER)
 	./build/ci-test.sh -t localhost:$$(docker port regclient-ci-distribution 5000 | head -1 | cut -f2 -d:)/test-ci
 	docker stop regclient-ci-distribution
 
@@ -141,7 +156,7 @@ ci-zot:
 	docker run --rm -d -p 5000 \
 		--label regclient-ci=true --name regclient-ci-zot \
 		-v "$$(pwd)/build/zot-config.json:/etc/zot/config.json:ro" \
-		ghcr.io/project-zot/zot-linux-amd64:v2.0.0-rc5
+		ghcr.io/project-zot/zot-linux-amd64:$(CI_ZOT_VER)
 	./build/ci-test.sh -t localhost:$$(docker port regclient-ci-zot 5000 | head -1 | cut -f2 -d:)/test-ci
 	docker stop regclient-ci-zot
 
@@ -164,8 +179,8 @@ artifacts/%: artifact-pre .FORCE
 	echo export GOARCH=$${GOARCH}; \
 	echo go build ${GO_BUILD_FLAGS} -o "$@" ./cmd/$${command}/; \
 	CGO_ENABLED=0 go build ${GO_BUILD_FLAGS} -o "$@" ./cmd/$${command}/; \
-	$(SYFT) packages -q "file:$@" --source-name "$${command}" -o cyclonedx-json >"artifacts/$${command}-$${platform}.cyclonedx.json"; \
-	$(SYFT) packages -q "file:$@" --source-name "$${command}" -o spdx-json >"artifacts/$${command}-$${platform}.spdx.json"
+	$(SYFT) scan -q "file:$@" --source-name "$${command}" -o cyclonedx-json >"artifacts/$${command}-$${platform}.cyclonedx.json"; \
+	$(SYFT) scan -q "file:$@" --source-name "$${command}" -o spdx-json >"artifacts/$${command}-$${platform}.spdx.json"
 
 .PHONY: plugin-user
 plugin-user:

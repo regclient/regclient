@@ -2,9 +2,10 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"os/signal"
 	"strings"
 	"syscall"
 
@@ -14,11 +15,13 @@ import (
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
+	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/types/ref"
 )
 
 type registryCmd struct {
 	rootOpts             *rootCmd
+	formatConf           string
 	user, pass           string // login opts
 	passStdin            bool
 	credHelper           string
@@ -51,6 +54,18 @@ func NewRegistryCmd(rootOpts *rootCmd) *cobra.Command {
 		Short: "show registry config",
 		Long: `Displays the configuration used for a registry. Secrets are not included
 in the output (e.g. passwords, tokens, and TLS keys).`,
+		Example: `
+# show the full config
+regctl registry config
+
+# show the configuration for a single registry
+regctl registry config registry.example.org
+
+# show the configuration for Docker Hub
+regctl registry config docker.io
+
+# show the username used to login to docker hub
+regctl registry config docker.io --format '{{.User}}'`,
 		Args:              cobra.RangeArgs(0, 1),
 		ValidArgsFunction: registryArgListReg,
 		RunE:              registryOpts.runRegistryConfig,
@@ -60,14 +75,29 @@ in the output (e.g. passwords, tokens, and TLS keys).`,
 		Short: "login to a registry",
 		Long: `Provide login credentials for a registry. This may not be necessary if you
 have already logged in with docker.`,
+		Example: `
+# login to Docker Hub
+regctl registry login
+
+# login to registry
+regctl registry login registry.example.org
+
+# login to GHCR with a provided password
+echo "${token}" | regctl registry login ghcr.io -u "${username}" --pass-stdin`,
 		Args:              cobra.RangeArgs(0, 1),
 		ValidArgsFunction: registryArgListReg,
 		RunE:              registryOpts.runRegistryLogin,
 	}
 	var registryLogoutCmd = &cobra.Command{
-		Use:               "logout <registry>",
-		Short:             "logout of a registry",
-		Long:              `Remove registry credentials from the configuration.`,
+		Use:   "logout <registry>",
+		Short: "logout of a registry",
+		Long:  `Remove registry credentials from the configuration.`,
+		Example: `
+# logout from Docker Hub
+regctl registry logout
+
+# logout from a specific registry
+regctl registry logout registry.example.org`,
 		Args:              cobra.RangeArgs(0, 1),
 		ValidArgsFunction: registryArgListReg,
 		RunE:              registryOpts.runRegistryLogout,
@@ -75,12 +105,25 @@ have already logged in with docker.`,
 	var registrySetCmd = &cobra.Command{
 		Use:   "set <registry>",
 		Short: "set options on a registry",
-		Long: `Set or modify the configuration of a registry. To pass a certificate, include
-the contents of the file, e.g. --cacert "$(cat reg-ca.crt)"`,
+		Long:  `Set or modify the configuration of a registry.`,
+		Example: `
+# configure a registry for HTTP
+regctl registry set localhost:5000 --tls disabled
+
+# configure a self signed certificate
+regctl registry set registry.example.org --cacert "$(cat reg-ca.crt)"
+
+# specify a local mirror for Docker Hub
+regctl registry set docker.io --mirror hub-mirror.example.org
+
+# specify the requests per sec throttle
+regctl registry set quay.io --req-per-sec 10`,
 		Args:              cobra.RangeArgs(0, 1),
 		ValidArgsFunction: registryArgListReg,
 		RunE:              registryOpts.runRegistrySet,
 	}
+
+	registryConfigCmd.Flags().StringVar(&registryOpts.formatConf, "format", "{{jsonPretty .}}", "Format output with go template syntax")
 
 	registryLoginCmd.Flags().StringVarP(&registryOpts.user, "user", "u", "", "Username")
 	registryLoginCmd.Flags().StringVarP(&registryOpts.pass, "pass", "p", "", "Password")
@@ -158,7 +201,6 @@ func (registryOpts *registryCmd) runRegistryConfig(cmd *cobra.Command, args []st
 		c.Hosts[i].Token = ""
 		c.Hosts[i].ClientKey = ""
 	}
-	var hj []byte
 	if len(args) > 0 {
 		h, ok := c.Hosts[args[0]]
 		if !ok {
@@ -167,24 +209,16 @@ func (registryOpts *registryCmd) runRegistryConfig(cmd *cobra.Command, args []st
 			}).Warn("No configuration found for registry")
 			return nil
 		}
-		hj, err = json.MarshalIndent(h, "", "  ")
-		if err != nil {
-			return err
-		}
+		return template.Writer(cmd.OutOrStdout(), registryOpts.formatConf, h)
 	} else {
-		hj, err = json.MarshalIndent(c.Hosts, "", "  ")
-		if err != nil {
-			return err
-		}
+		return template.Writer(cmd.OutOrStdout(), registryOpts.formatConf, c)
 	}
-
-	// TODO: enable formatted/template output
-	fmt.Fprintf(cmd.OutOrStdout(), "%s\n", hj)
-	return nil
 }
 
 func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
+	// disable signal handler to allow ctrl-c to be used on prompts (context cancel on a blocking reader is difficult)
+	signal.Reset(os.Interrupt, syscall.SIGTERM)
 	c, err := ConfigLoadDefault()
 	if err != nil {
 		return err
@@ -209,7 +243,7 @@ func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []str
 		if h.User != "" {
 			defUser = " [" + h.User + "]"
 		}
-		fmt.Printf("Enter Username%s: ", defUser)
+		fmt.Fprintf(cmd.OutOrStdout(), "Enter Username%s: ", defUser)
 		user, _ := reader.ReadString('\n')
 		user = strings.TrimSpace(user)
 		if user != "" {
@@ -235,13 +269,19 @@ func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []str
 		}
 	} else {
 		// prompt for a password
-		fmt.Print("Enter Password: ")
-		pass, err := term.ReadPassword(int(syscall.Stdin))
+		var fd int
+		if ifd, ok := cmd.InOrStdin().(interface{ Fd() uintptr }); ok {
+			fd = int(ifd.Fd())
+		} else {
+			return fmt.Errorf("file descriptor needed to prompt for password (resolve by using \"-p\" flag)")
+		}
+		fmt.Fprint(cmd.OutOrStdout(), "Enter Password: ")
+		pass, err := term.ReadPassword(fd)
 		if err != nil {
 			return fmt.Errorf("unable to read from tty (resolve by using \"-p\" flag, or winpty on Windows): %w", err)
 		}
 		passwd := strings.TrimRight(string(pass), "\n")
-		fmt.Print("\n")
+		fmt.Fprint(cmd.OutOrStdout(), "\n")
 		if passwd != "" {
 			h.Pass = passwd
 		} else {

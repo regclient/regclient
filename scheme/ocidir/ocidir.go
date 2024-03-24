@@ -15,7 +15,9 @@ import (
 
 	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/internal/throttle"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/descriptor"
+	"github.com/regclient/regclient/types/errs"
+	"github.com/regclient/regclient/types/mediatype"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/ref"
 )
@@ -210,7 +212,7 @@ func (o *OCIDir) readIndex(r ref.Ref, locked bool) (v1.Index, error) {
 	return index, nil
 }
 
-func (o *OCIDir) updateIndex(r ref.Ref, d types.Descriptor, child bool, locked bool) error {
+func (o *OCIDir) updateIndex(r ref.Ref, d descriptor.Descriptor, child bool, locked bool) error {
 	if !locked {
 		o.mu.Lock()
 		defer o.mu.Unlock()
@@ -331,14 +333,14 @@ func (o *OCIDir) refMod(r ref.Ref) {
 func indexCreate() v1.Index {
 	i := v1.Index{
 		Versioned:   v1.IndexSchemaVersion,
-		MediaType:   types.MediaTypeOCI1ManifestList,
-		Manifests:   []types.Descriptor{},
+		MediaType:   mediatype.OCI1ManifestList,
+		Manifests:   []descriptor.Descriptor{},
 		Annotations: map[string]string{},
 	}
 	return i
 }
 
-func indexGet(index v1.Index, r ref.Ref) (types.Descriptor, error) {
+func indexGet(index v1.Index, r ref.Ref) (descriptor.Descriptor, error) {
 	if r.Digest == "" && r.Tag == "" {
 		r.Tag = "latest"
 	}
@@ -361,10 +363,10 @@ func indexGet(index v1.Index, r ref.Ref) (types.Descriptor, error) {
 			}
 		}
 	}
-	return types.Descriptor{}, types.ErrNotFound
+	return descriptor.Descriptor{}, errs.ErrNotFound
 }
 
-func indexSet(index *v1.Index, r ref.Ref, d types.Descriptor) error {
+func indexSet(index *v1.Index, r ref.Ref, d descriptor.Descriptor) error {
 	if index == nil {
 		return fmt.Errorf("index is nil")
 	}
@@ -375,7 +377,7 @@ func indexSet(index *v1.Index, r ref.Ref, d types.Descriptor) error {
 		d.Annotations[aOCIRefName] = r.Tag
 	}
 	if index.Manifests == nil {
-		index.Manifests = []types.Descriptor{}
+		index.Manifests = []descriptor.Descriptor{}
 	}
 	pos := -1
 	// search for existing

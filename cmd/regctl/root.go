@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -17,8 +18,6 @@ import (
 
 const (
 	progressFreq = time.Millisecond * 250
-	usageDesc    = `Utility for accessing docker registries
-More details at https://github.com/regclient/regclient`
 	// UserAgent sets the header on http requests
 	UserAgent = "regclient/regctl"
 )
@@ -40,9 +39,28 @@ type rootCmd struct {
 func NewRootCmd() *cobra.Command {
 	rootOpts := rootCmd{}
 	var rootTopCmd = &cobra.Command{
-		Use:           "regctl <cmd>",
-		Short:         "Utility for accessing docker registries",
-		Long:          usageDesc,
+		Use:   "regctl <cmd>",
+		Short: "Utility for accessing docker registries",
+		Long: `Utility for accessing docker registries
+More details at https://github.com/regclient/regclient`,
+		Example: `
+# login to ghcr.io
+regctl registry login ghcr.io
+
+# configure a local registry for http
+regctl registry set --tls disabled registry.example.org
+
+# copy an image from ghcr.io to local registry
+regctl image copy ghcr.io/regclient/regctl:latest registry.example.org/regctl:latest
+
+# show debugging output from a command
+regctl tag ls ghcr.io/regclient/regctl -v debug
+
+# format log output in json
+regctl image ratelimit --logopt json alpine
+
+# override registry config for a single command
+regctl image digest --host reg=localhost:5000,tls=disabled localhost:5000/repo:v1`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
@@ -50,9 +68,15 @@ func NewRootCmd() *cobra.Command {
 	var versionCmd = &cobra.Command{
 		Use:   "version",
 		Short: "Show the version",
-		Long:  `Show the version`,
-		Args:  cobra.ExactArgs(0),
-		RunE:  rootOpts.runVersion,
+		Long:  fmt.Sprintf(`Show the version of %s`, rootOpts.name),
+		Example: `
+# display full version details
+regctl version
+
+# retrieve the version number
+regctl version --format '{{.VCSTag}}'`,
+		Args: cobra.ExactArgs(0),
+		RunE: rootOpts.runVersion,
 	}
 
 	log = &logrus.Logger{

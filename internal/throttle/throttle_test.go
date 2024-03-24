@@ -39,8 +39,7 @@ func TestSingleThrottle(t *testing.T) {
 	// simple acquire
 	err := t1.Acquire(ctx)
 	if err != nil {
-		t.Errorf("failed to acquire: %v", err)
-		return
+		t.Fatalf("failed to acquire: %v", err)
 	}
 	// try to acquire in a goroutine
 	acquired := false

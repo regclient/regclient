@@ -27,9 +27,13 @@ jobs:
         image: ["regctl", "regsync", "regbot"]
         type: ["scratch", "alpine"]
 
+    env:
+      ALPINE_NAME: "alpine:3"
+      ALPINE_DIGEST: "sha256:c5b1261d6d3e43071626931fc004f70149baeba2c8ec672bd4f27761f8e1ad6b" # 3.19.1
+
     steps:
     - name: Check out code
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633 # v4.1.2
 
     - name: Prepare
       id: prep
@@ -41,7 +45,7 @@ jobs:
         fi
         HUB_IMAGE=regclient/${{ matrix.image }}
         GHCR_IMAGE=ghcr.io/regclient/${{ matrix.image }}
-        VERSION=noop
+        VERSION="(devel)"
         if [ "${{ github.event_name }}" = "schedule" ]; then
           VERSION=edge
         elif [[ $GITHUB_REF == refs/tags/* ]]; then
@@ -81,25 +85,25 @@ jobs:
         echo "repo_url=${REPO_URL}" >>$GITHUB_OUTPUT
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@f95db51fddba0c2d1ec667646a06c2ce06100226 # v3.0.0
+      uses: docker/setup-buildx-action@2b51285047da1547ffb1b2203d8be4c0af6b1f20 # v3.2.0
 
     - name: Login to DockerHub
       if: github.repository_owner == 'regclient'
-      uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0 
+      uses: docker/login-action@e92390c5fb421da1463c202d546fed0ec5c39f20 # v3.1.0 
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
     - name: Login to GHCR
       if: github.repository_owner == 'regclient'
-      uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
+      uses: docker/login-action@e92390c5fb421da1463c202d546fed0ec5c39f20 # v3.1.0
       with:
         registry: ghcr.io
         username: ${{ secrets.GHCR_USERNAME }}
         password: ${{ secrets.GHCR_TOKEN }}
 
     - name: Build
-      uses: docker/build-push-action@4a13e500e55cf31b7a5d59a38ab2040ab0f42f56 # v5.1.0
+      uses: docker/build-push-action@2cdde995de11925a030ce8070c3d77a52ffcf1c0 # v5.3.0
       id: build
       with:
         context: .
@@ -109,11 +113,9 @@ jobs:
         outputs: type=oci,dest=output/${{matrix.image}}-${{matrix.type}}.tar
         build-args: |
           SOURCE_DATE_EPOCH=${{ steps.prep.outputs.vcs_sec }}
-        labels: |
-          org.opencontainers.image.created=${{ steps.prep.outputs.created }}
-          org.opencontainers.image.source=${{ steps.prep.outputs.repo_url }}
-          org.opencontainers.image.version=${{ steps.prep.outputs.version }}
-          org.opencontainers.image.revision=${{ github.sha }}
+          BUILD_DATE=${{ steps.prep.outputs.created }}
+          VCS_REF=${{ github.sha }}
+          VCS_VERSION=${{ steps.prep.outputs.version }} 
 
     - name: Install cosign
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
@@ -123,14 +125,14 @@ jobs:
     
     - name: Install syft
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
-      uses: anchore/sbom-action/download-syft@b6a39da80722a2cb0ef5d197531764a89b5d48c3 # v0.15.8
+      uses: anchore/sbom-action/download-syft@9fece9e20048ca9590af301449208b2b8861333b # v0.15.9
       id: syft
       with:
-        syft-version: "v0.103.1"
+        syft-version: "v1.0.1"
     
     # Dogfooding, use regctl to modify regclient images to improve reproducibility
     - name: Install regctl
-      uses: regclient/actions/regctl-installer@36cf95c1ea691643b8e8aad3d10b8b8658fad984 # main
+      uses: regclient/actions/regctl-installer@d8097ee5dd5cdf150516315919b58509fc7f4cfa # main
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       with:
         release: main
@@ -143,8 +145,8 @@ jobs:
         base_name=""
         mkdir -p "output/${{matrix.image}}"
         if [ "${{matrix.type}}" = "alpine" ]; then
-          base_name="alpine:3"
-          base_digest="$(regctl image digest "${base_name}")"
+          base_name="${ALPINE_NAME}"
+          base_digest="${ALPINE_DIGEST}"
         fi
         # mutate the image locally
         local_tag="ocidir://output/${{matrix.image}}:${{matrix.type}}"
@@ -152,12 +154,7 @@ jobs:
         regctl image import "${local_tag}" "output/${{matrix.image}}-${{matrix.type}}.tar"
         echo "Modifying image for reproducibility"
         regctl image mod "${local_tag}" --replace \
-          --to-oci-referrers
-        regctl image mod "${local_tag}" --replace \
-          --annotation "[*]org.opencontainers.image.created=${vcs_date}" \
-          --annotation "[*]org.opencontainers.image.source=${{ steps.prep.outputs.repo_url }}" \
-          --annotation "[*]org.opencontainers.image.version=${{ steps.prep.outputs.version }}" \
-          --annotation "[*]org.opencontainers.image.revision=${{ github.sha }}"
+          --to-oci-referrers --label-to-annotation --annotation-promote
         if [ -n "$base_name" ] && [ -n "$base_digest" ]; then
           regctl image mod "${local_tag}" --replace \
             --annotation "[*]org.opencontainers.image.base.name=${base_name}" \
@@ -170,6 +167,7 @@ jobs:
             --time "set=${vcs_date}"
         fi
         echo "digest=$(regctl image digest ${local_tag})" >>$GITHUB_OUTPUT
+
     - name: Attach SBOMs
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       id: sbom
@@ -179,14 +177,14 @@ jobs:
                         --format '{{range .Manifests}}{{printf "%s\n" .Digest}}{{end}}'); do
           echo "Attaching SBOMs for ${{matrix.image}}@${digest}"
           regctl image copy ocidir://output/${{matrix.image}}@${digest} ocidir://output/${{matrix.image}}-sbom -v warn >/dev/null
-          ${{steps.syft.outputs.cmd}} packages -q "oci-dir:output/${{matrix.image}}-sbom" \
+          ${{steps.syft.outputs.cmd}} scan -q "oci-dir:output/${{matrix.image}}-sbom" \
               --source-name "docker:docker.io/regclient/${{matrix.image}}@${digest}" -o cyclonedx-json \
             | regctl artifact put --subject "ocidir://output/${{matrix.image}}@${digest}" \
                 --artifact-type application/vnd.cyclonedx+json \
                 -m application/vnd.cyclonedx+json \
                 --annotation "org.opencontainers.image.created=${now_date}" \
                 --annotation "org.opencontainers.image.description=CycloneDX JSON SBOM"
-          ${{steps.syft.outputs.cmd}} packages -q "oci-dir:output/${{matrix.image}}-sbom" \
+          ${{steps.syft.outputs.cmd}} scan -q "oci-dir:output/${{matrix.image}}-sbom" \
               --source-name "docker:docker.io/regclient/${{matrix.image}}@${digest}" -o spdx-json \
             | regctl artifact put --subject "ocidir://output/${{matrix.image}}@${digest}" \
                 --artifact-type application/spdx+json \
@@ -196,29 +194,20 @@ jobs:
           rm -r output/${{matrix.image}}-sbom
         done
 
-    - name: Push
+    - name: Push and Sign
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       id: push
       run: |
         # loop over the tags
         image_hub="${{ steps.prep.outputs.image_hub }}"
         for tag in $(echo ${{ steps.prep.outputs.tags }} | tr , ' '); do
-          if [ "$(regctl image digest "ocidir://output/${{matrix.image}}:${{matrix.type}}")" = "$(regctl image digest "${tag}" 2>/dev/null || true)" ]; then
+          digest="$(regctl image digest "ocidir://output/${{matrix.image}}:${{matrix.type}}")"
+          if [ "${digest}" = "$(regctl image digest "${tag}" 2>/dev/null || true)" ]; then
             # image already pushed, don't add referrers to reproducible builds
             echo "Skipping ${tag}"
           else
             echo "Pushing ${tag}"
-            # TODO: push referrers to Hub once this is fixed: https://github.com/docker/hub-feedback/issues/2307
-            if [ "$tag" != "${tag#$image_hub}" ]; then
-              regctl image copy "ocidir://output/${{matrix.image}}:${{matrix.type}}" "${tag}"
-            else
-              regctl image copy --referrers "ocidir://output/${{matrix.image}}:${{matrix.type}}" "${tag}"
-            fi
+            regctl image copy --referrers "ocidir://output/${{matrix.image}}:${{matrix.type}}@${digest}" "${tag}"
+            cosign sign -y -r "${tag}@${digest}"
           fi
         done
-
-    - name: Sign the container image
-      if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
-      run: |
-        cosign sign -y -r ${{ steps.prep.outputs.image_hub }}@${{ steps.mutate.outputs.digest }}
-        cosign sign -y -r ${{ steps.prep.outputs.image_ghcr }}@${{ steps.mutate.outputs.digest }}

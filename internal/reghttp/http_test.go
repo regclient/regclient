@@ -19,7 +19,7 @@ import (
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/auth"
 	"github.com/regclient/regclient/internal/reqresp"
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/warning"
 )
 
@@ -769,15 +769,14 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err != nil {
-			t.Errorf("failed to run get: %v", err)
-			return
+			t.Fatalf("failed to run get: %v", err)
 		}
 		if resp.HTTPResponse().StatusCode != 200 {
 			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
 		}
 		body, err := io.ReadAll(resp)
 		if err != nil {
-			t.Errorf("body read failure: %v", err)
+			t.Fatalf("body read failure: %v", err)
 		} else if !bytes.Equal(body, getBody) {
 			t.Errorf("body read mismatch, expected %s, received %s", getBody, body)
 		}
@@ -802,8 +801,7 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err != nil {
-			t.Errorf("failed to run get: %v", err)
-			return
+			t.Fatalf("failed to run get: %v", err)
 		}
 		if resp.HTTPResponse().StatusCode != 200 {
 			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
@@ -811,7 +809,7 @@ func TestRegHttp(t *testing.T) {
 		b := make([]byte, 2)
 		l, err := resp.Read(b)
 		if err != nil {
-			t.Errorf("body read failure: %v", err)
+			t.Fatalf("body read failure: %v", err)
 		}
 		if l != 2 {
 			t.Errorf("unexpected length, expected 2, received %d", l)
@@ -828,7 +826,7 @@ func TestRegHttp(t *testing.T) {
 		}
 		body, err := io.ReadAll(resp)
 		if err != nil {
-			t.Errorf("body read failure: %v", err)
+			t.Fatalf("body read failure: %v", err)
 		} else if !bytes.Equal(body, getBody) {
 			t.Errorf("body read mismatch, expected %s, received %s", getBody, body)
 		}
@@ -854,15 +852,14 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err != nil {
-			t.Errorf("failed to run get: %v", err)
-			return
+			t.Fatalf("failed to run get: %v", err)
 		}
 		if resp.HTTPResponse().StatusCode != 200 {
 			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
 		}
 		body, err := io.ReadAll(resp)
 		if err != nil {
-			t.Errorf("body read failure: %v", err)
+			t.Fatalf("body read failure: %v", err)
 		} else if !bytes.Equal(body, getBody) {
 			t.Errorf("body read mismatch, expected %s, received %s", getBody, body)
 		}
@@ -888,8 +885,7 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, badDigestReq)
 		if err != nil {
-			t.Errorf("failed to run get: %v", err)
-			return
+			t.Fatalf("failed to run get: %v", err)
 		}
 		if resp.HTTPResponse().StatusCode != 200 {
 			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
@@ -897,7 +893,7 @@ func TestRegHttp(t *testing.T) {
 		body, err := io.ReadAll(resp)
 		if err == nil {
 			t.Errorf("body read unexpectedly succeeded: %s", body)
-		} else if !errors.Is(err, types.ErrDigestMismatch) {
+		} else if !errors.Is(err, errs.ErrDigestMismatch) {
 			t.Errorf("unexpected error from digest mismatch: %v", err)
 		}
 		err = resp.Close()
@@ -922,8 +918,7 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err != nil {
-			t.Errorf("failed to run get: %v", err)
-			return
+			t.Fatalf("failed to run get: %v", err)
 		}
 		if resp.HTTPResponse().StatusCode != 200 {
 			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
@@ -931,7 +926,7 @@ func TestRegHttp(t *testing.T) {
 		body, err := io.ReadAll(resp)
 		if err == nil {
 			t.Errorf("body read unexpectedly succeeded: %s", body)
-		} else if !errors.Is(err, types.ErrDigestMismatch) {
+		} else if !errors.Is(err, errs.ErrDigestMismatch) {
 			t.Errorf("unexpected error from digest mismatch: %v", err)
 		}
 		err = resp.Close()
@@ -960,9 +955,8 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(expCtx, getReq)
 		if err == nil {
-			t.Errorf("get unexpectedly succeeded")
 			resp.Close()
-			return
+			t.Errorf("get unexpectedly succeeded")
 		}
 	})
 	// test head requests
@@ -983,14 +977,13 @@ func TestRegHttp(t *testing.T) {
 		resp, err := hc.Do(ctx, headReq)
 		if err != nil {
 			t.Errorf("failed to run head: %v", err)
-			return
 		}
 		if resp.HTTPResponse().StatusCode != 200 {
 			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
 		}
 		body, err := io.ReadAll(resp)
 		if err != nil {
-			t.Errorf("body read failure: %v", err)
+			t.Fatalf("body read failure: %v", err)
 		} else if len(body) > 0 {
 			t.Errorf("body read mismatch, expected empty body, received %s", body)
 		}
@@ -1016,9 +1009,8 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, headReq)
 		if err == nil {
-			t.Errorf("unexpected success running head request")
 			resp.Close()
-			return
+			t.Fatalf("unexpected success running head request")
 		}
 	})
 	// test auth
@@ -1038,15 +1030,14 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, authReq)
 		if err != nil {
-			t.Errorf("failed to run get: %v", err)
-			return
+			t.Fatalf("failed to run get: %v", err)
 		}
 		if resp.HTTPResponse().StatusCode != 200 {
 			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
 		}
 		body, err := io.ReadAll(resp)
 		if err != nil {
-			t.Errorf("body read failure: %v", err)
+			t.Fatalf("body read failure: %v", err)
 		} else if !bytes.Equal(body, getBody) {
 			t.Errorf("body read mismatch, expected %s, received %s", getBody, body)
 		}
@@ -1071,11 +1062,10 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, authReq)
 		if err == nil {
-			t.Errorf("unexpected success with bad password")
 			resp.Close()
-			return
-		} else if !errors.Is(err, auth.ErrUnauthorized) {
-			t.Errorf("expected error %v, received error %v", auth.ErrUnauthorized, err)
+			t.Fatalf("unexpected success with bad password")
+		} else if !errors.Is(err, errs.ErrHTTPUnauthorized) {
+			t.Errorf("expected error %v, received error %v", errs.ErrHTTPUnauthorized, err)
 		}
 	})
 	t.Run("Bad auth", func(t *testing.T) {
@@ -1094,11 +1084,10 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, authReq)
 		if err == nil {
-			t.Errorf("unexpected success with bad auth header")
 			resp.Close()
-			return
-		} else if !errors.Is(err, types.ErrParsingFailed) {
-			t.Errorf("expected error %v, received error %v", types.ErrParsingFailed, err)
+			t.Fatalf("unexpected success with bad auth header")
+		} else if !errors.Is(err, errs.ErrParsingFailed) {
+			t.Errorf("expected error %v, received error %v", errs.ErrParsingFailed, err)
 		}
 	})
 	t.Run("Missing auth", func(t *testing.T) {
@@ -1117,11 +1106,10 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, authReq)
 		if err == nil {
-			t.Errorf("unexpected success with missing auth header")
 			resp.Close()
-			return
-		} else if !errors.Is(err, types.ErrEmptyChallenge) {
-			t.Errorf("expected error %v, received error %v", types.ErrEmptyChallenge, err)
+			t.Fatalf("unexpected success with missing auth header")
+		} else if !errors.Is(err, errs.ErrEmptyChallenge) {
+			t.Errorf("expected error %v, received error %v", errs.ErrEmptyChallenge, err)
 		}
 	})
 	// test repoauth
@@ -1141,15 +1129,14 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, authReq1G)
 		if err != nil {
-			t.Errorf("failed to run get: %v", err)
-			return
+			t.Fatalf("failed to run get: %v", err)
 		}
 		if resp.HTTPResponse().StatusCode != 200 {
 			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
 		}
 		body, err := io.ReadAll(resp)
 		if err != nil {
-			t.Errorf("body read failure: %v", err)
+			t.Fatalf("body read failure: %v", err)
 		} else if !bytes.Equal(body, getBody) {
 			t.Errorf("body read mismatch, expected %s, received %s", getBody, body)
 		}
@@ -1174,8 +1161,7 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err = hc.Do(ctx, authReq1P)
 		if err != nil {
-			t.Errorf("failed to run put: %v", err)
-			return
+			t.Fatalf("failed to run put: %v", err)
 		}
 		if resp.HTTPResponse().StatusCode != 201 {
 			t.Errorf("invalid status code, expected 201, received %d", resp.HTTPResponse().StatusCode)
@@ -1200,15 +1186,14 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err = hc.Do(ctx, authReq2G)
 		if err != nil {
-			t.Errorf("failed to run get: %v", err)
-			return
+			t.Fatalf("failed to run get: %v", err)
 		}
 		if resp.HTTPResponse().StatusCode != 200 {
 			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
 		}
 		body, err = io.ReadAll(resp)
 		if err != nil {
-			t.Errorf("body read failure: %v", err)
+			t.Fatalf("body read failure: %v", err)
 		} else if !bytes.Equal(body, getBody) {
 			t.Errorf("body read mismatch, expected %s, received %s", getBody, body)
 		}
@@ -1233,8 +1218,7 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err = hc.Do(ctx, authReq2P)
 		if err != nil {
-			t.Errorf("failed to run put: %v", err)
-			return
+			t.Fatalf("failed to run put: %v", err)
 		}
 		if resp.HTTPResponse().StatusCode != 201 {
 			t.Errorf("invalid status code, expected 201, received %d", resp.HTTPResponse().StatusCode)
@@ -1261,15 +1245,14 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, postReq)
 		if err != nil {
-			t.Errorf("failed to run post: %v", err)
-			return
+			t.Fatalf("failed to run post: %v", err)
 		}
 		if resp.HTTPResponse().StatusCode != http.StatusAccepted {
 			t.Errorf("invalid status code, expected %d, received %d", http.StatusAccepted, resp.HTTPResponse().StatusCode)
 		}
 		body, err := io.ReadAll(resp)
 		if err != nil {
-			t.Errorf("body read failure: %v", err)
+			t.Fatalf("body read failure: %v", err)
 		} else if len(body) > 0 {
 			t.Errorf("body read mismatch, expected empty body, received %s", body)
 		}
@@ -1293,15 +1276,14 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, putReq)
 		if err != nil {
-			t.Errorf("failed to run put: %v", err)
-			return
+			t.Fatalf("failed to run put: %v", err)
 		}
 		if resp.HTTPResponse().StatusCode != http.StatusCreated {
 			t.Errorf("invalid status code, expected %d, received %d", http.StatusCreated, resp.HTTPResponse().StatusCode)
 		}
 		body, err := io.ReadAll(resp)
 		if err != nil {
-			t.Errorf("body read failure: %v", err)
+			t.Fatalf("body read failure: %v", err)
 		} else if len(body) > 0 {
 			t.Errorf("body read mismatch, expected empty body, received %s", body)
 		}
@@ -1326,15 +1308,14 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, putReq)
 		if err != nil {
-			t.Errorf("failed to run put: %v", err)
-			return
+			t.Fatalf("failed to run put: %v", err)
 		}
 		if resp.HTTPResponse().StatusCode != http.StatusCreated {
 			t.Errorf("invalid status code, expected %d, received %d", http.StatusCreated, resp.HTTPResponse().StatusCode)
 		}
 		body, err := io.ReadAll(resp)
 		if err != nil {
-			t.Errorf("body read failure: %v", err)
+			t.Fatalf("body read failure: %v", err)
 		} else if len(body) > 0 {
 			t.Errorf("body read mismatch, expected empty body, received %s", body)
 		}
@@ -1358,15 +1339,14 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, deleteReq)
 		if err != nil {
-			t.Errorf("failed to run delete: %v", err)
-			return
+			t.Fatalf("failed to run delete: %v", err)
 		}
 		if resp.HTTPResponse().StatusCode != http.StatusAccepted {
 			t.Errorf("invalid status code, expected %d, received %d", http.StatusAccepted, resp.HTTPResponse().StatusCode)
 		}
 		body, err := io.ReadAll(resp)
 		if err != nil {
-			t.Errorf("body read failure: %v", err)
+			t.Fatalf("body read failure: %v", err)
 		} else if len(body) > 0 {
 			t.Errorf("body read mismatch, expected empty body, received %s", body)
 		}
@@ -1393,15 +1373,14 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err != nil {
-			t.Errorf("failed to run get: %v", err)
-			return
+			t.Fatalf("failed to run get: %v", err)
 		}
 		if resp.HTTPResponse().StatusCode != 200 {
 			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
 		}
 		body, err := io.ReadAll(resp)
 		if err != nil {
-			t.Errorf("body read failure: %v", err)
+			t.Fatalf("body read failure: %v", err)
 		} else if !bytes.Equal(body, getBody) {
 			t.Errorf("body read mismatch, expected %s, received %s", getBody, body)
 		}
@@ -1427,11 +1406,10 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err == nil {
-			t.Errorf("unexpected success on get for missing manifest")
 			resp.Close()
-			return
-		} else if !errors.Is(err, types.ErrNotFound) {
-			t.Errorf("unexpected error, expected %v, received %v", types.ErrNotFound, err)
+			t.Fatalf("unexpected success on get for missing manifest")
+		} else if !errors.Is(err, errs.ErrNotFound) {
+			t.Errorf("unexpected error, expected %v, received %v", errs.ErrNotFound, err)
 		}
 	})
 	t.Run("Forbidden", func(t *testing.T) {
@@ -1450,11 +1428,10 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err == nil {
-			t.Errorf("unexpected success on get for missing manifest")
 			resp.Close()
-			return
-		} else if !errors.Is(err, types.ErrHTTPUnauthorized) {
-			t.Errorf("unexpected error, expected %v, received %v", types.ErrHTTPUnauthorized, err)
+			t.Fatalf("unexpected success on get for missing manifest")
+		} else if !errors.Is(err, errs.ErrHTTPUnauthorized) {
+			t.Errorf("unexpected error, expected %v, received %v", errs.ErrHTTPUnauthorized, err)
 		}
 	})
 	t.Run("Bad GW", func(t *testing.T) {
@@ -1473,11 +1450,10 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err == nil {
-			t.Errorf("unexpected success on get for missing manifest")
 			resp.Close()
-			return
-		} else if !errors.Is(err, types.ErrHTTPStatus) {
-			t.Errorf("unexpected error, expected %v, received %v", types.ErrHTTPStatus, err)
+			t.Fatalf("unexpected success on get for missing manifest")
+		} else if !errors.Is(err, errs.ErrHTTPStatus) {
+			t.Errorf("unexpected error, expected %v, received %v", errs.ErrHTTPStatus, err)
 		}
 	})
 	t.Run("GW Timeout", func(t *testing.T) {
@@ -1496,11 +1472,10 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err == nil {
-			t.Errorf("unexpected success on get for missing manifest")
 			resp.Close()
-			return
-		} else if !errors.Is(err, types.ErrHTTPStatus) {
-			t.Errorf("unexpected error, expected %v, received %v", types.ErrHTTPStatus, err)
+			t.Fatalf("unexpected success on get for missing manifest")
+		} else if !errors.Is(err, errs.ErrHTTPStatus) {
+			t.Errorf("unexpected error, expected %v, received %v", errs.ErrHTTPStatus, err)
 		}
 	})
 	t.Run("Server error", func(t *testing.T) {
@@ -1519,11 +1494,10 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err == nil {
-			t.Errorf("unexpected success on get for missing manifest")
 			resp.Close()
-			return
-		} else if !errors.Is(err, types.ErrHTTPStatus) {
-			t.Errorf("unexpected error, expected %v, received %v", types.ErrHTTPStatus, err)
+			t.Fatalf("unexpected success on get for missing manifest")
+		} else if !errors.Is(err, errs.ErrHTTPStatus) {
+			t.Errorf("unexpected error, expected %v, received %v", errs.ErrHTTPStatus, err)
 		}
 	})
 	// test context expire during retries
@@ -1545,9 +1519,8 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctxTimeout, getReq)
 		if err == nil {
-			t.Errorf("unexpected success on get for missing manifest")
 			resp.Close()
-			return
+			t.Fatalf("unexpected success on get for missing manifest")
 		} else if !errors.Is(err, context.DeadlineExceeded) {
 			t.Errorf("unexpected error, expected %v, received %v", context.DeadlineExceeded, err)
 		}
@@ -1568,8 +1541,7 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, shortReq)
 		if err != nil {
-			t.Errorf("failed to run get: %v", err)
-			return
+			t.Fatalf("failed to run get: %v", err)
 		}
 		if resp.HTTPResponse().StatusCode != 200 {
 			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
@@ -1601,15 +1573,14 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, retryReq)
 		if err != nil {
-			t.Errorf("failed to run get: %v", err)
-			return
+			t.Fatalf("failed to run get: %v", err)
 		}
 		if resp.HTTPResponse().StatusCode != 200 {
 			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
 		}
 		body, err := io.ReadAll(resp)
 		if err != nil {
-			t.Errorf("body read failure: %v", err)
+			t.Fatalf("body read failure: %v", err)
 		} else if !bytes.Equal(body, retryBody) {
 			t.Errorf("body read mismatch, expected %s, received %s", retryBody, body)
 		}
@@ -1636,8 +1607,7 @@ func TestRegHttp(t *testing.T) {
 		wCtx := warning.NewContext(ctx, w)
 		resp, err := hc.Do(wCtx, getReq)
 		if err != nil {
-			t.Errorf("failed to run get: %v", err)
-			return
+			t.Fatalf("failed to run get: %v", err)
 		}
 		if len(w.List) != 2 {
 			t.Errorf("warning count, expected 2, received %d", len(w.List))
@@ -1670,15 +1640,14 @@ func TestRegHttp(t *testing.T) {
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err != nil {
-			t.Errorf("failed to run get: %v", err)
-			return
+			t.Fatalf("failed to run get: %v", err)
 		}
 		if resp.HTTPResponse().StatusCode != 200 {
 			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
 		}
 		body, err := io.ReadAll(resp)
 		if err != nil {
-			t.Errorf("body read failure: %v", err)
+			t.Fatalf("body read failure: %v", err)
 		} else if !bytes.Equal(body, getBody) {
 			t.Errorf("body read mismatch, expected %s, received %s", getBody, body)
 		}

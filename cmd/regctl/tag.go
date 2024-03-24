@@ -37,8 +37,10 @@ func NewTagCmd(rootOpts *rootCmd) *cobra.Command {
 This avoids deleting the manifest when multiple tags reference the same image.
 For registries that do not support the OCI tag delete API, this is implemented
 by pushing a unique dummy manifest and deleting that by digest.
-If the registry does not support the delete API, the dummy manifest will remain.
-`,
+If the registry does not support the delete API, the dummy manifest will remain.`,
+		Example: `
+# delete a tag
+regctl tag delete registry.example.org/repo:v42`,
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: rootOpts.completeArgTag,
 		RunE:              tagOpts.runTagDelete,
@@ -49,8 +51,13 @@ If the registry does not support the delete API, the dummy manifest will remain.
 		Short:   "list tags in a repo",
 		Long: `List tags in a repository.
 Note: many registries ignore the pagination options.
-For an OCI Layout, the index is available as Index (--format "{{.Index}}").
-`,
+For an OCI Layout, the index is available as Index (--format "{{.Index}}").`,
+		Example: `
+# list all tags in a repository
+regctl tag ls registry.example.org/repo
+
+# exclude tags starting with sha256- from the listing
+regctl tag ls registry.example.org/repo --exclude 'sha256-.*'`,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{},
 		RunE:      tagOpts.runTagLs,

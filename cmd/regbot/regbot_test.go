@@ -20,8 +20,7 @@ func TestRegbot(t *testing.T) {
 	fsMem := rwfs.MemNew()
 	err := rwfs.CopyRecursive(fsOS, "testdata", fsMem, ".")
 	if err != nil {
-		t.Errorf("failed to setup memfs copy: %v", err)
-		return
+		t.Fatalf("failed to setup memfs copy: %v", err)
 	}
 	// setup various globals normally done by loadConf
 	throttleC = throttle.New(1)
@@ -35,13 +34,11 @@ func TestRegbot(t *testing.T) {
 	confRdr := bytes.NewReader([]byte(confBytes))
 	conf, err = ConfigLoadReader(confRdr)
 	if err != nil {
-		t.Errorf("failed parsing config: %v", err)
-		return
+		t.Fatalf("failed parsing config: %v", err)
 	}
 	shortTime, err := time.ParseDuration("10ms")
 	if err != nil {
-		t.Errorf("failed to setup shortTime: %v", err)
-		return
+		t.Fatalf("failed to setup shortTime: %v", err)
 	}
 	tests := []struct {
 		name      string
@@ -167,8 +164,7 @@ func TestRegbot(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("unexpected error on process: %v", err)
-				return
+				t.Fatalf("unexpected error on process: %v", err)
 			}
 			for _, exist := range tt.exists {
 				r, err := ref.New(exist)
@@ -184,8 +180,7 @@ func TestRegbot(t *testing.T) {
 			for _, missing := range tt.missing {
 				r, err := ref.New(missing)
 				if err != nil {
-					t.Errorf("cannot parse ref %s: %v", missing, err)
-					continue
+					t.Fatalf("cannot parse ref %s: %v", missing, err)
 				}
 				_, err = rc.ManifestHead(ctx, r)
 				if err == nil {

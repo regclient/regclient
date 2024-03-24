@@ -6,7 +6,7 @@ import (
 	"io"
 	"testing"
 
-	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/errs"
 )
 
 func TestLimitRead(t *testing.T) {
@@ -64,7 +64,7 @@ func TestLimitRead(t *testing.T) {
 			limit:     9,
 			src:       byte10,
 			try:       10,
-			expectErr: types.ErrSizeLimitExceeded,
+			expectErr: errs.ErrSizeLimitExceeded,
 		},
 	}
 	for _, tc := range tt {
@@ -90,8 +90,7 @@ func TestLimitRead(t *testing.T) {
 				return
 			}
 			if err != nil {
-				t.Errorf("read failed: %v", err)
-				return
+				t.Fatalf("read failed: %v", err)
 			}
 			if result != tc.expectLen {
 				t.Errorf("read length mismatch, expected %d, received %d", tc.expectLen, result)

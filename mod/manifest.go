@@ -10,7 +10,9 @@ import (
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/docker/schema2"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/mediatype"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 )
@@ -158,6 +160,75 @@ func WithAnnotationOCIBase(rBase ref.Ref, dBase digest.Digest) Opts {
 	}
 }
 
+// WithAnnotationPromoteCommon pulls up common annotations from child images to the index.
+func WithAnnotationPromoteCommon() Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		dc.stepsManifest = append(dc.stepsManifest, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
+			if dm.mod == deleted {
+				return nil
+			}
+			changed := false
+			if !dm.m.IsList() {
+				return nil
+			}
+			ociI, err := manifest.OCIIndexFromAny(dm.m.GetOrig())
+			if err != nil {
+				return err
+			}
+			var common map[string]string
+			for _, child := range dm.manifests {
+				if child.mod == deleted {
+					continue
+				}
+				mAnnot, ok := child.m.(manifest.Annotator)
+				if !ok {
+					return fmt.Errorf("manifest does not support annotations: %s%.0w", child.m.GetDescriptor().Digest.String(), errs.ErrUnsupportedMediaType)
+				}
+				cur, err := mAnnot.GetAnnotations()
+				if err != nil {
+					return err
+				}
+				if common == nil {
+					common = cur
+				} else {
+					for k, v := range common {
+						if curV, ok := cur[k]; !ok || v != curV {
+							delete(common, k)
+						}
+					}
+				}
+				if len(common) == 0 {
+					return nil
+				}
+			}
+			if len(common) == 0 {
+				return nil
+			}
+			if ociI.Annotations == nil {
+				ociI.Annotations = common
+				changed = true
+			} else {
+				for k, v := range common {
+					if curV, ok := ociI.Annotations[k]; !ok || v != curV {
+						ociI.Annotations[k] = v
+						changed = true
+					}
+				}
+			}
+			if changed {
+				dm.mod = replaced
+				err = dm.m.SetOrig(ociI)
+				if err != nil {
+					return err
+				}
+				dm.newDesc = dm.m.GetDescriptor()
+			}
+			return nil
+		})
+		return nil
+	}
+}
+
 // WithLabelToAnnotation copies image config labels to manifest annotations.
 func WithLabelToAnnotation() Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
@@ -220,7 +291,7 @@ func WithManifestToDocker() Opts {
 			changed := false
 			om := dm.m.GetOrig()
 			if dm.m.IsList() {
-				if dm.m.GetDescriptor().MediaType != types.MediaTypeDocker2ManifestList {
+				if dm.m.GetDescriptor().MediaType != mediatype.Docker2ManifestList {
 					ociM, err := manifest.OCIIndexFromAny(om)
 					if err != nil {
 						return err
@@ -238,22 +309,22 @@ func WithManifestToDocker() Opts {
 				if err != nil {
 					return err
 				}
-				if dm.m.GetDescriptor().MediaType != types.MediaTypeDocker2Manifest {
+				if dm.m.GetDescriptor().MediaType != mediatype.Docker2Manifest {
 					changed = true
 				}
 				if ociM.ArtifactType != "" {
-					return fmt.Errorf("unable to convert artifactType to docker manifest, ref %s%.0w", rSrc.CommonName(), types.ErrUnsupportedMediaType)
+					return fmt.Errorf("unable to convert artifactType to docker manifest, ref %s%.0w", rSrc.CommonName(), errs.ErrUnsupportedMediaType)
 				}
-				if ociM.Config.MediaType == types.MediaTypeOCI1ImageConfig {
-					ociM.Config.MediaType = types.MediaTypeDocker2ImageConfig
+				if ociM.Config.MediaType == mediatype.OCI1ImageConfig {
+					ociM.Config.MediaType = mediatype.Docker2ImageConfig
 					changed = true
 				}
 				for i, l := range ociM.Layers {
-					if l.MediaType == types.MediaTypeOCI1LayerGzip {
-						ociM.Layers[i].MediaType = types.MediaTypeDocker2LayerGzip
+					if l.MediaType == mediatype.OCI1LayerGzip {
+						ociM.Layers[i].MediaType = mediatype.Docker2LayerGzip
 						changed = true
-					} else if l.MediaType == types.MediaTypeOCI1ForeignLayerGzip {
-						ociM.Layers[i].MediaType = types.MediaTypeDocker2ForeignLayer
+					} else if l.MediaType == mediatype.OCI1ForeignLayerGzip {
+						ociM.Layers[i].MediaType = mediatype.Docker2ForeignLayer
 						changed = true
 					}
 				}
@@ -296,7 +367,7 @@ func WithManifestToOCI() Opts {
 				if err != nil {
 					return err
 				}
-				if dm.m.GetDescriptor().MediaType != types.MediaTypeOCI1ManifestList {
+				if dm.m.GetDescriptor().MediaType != mediatype.OCI1ManifestList {
 					changed = true
 					om = ociM
 				}
@@ -305,19 +376,19 @@ func WithManifestToOCI() Opts {
 				if err != nil {
 					return err
 				}
-				if dm.m.GetDescriptor().MediaType != types.MediaTypeOCI1Manifest {
+				if dm.m.GetDescriptor().MediaType != mediatype.OCI1Manifest {
 					changed = true
 				}
-				if ociM.Config.MediaType == types.MediaTypeDocker2ImageConfig {
-					ociM.Config.MediaType = types.MediaTypeOCI1ImageConfig
+				if ociM.Config.MediaType == mediatype.Docker2ImageConfig {
+					ociM.Config.MediaType = mediatype.OCI1ImageConfig
 					changed = true
 				}
 				for i, l := range ociM.Layers {
-					if l.MediaType == types.MediaTypeDocker2LayerGzip {
-						ociM.Layers[i].MediaType = types.MediaTypeOCI1LayerGzip
+					if l.MediaType == mediatype.Docker2LayerGzip {
+						ociM.Layers[i].MediaType = mediatype.OCI1LayerGzip
 						changed = true
-					} else if l.MediaType == types.MediaTypeDocker2ForeignLayer {
-						ociM.Layers[i].MediaType = types.MediaTypeOCI1ForeignLayerGzip
+					} else if l.MediaType == mediatype.Docker2ForeignLayer {
+						ociM.Layers[i].MediaType = mediatype.OCI1ForeignLayerGzip
 						changed = true
 					}
 				}
@@ -445,14 +516,14 @@ func WithExternalURLsRm() Opts {
 					ociOM.Layers[i].URLs = []string{}
 					mt := ociOM.Layers[i].MediaType
 					switch mt {
-					case types.MediaTypeDocker2ForeignLayer:
-						mt = types.MediaTypeDocker2LayerGzip
-					case types.MediaTypeOCI1ForeignLayer:
-						mt = types.MediaTypeOCI1Layer
-					case types.MediaTypeOCI1ForeignLayerGzip:
-						mt = types.MediaTypeOCI1LayerGzip
-					case types.MediaTypeOCI1ForeignLayerZstd:
-						mt = types.MediaTypeOCI1LayerZstd
+					case mediatype.Docker2ForeignLayer:
+						mt = mediatype.Docker2LayerGzip
+					case mediatype.OCI1ForeignLayer:
+						mt = mediatype.OCI1Layer
+					case mediatype.OCI1ForeignLayerGzip:
+						mt = mediatype.OCI1LayerGzip
+					case mediatype.OCI1ForeignLayerZstd:
+						mt = mediatype.OCI1LayerZstd
 					}
 					ociOM.Layers[i].MediaType = mt
 					changed = true
@@ -503,11 +574,11 @@ func WithRebase() Opts {
 		}
 		baseName, ok := annot[types.AnnotationBaseImageName]
 		if !ok {
-			return fmt.Errorf("annotation for base image is missing (%s or %s)%.0w", types.AnnotationBaseImageName, types.AnnotationBaseImageDigest, types.ErrMissingAnnotation)
+			return fmt.Errorf("annotation for base image is missing (%s or %s)%.0w", types.AnnotationBaseImageName, types.AnnotationBaseImageDigest, errs.ErrMissingAnnotation)
 		}
 		baseDigest, ok := annot[types.AnnotationBaseImageDigest]
 		if !ok {
-			return fmt.Errorf("annotation for base image is missing (%s or %s)%.0w", types.AnnotationBaseImageName, types.AnnotationBaseImageDigest, types.ErrMissingAnnotation)
+			return fmt.Errorf("annotation for base image is missing (%s or %s)%.0w", types.AnnotationBaseImageName, types.AnnotationBaseImageDigest, errs.ErrMissingAnnotation)
 		}
 		rNew, err := ref.New(baseName)
 		if err != nil {
@@ -643,15 +714,15 @@ func rebaseAddStep(dc *dagConfig, rBaseOld, rBaseNew ref.Ref) error {
 
 		// validate current base
 		if len(layersOld) > len(layers) {
-			return fmt.Errorf("base image has more layers than modified image%.0w", types.ErrMismatch)
+			return fmt.Errorf("base image has more layers than modified image%.0w", errs.ErrMismatch)
 		}
 		for i := range layersOld {
 			if !layers[i].Same(layersOld[i]) {
-				return fmt.Errorf("old base image does not match image layers, layer %d, base %v, image %v%.0w", i, layersOld[i], layers[i], types.ErrMismatch)
+				return fmt.Errorf("old base image does not match image layers, layer %d, base %v, image %v%.0w", i, layersOld[i], layers[i], errs.ErrMismatch)
 			}
 		}
 		if len(confOCIOld.History) > len(confOCI.History) {
-			return fmt.Errorf("base image has more history entries than modified image%.0w", types.ErrMismatch)
+			return fmt.Errorf("base image has more history entries than modified image%.0w", errs.ErrMismatch)
 		}
 		historyLayers := 0
 		for i := range confOCIOld.History {
@@ -660,21 +731,21 @@ func rebaseAddStep(dc *dagConfig, rBaseOld, rBaseNew ref.Ref) error {
 				!confOCI.History[i].Created.Equal(*confOCIOld.History[i].Created) ||
 				confOCI.History[i].CreatedBy != confOCIOld.History[i].CreatedBy ||
 				confOCI.History[i].EmptyLayer != confOCIOld.History[i].EmptyLayer {
-				return fmt.Errorf("old base image does not match image history, entry %d, base %v, image %v%.0w", i, confOCIOld.History[i], confOCI.History[i], types.ErrMismatch)
+				return fmt.Errorf("old base image does not match image history, entry %d, base %v, image %v%.0w", i, confOCIOld.History[i], confOCI.History[i], errs.ErrMismatch)
 			}
 			if !confOCIOld.History[i].EmptyLayer {
 				historyLayers++
 			}
 		}
 		if len(layersOld) != historyLayers || len(layersOld) != len(confOCIOld.RootFS.DiffIDs) {
-			return fmt.Errorf("old base image layer count doesn't match history%.0w", types.ErrMismatch)
+			return fmt.Errorf("old base image layer count doesn't match history%.0w", errs.ErrMismatch)
 		}
 		if len(confOCIOld.RootFS.DiffIDs) > len(confOCI.RootFS.DiffIDs) {
-			return fmt.Errorf("base image has more rootfs entries than modified image%.0w", types.ErrMismatch)
+			return fmt.Errorf("base image has more rootfs entries than modified image%.0w", errs.ErrMismatch)
 		}
 		for i := range confOCIOld.RootFS.DiffIDs {
 			if confOCI.RootFS.DiffIDs[i] != confOCIOld.RootFS.DiffIDs[i] {
-				return fmt.Errorf("old base image does not match image rootfs, entry %d, base %s, image %s%.0w", i, confOCIOld.RootFS.DiffIDs[i].String(), confOCI.RootFS.DiffIDs[i].String(), types.ErrMismatch)
+				return fmt.Errorf("old base image does not match image rootfs, entry %d, base %s, image %s%.0w", i, confOCIOld.RootFS.DiffIDs[i].String(), confOCI.RootFS.DiffIDs[i].String(), errs.ErrMismatch)
 			}
 		}
 		// validate new base
@@ -686,12 +757,6 @@ func rebaseAddStep(dc *dagConfig, rBaseOld, rBaseNew ref.Ref) error {
 		}
 		if len(layersNew) != historyLayers || len(confOCINew.RootFS.DiffIDs) != historyLayers {
 			return fmt.Errorf("new base image config history doesn't match layer count")
-		}
-		// copy blobs from new base to repo
-		for _, d := range layersNew {
-			if err := rc.BlobCopy(ctx, rBaseNew, rSrc, d); err != nil {
-				return fmt.Errorf("failed copying blobs for rebase: %w", err)
-			}
 		}
 
 		// delete the old layers and config entries from vars and dag
@@ -722,6 +787,7 @@ func rebaseAddStep(dc *dagConfig, rBaseOld, rBaseNew ref.Ref) error {
 				mod:      unchanged,
 				ucDigest: confOCINew.RootFS.DiffIDs[i],
 				desc:     l,
+				rSrc:     rBaseNew,
 			})
 		}
 		dm.layers = append(dagAdd, dm.layers...)
@@ -738,6 +804,7 @@ func rebaseAddStep(dc *dagConfig, rBaseOld, rBaseNew ref.Ref) error {
 		// set modified flags on config and manifest
 		dm.config.modified = true
 		dm.mod = replaced
+		dc.forceLayerWalk = true
 
 		return nil
 	})
