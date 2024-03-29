@@ -131,6 +131,104 @@ func TestImageCheckBase(t *testing.T) {
 	}
 }
 
+func TestImageConfig(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	regHandler := olareg.New(oConfig.Config{
+		Storage: oConfig.ConfigStorage{
+			StoreType: oConfig.StoreMem,
+			RootDir:   "./testdata",
+		},
+	})
+	ts := httptest.NewServer(regHandler)
+	t.Cleanup(func() {
+		ts.Close()
+		_ = regHandler.Close()
+	})
+	tsURL, _ := url.Parse(ts.URL)
+	tsHost := tsURL.Host
+	rcHosts := []config.Host{
+		{
+			Name:      tsHost,
+			Hostname:  tsHost,
+			TLS:       config.TLSDisabled,
+			ReqPerSec: 1000,
+		},
+	}
+	log := &logrus.Logger{
+		Out:       os.Stderr,
+		Formatter: new(logrus.TextFormatter),
+		Hooks:     make(logrus.LevelHooks),
+		Level:     logrus.WarnLevel,
+	}
+	delayInit, _ := time.ParseDuration("0.05s")
+	delayMax, _ := time.ParseDuration("0.10s")
+	rc := New(
+		WithConfigHost(rcHosts...),
+		WithLog(log),
+		WithRetryDelay(delayInit, delayMax),
+	)
+	tt := []struct {
+		name       string
+		r          string
+		opts       []ImageOpts
+		expectErr  error
+		expectArch string
+		expectOS   string
+	}{
+		{
+			name:       "ocidir-v1-amd64",
+			r:          "ocidir://testdata/testrepo:v1",
+			opts:       []ImageOpts{ImageWithPlatform("linux/amd64")},
+			expectArch: "amd64",
+			expectOS:   "linux",
+		},
+		{
+			name:      "ocidir-not-found",
+			r:         "ocidir://testdata/testrepo:missing",
+			expectErr: errs.ErrNotFound,
+		},
+		{
+			name:      "ocidir-a1",
+			r:         "ocidir://testdata/testrepo:a1",
+			opts:      []ImageOpts{},
+			expectErr: errs.ErrUnsupportedMediaType,
+		},
+		{
+			name:       "reg-v2-arm64",
+			r:          tsHost + "/testrepo:v2",
+			opts:       []ImageOpts{ImageWithPlatform("linux/arm64")},
+			expectArch: "arm64",
+			expectOS:   "linux",
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			r, err := ref.New(tc.r)
+			if err != nil {
+				t.Fatalf("failed to parse ref: %v", err)
+			}
+			bConf, err := rc.ImageConfig(ctx, r, tc.opts...)
+			if tc.expectErr != nil {
+				if err == nil {
+					t.Fatalf("method did not fail")
+				}
+				if !errors.Is(err, tc.expectErr) && err.Error() != tc.expectErr.Error() {
+					t.Errorf("unexpected error, expected %v, received %v", tc.expectErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("method failed: %v", err)
+			}
+			c := bConf.GetConfig()
+			if (tc.expectOS != "" && tc.expectOS != c.OS) || (tc.expectArch != "" && tc.expectArch != c.Architecture) {
+				t.Errorf("unexpected config, expected %s/%s, received %s/%s", tc.expectOS, tc.expectArch, c.OS, c.Architecture)
+			}
+		})
+	}
+}
+
 func TestCopy(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

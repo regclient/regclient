@@ -47,13 +47,11 @@ type imageCmd struct {
 	importName      string
 	includeExternal bool
 	digestTags      bool
-	list            bool
 	modOpts         []mod.Opts
 	platform        string
 	platforms       []string
 	referrers       bool
 	replace         bool
-	requireList     bool
 }
 
 func NewImageCmd(rootOpts *rootCmd) *cobra.Command {
@@ -1339,20 +1337,11 @@ func (imageOpts *imageCmd) runImageInspect(cmd *cobra.Command, args []string) er
 		"platform": imageOpts.platform,
 	}).Debug("Image inspect")
 
-	m, err := getManifest(ctx, rc, r, imageOpts.platform, imageOpts.list, imageOpts.requireList)
-	if err != nil {
-		return err
+	opts := []regclient.ImageOpts{}
+	if imageOpts.platform != "" {
+		opts = append(opts, regclient.ImageWithPlatform(imageOpts.platform))
 	}
-	mi, ok := m.(manifest.Imager)
-	if !ok {
-		return fmt.Errorf("manifest does not support image methods%.0w", errs.ErrUnsupportedMediaType)
-	}
-	cd, err := mi.GetConfig()
-	if err != nil {
-		return err
-	}
-
-	blobConfig, err := rc.BlobGetOCIConfig(ctx, r, cd)
+	blobConfig, err := rc.ImageConfig(ctx, r, opts...)
 	if err != nil {
 		return err
 	}
