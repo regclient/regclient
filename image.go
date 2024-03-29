@@ -24,6 +24,7 @@ import (
 	"github.com/regclient/regclient/pkg/archive"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
+	"github.com/regclient/regclient/types/blob"
 	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/docker/schema2"
 	"github.com/regclient/regclient/types/errs"
@@ -434,6 +435,55 @@ func (rc *RegClient) ImageCheckBase(ctx context.Context, r ref.Ref, opts ...Imag
 		"base": baseR.CommonName(),
 	}).Debug("base image layers and history matches")
 	return nil
+}
+
+// ImageConfig returns the OCI config of a given image.
+// Use [ImageWithPlatform] to select a platform from an Index or Manifest List.
+func (rc *RegClient) ImageConfig(ctx context.Context, r ref.Ref, opts ...ImageOpts) (*blob.BOCIConfig, error) {
+	opt := imageOpt{
+		platform: "local",
+	}
+	for _, optFn := range opts {
+		optFn(&opt)
+	}
+	m, err := rc.ManifestGet(ctx, r)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get manifest: %w", err)
+	}
+	for m.IsList() {
+		mi, ok := m.(manifest.Indexer)
+		if !ok {
+			return nil, fmt.Errorf("unsupported manifest type: %s", m.GetDescriptor().MediaType)
+		}
+		ml, err := mi.GetManifestList()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get manifest list: %w", err)
+		}
+		p, err := platform.Parse(opt.platform)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse platform %s: %w", opt.platform, err)
+		}
+		d, err := descriptor.DescriptorListSearch(ml, descriptor.MatchOpt{Platform: &p})
+		if err != nil {
+			return nil, fmt.Errorf("failed to find platform in manifest list: %w", err)
+		}
+		m, err = rc.ManifestGet(ctx, r, WithManifestDesc(d))
+		if err != nil {
+			return nil, fmt.Errorf("failed to get manifest: %w", err)
+		}
+	}
+	mi, ok := m.(manifest.Imager)
+	if !ok {
+		return nil, fmt.Errorf("unsupported manifest type: %s", m.GetDescriptor().MediaType)
+	}
+	d, err := mi.GetConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get image config: %w", err)
+	}
+	if d.MediaType != mediatype.OCI1ImageConfig && d.MediaType != mediatype.Docker2ImageConfig {
+		return nil, fmt.Errorf("unsupported config media type %s: %w", d.MediaType, errs.ErrUnsupportedMediaType)
+	}
+	return rc.BlobGetOCIConfig(ctx, r, d)
 }
 
 // ImageCopy copies an image.
