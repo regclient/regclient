@@ -18,6 +18,9 @@ on:
     branches:
       - 'main'
 
+permissions:
+  contents: read
+
 jobs:
   coverage_report:
     name: "Generate coverage report"
