@@ -195,17 +195,17 @@ func TestArtifactPut(t *testing.T) {
 		},
 		{
 			name: "Put artifact example conf data",
-			args: []string{"artifact", "put", "--artifact-type", "", "--config-type", "application/vnd.example", "--config-file", testConfName, "ocidir://" + testDir + ":put-example-conf-data"},
+			args: []string{"artifact", "put", "--config-type", "application/vnd.example", "--config-file", testConfName, "ocidir://" + testDir + ":put-example-conf-data"},
 			in:   testData,
 		},
 		{
 			name: "Put artifact example conf data and file",
-			args: []string{"artifact", "put", "--artifact-type", "", "--config-type", "application/vnd.example", "--config-file", testConfName, "--file", testFileName, "ocidir://" + testDir + ":put-example-file-data"},
+			args: []string{"artifact", "put", "--config-type", "application/vnd.example", "--config-file", testConfName, "--file", testFileName, "ocidir://" + testDir + ":put-example-file-data"},
 			in:   testData,
 		},
 		{
 			name: "Put artifact example conf data and file stripped",
-			args: []string{"artifact", "put", "--artifact-type", "", "--config-type", "application/vnd.example", "--config-file", testConfName, "--file", testFileName, "--file-title", "--strip-dirs", "ocidir://" + testDir + ":put-example-file-data"},
+			args: []string{"artifact", "put", "--config-type", "application/vnd.example", "--config-file", testConfName, "--file", testFileName, "--file-title", "--strip-dirs", "ocidir://" + testDir + ":put-example-file-data"},
 			in:   testData,
 		},
 		{
@@ -223,6 +223,24 @@ func TestArtifactPut(t *testing.T) {
 			args: []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--annotation", "test=b", "--platform", "linux/arm64", "--index", "ocidir://" + testDir + ":index"},
 			in:   testData,
 		},
+		{
+			name:      "Invalid-artifact-media-type",
+			args:      []string{"artifact", "put", "--artifact-type", "application/vnd.example;version=1.0", "ocidir://" + testDir + ":err"},
+			in:        testData,
+			expectErr: errs.ErrUnsupportedMediaType,
+		},
+		{
+			name:      "Invalid-config-media-type",
+			args:      []string{"artifact", "put", "--config-type", "application/vnd.example;version=1.0", "--config-file", testConfName, "ocidir://" + testDir + ":err"},
+			in:        testData,
+			expectErr: errs.ErrUnsupportedMediaType,
+		},
+		{
+			name:      "Invalid-file-media-type",
+			args:      []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--file", testFileName, "--file-media-type", "application/vnd.example;version=1.0", "ocidir://" + testDir + ":err"},
+			in:        testData,
+			expectErr: errs.ErrUnsupportedMediaType,
+		},
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
@@ -233,7 +251,7 @@ func TestArtifactPut(t *testing.T) {
 			out, err := cobraTest(t, &cobraOpts, tc.args...)
 			if tc.expectErr != nil {
 				if err == nil {
-					t.Errorf("did not receive expected error: %v", tc.expectErr)
+					t.Errorf("did not fail with error: %v", tc.expectErr)
 				} else if !errors.Is(err, tc.expectErr) && err.Error() != tc.expectErr.Error() {
 					t.Errorf("unexpected error, received %v, expected %v", err, tc.expectErr)
 				}

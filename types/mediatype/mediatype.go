@@ -1,7 +1,10 @@
 // Package mediatype defines well known media types.
 package mediatype
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 const (
 	// Docker1Manifest deprecated media type for docker schema1 manifests.
@@ -49,3 +52,10 @@ func Base(orig string) string {
 	base, _, _ := strings.Cut(orig, ";")
 	return strings.TrimSpace(strings.ToLower(base))
 }
+
+// Valid returns true if the media type matches the rfc6838 4.2 naming requirements.
+func Valid(mt string) bool {
+	return validateRegexp.MatchString(mt)
+}
+
+var validateRegexp = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,126}/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]{0,126}$`)

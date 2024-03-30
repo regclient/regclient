@@ -622,7 +622,7 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 	case "", mediatype.OCI1Manifest:
 		hasConfig = true
 	default:
-		return fmt.Errorf("unsupported manifest media type: %s", artifactOpts.artifactMT)
+		return fmt.Errorf("unsupported manifest media type: %s%.0w", artifactOpts.artifactMT, errs.ErrUnsupportedMediaType)
 	}
 
 	// validate inputs
@@ -656,6 +656,17 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 	}
 
 	// validate/set artifactType and config.mediaType
+	if artifactOpts.artifactConfigMT != "" && !mediatype.Valid(artifactOpts.artifactConfigMT) {
+		return fmt.Errorf("invalid media type: %s%.0w", artifactOpts.artifactConfigMT, errs.ErrUnsupportedMediaType)
+	}
+	if artifactOpts.artifactType != "" && !mediatype.Valid(artifactOpts.artifactType) {
+		return fmt.Errorf("invalid media type: %s%.0w", artifactOpts.artifactType, errs.ErrUnsupportedMediaType)
+	}
+	for _, mt := range artifactOpts.artifactFileMT {
+		if !mediatype.Valid(mt) {
+			return fmt.Errorf("invalid media type: %s%.0w", mt, errs.ErrUnsupportedMediaType)
+		}
+	}
 	if hasConfig && artifactOpts.artifactConfigMT == "" {
 		if artifactOpts.artifactConfig == "" {
 			artifactOpts.artifactConfigMT = mediatype.OCI1Empty
