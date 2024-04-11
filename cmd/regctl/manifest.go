@@ -117,7 +117,7 @@ regctl manifest get golang --platform windows/amd64,osver=10.0.17763.4974`,
 # show the digest for an image
 regctl manifest head alpine
 
-# show the digest for a specific platform
+# show the digest for a specific platform (this will perform a GET request)
 regctl manifest head alpine --platform linux/arm64
 
 # show all headers for the request
@@ -150,7 +150,7 @@ regctl manifest put \
 
 	manifestHeadCmd.Flags().StringVarP(&manifestOpts.formatHead, "format", "", "", "Format output with go template syntax (use \"raw-body\" for the original manifest)")
 	manifestHeadCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Do not resolve platform from manifest list (enabled by default)")
-	manifestHeadCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
+	manifestHeadCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local, requires a get request)")
 	manifestHeadCmd.Flags().BoolVarP(&manifestOpts.requireDigest, "require-digest", "", false, "Fallback to get request if digest is not received")
 	manifestHeadCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
 	_ = manifestHeadCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)

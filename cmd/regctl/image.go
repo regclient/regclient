@@ -286,7 +286,7 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 	imageDeleteCmd.Flags().BoolVarP(&manifestOpts.forceTagDeref, "force-tag-dereference", "", false, "Dereference the a tag to a digest, this is unsafe")
 
 	imageDigestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Do not resolve platform from manifest list (enabled by default)")
-	imageDigestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
+	imageDigestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local, requires a get request)")
 	imageDigestCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
 	_ = imageDigestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	_ = imageDigestCmd.Flags().MarkHidden("list")
