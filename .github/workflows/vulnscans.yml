@@ -34,12 +34,11 @@ jobs:
       run: |
         govulncheck ./...
 
-    # TODO: reenable after 1.7.2 or later is released
     # intentionally not pinned to always run the latest scanner
-    # - name: "Install OSV Scanner"
-    #   run: |
-    #     go install github.com/google/osv-scanner/cmd/osv-scanner@latest
+    - name: "Install OSV Scanner"
+      run: |
+        go install github.com/google/osv-scanner/cmd/osv-scanner@latest
 
-    # - name: "Run OSV Scanner"
-    #   run: |
-    #     osv-scanner scan --config .osv-scanner.toml -r --experimental-licenses="Apache-2.0,BSD-3-Clause,MIT,CC-BY-SA-4.0,UNKNOWN" .
+    - name: "Run OSV Scanner"
+      run: |
+        osv-scanner scan --config .osv-scanner.toml -r --experimental-licenses="Apache-2.0,BSD-3-Clause,MIT,CC-BY-SA-4.0,UNKNOWN" .
