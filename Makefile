@@ -40,8 +40,8 @@ GO_VULNCHECK_VER?=v1.0.4
 OSV_SCANNER_VER?=v1.7.1
 SYFT?=$(shell command -v syft 2>/dev/null)
 SYFT_CMD_VER:=$(shell [ -x "$(SYFT)" ] && echo "v$$($(SYFT) version | awk '/^Version: / {print $$2}')" || echo "0")
-SYFT_VERSION?=v1.1.1
-SYFT_CONTAINER?=anchore/syft:v1.1.1@sha256:201752e0aa1233f7e2fbc478e3c345ac98b1613a6e0005fb26c8c3ee84d3809c
+SYFT_VERSION?=v1.2.0
+SYFT_CONTAINER?=anchore/syft:v1.2.0@sha256:6e70eb6e34380ae2e9397f7dbe1b0e1e329a53e71b18fc3b1d2089e367fc114a
 ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 	SYFT=docker run --rm \
 		-v "$(shell pwd)/:$(shell pwd)/" -w "$(shell pwd)" \
