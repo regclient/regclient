@@ -95,7 +95,7 @@ func dagGet(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, d descri
 		cd, err := mi.GetConfig()
 		if err != nil && !errors.Is(err, errs.ErrUnsupportedMediaType) {
 			return nil, err
-		} else if err == nil && inListStr(cd.MediaType, mtWLConfig) {
+		} else if err == nil && inListStr(cd.MediaType, mtKnownConfig) {
 			oc, err := rc.BlobGetOCIConfig(ctx, rSrc, cd)
 			if err != nil {
 				return nil, err

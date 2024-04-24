@@ -915,13 +915,13 @@ func TestMod(t *testing.T) {
 func TestInList(t *testing.T) {
 	t.Parallel()
 	t.Run("match", func(t *testing.T) {
-		if !inListStr(mediatype.Docker2LayerGzip, mtWLTar) {
-			t.Errorf("did not find docker layer in tar whitelist")
+		if !inListStr(mediatype.Docker2LayerGzip, mtKnownTar) {
+			t.Errorf("did not find docker layer in known tar list")
 		}
 	})
 	t.Run("mismatch", func(t *testing.T) {
-		if inListStr(mediatype.Docker2LayerGzip, mtWLConfig) {
-			t.Errorf("found docker layer in config whitelist")
+		if inListStr(mediatype.Docker2LayerGzip, mtKnownConfig) {
+			t.Errorf("found docker layer in known config list")
 		}
 	})
 }

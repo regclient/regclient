@@ -32,14 +32,15 @@ type OptTime struct {
 }
 
 var (
-	// whitelist of tar media types
-	mtWLTar = []string{
+	// known tar media types
+	mtKnownTar = []string{
 		mediatype.Docker2LayerGzip,
 		mediatype.OCI1Layer,
 		mediatype.OCI1LayerGzip,
 		mediatype.OCI1LayerZstd,
 	}
-	mtWLConfig = []string{
+	// known config media types
+	mtKnownConfig = []string{
 		mediatype.Docker2ImageConfig,
 		mediatype.OCI1ImageConfig,
 	}
@@ -118,7 +119,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 				// skip deleted or external layers
 				return dl, nil
 			}
-			if len(dc.stepsLayerFile) > 0 && dl.mod != deleted && inListStr(dl.desc.MediaType, mtWLTar) {
+			if len(dc.stepsLayerFile) > 0 && dl.mod != deleted && inListStr(dl.desc.MediaType, mtKnownTar) {
 				br, err := rc.BlobGet(ctx, rSrc, dl.desc)
 				if err != nil {
 					return nil, err
