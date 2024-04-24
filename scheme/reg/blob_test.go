@@ -21,6 +21,7 @@ import (
 	"github.com/regclient/regclient/internal/reqresp"
 	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/errs"
+	"github.com/regclient/regclient/types/mediatype"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -37,6 +38,11 @@ func TestBlobGet(t *testing.T) {
 	d1, blob1 := reqresp.NewRandomBlob(blobLen, seed)
 	d2, blob2 := reqresp.NewRandomBlob(blobLen, seed+1)
 	dMissing := digest.FromBytes([]byte("missing"))
+	blob1Desc := descriptor.Descriptor{
+		MediaType: mediatype.OCI1ImageConfig,
+		Digest:    d1,
+		Size:      int64(len(blob1)),
+	}
 	// define req/resp entries
 	rrs := []reqresp.ReqResp{
 		// head
@@ -233,7 +239,30 @@ func TestBlobGet(t *testing.T) {
 	)
 
 	// Test successful blob
-	t.Run("Get", func(t *testing.T) {
+	t.Run("get-descriptor", func(t *testing.T) {
+		r, err := ref.New(tsURL.Host + blobRepo)
+		if err != nil {
+			t.Fatalf("Failed creating ref: %v", err)
+		}
+		br, err := reg.BlobGet(ctx, r, blob1Desc)
+		if err != nil {
+			t.Fatalf("Failed running BlobGet: %v", err)
+		}
+		defer br.Close()
+		brBlob, err := io.ReadAll(br)
+		if err != nil {
+			t.Fatalf("Failed reading blob: %v", err)
+		}
+		if !bytes.Equal(blob1, brBlob) {
+			t.Errorf("Blob does not match")
+		}
+		brDesc := br.GetDescriptor()
+		if !brDesc.Equal(blob1Desc) {
+			t.Errorf("descriptor mismatch: expect %v, receive %v", blob1Desc, brDesc)
+		}
+	})
+
+	t.Run("get-digest", func(t *testing.T) {
 		r, err := ref.New(tsURL.Host + blobRepo)
 		if err != nil {
 			t.Fatalf("Failed creating ref: %v", err)
@@ -250,9 +279,29 @@ func TestBlobGet(t *testing.T) {
 		if !bytes.Equal(blob1, brBlob) {
 			t.Errorf("Blob does not match")
 		}
+		brDesc := br.GetDescriptor()
+		if brDesc.Digest != d1 || brDesc.Size != blob1Desc.Size {
+			t.Errorf("descriptor mismatch: expect %v, receive %v", blob1Desc, brDesc)
+		}
 	})
 
-	t.Run("Head", func(t *testing.T) {
+	t.Run("head-descriptor", func(t *testing.T) {
+		r, err := ref.New(tsURL.Host + blobRepo)
+		if err != nil {
+			t.Fatalf("Failed creating ref: %v", err)
+		}
+		br, err := reg.BlobHead(ctx, r, blob1Desc)
+		if err != nil {
+			t.Fatalf("Failed running BlobHead: %v", err)
+		}
+		defer br.Close()
+		brDesc := br.GetDescriptor()
+		if !brDesc.Equal(blob1Desc) {
+			t.Errorf("descriptor mismatch: expect %v, receive %v", blob1Desc, brDesc)
+		}
+	})
+
+	t.Run("head-digest", func(t *testing.T) {
 		r, err := ref.New(tsURL.Host + blobRepo)
 		if err != nil {
 			t.Fatalf("Failed creating ref: %v", err)
@@ -262,8 +311,9 @@ func TestBlobGet(t *testing.T) {
 			t.Fatalf("Failed running BlobHead: %v", err)
 		}
 		defer br.Close()
-		if br.GetDescriptor().Size != int64(blobLen) {
-			t.Errorf("Failed comparing blob length")
+		brDesc := br.GetDescriptor()
+		if brDesc.Digest != d1 || brDesc.Size != blob1Desc.Size {
+			t.Errorf("descriptor mismatch: expect %v, receive %v", blob1Desc, brDesc)
 		}
 	})
 
