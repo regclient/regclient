@@ -31,6 +31,7 @@ const (
 type dagConfig struct {
 	stepsManifest  []func(context.Context, *regclient.RegClient, ref.Ref, ref.Ref, *dagManifest) error
 	stepsOCIConfig []func(context.Context, *regclient.RegClient, ref.Ref, ref.Ref, *dagOCIConfig) error
+	stepsLayer     []func(context.Context, *regclient.RegClient, ref.Ref, ref.Ref, *dagLayer, io.ReadCloser) (io.ReadCloser, error)
 	stepsLayerFile []func(context.Context, *regclient.RegClient, ref.Ref, ref.Ref, *dagLayer, *tar.Header, io.Reader) (*tar.Header, io.Reader, changes, error)
 	maxDataSize    int64
 	rTgt           ref.Ref

@@ -22,6 +22,7 @@ import (
 	"github.com/regclient/regclient/internal/ascii"
 	"github.com/regclient/regclient/internal/units"
 	"github.com/regclient/regclient/mod"
+	"github.com/regclient/regclient/pkg/archive"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
@@ -591,6 +592,19 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 		},
 	}, "label-to-annotation", "", `set annotations from labels`)
 	flagLabelAnnot.NoOptDefVal = "true"
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "string",
+		f: func(val string) error {
+			var algo archive.CompressType
+			err := algo.UnmarshalText([]byte(val))
+			if err != nil {
+				return fmt.Errorf("unknown layer compression %s", val)
+			}
+			imageOpts.modOpts = append(imageOpts.modOpts,
+				mod.WithLayerCompression(algo))
+			return nil
+		},
+	}, "layer-compress", "", `change layer compression (gzip, none)`)
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {

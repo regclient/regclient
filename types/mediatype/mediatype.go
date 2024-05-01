@@ -25,6 +25,8 @@ const (
 	OCI1ManifestList = "application/vnd.oci.image.index.v1+json"
 	// OCI1ImageConfig OCI v1 configuration json object media type.
 	OCI1ImageConfig = "application/vnd.oci.image.config.v1+json"
+	// Docker2Layer is the uncompressed layer for docker schema2.
+	Docker2Layer = "application/vnd.docker.image.rootfs.diff.tar"
 	// Docker2LayerGzip is the default compressed layer for docker schema2.
 	Docker2LayerGzip = "application/vnd.docker.image.rootfs.diff.tar.gzip"
 	// Docker2ForeignLayer is the default compressed layer for foreign layers in docker schema2.

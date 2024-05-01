@@ -14,9 +14,111 @@ import (
 	"github.com/opencontainers/go-digest"
 
 	"github.com/regclient/regclient"
+	"github.com/regclient/regclient/pkg/archive"
+	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/mediatype"
 	"github.com/regclient/regclient/types/ref"
 )
+
+// WithLayerCompression alters the media type and compression algorithm of the layers.
+func WithLayerCompression(algo archive.CompressType) Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		// TODO: add zstd support here, and in cases below
+		if algo != archive.CompressNone && algo != archive.CompressGzip {
+			return fmt.Errorf("unsupported layer compression: %s", algo.String())
+		}
+		dc.stepsLayer = append(dc.stepsLayer, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dl *dagLayer, rdr io.ReadCloser) (io.ReadCloser, error) {
+			if dl.mod == deleted {
+				return rdr, nil
+			}
+			mt := dl.desc.MediaType
+			if dl.newDesc.MediaType != "" {
+				mt = dl.newDesc.MediaType
+			}
+			switch algo {
+			case archive.CompressGzip:
+				switch mt {
+				case mediatype.Docker2Layer:
+					dl.newDesc = descriptor.Descriptor{
+						MediaType: mediatype.Docker2LayerGzip,
+					}
+				case mediatype.OCI1Layer:
+					dl.newDesc = descriptor.Descriptor{
+						MediaType: mediatype.OCI1LayerGzip,
+					}
+				default:
+					return rdr, nil
+				}
+				if dl.mod == unchanged {
+					dl.mod = replaced
+				}
+				digRaw := digest.Canonical.Digester() // raw/compressed digest
+				digUC := digest.Canonical.Digester()  // uncompressed digest
+				ucRdr, err := archive.Decompress(rdr)
+				if err != nil {
+					return nil, err
+				}
+				ucDigRdr := io.TeeReader(ucRdr, digUC.Hash())
+				cRdr, err := archive.Compress(ucDigRdr, algo)
+				if err != nil {
+					return nil, err
+				}
+				digRdr := io.TeeReader(cRdr, digRaw.Hash())
+				return readCloserFn{
+					Reader: digRdr,
+					closeFn: func() error {
+						err := rdr.Close()
+						if err != nil {
+							return err
+						}
+						// TODO: close cRdr when it returns a ReadCloser
+						dl.newDesc.Digest = digRaw.Digest()
+						dl.ucDigest = digUC.Digest()
+						return nil
+					}}, nil
+
+			case archive.CompressNone:
+				switch mt {
+				case mediatype.Docker2LayerGzip:
+					dl.newDesc = descriptor.Descriptor{
+						MediaType: mediatype.Docker2Layer,
+					}
+				case mediatype.OCI1LayerGzip:
+					dl.newDesc = descriptor.Descriptor{
+						MediaType: mediatype.OCI1Layer,
+					}
+				default:
+					return rdr, nil
+				}
+				if dl.mod == unchanged {
+					dl.mod = replaced
+				}
+				dig := digest.Canonical.Digester()
+				ucRdr, err := archive.Decompress(rdr)
+				if err != nil {
+					return nil, err
+				}
+				digRdr := io.TeeReader(ucRdr, dig.Hash())
+				return readCloserFn{
+					Reader: digRdr,
+					closeFn: func() error {
+						err := rdr.Close()
+						if err != nil {
+							return err
+						}
+						dl.newDesc.Digest = dig.Digest()
+						dl.ucDigest = dig.Digest()
+						return nil
+					}}, nil
+
+			default:
+				return rdr, nil
+			}
+		})
+		return nil
+	}
+}
 
 // WithLayerReproducible modifies the layer with reproducible options.
 // This currently configures users and groups with numeric ids.
@@ -489,6 +591,15 @@ func WithFileTarTimeMax(name string, t time.Time) Opts {
 		Set:   t,
 		After: t,
 	})
+}
+
+type readCloserFn struct {
+	io.Reader
+	closeFn func() error
+}
+
+func (rcf readCloserFn) Close() error {
+	return rcf.closeFn()
 }
 
 type tmpReader struct {
