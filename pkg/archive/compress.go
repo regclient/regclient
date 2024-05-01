@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/bzip2"
 	"compress/gzip"
+	"fmt"
 	"io"
 
 	"github.com/ulikunitz/xz"
@@ -101,15 +102,39 @@ func DetectCompression(head []byte) CompressType {
 }
 
 func (ct CompressType) String() string {
+	mt, err := ct.MarshalText()
+	if err != nil {
+		return "unknown"
+	}
+	return string(mt)
+}
+
+func (ct CompressType) MarshalText() ([]byte, error) {
 	switch ct {
 	case CompressNone:
-		return "none"
+		return []byte("none"), nil
 	case CompressBzip2:
-		return "bzip2"
+		return []byte("bzip2"), nil
 	case CompressGzip:
-		return "gzip"
+		return []byte("gzip"), nil
 	case CompressXz:
-		return "xz"
+		return []byte("xz"), nil
 	}
-	return "unknown"
+	return nil, fmt.Errorf("unknown compression type")
+}
+
+func (ct *CompressType) UnmarshalText(text []byte) error {
+	switch string(text) {
+	case "none":
+		*ct = CompressNone
+	case "bzip2":
+		*ct = CompressBzip2
+	case "gzip":
+		*ct = CompressGzip
+	case "xz":
+		*ct = CompressXz
+	default:
+		return fmt.Errorf("unknown compression type %s", string(text))
+	}
+	return nil
 }

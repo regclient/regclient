@@ -34,10 +34,10 @@ type OptTime struct {
 var (
 	// known tar media types
 	mtKnownTar = []string{
+		mediatype.Docker2Layer,
 		mediatype.Docker2LayerGzip,
 		mediatype.OCI1Layer,
 		mediatype.OCI1LayerGzip,
-		mediatype.OCI1LayerZstd,
 	}
 	// known config media types
 	mtKnownConfig = []string{
@@ -69,6 +69,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 	dc := dagConfig{
 		stepsManifest:  []func(context.Context, *regclient.RegClient, ref.Ref, ref.Ref, *dagManifest) error{},
 		stepsOCIConfig: []func(context.Context, *regclient.RegClient, ref.Ref, ref.Ref, *dagOCIConfig) error{},
+		stepsLayer:     []func(context.Context, *regclient.RegClient, ref.Ref, ref.Ref, *dagLayer, io.ReadCloser) (io.ReadCloser, error){},
 		stepsLayerFile: []func(context.Context, *regclient.RegClient, ref.Ref, ref.Ref, *dagLayer, *tar.Header, io.Reader) (*tar.Header, io.Reader, changes, error){},
 		maxDataSize:    -1, // unchanged, if a data field exists, preserve it
 		rTgt:           rTgt,
@@ -109,38 +110,71 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 			return rTgt, err
 		}
 	}
-	if len(dc.stepsLayerFile) > 0 || !ref.EqualRepository(rSrc, rTgt) || dc.forceLayerWalk {
+	if len(dc.stepsLayer) > 0 || len(dc.stepsLayerFile) > 0 || !ref.EqualRepository(rSrc, rTgt) || dc.forceLayerWalk {
 		err = dagWalkLayers(dm, func(dl *dagLayer) (*dagLayer, error) {
+			var rdr io.ReadCloser
+			defer func() {
+				if rdr != nil {
+					_ = rdr.Close()
+				}
+			}()
+			var err error
 			rSrc := rSrc
 			if dl.rSrc.IsSet() {
 				rSrc = dl.rSrc
 			}
 			if dl.mod == deleted || len(dl.desc.URLs) > 0 {
-				// skip deleted or external layers
+				// skip deleted and external layers
 				return dl, nil
 			}
-			if len(dc.stepsLayerFile) > 0 && dl.mod != deleted && inListStr(dl.desc.MediaType, mtKnownTar) {
-				br, err := rc.BlobGet(ctx, rSrc, dl.desc)
+			if len(dc.stepsLayer) > 0 {
+				rdr, err = rc.BlobGet(ctx, rSrc, dl.desc)
 				if err != nil {
 					return nil, err
 				}
-				defer br.Close()
+				for _, sl := range dc.stepsLayer {
+					rdrNext, err := sl(ctx, rc, rSrc, rTgt, dl, rdr)
+					if err != nil {
+						return nil, err
+					}
+					rdr = rdrNext
+				}
+			}
+			if len(dc.stepsLayerFile) > 0 && inListStr(dl.desc.MediaType, mtKnownTar) {
+				if dl.mod == deleted {
+					return dl, nil
+				}
+				if rdr == nil {
+					rdr, err = rc.BlobGet(ctx, rSrc, dl.desc)
+					if err != nil {
+						return nil, err
+					}
+				}
 				changed := false
 				empty := true
-				// setup tar reader to process layer
-				dr, err := archive.Decompress(br)
-				if err != nil {
-					return nil, err
+				mt := dl.desc.MediaType
+				if dl.newDesc.MediaType != "" {
+					mt = dl.newDesc.MediaType
 				}
-				tr := tar.NewReader(dr)
-				// create temp file
+				// if compressed, setup a decompressing reader that passes through the close
+				if mt != mediatype.OCI1Layer && mt != mediatype.Docker2Layer {
+					dr, err := archive.Decompress(rdr)
+					if err != nil {
+						return nil, err
+					}
+					rdr = readCloserFn{Reader: dr, closeFn: rdr.Close}
+				}
+				// setup tar reader to process layer
+				tr := tar.NewReader(rdr)
+				// create temp file and setup tar writer
 				fh, err := os.CreateTemp("", "regclient-mod-")
 				if err != nil {
 					return nil, err
 				}
-				defer fh.Close()
-				defer os.Remove(fh.Name())
-				// create tar writer, optional recompress
+				defer func() {
+					_ = fh.Close()
+					_ = os.Remove(fh.Name())
+				}()
 				var tw *tar.Writer
 				var gw *gzip.Writer
 				digRaw := digest.Canonical.Digester() // raw/compressed digest
@@ -196,17 +230,12 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 						}
 					}
 				}
-				err = br.Close()
-				if err != nil {
-					return nil, fmt.Errorf("failed to close blob: %w", err)
-				}
-				br = nil
-				if empty || dl.mod == deleted {
+				if empty {
 					dl.mod = deleted
 					return dl, nil
 				}
 				if changed {
-					// if modified, push blob
+					// close to flush remaining content
 					err = tw.Close()
 					if err != nil {
 						return nil, fmt.Errorf("failed to close temporary tar layer: %w", err)
@@ -217,24 +246,51 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 							return nil, fmt.Errorf("failed to close gzip writer: %w", err)
 						}
 					}
-					// get the file size
+					err = rdr.Close()
+					if err != nil {
+						return nil, fmt.Errorf("failed to close layer reader: %w", err)
+					}
+					// replace the current reader and save the digests
 					l, err := fh.Seek(0, 1)
 					if err != nil {
 						return nil, err
 					}
-					dl.newDesc = dl.desc
-					dl.newDesc.Digest = digRaw.Digest()
-					dl.newDesc.Size = l
-					dl.ucDigest = digUC.Digest()
 					_, err = fh.Seek(0, 0)
 					if err != nil {
 						return nil, err
 					}
-					_, err = rc.BlobPut(ctx, rTgt, dl.newDesc, fh)
-					if err != nil {
-						return nil, err
+					rdr = fh
+					dl.newDesc = descriptor.Descriptor{
+						MediaType: mt,
+						Digest:    digRaw.Digest(),
+						Size:      l,
 					}
-					dl.mod = replaced
+					dl.ucDigest = digUC.Digest()
+					if dl.mod == unchanged {
+						dl.mod = replaced
+					}
+				}
+			}
+			// if added or replaced, and reader not nil, push blob
+			if (dl.mod == added || dl.mod == replaced) && rdr != nil {
+				// push the blob and verify the results
+				dNew, err := rc.BlobPut(ctx, rTgt, descriptor.Descriptor{}, rdr)
+				if err != nil {
+					return nil, err
+				}
+				err = rdr.Close()
+				if err != nil {
+					return nil, err
+				}
+				if dl.newDesc.Digest == "" {
+					dl.newDesc.Digest = dNew.Digest
+				} else if dl.newDesc.Digest != dNew.Digest {
+					return nil, fmt.Errorf("layer digest mismatch, pushed %s, expected %s", dNew.Digest.String(), dl.newDesc.Digest.String())
+				}
+				if dl.newDesc.Size == 0 {
+					dl.newDesc.Size = dNew.Size
+				} else if dl.newDesc.Size != dNew.Size {
+					return nil, fmt.Errorf("layer size mismatch, pushed %d, expected %d", dNew.Size, dl.newDesc.Size)
 				}
 			}
 			if dl.mod == unchanged && !ref.EqualRepository(rSrc, rTgt) {

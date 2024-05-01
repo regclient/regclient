@@ -17,6 +17,7 @@ import (
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/rwfs"
+	"github.com/regclient/regclient/pkg/archive"
 	"github.com/regclient/regclient/scheme/reg"
 	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
@@ -454,6 +455,21 @@ func TestMod(t *testing.T) {
 			name: "External layer remove unchanged",
 			opts: []Opts{
 				WithExternalURLsRm(),
+			},
+			ref:      "ocidir://testrepo:v1",
+			wantSame: true,
+		},
+		{
+			name: "Layer Uncompressed",
+			opts: []Opts{
+				WithLayerCompression(archive.CompressNone),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Layer Compressed gzip",
+			opts: []Opts{
+				WithLayerCompression(archive.CompressGzip),
 			},
 			ref:      "ocidir://testrepo:v1",
 			wantSame: true,
