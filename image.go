@@ -654,7 +654,8 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					// known manifest media type
 					err = rc.imageCopyOpt(ctx, entrySrc, entryTgt, dEntry, true, parentsNew, opt)
 				case mediatype.Docker2ImageConfig, mediatype.OCI1ImageConfig,
-					mediatype.Docker2LayerGzip, mediatype.OCI1Layer, mediatype.OCI1LayerGzip,
+					mediatype.Docker2Layer, mediatype.Docker2LayerGzip, mediatype.Docker2LayerZstd,
+					mediatype.OCI1Layer, mediatype.OCI1LayerGzip, mediatype.OCI1LayerZstd,
 					mediatype.BuildkitCacheConfig:
 					// known blob media type
 					err = rc.imageCopyBlob(ctx, entrySrc, entryTgt, dEntry, opt, bOpt...)
@@ -1390,11 +1391,16 @@ func (rc *RegClient) imageImportDockerAddLayerHandlers(ctx context.Context, r re
 	for i, layerFile := range trd.dockerManifestList[index].Layers {
 		func(i int) {
 			trd.handlers[filepath.Clean(layerFile)] = func(header *tar.Header, trd *tarReadData) error {
-				// ensure blob is compressed with gzip to match media type
-				gzipR, err := archive.Compress(trd.tr, archive.CompressGzip)
+				// ensure blob is compressed
+				rdrUC, err := archive.Decompress(trd.tr)
 				if err != nil {
 					return err
 				}
+				gzipR, err := archive.Compress(rdrUC, archive.CompressGzip)
+				if err != nil {
+					return err
+				}
+				defer gzipR.Close()
 				// upload blob, digest and size is unknown
 				d, err := rc.BlobPut(ctx, r, descriptor.Descriptor{}, gzipR)
 				if err != nil {
@@ -1499,7 +1505,8 @@ func (rc *RegClient) imageImportOCIHandleManifest(ctx context.Context, r ref.Ref
 					}
 					return rc.imageImportOCIHandleManifest(ctx, r, md, trd, true, child)
 				case mediatype.Docker2ImageConfig, mediatype.OCI1ImageConfig,
-					mediatype.Docker2LayerGzip, mediatype.OCI1Layer, mediatype.OCI1LayerGzip,
+					mediatype.Docker2Layer, mediatype.Docker2LayerGzip, mediatype.Docker2LayerZstd,
+					mediatype.OCI1Layer, mediatype.OCI1LayerGzip, mediatype.OCI1LayerZstd,
 					mediatype.BuildkitCacheConfig:
 					// known blob media types
 					return rc.imageImportBlob(ctx, r, d, trd)

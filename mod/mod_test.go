@@ -475,6 +475,13 @@ func TestMod(t *testing.T) {
 			wantSame: true,
 		},
 		{
+			name: "Layer Compressed zstd",
+			opts: []Opts{
+				WithLayerCompression(archive.CompressZstd),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
 			name: "Layer Reproducible",
 			opts: []Opts{
 				WithLayerReproducible(),

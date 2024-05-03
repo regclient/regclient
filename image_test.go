@@ -491,6 +491,7 @@ func TestExportImport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open tar: %v", err)
 	}
+	defer fileIn2.Close()
 	fileIn2Seeker, ok := fileIn2.(io.ReadSeeker)
 	if !ok {
 		t.Fatalf("could not convert fileIn to io.ReadSeeker, type %T", fileIn2)
@@ -504,6 +505,7 @@ func TestExportImport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open tar: %v", err)
 	}
+	defer fileIn3.Close()
 	fileIn3Seeker, ok := fileIn3.(io.ReadSeeker)
 	if !ok {
 		t.Fatalf("could not convert fileIn to io.ReadSeeker, type %T", fileIn3)

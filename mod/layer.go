@@ -24,8 +24,9 @@ import (
 // WithLayerCompression alters the media type and compression algorithm of the layers.
 func WithLayerCompression(algo archive.CompressType) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
-		// TODO: add zstd support here, and in cases below
-		if algo != archive.CompressNone && algo != archive.CompressGzip {
+		switch algo {
+		case archive.CompressNone, archive.CompressGzip, archive.CompressZstd:
+		default:
 			return fmt.Errorf("unsupported layer compression: %s", algo.String())
 		}
 		dc.stepsLayer = append(dc.stepsLayer, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dl *dagLayer, rdr io.ReadCloser) (io.ReadCloser, error) {
@@ -39,11 +40,11 @@ func WithLayerCompression(algo archive.CompressType) Opts {
 			switch algo {
 			case archive.CompressGzip:
 				switch mt {
-				case mediatype.Docker2Layer:
+				case mediatype.Docker2Layer, mediatype.Docker2LayerZstd:
 					dl.newDesc = descriptor.Descriptor{
 						MediaType: mediatype.Docker2LayerGzip,
 					}
-				case mediatype.OCI1Layer:
+				case mediatype.OCI1Layer, mediatype.OCI1LayerZstd:
 					dl.newDesc = descriptor.Descriptor{
 						MediaType: mediatype.OCI1LayerGzip,
 					}
@@ -57,11 +58,13 @@ func WithLayerCompression(algo archive.CompressType) Opts {
 				digUC := digest.Canonical.Digester()  // uncompressed digest
 				ucRdr, err := archive.Decompress(rdr)
 				if err != nil {
+					_ = rdr.Close()
 					return nil, err
 				}
 				ucDigRdr := io.TeeReader(ucRdr, digUC.Hash())
 				cRdr, err := archive.Compress(ucDigRdr, algo)
 				if err != nil {
+					_ = rdr.Close()
 					return nil, err
 				}
 				digRdr := io.TeeReader(cRdr, digRaw.Hash())
@@ -72,7 +75,50 @@ func WithLayerCompression(algo archive.CompressType) Opts {
 						if err != nil {
 							return err
 						}
-						// TODO: close cRdr when it returns a ReadCloser
+						_ = cRdr.Close()
+						dl.newDesc.Digest = digRaw.Digest()
+						dl.ucDigest = digUC.Digest()
+						return nil
+					}}, nil
+
+			case archive.CompressZstd:
+				switch mt {
+				case mediatype.Docker2Layer, mediatype.Docker2LayerGzip:
+					dl.newDesc = descriptor.Descriptor{
+						MediaType: mediatype.Docker2LayerZstd,
+					}
+				case mediatype.OCI1Layer, mediatype.OCI1LayerGzip:
+					dl.newDesc = descriptor.Descriptor{
+						MediaType: mediatype.OCI1LayerZstd,
+					}
+				default:
+					return rdr, nil
+				}
+				if dl.mod == unchanged {
+					dl.mod = replaced
+				}
+				digRaw := digest.Canonical.Digester() // raw/compressed digest
+				digUC := digest.Canonical.Digester()  // uncompressed digest
+				ucRdr, err := archive.Decompress(rdr)
+				if err != nil {
+					_ = rdr.Close()
+					return nil, err
+				}
+				ucDigRdr := io.TeeReader(ucRdr, digUC.Hash())
+				cRdr, err := archive.Compress(ucDigRdr, algo)
+				if err != nil {
+					_ = rdr.Close()
+					return nil, err
+				}
+				digRdr := io.TeeReader(cRdr, digRaw.Hash())
+				return readCloserFn{
+					Reader: digRdr,
+					closeFn: func() error {
+						err := rdr.Close()
+						if err != nil {
+							return err
+						}
+						_ = cRdr.Close()
 						dl.newDesc.Digest = digRaw.Digest()
 						dl.ucDigest = digUC.Digest()
 						return nil
@@ -80,11 +126,11 @@ func WithLayerCompression(algo archive.CompressType) Opts {
 
 			case archive.CompressNone:
 				switch mt {
-				case mediatype.Docker2LayerGzip:
+				case mediatype.Docker2LayerGzip, mediatype.Docker2LayerZstd:
 					dl.newDesc = descriptor.Descriptor{
 						MediaType: mediatype.Docker2Layer,
 					}
-				case mediatype.OCI1LayerGzip:
+				case mediatype.OCI1LayerGzip, mediatype.OCI1LayerZstd:
 					dl.newDesc = descriptor.Descriptor{
 						MediaType: mediatype.OCI1Layer,
 					}
@@ -97,6 +143,7 @@ func WithLayerCompression(algo archive.CompressType) Opts {
 				dig := digest.Canonical.Digester()
 				ucRdr, err := archive.Decompress(rdr)
 				if err != nil {
+					_ = rdr.Close()
 					return nil, err
 				}
 				digRdr := io.TeeReader(ucRdr, dig.Hash())
