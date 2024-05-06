@@ -604,7 +604,7 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 				mod.WithLayerCompression(algo))
 			return nil
 		},
-	}, "layer-compress", "", `change layer compression (gzip, none)`)
+	}, "layer-compress", "", `change layer compression (gzip, none, zstd)`)
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {

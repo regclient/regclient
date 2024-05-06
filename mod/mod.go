@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/klauspost/compress/zstd"
 	"github.com/opencontainers/go-digest"
 
 	"github.com/regclient/regclient"
@@ -36,8 +37,10 @@ var (
 	mtKnownTar = []string{
 		mediatype.Docker2Layer,
 		mediatype.Docker2LayerGzip,
+		mediatype.Docker2LayerZstd,
 		mediatype.OCI1Layer,
 		mediatype.OCI1LayerGzip,
+		mediatype.OCI1LayerZstd,
 	}
 	// known config media types
 	mtKnownConfig = []string{
@@ -160,6 +163,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 				if mt != mediatype.OCI1Layer && mt != mediatype.Docker2Layer {
 					dr, err := archive.Decompress(rdr)
 					if err != nil {
+						_ = rdr.Close()
 						return nil, err
 					}
 					rdr = readCloserFn{Reader: dr, closeFn: rdr.Close}
@@ -169,6 +173,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 				// create temp file and setup tar writer
 				fh, err := os.CreateTemp("", "regclient-mod-")
 				if err != nil {
+					_ = rdr.Close()
 					return nil, err
 				}
 				defer func() {
@@ -177,6 +182,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 				}()
 				var tw *tar.Writer
 				var gw *gzip.Writer
+				var zw *zstd.Encoder
 				digRaw := digest.Canonical.Digester() // raw/compressed digest
 				digUC := digest.Canonical.Digester()  // uncompressed digest
 				if dl.desc.MediaType == mediatype.Docker2LayerGzip || dl.desc.MediaType == mediatype.OCI1LayerGzip {
@@ -184,6 +190,16 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 					gw = gzip.NewWriter(cw)
 					defer gw.Close()
 					ucw := io.MultiWriter(gw, digUC.Hash())
+					tw = tar.NewWriter(ucw)
+				} else if dl.desc.MediaType == mediatype.Docker2LayerZstd || dl.desc.MediaType == mediatype.OCI1LayerZstd {
+					cw := io.MultiWriter(fh, digRaw.Hash())
+					zw, err = zstd.NewWriter(cw)
+					if err != nil {
+						_ = rdr.Close()
+						return nil, err
+					}
+					defer zw.Close()
+					ucw := io.MultiWriter(zw, digUC.Hash())
 					tw = tar.NewWriter(ucw)
 				} else {
 					dw := io.MultiWriter(fh, digRaw.Hash(), digUC.Hash())
@@ -199,12 +215,13 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 						return nil, err
 					}
 					changeFile := unchanged
-					var rdr io.Reader
-					rdr = tr
+					var fileRdr io.Reader
+					fileRdr = tr
 					for _, slf := range dc.stepsLayerFile {
 						var changeCur changes
-						th, rdr, changeCur, err = slf(ctx, rc, rSrc, rTgt, dl, th, rdr)
+						th, fileRdr, changeCur, err = slf(ctx, rc, rSrc, rTgt, dl, th, fileRdr)
 						if err != nil {
+							_ = rdr.Close()
 							return nil, err
 						}
 						if changeCur != unchanged {
@@ -220,11 +237,13 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 						empty = false
 						err = tw.WriteHeader(th)
 						if err != nil {
+							_ = rdr.Close()
 							return nil, err
 						}
 						if th.Typeflag == tar.TypeReg && th.Size > 0 {
-							_, err := io.CopyN(tw, rdr, th.Size)
+							_, err := io.CopyN(tw, fileRdr, th.Size)
 							if err != nil {
+								_ = rdr.Close()
 								return nil, err
 							}
 						}
@@ -238,12 +257,21 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 					// close to flush remaining content
 					err = tw.Close()
 					if err != nil {
+						_ = rdr.Close()
 						return nil, fmt.Errorf("failed to close temporary tar layer: %w", err)
 					}
 					if gw != nil {
 						err = gw.Close()
 						if err != nil {
+							_ = rdr.Close()
 							return nil, fmt.Errorf("failed to close gzip writer: %w", err)
+						}
+					}
+					if zw != nil {
+						err = zw.Close()
+						if err != nil {
+							_ = rdr.Close()
+							return nil, fmt.Errorf("failed to close zstd writer: %w", err)
 						}
 					}
 					err = rdr.Close()

@@ -29,6 +29,8 @@ const (
 	Docker2Layer = "application/vnd.docker.image.rootfs.diff.tar"
 	// Docker2LayerGzip is the default compressed layer for docker schema2.
 	Docker2LayerGzip = "application/vnd.docker.image.rootfs.diff.tar.gzip"
+	// Docker2LayerZstd is the default compressed layer for docker schema2.
+	Docker2LayerZstd = "application/vnd.docker.image.rootfs.diff.tar.zstd"
 	// Docker2ForeignLayer is the default compressed layer for foreign layers in docker schema2.
 	Docker2ForeignLayer = "application/vnd.docker.image.rootfs.foreign.diff.tar.gzip"
 	// OCI1Layer is the uncompressed layer for OCIv1.
