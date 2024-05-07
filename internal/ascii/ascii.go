@@ -1,4 +1,4 @@
-// Package ascii is used to output asci content to a terminal
+// Package ascii is used to output ascii content to a terminal
 package ascii
 
 import (
