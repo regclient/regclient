@@ -1016,10 +1016,10 @@ func (imageOpts *imageCmd) runImageCopy(cmd *cobra.Command, args []string) error
 	var progress *imageProgress
 	if !flagChanged(cmd, "verbosity") && ascii.IsWriterTerminal(cmd.ErrOrStderr()) {
 		progress = &imageProgress{
-			start:   time.Now(),
-			entries: map[string]*imageProgressEntry{},
-			asciOut: ascii.NewLines(cmd.ErrOrStderr()),
-			bar:     ascii.NewProgressBar(cmd.ErrOrStderr()),
+			start:    time.Now(),
+			entries:  map[string]*imageProgressEntry{},
+			asciiOut: ascii.NewLines(cmd.ErrOrStderr()),
+			bar:      ascii.NewProgressBar(cmd.ErrOrStderr()),
 		}
 		ticker := time.NewTicker(progressFreq)
 		defer ticker.Stop()
@@ -1051,12 +1051,12 @@ func (imageOpts *imageCmd) runImageCopy(cmd *cobra.Command, args []string) error
 }
 
 type imageProgress struct {
-	mu      sync.Mutex
-	start   time.Time
-	entries map[string]*imageProgressEntry
-	asciOut *ascii.Lines
-	bar     *ascii.ProgressBar
-	changed bool
+	mu       sync.Mutex
+	start    time.Time
+	entries  map[string]*imageProgressEntry
+	asciiOut *ascii.Lines
+	bar      *ascii.ProgressBar
+	changed  bool
 }
 
 type imageProgressEntry struct {
@@ -1154,7 +1154,7 @@ func (ip *imageProgress) display(final bool) {
 				}
 				pct := float64(e.cur) / float64(e.total)
 				post := fmt.Sprintf(" %4.2f%% %s/%s", pct*100, units.HumanSize(float64(e.cur)), units.HumanSize(float64(e.total)))
-				ip.asciOut.Add(ip.bar.Generate(pct, pre, post))
+				ip.asciiOut.Add(ip.bar.Generate(pct, pre, post))
 			}
 			// track stats
 			if e.state == types.CallbackSkipped {
@@ -1166,18 +1166,18 @@ func (ip *imageProgress) display(final bool) {
 		}
 	}
 	// show stats summary
-	ip.asciOut.Add([]byte(fmt.Sprintf("Manifests: %d/%d | Blobs: %s copied, %s skipped",
+	ip.asciiOut.Add([]byte(fmt.Sprintf("Manifests: %d/%d | Blobs: %s copied, %s skipped",
 		manifestFinished, manifestTotal,
 		units.HumanSize(float64(sum)),
 		units.HumanSize(float64(skipped)))))
 	if queued > 0 {
-		ip.asciOut.Add([]byte(fmt.Sprintf(", %s queued",
+		ip.asciiOut.Add([]byte(fmt.Sprintf(", %s queued",
 			units.HumanSize(float64(queued)))))
 	}
-	ip.asciOut.Add([]byte(fmt.Sprintf(" | Elapsed: %ds\n", int64(time.Since(ip.start).Seconds()))))
-	ip.asciOut.Flush()
+	ip.asciiOut.Add([]byte(fmt.Sprintf(" | Elapsed: %ds\n", int64(time.Since(ip.start).Seconds()))))
+	ip.asciiOut.Flush()
 	if !final {
-		ip.asciOut.Return()
+		ip.asciiOut.Return()
 	}
 }
 
