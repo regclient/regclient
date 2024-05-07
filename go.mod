@@ -12,8 +12,8 @@ require (
 	github.com/spf13/cobra v1.8.0
 	github.com/ulikunitz/xz v0.5.12
 	github.com/yuin/gopher-lua v1.1.1
-	golang.org/x/sys v0.19.0
-	golang.org/x/term v0.19.0
+	golang.org/x/sys v0.20.0
+	golang.org/x/term v0.20.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
