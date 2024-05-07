@@ -6,6 +6,19 @@ import (
 	"testing"
 )
 
+func TestImageCreate(t *testing.T) {
+	tmpDir := t.TempDir()
+	imageRef := fmt.Sprintf("ocidir://%s/repo:scratch", tmpDir)
+
+	out, err := cobraTest(t, nil, "image", "create", imageRef)
+	if err != nil {
+		t.Fatalf("failed to run image create: %v", err)
+	}
+	if out != "" {
+		t.Errorf("unexpected output: %v", out)
+	}
+}
+
 func TestImageExportImport(t *testing.T) {
 	tmpDir := t.TempDir()
 	srcRef := "ocidir://../../testdata/testrepo:v2"
