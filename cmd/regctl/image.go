@@ -21,6 +21,7 @@ import (
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/internal/ascii"
+	"github.com/regclient/regclient/internal/strparse"
 	"github.com/regclient/regclient/internal/units"
 	"github.com/regclient/regclient/mod"
 	"github.com/regclient/regclient/pkg/archive"
@@ -259,6 +260,10 @@ regctl image mod registry.example.org/repo:v1 \
 
 # convert an image to the OCI media types, copying to local registry
 regctl image mod alpine:3.5 --to-oci --create registry.example.org/alpine:3.5
+
+# append a layer to only the linux/amd64 image using the file.tar contents
+regctl image mod registry.example.org/repo:v1 --create v1-extended \
+  --layer-add "tar=file.tar,platform=linux/amd64"
 
 # set the timestamp on the config and layers, ignoring the alpine base image layers
 regctl image mod registry.example.org/repo:v1 --create v1-mod \
@@ -631,6 +636,45 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 		},
 	}, "label-to-annotation", "", `set annotations from labels`)
 	flagLabelAnnot.NoOptDefVal = "true"
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "string",
+		f: func(val string) error {
+			kvSplit, err := strparse.SplitCSKV(val)
+			if err != nil {
+				return fmt.Errorf("failed to parse layer-add options %s", val)
+			}
+			var rdr io.Reader
+			var mt string
+			var platforms []platform.Platform
+			if filename, ok := kvSplit["tar"]; ok {
+				//#nosec G304 command is run by a user accessing their own files
+				fh, err := os.Open(filename)
+				if err != nil {
+					return fmt.Errorf("failed to open tar file %s: %v", filename, err)
+				}
+				rdr = fh
+				cobra.OnFinalize(func() {
+					_ = fh.Close()
+				})
+			}
+			if rdr == nil {
+				return fmt.Errorf("tar file input is required")
+			}
+			if mtArg, ok := kvSplit["mediaType"]; ok {
+				mt = mtArg
+			}
+			if pStr, ok := kvSplit["platform"]; ok {
+				p, err := platform.Parse(pStr)
+				if err != nil {
+					return fmt.Errorf("failed to parse platform %s: %v", pStr, err)
+				}
+				platforms = append(platforms, p)
+			}
+			imageOpts.modOpts = append(imageOpts.modOpts,
+				mod.WithLayerAddTar(rdr, mt, platforms))
+			return nil
+		},
+	}, "layer-add", "", `add a new layer (tar=file,platform=val)`)
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {

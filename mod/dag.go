@@ -229,9 +229,9 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rT
 				return fmt.Errorf("manifest does not have enough layers")
 			}
 			// keep config index aligned
-			for iConfig >= 0 && oc.History[iConfig].EmptyLayer {
+			for iConfig >= 0 && iConfig < len(oc.History) && oc.History[iConfig].EmptyLayer {
 				iConfig++
-				if iConfig >= len(oc.History) {
+				if iConfig >= len(oc.History) && layer.mod != added {
 					return fmt.Errorf("config history does not have enough entries")
 				}
 			}
@@ -283,7 +283,7 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rT
 				}
 				if iConfig < 0 {
 					// noop
-				} else if len(oc.History) == iConfig {
+				} else if iConfig >= len(oc.History) {
 					oc.History = append(oc.History, newHistory)
 				} else {
 					oc.History = append(oc.History[:iConfig+1], oc.History[iConfig:]...)

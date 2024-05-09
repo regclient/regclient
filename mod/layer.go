@@ -16,10 +16,88 @@ import (
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/pkg/archive"
 	"github.com/regclient/regclient/types/descriptor"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/mediatype"
+	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 )
+
+// WithLayerAddTar appends a new layer to the image based on a tar input stream.
+// If media type (mt) is not defined, it will default to Gzip and match Docker or OCI based on the manifest media type.
+// If the platform slice is empty, the layer is added to all platforms.
+func WithLayerAddTar(rdr io.Reader, mt string, platforms []platform.Platform) Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		if mt == "" {
+			switch dm.m.GetDescriptor().MediaType {
+			case mediatype.Docker2Manifest, mediatype.Docker2ManifestList:
+				mt = mediatype.Docker2LayerGzip
+			default:
+				mt = mediatype.OCI1LayerGzip
+			}
+		}
+		var comp archive.CompressType
+		switch mt {
+		case mediatype.OCI1Layer, mediatype.Docker2Layer:
+			comp = archive.CompressNone
+		case mediatype.OCI1LayerGzip, mediatype.Docker2LayerGzip:
+			comp = archive.CompressGzip
+		case mediatype.OCI1LayerZstd, mediatype.Docker2LayerZstd:
+			comp = archive.CompressZstd
+		default:
+			return fmt.Errorf("unsupported new layer media type %s%.0w", mt, errs.ErrUnsupportedMediaType)
+		}
+		var ucDig digest.Digest
+		var desc descriptor.Descriptor
+		dc.stepsManifest = append(dc.stepsManifest, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
+			// skip deleted, manifest lists, and platforms that aren't listed
+			if dm.mod == deleted || dm.m.IsList() {
+				return nil
+			}
+			if len(platforms) > 0 {
+				p := dm.config.oc.GetConfig().Platform
+				found := false
+				for _, pe := range platforms {
+					if platform.Match(p, pe) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					return nil
+				}
+			}
+			// push the layer
+			if ucDig == "" {
+				digUC := digest.Canonical.Digester() // uncompressed digest
+				ucDigRdr := io.TeeReader(rdr, digUC.Hash())
+				cRdr, err := archive.Compress(ucDigRdr, comp)
+				if err != nil {
+					return fmt.Errorf("failed to compress layer with %s: %w", comp.String(), err)
+				}
+				descPut, err := rc.BlobPut(ctx, rTgt, descriptor.Descriptor{}, cRdr)
+				_ = cRdr.Close()
+				if err != nil {
+					return fmt.Errorf("failed to push layer to %s: %w", rTgt.CommonName(), err)
+				}
+				ucDig = digUC.Digest()
+				desc = descriptor.Descriptor{
+					MediaType: mt,
+					Digest:    descPut.Digest,
+					Size:      descPut.Size,
+				}
+			}
+			// add the layer to the dag
+			dm.layers = append(dm.layers, &dagLayer{
+				mod:      added,
+				desc:     desc,
+				ucDigest: ucDig,
+			})
+			return nil
+		})
+		return nil
+	}
+}
 
 // WithLayerCompression alters the media type and compression algorithm of the layers.
 func WithLayerCompression(algo archive.CompressType) Opts {
