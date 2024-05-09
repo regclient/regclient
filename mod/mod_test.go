@@ -1,11 +1,13 @@
 package mod
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"regexp"
 	"testing"
 	"time"
@@ -76,6 +78,10 @@ func TestMod(t *testing.T) {
 		tTgt.Close()
 		_ = regTgt.Close()
 	})
+	tarBytes, err := os.ReadFile("../testdata/layer.tar")
+	if err != nil {
+		t.Fatalf("failed to read testdata/layer.tar: %v", err)
+	}
 
 	// create regclient
 	rcHosts := []config.Host{
@@ -458,6 +464,13 @@ func TestMod(t *testing.T) {
 			},
 			ref:      "ocidir://testrepo:v1",
 			wantSame: true,
+		},
+		{
+			name: "Layer Add",
+			opts: []Opts{
+				WithLayerAddTar(bytes.NewReader(tarBytes), "", nil),
+			},
+			ref: "ocidir://testrepo:v1",
 		},
 		{
 			name: "Layer Uncompressed",
