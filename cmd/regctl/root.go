@@ -143,6 +143,9 @@ func (rootOpts *rootCmd) newRegClient() *regclient.RegClient {
 		log.WithFields(logrus.Fields{
 			"err": err,
 		}).Warn("Failed to load default config")
+		if conf == nil {
+			conf = ConfigNew()
+		}
 	}
 
 	rcOpts := []regclient.Opt{
