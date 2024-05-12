@@ -3,6 +3,7 @@ package main
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -264,6 +265,10 @@ regctl image mod alpine:3.5 --to-oci --create registry.example.org/alpine:3.5
 # append a layer to only the linux/amd64 image using the file.tar contents
 regctl image mod registry.example.org/repo:v1 --create v1-extended \
   --layer-add "tar=file.tar,platform=linux/amd64"
+
+# append a layer to all platforms using the contents of a directory
+regctl image mod registry.example.org/repo:v1 --create v1-extended \
+  --layer-add "dir=path/to/directory"
 
 # set the timestamp on the config and layers, ignoring the alpine base image layers
 regctl image mod registry.example.org/repo:v1 --create v1-mod \
@@ -657,6 +662,23 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 					_ = fh.Close()
 				})
 			}
+			if dir, ok := kvSplit["dir"]; ok {
+				if rdr != nil {
+					return fmt.Errorf("cannot use dir and tar options together in layer-add")
+				}
+				pr, pw := io.Pipe()
+				go func() {
+					err := archive.Tar(context.TODO(), dir, pw)
+					if err != nil {
+						_ = pw.CloseWithError(err)
+					}
+					_ = pw.Close()
+				}()
+				rdr = pr
+				cobra.OnFinalize(func() {
+					_ = pr.Close()
+				})
+			}
 			if rdr == nil {
 				return fmt.Errorf("tar file input is required")
 			}
@@ -674,7 +696,7 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 				mod.WithLayerAddTar(rdr, mt, platforms))
 			return nil
 		},
-	}, "layer-add", "", `add a new layer (tar=file,platform=val)`)
+	}, "layer-add", "", `add a new layer (tar=file,dir=directory,platform=val)`)
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
