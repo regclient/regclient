@@ -3,6 +3,7 @@ package archive
 import (
 	"bytes"
 	"io"
+	"strings"
 	"testing"
 )
 
@@ -67,4 +68,27 @@ func TestRoundtrip(t *testing.T) {
 			}
 		})
 	}
+}
+
+func FuzzRoundTrip(f *testing.F) {
+	f.Add(int(CompressNone), "hello world")
+	f.Fuzz(func(t *testing.T, comp int, s string) {
+		r := strings.NewReader(s)
+		rComp, err := Compress(r, CompressType(comp))
+		if err != nil {
+			return
+		}
+		defer rComp.Close()
+		rOut, err := Decompress(rComp)
+		if err != nil {
+			t.Fatalf("failed to decompress: %v", err)
+		}
+		out, err := io.ReadAll(rOut)
+		if err != nil {
+			t.Fatalf("failed to ReadAdd: %v", err)
+		}
+		if s != string(out) {
+			t.Errorf("output does not equal input: input %s, output %s", s, string(out))
+		}
+	})
 }
