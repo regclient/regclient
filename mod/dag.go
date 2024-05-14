@@ -31,6 +31,7 @@ const (
 type dagConfig struct {
 	stepsManifest  []func(context.Context, *regclient.RegClient, ref.Ref, ref.Ref, *dagManifest) error
 	stepsOCIConfig []func(context.Context, *regclient.RegClient, ref.Ref, ref.Ref, *dagOCIConfig) error
+	stepsLayer     []func(context.Context, *regclient.RegClient, ref.Ref, ref.Ref, *dagLayer, io.ReadCloser) (io.ReadCloser, error)
 	stepsLayerFile []func(context.Context, *regclient.RegClient, ref.Ref, ref.Ref, *dagLayer, *tar.Header, io.Reader) (*tar.Header, io.Reader, changes, error)
 	maxDataSize    int64
 	rTgt           ref.Ref
@@ -95,7 +96,7 @@ func dagGet(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, d descri
 		cd, err := mi.GetConfig()
 		if err != nil && !errors.Is(err, errs.ErrUnsupportedMediaType) {
 			return nil, err
-		} else if err == nil && inListStr(cd.MediaType, mtWLConfig) {
+		} else if err == nil && inListStr(cd.MediaType, mtKnownConfig) {
 			oc, err := rc.BlobGetOCIConfig(ctx, rSrc, cd)
 			if err != nil {
 				return nil, err
@@ -228,9 +229,9 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rT
 				return fmt.Errorf("manifest does not have enough layers")
 			}
 			// keep config index aligned
-			for iConfig >= 0 && oc.History[iConfig].EmptyLayer {
+			for iConfig >= 0 && iConfig < len(oc.History) && oc.History[iConfig].EmptyLayer {
 				iConfig++
-				if iConfig >= len(oc.History) {
+				if iConfig >= len(oc.History) && layer.mod != added {
 					return fmt.Errorf("config history does not have enough entries")
 				}
 			}
@@ -282,7 +283,7 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rT
 				}
 				if iConfig < 0 {
 					// noop
-				} else if len(oc.History) == iConfig {
+				} else if iConfig >= len(oc.History) {
 					oc.History = append(oc.History, newHistory)
 				} else {
 					oc.History = append(oc.History[:iConfig+1], oc.History[iConfig:]...)

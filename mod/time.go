@@ -19,7 +19,7 @@ func timeNow() time.Time {
 	if err == nil {
 		return now
 	}
-	return time.Now()
+	return time.Now().UTC()
 }
 
 func timeEpocEnv() (time.Time, error) {

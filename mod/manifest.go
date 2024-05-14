@@ -320,13 +320,19 @@ func WithManifestToDocker() Opts {
 					changed = true
 				}
 				for i, l := range ociM.Layers {
-					if l.MediaType == mediatype.OCI1LayerGzip {
+					switch l.MediaType {
+					case mediatype.OCI1Layer:
+						ociM.Layers[i].MediaType = mediatype.Docker2Layer
+					case mediatype.OCI1LayerGzip:
 						ociM.Layers[i].MediaType = mediatype.Docker2LayerGzip
-						changed = true
-					} else if l.MediaType == mediatype.OCI1ForeignLayerGzip {
+					case mediatype.OCI1LayerZstd:
+						ociM.Layers[i].MediaType = mediatype.Docker2LayerZstd
+					case mediatype.OCI1ForeignLayerGzip:
 						ociM.Layers[i].MediaType = mediatype.Docker2ForeignLayer
-						changed = true
+					default:
+						continue
 					}
+					changed = true
 				}
 				if changed {
 					dm := schema2.Manifest{}
@@ -384,13 +390,19 @@ func WithManifestToOCI() Opts {
 					changed = true
 				}
 				for i, l := range ociM.Layers {
-					if l.MediaType == mediatype.Docker2LayerGzip {
+					switch l.MediaType {
+					case mediatype.Docker2Layer:
+						ociM.Layers[i].MediaType = mediatype.OCI1Layer
+					case mediatype.Docker2LayerGzip:
 						ociM.Layers[i].MediaType = mediatype.OCI1LayerGzip
-						changed = true
-					} else if l.MediaType == mediatype.Docker2ForeignLayer {
+					case mediatype.Docker2LayerZstd:
+						ociM.Layers[i].MediaType = mediatype.OCI1LayerZstd
+					case mediatype.Docker2ForeignLayer:
 						ociM.Layers[i].MediaType = mediatype.OCI1ForeignLayerGzip
-						changed = true
+					default:
+						continue
 					}
+					changed = true
 				}
 				if changed {
 					om = ociM

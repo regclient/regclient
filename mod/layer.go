@@ -14,9 +14,236 @@ import (
 	"github.com/opencontainers/go-digest"
 
 	"github.com/regclient/regclient"
+	"github.com/regclient/regclient/pkg/archive"
+	"github.com/regclient/regclient/types/descriptor"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/mediatype"
+	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 )
+
+// WithLayerAddTar appends a new layer to the image based on a tar input stream.
+// If media type (mt) is not defined, it will default to Gzip and match Docker or OCI based on the manifest media type.
+// If the platform slice is empty, the layer is added to all platforms.
+func WithLayerAddTar(rdr io.Reader, mt string, platforms []platform.Platform) Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		if mt == "" {
+			switch dm.m.GetDescriptor().MediaType {
+			case mediatype.Docker2Manifest, mediatype.Docker2ManifestList:
+				mt = mediatype.Docker2LayerGzip
+			default:
+				mt = mediatype.OCI1LayerGzip
+			}
+		}
+		var comp archive.CompressType
+		switch mt {
+		case mediatype.OCI1Layer, mediatype.Docker2Layer:
+			comp = archive.CompressNone
+		case mediatype.OCI1LayerGzip, mediatype.Docker2LayerGzip:
+			comp = archive.CompressGzip
+		case mediatype.OCI1LayerZstd, mediatype.Docker2LayerZstd:
+			comp = archive.CompressZstd
+		default:
+			return fmt.Errorf("unsupported new layer media type %s%.0w", mt, errs.ErrUnsupportedMediaType)
+		}
+		var ucDig digest.Digest
+		var desc descriptor.Descriptor
+		dc.stepsManifest = append(dc.stepsManifest, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
+			// skip deleted, manifest lists, and platforms that aren't listed
+			if dm.mod == deleted || dm.m.IsList() {
+				return nil
+			}
+			if len(platforms) > 0 {
+				p := dm.config.oc.GetConfig().Platform
+				found := false
+				for _, pe := range platforms {
+					if platform.Match(p, pe) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					return nil
+				}
+			}
+			// push the layer
+			if ucDig == "" {
+				digUC := digest.Canonical.Digester() // uncompressed digest
+				ucDigRdr := io.TeeReader(rdr, digUC.Hash())
+				cRdr, err := archive.Compress(ucDigRdr, comp)
+				if err != nil {
+					return fmt.Errorf("failed to compress layer with %s: %w", comp.String(), err)
+				}
+				descPut, err := rc.BlobPut(ctx, rTgt, descriptor.Descriptor{}, cRdr)
+				_ = cRdr.Close()
+				if err != nil {
+					return fmt.Errorf("failed to push layer to %s: %w", rTgt.CommonName(), err)
+				}
+				ucDig = digUC.Digest()
+				desc = descriptor.Descriptor{
+					MediaType: mt,
+					Digest:    descPut.Digest,
+					Size:      descPut.Size,
+				}
+			}
+			// add the layer to the dag
+			dm.layers = append(dm.layers, &dagLayer{
+				mod:      added,
+				desc:     desc,
+				ucDigest: ucDig,
+			})
+			return nil
+		})
+		return nil
+	}
+}
+
+// WithLayerCompression alters the media type and compression algorithm of the layers.
+func WithLayerCompression(algo archive.CompressType) Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		switch algo {
+		case archive.CompressNone, archive.CompressGzip, archive.CompressZstd:
+		default:
+			return fmt.Errorf("unsupported layer compression: %s", algo.String())
+		}
+		dc.stepsLayer = append(dc.stepsLayer, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dl *dagLayer, rdr io.ReadCloser) (io.ReadCloser, error) {
+			if dl.mod == deleted {
+				return rdr, nil
+			}
+			mt := dl.desc.MediaType
+			if dl.newDesc.MediaType != "" {
+				mt = dl.newDesc.MediaType
+			}
+			switch algo {
+			case archive.CompressGzip:
+				switch mt {
+				case mediatype.Docker2Layer, mediatype.Docker2LayerZstd:
+					dl.newDesc = descriptor.Descriptor{
+						MediaType: mediatype.Docker2LayerGzip,
+					}
+				case mediatype.OCI1Layer, mediatype.OCI1LayerZstd:
+					dl.newDesc = descriptor.Descriptor{
+						MediaType: mediatype.OCI1LayerGzip,
+					}
+				default:
+					return rdr, nil
+				}
+				if dl.mod == unchanged {
+					dl.mod = replaced
+				}
+				digRaw := digest.Canonical.Digester() // raw/compressed digest
+				digUC := digest.Canonical.Digester()  // uncompressed digest
+				ucRdr, err := archive.Decompress(rdr)
+				if err != nil {
+					_ = rdr.Close()
+					return nil, err
+				}
+				ucDigRdr := io.TeeReader(ucRdr, digUC.Hash())
+				cRdr, err := archive.Compress(ucDigRdr, algo)
+				if err != nil {
+					_ = rdr.Close()
+					return nil, err
+				}
+				digRdr := io.TeeReader(cRdr, digRaw.Hash())
+				return readCloserFn{
+					Reader: digRdr,
+					closeFn: func() error {
+						err := rdr.Close()
+						if err != nil {
+							return err
+						}
+						_ = cRdr.Close()
+						dl.newDesc.Digest = digRaw.Digest()
+						dl.ucDigest = digUC.Digest()
+						return nil
+					}}, nil
+
+			case archive.CompressZstd:
+				switch mt {
+				case mediatype.Docker2Layer, mediatype.Docker2LayerGzip:
+					dl.newDesc = descriptor.Descriptor{
+						MediaType: mediatype.Docker2LayerZstd,
+					}
+				case mediatype.OCI1Layer, mediatype.OCI1LayerGzip:
+					dl.newDesc = descriptor.Descriptor{
+						MediaType: mediatype.OCI1LayerZstd,
+					}
+				default:
+					return rdr, nil
+				}
+				if dl.mod == unchanged {
+					dl.mod = replaced
+				}
+				digRaw := digest.Canonical.Digester() // raw/compressed digest
+				digUC := digest.Canonical.Digester()  // uncompressed digest
+				ucRdr, err := archive.Decompress(rdr)
+				if err != nil {
+					_ = rdr.Close()
+					return nil, err
+				}
+				ucDigRdr := io.TeeReader(ucRdr, digUC.Hash())
+				cRdr, err := archive.Compress(ucDigRdr, algo)
+				if err != nil {
+					_ = rdr.Close()
+					return nil, err
+				}
+				digRdr := io.TeeReader(cRdr, digRaw.Hash())
+				return readCloserFn{
+					Reader: digRdr,
+					closeFn: func() error {
+						err := rdr.Close()
+						if err != nil {
+							return err
+						}
+						_ = cRdr.Close()
+						dl.newDesc.Digest = digRaw.Digest()
+						dl.ucDigest = digUC.Digest()
+						return nil
+					}}, nil
+
+			case archive.CompressNone:
+				switch mt {
+				case mediatype.Docker2LayerGzip, mediatype.Docker2LayerZstd:
+					dl.newDesc = descriptor.Descriptor{
+						MediaType: mediatype.Docker2Layer,
+					}
+				case mediatype.OCI1LayerGzip, mediatype.OCI1LayerZstd:
+					dl.newDesc = descriptor.Descriptor{
+						MediaType: mediatype.OCI1Layer,
+					}
+				default:
+					return rdr, nil
+				}
+				if dl.mod == unchanged {
+					dl.mod = replaced
+				}
+				dig := digest.Canonical.Digester()
+				ucRdr, err := archive.Decompress(rdr)
+				if err != nil {
+					_ = rdr.Close()
+					return nil, err
+				}
+				digRdr := io.TeeReader(ucRdr, dig.Hash())
+				return readCloserFn{
+					Reader: digRdr,
+					closeFn: func() error {
+						err := rdr.Close()
+						if err != nil {
+							return err
+						}
+						dl.newDesc.Digest = dig.Digest()
+						dl.ucDigest = dig.Digest()
+						return nil
+					}}, nil
+
+			default:
+				return rdr, nil
+			}
+		})
+		return nil
+	}
+}
 
 // WithLayerReproducible modifies the layer with reproducible options.
 // This currently configures users and groups with numeric ids.
@@ -489,6 +716,15 @@ func WithFileTarTimeMax(name string, t time.Time) Opts {
 		Set:   t,
 		After: t,
 	})
+}
+
+type readCloserFn struct {
+	io.Reader
+	closeFn func() error
+}
+
+func (rcf readCloserFn) Close() error {
+	return rcf.closeFn()
 }
 
 type tmpReader struct {

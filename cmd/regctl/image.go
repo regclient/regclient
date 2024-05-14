@@ -2,6 +2,8 @@ package main
 
 import (
 	"archive/tar"
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,13 +22,18 @@ import (
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/internal/ascii"
+	"github.com/regclient/regclient/internal/strparse"
 	"github.com/regclient/regclient/internal/units"
 	"github.com/regclient/regclient/mod"
+	"github.com/regclient/regclient/pkg/archive"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
+	"github.com/regclient/regclient/types/descriptor"
+	"github.com/regclient/regclient/types/docker/schema2"
 	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/mediatype"
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
@@ -34,26 +41,35 @@ import (
 
 type imageCmd struct {
 	rootOpts        *rootCmd
+	annotations     []string
+	byDigest        bool
 	checkBaseRef    string
 	checkBaseDigest string
 	checkSkipConfig bool
 	create          string
+	created         string
+	digestTags      bool
 	exportCompress  bool
 	exportRef       string
 	fastCheck       bool
 	forceRecursive  bool
 	format          string
+	formatCreate    string
 	formatFile      string
 	importName      string
 	includeExternal bool
-	digestTags      bool
-	list            bool
+	labels          []string
+	mediaType       string
 	modOpts         []mod.Opts
 	platform        string
 	platforms       []string
 	referrers       bool
 	replace         bool
-	requireList     bool
+}
+
+var imageKnownTypes = []string{
+	mediatype.OCI1Manifest,
+	mediatype.Docker2Manifest,
 }
 
 func NewImageCmd(rootOpts *rootCmd) *cobra.Command {
@@ -120,6 +136,19 @@ regctl image copy --platform windows/amd64,osver=10.0.17763.4974 --include-exter
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: rootOpts.completeArgTag,
 		RunE:              imageOpts.runImageCopy,
+	}
+	var imageCreateCmd = &cobra.Command{
+		Use:     "create <image_ref>",
+		Aliases: []string{"init", "new"},
+		Short:   "create a new image manifest",
+		Long:    `Create a new image manifest from an initially empty (scratch) state.`,
+		Example: `
+# create a scratch image
+regctl image create ocidir://new-image:scratch
+`,
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: rootOpts.completeArgTag,
+		RunE:              imageOpts.runImageCreate,
 	}
 	var imageDeleteCmd = &cobra.Command{
 		Use:     "delete <image_ref>",
@@ -233,6 +262,14 @@ regctl image mod registry.example.org/repo:v1 \
 # convert an image to the OCI media types, copying to local registry
 regctl image mod alpine:3.5 --to-oci --create registry.example.org/alpine:3.5
 
+# append a layer to only the linux/amd64 image using the file.tar contents
+regctl image mod registry.example.org/repo:v1 --create v1-extended \
+  --layer-add "tar=file.tar,platform=linux/amd64"
+
+# append a layer to all platforms using the contents of a directory
+regctl image mod registry.example.org/repo:v1 --create v1-extended \
+  --layer-add "dir=path/to/directory"
+
 # set the timestamp on the config and layers, ignoring the alpine base image layers
 regctl image mod registry.example.org/repo:v1 --create v1-mod \
   --time "set=2021-02-03T04:05:06Z,base-ref=alpine:3"
@@ -285,10 +322,21 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.digestTags, "digest-tags", "", false, "Include digest tags (\"sha256-<digest>.*\") when copying manifests")
 	imageCopyCmd.Flags().BoolVarP(&imageOpts.referrers, "referrers", "", false, "Include referrers")
 
+	imageCreateCmd.Flags().StringArrayVar(&imageOpts.annotations, "annotation", []string{}, "Annotation to set on manifest")
+	imageCreateCmd.Flags().BoolVar(&imageOpts.byDigest, "by-digest", false, "Push manifest by digest instead of tag")
+	imageCreateCmd.Flags().StringVar(&imageOpts.created, "created", "", "Created timestamp to set (use \"now\" or RFC3339 syntax)")
+	imageCreateCmd.Flags().StringVar(&imageOpts.formatCreate, "format", "", "Format output with go template syntax")
+	imageCreateCmd.Flags().StringArrayVar(&imageOpts.labels, "label", []string{}, "Labels to set in the image config")
+	imageCreateCmd.Flags().StringVar(&imageOpts.mediaType, "media-type", mediatype.OCI1Manifest, "Media-type for manifest")
+	imageCreateCmd.Flags().StringVar(&imageOpts.platform, "platform", "", "Platform to set on the image")
+	_ = imageCreateCmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return imageKnownTypes, cobra.ShellCompDirectiveNoFileComp
+	})
+
 	imageDeleteCmd.Flags().BoolVarP(&manifestOpts.forceTagDeref, "force-tag-dereference", "", false, "Dereference the a tag to a digest, this is unsafe")
 
 	imageDigestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Do not resolve platform from manifest list (enabled by default)")
-	imageDigestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
+	imageDigestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local, requires a get request)")
 	imageDigestCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
 	_ = imageDigestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	_ = imageDigestCmd.Flags().MarkHidden("list")
@@ -596,6 +644,75 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
+			kvSplit, err := strparse.SplitCSKV(val)
+			if err != nil {
+				return fmt.Errorf("failed to parse layer-add options %s", val)
+			}
+			var rdr io.Reader
+			var mt string
+			var platforms []platform.Platform
+			if filename, ok := kvSplit["tar"]; ok {
+				//#nosec G304 command is run by a user accessing their own files
+				fh, err := os.Open(filename)
+				if err != nil {
+					return fmt.Errorf("failed to open tar file %s: %v", filename, err)
+				}
+				rdr = fh
+				cobra.OnFinalize(func() {
+					_ = fh.Close()
+				})
+			}
+			if dir, ok := kvSplit["dir"]; ok {
+				if rdr != nil {
+					return fmt.Errorf("cannot use dir and tar options together in layer-add")
+				}
+				pr, pw := io.Pipe()
+				go func() {
+					err := archive.Tar(context.TODO(), dir, pw)
+					if err != nil {
+						_ = pw.CloseWithError(err)
+					}
+					_ = pw.Close()
+				}()
+				rdr = pr
+				cobra.OnFinalize(func() {
+					_ = pr.Close()
+				})
+			}
+			if rdr == nil {
+				return fmt.Errorf("tar file input is required")
+			}
+			if mtArg, ok := kvSplit["mediaType"]; ok {
+				mt = mtArg
+			}
+			if pStr, ok := kvSplit["platform"]; ok {
+				p, err := platform.Parse(pStr)
+				if err != nil {
+					return fmt.Errorf("failed to parse platform %s: %v", pStr, err)
+				}
+				platforms = append(platforms, p)
+			}
+			imageOpts.modOpts = append(imageOpts.modOpts,
+				mod.WithLayerAddTar(rdr, mt, platforms))
+			return nil
+		},
+	}, "layer-add", "", `add a new layer (tar=file,dir=directory,platform=val)`)
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "string",
+		f: func(val string) error {
+			var algo archive.CompressType
+			err := algo.UnmarshalText([]byte(val))
+			if err != nil {
+				return fmt.Errorf("unknown layer compression %s", val)
+			}
+			imageOpts.modOpts = append(imageOpts.modOpts,
+				mod.WithLayerCompression(algo))
+			return nil
+		},
+	}, "layer-compress", "", `change layer compression (gzip, none, zstd)`)
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "string",
+		f: func(val string) error {
 			re, err := regexp.Compile(val)
 			if err != nil {
 				return fmt.Errorf("value must be a valid regex: %w", err)
@@ -812,6 +929,7 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 
 	imageTopCmd.AddCommand(imageCheckBaseCmd)
 	imageTopCmd.AddCommand(imageCopyCmd)
+	imageTopCmd.AddCommand(imageCreateCmd)
 	imageTopCmd.AddCommand(imageDeleteCmd)
 	imageTopCmd.AddCommand(imageDigestCmd)
 	imageTopCmd.AddCommand(imageExportCmd)
@@ -964,10 +1082,10 @@ func (imageOpts *imageCmd) runImageCopy(cmd *cobra.Command, args []string) error
 	var progress *imageProgress
 	if !flagChanged(cmd, "verbosity") && ascii.IsWriterTerminal(cmd.ErrOrStderr()) {
 		progress = &imageProgress{
-			start:   time.Now(),
-			entries: map[string]*imageProgressEntry{},
-			asciOut: ascii.NewLines(cmd.ErrOrStderr()),
-			bar:     ascii.NewProgressBar(cmd.ErrOrStderr()),
+			start:    time.Now(),
+			entries:  map[string]*imageProgressEntry{},
+			asciiOut: ascii.NewLines(cmd.ErrOrStderr()),
+			bar:      ascii.NewProgressBar(cmd.ErrOrStderr()),
 		}
 		ticker := time.NewTicker(progressFreq)
 		defer ticker.Stop()
@@ -999,12 +1117,12 @@ func (imageOpts *imageCmd) runImageCopy(cmd *cobra.Command, args []string) error
 }
 
 type imageProgress struct {
-	mu      sync.Mutex
-	start   time.Time
-	entries map[string]*imageProgressEntry
-	asciOut *ascii.Lines
-	bar     *ascii.ProgressBar
-	changed bool
+	mu       sync.Mutex
+	start    time.Time
+	entries  map[string]*imageProgressEntry
+	asciiOut *ascii.Lines
+	bar      *ascii.ProgressBar
+	changed  bool
 }
 
 type imageProgressEntry struct {
@@ -1102,7 +1220,7 @@ func (ip *imageProgress) display(final bool) {
 				}
 				pct := float64(e.cur) / float64(e.total)
 				post := fmt.Sprintf(" %4.2f%% %s/%s", pct*100, units.HumanSize(float64(e.cur)), units.HumanSize(float64(e.total)))
-				ip.asciOut.Add(ip.bar.Generate(pct, pre, post))
+				ip.asciiOut.Add(ip.bar.Generate(pct, pre, post))
 			}
 			// track stats
 			if e.state == types.CallbackSkipped {
@@ -1114,19 +1232,154 @@ func (ip *imageProgress) display(final bool) {
 		}
 	}
 	// show stats summary
-	ip.asciOut.Add([]byte(fmt.Sprintf("Manifests: %d/%d | Blobs: %s copied, %s skipped",
+	ip.asciiOut.Add([]byte(fmt.Sprintf("Manifests: %d/%d | Blobs: %s copied, %s skipped",
 		manifestFinished, manifestTotal,
 		units.HumanSize(float64(sum)),
 		units.HumanSize(float64(skipped)))))
 	if queued > 0 {
-		ip.asciOut.Add([]byte(fmt.Sprintf(", %s queued",
+		ip.asciiOut.Add([]byte(fmt.Sprintf(", %s queued",
 			units.HumanSize(float64(queued)))))
 	}
-	ip.asciOut.Add([]byte(fmt.Sprintf(" | Elapsed: %ds\n", int64(time.Since(ip.start).Seconds()))))
-	ip.asciOut.Flush()
+	ip.asciiOut.Add([]byte(fmt.Sprintf(" | Elapsed: %ds\n", int64(time.Since(ip.start).Seconds()))))
+	ip.asciiOut.Flush()
 	if !final {
-		ip.asciOut.Return()
+		ip.asciiOut.Return()
 	}
+}
+
+func (imageOpts *imageCmd) runImageCreate(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+
+	// validate media type
+	if imageOpts.mediaType != mediatype.OCI1Manifest && imageOpts.mediaType != mediatype.Docker2Manifest {
+		return fmt.Errorf("unsupported manifest media type: %s%.0w", imageOpts.mediaType, errs.ErrUnsupportedMediaType)
+	}
+
+	// parse ref
+	r, err := ref.New(args[0])
+	if err != nil {
+		return err
+	}
+
+	// setup regclient
+	rc := imageOpts.rootOpts.newRegClient()
+	defer rc.Close(ctx, r)
+
+	// define the image config
+	conf := v1.Image{
+		Config: v1.ImageConfig{},
+		RootFS: v1.RootFS{
+			Type:    "layers",
+			DiffIDs: []digest.Digest{},
+		},
+		History: []v1.History{},
+	}
+
+	if imageOpts.created == "now" {
+		now := time.Now().UTC()
+		conf.Created = &now
+	} else if imageOpts.created != "" {
+		t, err := time.Parse(time.RFC3339, imageOpts.created)
+		if err != nil {
+			return fmt.Errorf("failed to parse created time %s: %w", imageOpts.created, err)
+		}
+		conf.Created = &t
+	}
+
+	labels := map[string]string{}
+	for _, l := range imageOpts.labels {
+		lSplit := strings.SplitN(l, "=", 2)
+		if len(lSplit) == 1 {
+			labels[lSplit[0]] = ""
+		} else {
+			labels[lSplit[0]] = lSplit[1]
+		}
+	}
+	if len(labels) > 0 {
+		conf.Config.Labels = labels
+	}
+
+	if imageOpts.platform != "" {
+		p, err := platform.Parse(imageOpts.platform)
+		if err != nil {
+			return fmt.Errorf("failed to parse platform: %w", err)
+		}
+		conf.Platform = p
+	}
+
+	// TODO: add layers
+
+	// push the config
+	cJSON, err := json.Marshal(conf)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+	cd, err := rc.BlobPut(ctx, r, descriptor.Descriptor{}, bytes.NewReader(cJSON))
+	if err != nil {
+		return fmt.Errorf("failed to push config: %w", err)
+	}
+
+	// parse annotations
+	annotations := map[string]string{}
+	for _, a := range imageOpts.annotations {
+		aSplit := strings.SplitN(a, "=", 2)
+		if len(aSplit) == 1 {
+			annotations[aSplit[0]] = ""
+		} else {
+			annotations[aSplit[0]] = aSplit[1]
+		}
+	}
+
+	// build the manifest
+	mOpts := []manifest.Opts{}
+	switch imageOpts.mediaType {
+	case mediatype.OCI1Manifest:
+		cd.MediaType = mediatype.OCI1ImageConfig
+		m := v1.Manifest{
+			Versioned: v1.ManifestSchemaVersion,
+			MediaType: mediatype.OCI1Manifest,
+			Config:    cd,
+		}
+		if len(annotations) > 0 {
+			m.Annotations = annotations
+		}
+		mOpts = append(mOpts, manifest.WithOrig(m))
+	case mediatype.Docker2Manifest:
+		cd.MediaType = mediatype.Docker2ImageConfig
+		m := schema2.Manifest{
+			Versioned: schema2.ManifestSchemaVersion,
+			Config:    cd,
+		}
+		if len(annotations) > 0 {
+			m.Annotations = annotations
+		}
+		mOpts = append(mOpts, manifest.WithOrig(m))
+	}
+	mm, err := manifest.New(mOpts...)
+	if err != nil {
+		return err
+	}
+
+	// push the image
+	if imageOpts.byDigest {
+		r.Tag = ""
+		r.Digest = mm.GetDescriptor().Digest.String()
+	}
+	err = rc.ManifestPut(ctx, r, mm)
+	if err != nil {
+		return err
+	}
+
+	// format output
+	result := struct {
+		Manifest manifest.Manifest
+	}{
+		Manifest: mm,
+	}
+	if imageOpts.byDigest && imageOpts.formatCreate == "" {
+		imageOpts.formatCreate = "{{ printf \"%s\\n\" .Manifest.GetDescriptor.Digest }}"
+	}
+	return template.Writer(cmd.OutOrStdout(), imageOpts.formatCreate, result)
 }
 
 func (imageOpts *imageCmd) runImageExport(cmd *cobra.Command, args []string) error {
@@ -1339,20 +1592,11 @@ func (imageOpts *imageCmd) runImageInspect(cmd *cobra.Command, args []string) er
 		"platform": imageOpts.platform,
 	}).Debug("Image inspect")
 
-	m, err := getManifest(ctx, rc, r, imageOpts.platform, imageOpts.list, imageOpts.requireList)
-	if err != nil {
-		return err
+	opts := []regclient.ImageOpts{}
+	if imageOpts.platform != "" {
+		opts = append(opts, regclient.ImageWithPlatform(imageOpts.platform))
 	}
-	mi, ok := m.(manifest.Imager)
-	if !ok {
-		return fmt.Errorf("manifest does not support image methods%.0w", errs.ErrUnsupportedMediaType)
-	}
-	cd, err := mi.GetConfig()
-	if err != nil {
-		return err
-	}
-
-	blobConfig, err := rc.BlobGetOCIConfig(ctx, r, cd)
+	blobConfig, err := rc.ImageConfig(ctx, r, opts...)
 	if err != nil {
 		return err
 	}

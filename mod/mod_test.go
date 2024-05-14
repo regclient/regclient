@@ -1,11 +1,13 @@
 package mod
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"regexp"
 	"testing"
 	"time"
@@ -17,6 +19,7 @@ import (
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/rwfs"
+	"github.com/regclient/regclient/pkg/archive"
 	"github.com/regclient/regclient/scheme/reg"
 	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
@@ -75,6 +78,10 @@ func TestMod(t *testing.T) {
 		tTgt.Close()
 		_ = regTgt.Close()
 	})
+	tarBytes, err := os.ReadFile("../testdata/layer.tar")
+	if err != nil {
+		t.Fatalf("failed to read testdata/layer.tar: %v", err)
+	}
 
 	// create regclient
 	rcHosts := []config.Host{
@@ -457,6 +464,35 @@ func TestMod(t *testing.T) {
 			},
 			ref:      "ocidir://testrepo:v1",
 			wantSame: true,
+		},
+		{
+			name: "Layer Add",
+			opts: []Opts{
+				WithLayerAddTar(bytes.NewReader(tarBytes), "", nil),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Layer Uncompressed",
+			opts: []Opts{
+				WithLayerCompression(archive.CompressNone),
+			},
+			ref: "ocidir://testrepo:v1",
+		},
+		{
+			name: "Layer Compressed gzip",
+			opts: []Opts{
+				WithLayerCompression(archive.CompressGzip),
+			},
+			ref:      "ocidir://testrepo:v1",
+			wantSame: true,
+		},
+		{
+			name: "Layer Compressed zstd",
+			opts: []Opts{
+				WithLayerCompression(archive.CompressZstd),
+			},
+			ref: "ocidir://testrepo:v1",
 		},
 		{
 			name: "Layer Reproducible",
@@ -915,13 +951,13 @@ func TestMod(t *testing.T) {
 func TestInList(t *testing.T) {
 	t.Parallel()
 	t.Run("match", func(t *testing.T) {
-		if !inListStr(mediatype.Docker2LayerGzip, mtWLTar) {
-			t.Errorf("did not find docker layer in tar whitelist")
+		if !inListStr(mediatype.Docker2LayerGzip, mtKnownTar) {
+			t.Errorf("did not find docker layer in known tar list")
 		}
 	})
 	t.Run("mismatch", func(t *testing.T) {
-		if inListStr(mediatype.Docker2LayerGzip, mtWLConfig) {
-			t.Errorf("found docker layer in config whitelist")
+		if inListStr(mediatype.Docker2LayerGzip, mtKnownConfig) {
+			t.Errorf("found docker layer in known config list")
 		}
 	})
 }

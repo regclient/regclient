@@ -138,6 +138,7 @@ Usage:
 Available Commands:
   check-base  check if the base image has changed
   copy        copy or retag image
+  create      create a new image manifest
   delete      delete image
   digest      show digest for pinning
   export      export image
@@ -155,6 +156,8 @@ Otherwise this compares the image layers and build history steps to verify no ch
 The OCI annotations used to automatically detect the base image are `org.opencontainers.image.base.name` and `org.opencontainers.image.base.digest`.
 
 The `copy` command allows images to be copied between registries, between repositories on the same registry, or retag an image within the same repository, and only pulls the layers when needed (typically not needed with the same registry server).
+
+The `create` command creates a new image manifest and config, starting from scratch.
 
 The `delete` command removes the image manifest from the server.
 This will impact all tags pointing to the same manifest and requires a digest to be included in the image reference to be deleted (e.g. `myimage@sha256:abcd...`).
