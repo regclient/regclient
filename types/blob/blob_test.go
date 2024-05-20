@@ -227,6 +227,29 @@ func TestCommon(t *testing.T) {
 }
 
 func TestReader(t *testing.T) {
+	t.Run("nil", func(t *testing.T) {
+		var b *BReader
+		_, err := b.Read([]byte{})
+		if err == nil {
+			t.Errorf("nil read did not fail")
+		}
+		err = b.Close()
+		if err != nil {
+			t.Errorf("nil close failed: %v", err)
+		}
+		_, err = b.ToOCIConfig()
+		if err == nil {
+			t.Errorf("nil convert ot OCI did not fail")
+		}
+		_, err = b.ToTarReader()
+		if err == nil {
+			t.Errorf("nil convert to tar reader did not fail")
+		}
+		_, err = b.Seek(0, io.SeekStart)
+		if err == nil {
+			t.Errorf("nil seek did not fail")
+		}
+	})
 	t.Run("empty", func(t *testing.T) {
 		// create empty blob
 		b := NewReader()

@@ -131,10 +131,11 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 				return dl, nil
 			}
 			if len(dc.stepsLayer) > 0 {
-				rdr, err = rc.BlobGet(ctx, rSrc, dl.desc)
+				bRdr, err := rc.BlobGet(ctx, rSrc, dl.desc)
 				if err != nil {
 					return nil, err
 				}
+				rdr = bRdr
 				for _, sl := range dc.stepsLayer {
 					rdrNext, err := sl(ctx, rc, rSrc, rTgt, dl, rdr)
 					if err != nil {
@@ -148,10 +149,11 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 					return dl, nil
 				}
 				if rdr == nil {
-					rdr, err = rc.BlobGet(ctx, rSrc, dl.desc)
+					bRdr, err := rc.BlobGet(ctx, rSrc, dl.desc)
 					if err != nil {
 						return nil, err
 					}
+					rdr = bRdr
 				}
 				changed := false
 				empty := true
