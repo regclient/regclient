@@ -36,7 +36,7 @@ endif
 MARKDOWN_LINT_VER?=v0.13.0
 GOMAJOR_VER?=v0.10.1
 GOSEC_VER?=v2.20.0
-GO_VULNCHECK_VER?=v1.1.0
+GO_VULNCHECK_VER?=v1.1.1
 OSV_SCANNER_VER?=v1.7.3
 SYFT?=$(shell command -v syft 2>/dev/null)
 SYFT_CMD_VER:=$(shell [ -x "$(SYFT)" ] && echo "v$$($(SYFT) version | awk '/^Version: / {print $$2}')" || echo "0")
