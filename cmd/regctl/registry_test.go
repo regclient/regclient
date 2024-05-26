@@ -11,6 +11,8 @@ import (
 
 	"github.com/olareg/olareg"
 	oConfig "github.com/olareg/olareg/config"
+
+	"github.com/regclient/regclient/types/errs"
 )
 
 func TestRegistry(t *testing.T) {
@@ -30,9 +32,15 @@ func TestRegistry(t *testing.T) {
 	}))
 	tsBadURL, _ := url.Parse(tsBad.URL)
 	tsBadHost := tsBadURL.Host
+	tsUnauth := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	tsUnauthURL, _ := url.Parse(tsUnauth.URL)
+	tsUnauthHost := tsUnauthURL.Host
 	t.Cleanup(func() {
 		tsGood.Close()
 		tsBad.Close()
+		tsUnauth.Close()
 		_ = regHandler.Close()
 	})
 	tempDir := t.TempDir()
@@ -44,35 +52,44 @@ func TestRegistry(t *testing.T) {
 		expectOut   string
 		outContains bool
 	}{
-		// set a good host
+		// disable tls
 		{
 			name:        "set no TLS",
 			args:        []string{"registry", "set", tsGoodHost, "--tls", "disabled"},
 			expectOut:   "",
 			outContains: false,
 		},
-		// set a bad host but skip the check
+		{
+			name:      "set no TLS on unauth host",
+			args:      []string{"registry", "set", tsUnauthHost, "--tls", "disabled"},
+			expectErr: errs.ErrHTTPUnauthorized,
+		},
 		{
 			name:        "set without check",
 			args:        []string{"registry", "set", tsBadHost, "--tls", "disabled", "--skip-check"},
 			expectOut:   "",
 			outContains: false,
 		},
-		// query the good host
+		// query the config change
 		{
 			name:        "query good host",
 			args:        []string{"registry", "config", tsGoodHost},
 			expectOut:   `"tls": "disabled",`,
 			outContains: true,
 		},
-		// query the bad host
+		{
+			name:        "query unauth host",
+			args:        []string{"registry", "config", tsUnauthHost},
+			expectOut:   `"tls": "disabled",`,
+			outContains: true,
+		},
 		{
 			name:        "query bad host",
 			args:        []string{"registry", "config", tsBadHost},
 			expectOut:   `"tls": "disabled",`,
 			outContains: true,
 		},
-		// login to good and bad hosts
+		// login
 		{
 			name:        "login good host",
 			args:        []string{"registry", "login", tsGoodHost, "-u", "testgooduser", "-p", "testpass"},
@@ -80,16 +97,26 @@ func TestRegistry(t *testing.T) {
 			outContains: false,
 		},
 		{
+			name:      "login unauth host",
+			args:      []string{"registry", "login", tsUnauthHost, "-u", "testunauthuser", "-p", "testpass"},
+			expectErr: errs.ErrHTTPUnauthorized,
+		},
+		{
 			name:        "login bad host",
 			args:        []string{"registry", "login", tsBadHost, "-u", "testbaduser", "-p", "testpass", "--skip-check"},
 			expectOut:   "",
 			outContains: false,
 		},
-		// query good and bad to ensure user is set
+		// query for user
 		{
 			name:      "query good host",
 			args:      []string{"registry", "config", tsGoodHost, "--format", "{{.User}}"},
 			expectOut: `testgooduser`,
+		},
+		{
+			name:      "query unauth host",
+			args:      []string{"registry", "config", tsUnauthHost, "--format", "{{.User}}"},
+			expectOut: `testunauthuser`,
 		},
 		{
 			name:      "query bad host",
@@ -104,6 +131,12 @@ func TestRegistry(t *testing.T) {
 			outContains: false,
 		},
 		{
+			name:        "logout unauth host",
+			args:        []string{"registry", "logout", tsUnauthHost},
+			expectOut:   "",
+			outContains: false,
+		},
+		{
 			name:        "logout bad host",
 			args:        []string{"registry", "logout", tsBadHost},
 			expectOut:   "",
@@ -113,6 +146,11 @@ func TestRegistry(t *testing.T) {
 		{
 			name:      "check logout on good host",
 			args:      []string{"registry", "config", tsGoodHost, "--format", "{{.User}}"},
+			expectOut: ``,
+		},
+		{
+			name:      "check logout on unauth host",
+			args:      []string{"registry", "config", tsUnauthHost, "--format", "{{.User}}"},
 			expectOut: ``,
 		},
 		{

@@ -301,7 +301,6 @@ func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []str
 	if err != nil {
 		return err
 	}
-
 	if !registryOpts.skipCheck {
 		r, err := ref.NewHost(args[0])
 		if err != nil {
@@ -310,9 +309,8 @@ func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []str
 		rc := registryOpts.rootOpts.newRegClient()
 		_, err = rc.Ping(ctx, r)
 		if err != nil {
-			log.WithFields(logrus.Fields{
-				"err": err,
-			}).Warn("Failed to ping registry with credentials")
+			log.Warn("Failed to ping registry, credentials were still stored")
+			return err
 		}
 	}
 	log.WithFields(logrus.Fields{
@@ -453,9 +451,8 @@ func (registryOpts *registryCmd) runRegistrySet(cmd *cobra.Command, args []strin
 		rc := registryOpts.rootOpts.newRegClient()
 		_, err = rc.Ping(ctx, r)
 		if err != nil {
-			log.WithFields(logrus.Fields{
-				"err": err,
-			}).Warn("Failed to ping registry with settings")
+			log.Warn("Failed to ping registry, configuration still updated")
+			return err
 		}
 	}
 
