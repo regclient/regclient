@@ -22,11 +22,15 @@ func TestTag(t *testing.T) {
 	existingRepo := "testrepo"
 	existingTag := "v2"
 	ctx := context.Background()
+	trueV := true
 	falseV := false
 	regRWHandler := olareg.New(oConfig.Config{
 		Storage: oConfig.ConfigStorage{
 			StoreType: oConfig.StoreMem,
 			RootDir:   "./testdata",
+		},
+		API: oConfig.ConfigAPI{
+			DeleteEnabled: &trueV,
 		},
 	})
 	regROHandler := olareg.New(oConfig.Config{
@@ -38,7 +42,6 @@ func TestTag(t *testing.T) {
 			DeleteEnabled: &falseV,
 		},
 	})
-	// TODO: test with a registry without the delete APIs
 	tsRW := httptest.NewServer(regRWHandler)
 	tsRWURL, _ := url.Parse(tsRW.URL)
 	tsRWHost := tsRWURL.Host
