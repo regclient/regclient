@@ -304,6 +304,17 @@ func TestNew(t *testing.T) {
 			wantE:      nil,
 		},
 		{
+			name:       "OCI dir with tilde",
+			ref:        "ocidir://path/2/~dir~/rules_oci~/examples:latest",
+			scheme:     "ocidir",
+			registry:   "",
+			repository: "",
+			tag:        "latest",
+			digest:     "",
+			path:       "path/2/~dir~/rules_oci~/examples",
+			wantE:      nil,
+		},
+		{
 			name:  "invalid scheme",
 			ref:   "unknown://repo:tag",
 			wantE: errs.ErrInvalidReference,
