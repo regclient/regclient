@@ -6,7 +6,7 @@ ARG GCR_HELPER_VER=v2.1.22
 ARG LUNAJSON_COMMIT=3d10600874527d71519b33ecbb314eb93ccd1df6
 ARG SEMVER_COMMIT=af495adc857d51fd1507a112be18523828a1da0d
 
-FROM ${REGISTRY}/library/golang:${GO_VER} as golang
+FROM ${REGISTRY}/library/golang:${GO_VER} AS golang
 RUN apk add --no-cache \
       ca-certificates \
       git \
@@ -16,7 +16,7 @@ RUN adduser -D appuser \
  && chown -R appuser /home/appuser
 WORKDIR /src
 
-FROM golang as build
+FROM golang AS build
 COPY go.* /src/
 RUN go mod download
 COPY . /src/
@@ -24,7 +24,7 @@ RUN make bin/regbot
 USER appuser
 CMD [ "/src/bin/regbot" ]
 
-FROM golang as docker-cred-ecr-login
+FROM golang AS docker-cred-ecr-login
 ARG TARGETOS
 ARG TARGETARCH
 ARG ECR_HELPER_VER
@@ -32,7 +32,7 @@ RUN CGO_ENABLED=0 go install -trimpath -ldflags=-buildid= github.com/awslabs/ama
  && ( cp "${GOPATH}/bin/docker-credential-ecr-login" /usr/local/bin/docker-credential-ecr-login \
    || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-ecr-login" /usr/local/bin/docker-credential-ecr-login )
 
-FROM golang as docker-cred-gcr
+FROM golang AS docker-cred-gcr
 ARG TARGETOS
 ARG TARGETARCH
 ARG GCR_HELPER_VER
@@ -42,7 +42,7 @@ RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 \
  && ( cp "${GOPATH}/bin/docker-credential-gcr" /usr/local/bin/docker-credential-gcr \
    || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-gcr" /usr/local/bin/docker-credential-gcr )
 
-FROM ${REGISTRY}/library/alpine:${ALPINE_VER} as lua-mods
+FROM ${REGISTRY}/library/alpine:${ALPINE_VER} AS lua-mods
 # COPY may pull in old timestamps, use a touch command below to reset them
 COPY cmd/regbot/lua/ /lua/
 ARG LUNAJSON_COMMIT
@@ -60,7 +60,7 @@ RUN apk add curl \
  && SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(date +%s)}" sh -c 'find . -exec touch --date="@${SOURCE_DATE_EPOCH}" {} \;'
 
 
-FROM ${REGISTRY}/library/alpine:${ALPINE_VER} as release-alpine
+FROM ${REGISTRY}/library/alpine:${ALPINE_VER} AS release-alpine
 COPY --from=build /etc/passwd /etc/group /etc/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build --chown=appuser /home/appuser /home/appuser
@@ -88,7 +88,7 @@ LABEL maintainer="" \
       org.opencontainers.image.title="regbot" \
       org.opencontainers.image.description="regclient/regbot utility for managing registry content (alpine)"
 
-FROM scratch as release-scratch
+FROM scratch AS release-scratch
 ADD  build/root.tgz /
 COPY --from=build /etc/passwd /etc/group /etc/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
