@@ -1040,17 +1040,11 @@ func (imageOpts *imageCmd) runImageCopy(cmd *cobra.Command, args []string) error
 		if err != nil {
 			return err
 		}
-		m, err := rc.ManifestGet(ctx, rSrc)
+		m, err := rc.ManifestGet(ctx, rSrc, regclient.WithManifestPlatform(p))
 		if err != nil {
 			return err
 		}
-		if m.IsList() {
-			d, err := manifest.GetPlatformDesc(m, &p)
-			if err != nil {
-				return err
-			}
-			rSrc.Digest = d.Digest.String()
-		}
+		rSrc = rSrc.SetDigest(m.GetDescriptor().Digest.String())
 	}
 	log.WithFields(logrus.Fields{
 		"source":      rSrc.CommonName(),
@@ -1405,17 +1399,11 @@ func (imageOpts *imageCmd) runImageExport(cmd *cobra.Command, args []string) err
 		if err != nil {
 			return err
 		}
-		m, err := rc.ManifestGet(ctx, r)
+		m, err := rc.ManifestGet(ctx, r, regclient.WithManifestPlatform(p))
 		if err != nil {
 			return err
 		}
-		if m.IsList() {
-			d, err := manifest.GetPlatformDesc(m, &p)
-			if err != nil {
-				return err
-			}
-			r.Digest = d.Digest.String()
-		}
+		r = r.SetDigest(m.GetDescriptor().Digest.String())
 	}
 	if imageOpts.exportCompress {
 		opts = append(opts, regclient.ImageWithExportCompress())
@@ -1449,40 +1437,19 @@ func (imageOpts *imageCmd) runImageGetFile(cmd *cobra.Command, args []string) er
 		"filename": filename,
 	}).Debug("Get file")
 
-	// make it recursive for index of index scenarios
-	m, err := rc.ManifestGet(ctx, r)
+	if imageOpts.platform == "" {
+		imageOpts.platform = "local"
+	}
+	p, err := platform.Parse(imageOpts.platform)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"platform": imageOpts.platform,
+			"err":      err,
+		}).Warn("Could not parse platform")
+	}
+	m, err := rc.ManifestGet(ctx, r, regclient.WithManifestPlatform(p))
 	if err != nil {
 		return err
-	}
-	if m.IsList() {
-		if imageOpts.platform == "" {
-			imageOpts.platform = "local"
-		}
-		plat, err := platform.Parse(imageOpts.platform)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"platform": imageOpts.platform,
-				"err":      err,
-			}).Warn("Could not parse platform")
-		}
-		desc, err := manifest.GetPlatformDesc(m, &plat)
-		if err != nil {
-			pl, _ := manifest.GetPlatformList(m)
-			var ps []string
-			for _, p := range pl {
-				ps = append(ps, p.String())
-			}
-			log.WithFields(logrus.Fields{
-				"platform":  plat,
-				"err":       err,
-				"platforms": strings.Join(ps, ", "),
-			}).Warn("Platform could not be found in manifest list")
-			return err
-		}
-		m, err = rc.ManifestGet(ctx, r, regclient.WithManifestDesc(*desc))
-		if err != nil {
-			return fmt.Errorf("failed to pull platform specific digest: %w", err)
-		}
 	}
 	// go through layers in reverse
 	mi, ok := m.(manifest.Imager)

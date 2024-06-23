@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olareg/olareg"
+	oConfig "github.com/olareg/olareg/config"
 	"github.com/opencontainers/go-digest"
 	"github.com/sirupsen/logrus"
 
@@ -23,14 +25,15 @@ import (
 	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/mediatype"
+	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 )
 
 func TestManifest(t *testing.T) {
 	t.Parallel()
-	repoPath := "/proj"
-	getTag := "get"
-	headTag := "head"
+	repoPath := "testrepo"
+	goodTag := "v1"
+	deleteTag := "v3"
 	noheadTag := "nohead"
 	nodigestTag := "nodigest"
 	missingTag := "missing"
@@ -63,7 +66,7 @@ func TestManifest(t *testing.T) {
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "Get",
 				Method: "GET",
-				Path:   "/v2" + repoPath + "/manifests/" + getTag,
+				Path:   "/v2/" + repoPath + "/manifests/" + goodTag,
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusOK,
@@ -79,7 +82,7 @@ func TestManifest(t *testing.T) {
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "Digest",
 				Method: "GET",
-				Path:   "/v2" + repoPath + "/manifests/" + mDigest.String(),
+				Path:   "/v2/" + repoPath + "/manifests/" + mDigest.String(),
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusOK,
@@ -95,7 +98,7 @@ func TestManifest(t *testing.T) {
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "Head",
 				Method: "HEAD",
-				Path:   "/v2" + repoPath + "/manifests/" + headTag,
+				Path:   "/v2/" + repoPath + "/manifests/" + goodTag,
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusOK,
@@ -110,7 +113,7 @@ func TestManifest(t *testing.T) {
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "Get nodigest",
 				Method: "GET",
-				Path:   "/v2" + repoPath + "/manifests/" + nodigestTag,
+				Path:   "/v2/" + repoPath + "/manifests/" + nodigestTag,
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusOK,
@@ -126,7 +129,7 @@ func TestManifest(t *testing.T) {
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "Head nodigest",
 				Method: "HEAD",
-				Path:   "/v2" + repoPath + "/manifests/" + nodigestTag,
+				Path:   "/v2/" + repoPath + "/manifests/" + nodigestTag,
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusOK,
@@ -140,7 +143,7 @@ func TestManifest(t *testing.T) {
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "Get nohead",
 				Method: "GET",
-				Path:   "/v2" + repoPath + "/manifests/" + noheadTag,
+				Path:   "/v2/" + repoPath + "/manifests/" + noheadTag,
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusOK,
@@ -152,50 +155,53 @@ func TestManifest(t *testing.T) {
 				Body: mBody,
 			},
 		},
-		{
-			ReqEntry: reqresp.ReqEntry{
-				Name:   "Missing",
-				Method: "GET",
-				Path:   "/v2" + repoPath + "/manifests/" + missingTag,
-			},
-			RespEntry: reqresp.RespEntry{
-				Status: http.StatusNotFound,
-			},
-		},
-		{
-			ReqEntry: reqresp.ReqEntry{
-				Name:   "Missing",
-				Method: "GET",
-				Path:   "/v2" + repoPath + "/manifests/" + missingDigest.String(),
-			},
-			RespEntry: reqresp.RespEntry{
-				Status: http.StatusNotFound,
-			},
-		},
 	}
 	rrs = append(rrs, reqresp.BaseEntries...)
-	// create a server
-	ts := httptest.NewServer(reqresp.NewHandler(t, rrs))
-	defer ts.Close()
+	// create servers
+	boolT := true
+	tsInternal := httptest.NewServer(reqresp.NewHandler(t, rrs))
+	olaregHandler := olareg.New(oConfig.Config{
+		Storage: oConfig.ConfigStorage{
+			StoreType: oConfig.StoreMem,
+			RootDir:   "./testdata",
+		},
+		API: oConfig.ConfigAPI{
+			DeleteEnabled: &boolT,
+		},
+	})
+	tsOlareg := httptest.NewServer(olaregHandler)
+	tsOlaregURL, _ := url.Parse(tsOlareg.URL)
+	tsOlaregHost := tsOlaregURL.Host
+	t.Cleanup(func() {
+		tsInternal.Close()
+		tsOlareg.Close()
+		_ = olaregHandler.Close()
+	})
 	// setup the regclient
-	tsURL, _ := url.Parse(ts.URL)
-	tsHost := tsURL.Host
+	tsInternalURL, _ := url.Parse(tsInternal.URL)
+	tsInternalHost := tsInternalURL.Host
 	rcHosts := []config.Host{
 		{
-			Name:      tsHost,
-			Hostname:  tsHost,
+			Name:      tsOlaregHost,
+			Hostname:  tsOlaregHost,
 			TLS:       config.TLSDisabled,
 			ReqPerSec: 100,
 		},
 		{
-			Name:      "missing." + tsHost,
-			Hostname:  tsHost,
+			Name:      "missing." + tsOlaregHost,
+			Hostname:  tsOlaregHost,
 			TLS:       config.TLSDisabled,
 			ReqPerSec: 100,
 		},
 		{
-			Name:     "nohead." + tsHost,
-			Hostname: tsHost,
+			Name:      tsInternalHost,
+			Hostname:  tsInternalHost,
+			TLS:       config.TLSDisabled,
+			ReqPerSec: 100,
+		},
+		{
+			Name:     "nohead." + tsInternalHost,
+			Hostname: tsInternalHost,
 			TLS:      config.TLSDisabled,
 			APIOpts: map[string]string{
 				"disableHead": "true",
@@ -217,96 +223,164 @@ func TestManifest(t *testing.T) {
 		WithRetryDelay(delayInit, delayMax),
 	)
 	t.Run("Get", func(t *testing.T) {
-		getRef, err := ref.New(tsURL.Host + repoPath + ":" + getTag)
+		r, err := ref.New(tsOlaregHost + "/" + repoPath + ":" + goodTag)
 		if err != nil {
-			t.Fatalf("Failed creating getRef: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
-		mGet, err := rc.ManifestGet(ctx, getRef)
+		m, err := rc.ManifestGet(ctx, r)
 		if err != nil {
 			t.Fatalf("Failed running ManifestGet: %v", err)
 		}
-		if manifest.GetMediaType(mGet) != mediatype.Docker2Manifest {
-			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mGet))
-		}
-		if mGet.GetDescriptor().Digest != mDigest {
-			t.Errorf("Unexpected digest: %s", mGet.GetDescriptor().Digest.String())
+		if !m.IsSet() {
+			t.Errorf("manifest is not set on a get request")
 		}
 	})
 	t.Run("Head", func(t *testing.T) {
-		headRef, err := ref.New(tsURL.Host + repoPath + ":" + headTag)
+		r, err := ref.New(tsOlaregHost + "/" + repoPath + ":" + goodTag)
 		if err != nil {
-			t.Fatalf("Failed creating getRef: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
-		mHead, err := rc.ManifestHead(ctx, headRef)
+		m, err := rc.ManifestHead(ctx, r)
 		if err != nil {
 			t.Fatalf("Failed running ManifestHead: %v", err)
 		}
-		if manifest.GetMediaType(mHead) != mediatype.Docker2Manifest {
-			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mHead))
-		}
-		if mHead.GetDescriptor().Digest != mDigest {
-			t.Errorf("Unexpected digest: %s", mHead.GetDescriptor().Digest.String())
+		if m.IsSet() {
+			t.Errorf("manifest is set on a head request")
 		}
 	})
 	t.Run("Head no digest", func(t *testing.T) {
-		headRef, err := ref.New(tsURL.Host + repoPath + ":" + nodigestTag)
+		r, err := ref.New(tsInternalHost + "/" + repoPath + ":" + nodigestTag)
 		if err != nil {
-			t.Fatalf("Failed creating getRef: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
-		mHead, err := rc.ManifestHead(ctx, headRef, WithManifestRequireDigest())
+		m, err := rc.ManifestHead(ctx, r, WithManifestRequireDigest())
 		if err != nil {
 			t.Fatalf("Failed running ManifestHead: %v", err)
 		}
-		if manifest.GetMediaType(mHead) != mediatype.Docker2Manifest {
-			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mHead))
+		if manifest.GetMediaType(m) != mediatype.Docker2Manifest {
+			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(m))
 		}
-		if mHead.GetDescriptor().Digest != mDigest {
-			t.Errorf("Unexpected digest: %s", mHead.GetDescriptor().Digest.String())
+		if m.GetDescriptor().Digest != mDigest {
+			t.Errorf("Unexpected digest: %s", m.GetDescriptor().Digest.String())
 		}
 	})
 	t.Run("Head No Head", func(t *testing.T) {
-		noheadRef, err := ref.New("nohead." + tsURL.Host + repoPath + ":" + noheadTag)
+		r, err := ref.New("nohead." + tsInternalHost + "/" + repoPath + ":" + noheadTag)
 		if err != nil {
-			t.Fatalf("Failed creating getRef: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
-		mNohead, err := rc.ManifestHead(ctx, noheadRef)
+		m, err := rc.ManifestHead(ctx, r)
 		if err == nil {
-			t.Errorf("Unexpected successful head on \"no head\" registry: %v", mNohead)
+			t.Errorf("Unexpected successful head on \"no head\" registry: %v", m)
 		} else if !errors.Is(err, errs.ErrUnsupportedAPI) {
 			t.Errorf("Expected error, expected %v, received %v", errs.ErrUnsupportedAPI, err)
 		}
 	})
 	t.Run("Get No Head", func(t *testing.T) {
-		noheadRef, err := ref.New("nohead." + tsURL.Host + repoPath + ":" + noheadTag)
+		r, err := ref.New("nohead." + tsInternalHost + "/" + repoPath + ":" + noheadTag)
 		if err != nil {
-			t.Fatalf("Failed creating getRef: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
-		mNohead, err := rc.ManifestGet(ctx, noheadRef)
+		m, err := rc.ManifestGet(ctx, r)
 		if err != nil {
 			t.Fatalf("Failed running ManifestGet: %v", err)
 		}
-		if manifest.GetMediaType(mNohead) != mediatype.Docker2Manifest {
-			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mNohead))
+		if manifest.GetMediaType(m) != mediatype.Docker2Manifest {
+			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(m))
 		}
-		if mNohead.GetDescriptor().Digest != mDigest {
-			t.Errorf("Unexpected digest: %s", mNohead.GetDescriptor().Digest.String())
+		if m.GetDescriptor().Digest != mDigest {
+			t.Errorf("Unexpected digest: %s", m.GetDescriptor().Digest.String())
 		}
 	})
 	t.Run("Missing", func(t *testing.T) {
-		missingRef, err := ref.New("missing." + tsURL.Host + repoPath + ":" + missingTag)
+		r, err := ref.New("missing." + tsOlaregHost + "/" + repoPath + ":" + missingTag)
 		if err != nil {
-			t.Fatalf("Failed creating missingRef: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
-		mMissing, err := rc.ManifestGet(ctx, missingRef)
+		m, err := rc.ManifestGet(ctx, r)
 		if err == nil {
-			t.Errorf("Success running ManifestGet on missing ref: %v", mMissing)
+			t.Errorf("Success running ManifestGet on missing ref: %v", m)
 			return
 		}
 	})
-	t.Run("Data", func(t *testing.T) {
-		dataRef, err := ref.New(tsURL.Host + repoPath + ":data")
+	t.Run("Get Platform", func(t *testing.T) {
+		r, err := ref.New(tsOlaregHost + "/" + repoPath + ":" + goodTag)
 		if err != nil {
-			t.Errorf("Failed creating getRef: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
+		}
+		p, err := platform.Parse("linux/amd64")
+		if err != nil {
+			t.Fatalf("Failed parsing platform: %v", err)
+		}
+		m, err := rc.ManifestGet(ctx, r, WithManifestPlatform(p))
+		if err != nil {
+			t.Fatalf("Failed running ManifestGet: %v", err)
+		}
+		if !m.IsSet() {
+			t.Errorf("manifest is not set on a get request")
+		}
+		if m.IsList() {
+			t.Errorf("returned manifest is an index")
+		}
+	})
+	t.Run("Get Missing Platform", func(t *testing.T) {
+		r, err := ref.New(tsOlaregHost + "/" + repoPath + ":" + goodTag)
+		if err != nil {
+			t.Fatalf("Failed creating ref: %v", err)
+		}
+		p, err := platform.Parse("linux/ppc64le")
+		if err != nil {
+			t.Fatalf("Failed parsing platform: %v", err)
+		}
+		_, err = rc.ManifestGet(ctx, r, WithManifestPlatform(p))
+		if err == nil {
+			t.Fatalf("Success running ManifestGet on missing platform")
+		}
+		if !errors.Is(err, errs.ErrNotFound) {
+			t.Errorf("Expected error %v, received %v", errs.ErrNotFound, err)
+		}
+	})
+	t.Run("Head Platform", func(t *testing.T) {
+		r, err := ref.New(tsOlaregHost + "/" + repoPath + ":" + goodTag)
+		if err != nil {
+			t.Fatalf("Failed creating ref: %v", err)
+		}
+		p, err := platform.Parse("linux/amd64")
+		if err != nil {
+			t.Fatalf("Failed parsing platform: %v", err)
+		}
+		m, err := rc.ManifestHead(ctx, r, WithManifestPlatform(p))
+		if err != nil {
+			t.Fatalf("Failed running ManifestHead: %v", err)
+		}
+		if m.IsSet() {
+			t.Errorf("manifest is set on a head request")
+		}
+		if m.IsList() {
+			t.Errorf("returned manifest is an index")
+		}
+	})
+	t.Run("Head Missing Platform", func(t *testing.T) {
+		r, err := ref.New(tsOlaregHost + "/" + repoPath + ":" + goodTag)
+		if err != nil {
+			t.Fatalf("Failed creating ref: %v", err)
+		}
+		p, err := platform.Parse("linux/ppc64le")
+		if err != nil {
+			t.Fatalf("Failed parsing platform: %v", err)
+		}
+		_, err = rc.ManifestHead(ctx, r, WithManifestPlatform(p))
+		if err == nil {
+			t.Fatalf("Success running ManifestHead on missing platform")
+		}
+		if !errors.Is(err, errs.ErrNotFound) {
+			t.Errorf("Expected error %v, received %v", errs.ErrNotFound, err)
+		}
+	})
+	t.Run("Data", func(t *testing.T) {
+		r, err := ref.New(tsInternalHost + "/" + repoPath + ":data")
+		if err != nil {
+			t.Errorf("Failed creating ref: %v", err)
 		}
 		d := descriptor.Descriptor{
 			MediaType: mediatype.Docker2Manifest,
@@ -314,11 +388,11 @@ func TestManifest(t *testing.T) {
 			Digest:    mDigest,
 			Data:      mBody,
 		}
-		mGet, err := rc.ManifestGet(ctx, dataRef, WithManifestDesc(d))
+		m, err := rc.ManifestGet(ctx, r, WithManifestDesc(d))
 		if err != nil {
 			t.Fatalf("failed running ManifestGet: %v", err)
 		}
-		mBodyOut, err := mGet.RawBody()
+		mBodyOut, err := m.RawBody()
 		if err != nil {
 			t.Fatalf("failed running RawBody: %v", err)
 		}
@@ -327,9 +401,9 @@ func TestManifest(t *testing.T) {
 		}
 	})
 	t.Run("Data fallback", func(t *testing.T) {
-		getRef, err := ref.New(tsURL.Host + repoPath + ":" + getTag)
+		r, err := ref.New(tsInternalHost + "/" + repoPath + ":" + goodTag)
 		if err != nil {
-			t.Fatalf("Failed creating getRef: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
 		d := descriptor.Descriptor{
 			MediaType: mediatype.Docker2Manifest,
@@ -337,16 +411,16 @@ func TestManifest(t *testing.T) {
 			Digest:    mDigest,
 			Data:      []byte("invalid data"),
 		}
-		_, err = rc.ManifestGet(ctx, getRef, WithManifestDesc(d))
+		_, err = rc.ManifestGet(ctx, r, WithManifestDesc(d))
 		if err != nil {
 			t.Errorf("Failed running ManifestGet: %v", err)
 			return
 		}
 	})
 	t.Run("Bad Data and Found Digest", func(t *testing.T) {
-		missingRef, err := ref.New("missing." + tsURL.Host + repoPath + ":" + missingTag)
+		r, err := ref.New(tsInternalHost + "/" + repoPath + ":" + missingTag)
 		if err != nil {
-			t.Fatalf("Failed creating missingRef: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
 		d := descriptor.Descriptor{
 			MediaType: mediatype.Docker2Manifest,
@@ -354,16 +428,16 @@ func TestManifest(t *testing.T) {
 			Digest:    mDigest,
 			Data:      []byte("invalid data"),
 		}
-		_, err = rc.ManifestGet(ctx, missingRef, WithManifestDesc(d))
+		_, err = rc.ManifestGet(ctx, r, WithManifestDesc(d))
 		if err != nil {
 			t.Errorf("get with descriptor failed, didn't fall back to digest")
 			return
 		}
 	})
 	t.Run("Bad Data and Missing Digest", func(t *testing.T) {
-		missingRef, err := ref.New("missing." + tsURL.Host + repoPath + ":" + missingTag)
+		r, err := ref.New("missing." + tsOlaregHost + "/" + repoPath + ":" + missingTag)
 		if err != nil {
-			t.Fatalf("Failed creating missingRef: %v", err)
+			t.Fatalf("Failed creating ref: %v", err)
 		}
 		d := descriptor.Descriptor{
 			MediaType: mediatype.Docker2Manifest,
@@ -371,7 +445,7 @@ func TestManifest(t *testing.T) {
 			Digest:    missingDigest,
 			Data:      []byte("invalid data"),
 		}
-		_, err = rc.ManifestGet(ctx, missingRef, WithManifestDesc(d))
+		_, err = rc.ManifestGet(ctx, r, WithManifestDesc(d))
 		if err == nil {
 			t.Errorf("Success running ManifestGet on missing ref")
 			return
@@ -390,5 +464,25 @@ func TestManifest(t *testing.T) {
 		if !errors.Is(err, errs.ErrInvalidReference) {
 			t.Errorf("ManifestGet did not respond with invalid ref: %v", err)
 		}
+	})
+	t.Run("Delete", func(t *testing.T) {
+		r, err := ref.New(tsOlaregHost + "/" + repoPath + ":" + deleteTag)
+		if err != nil {
+			t.Fatalf("Failed creating ref: %v", err)
+		}
+		m, err := rc.ManifestGet(ctx, r)
+		if err != nil {
+			t.Fatalf("failed to run get request: %v", err)
+		}
+		r = r.SetDigest(m.GetDescriptor().Digest.String())
+		err = rc.ManifestDelete(ctx, r, WithManifest(m), WithManifestCheckReferrers())
+		if err != nil {
+			t.Errorf("ManifestDelete failed: %v", err)
+		}
+		_, err = rc.ManifestHead(ctx, r)
+		if !errors.Is(err, errs.ErrNotFound) {
+			t.Fatalf("head after delete did not return a non-found: %v", err)
+		}
+
 	})
 }

@@ -446,7 +446,11 @@ func (rc *RegClient) ImageConfig(ctx context.Context, r ref.Ref, opts ...ImageOp
 	for _, optFn := range opts {
 		optFn(&opt)
 	}
-	m, err := rc.ManifestGet(ctx, r)
+	p, err := platform.Parse(opt.platform)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse platform %s: %w", opt.platform, err)
+	}
+	m, err := rc.ManifestGet(ctx, r, WithManifestPlatform(p))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get manifest: %w", err)
 	}
@@ -458,10 +462,6 @@ func (rc *RegClient) ImageConfig(ctx context.Context, r ref.Ref, opts ...ImageOp
 		ml, err := mi.GetManifestList()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get manifest list: %w", err)
-		}
-		p, err := platform.Parse(opt.platform)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse platform %s: %w", opt.platform, err)
 		}
 		d, err := descriptor.DescriptorListSearch(ml, descriptor.MatchOpt{Platform: &p})
 		if err != nil {

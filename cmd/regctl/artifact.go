@@ -610,7 +610,6 @@ func (artifactOpts *artifactCmd) runArtifactList(cmd *cobra.Command, args []stri
 
 func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
-	mOpts := []manifest.Opts{}
 	hasConfig := false
 	var r, rArt, rSubject ref.Ref
 	var err error
@@ -720,28 +719,20 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 
 	var subjectDesc *descriptor.Descriptor
 	if rSubject.IsSet() {
-		smh, err := rc.ManifestHead(ctx, rSubject, regclient.WithManifestRequireDigest())
+		mOpts := []regclient.ManifestOpts{regclient.WithManifestRequireDigest()}
+		if artifactOpts.platform != "" {
+			p, err := platform.Parse(artifactOpts.platform)
+			if err != nil {
+				return fmt.Errorf("failed to parse platform %s: %w", artifactOpts.platform, err)
+			}
+			mOpts = append(mOpts, regclient.WithManifestPlatform(p))
+		}
+		smh, err := rc.ManifestHead(ctx, rSubject, mOpts...)
 		if err != nil {
 			return fmt.Errorf("unable to find subject manifest: %w", err)
 		}
-		if smh.IsList() && artifactOpts.platform != "" {
-			sml, err := rc.ManifestGet(ctx, rSubject)
-			if err != nil {
-				return fmt.Errorf("unable to get subject manifest: %w", err)
-			}
-			plat, err := platform.Parse(artifactOpts.platform)
-			if err != nil {
-				return fmt.Errorf("failed to parse platform: %w", err)
-			}
-			d, err := manifest.GetPlatformDesc(sml, &plat)
-			if err != nil {
-				return fmt.Errorf("failed to get platform descriptor: %w", err)
-			}
-			subjectDesc = &descriptor.Descriptor{MediaType: d.MediaType, Digest: d.Digest, Size: d.Size}
-		} else {
-			d := smh.GetDescriptor()
-			subjectDesc = &descriptor.Descriptor{MediaType: d.MediaType, Digest: d.Digest, Size: d.Size}
-		}
+		d := smh.GetDescriptor()
+		subjectDesc = &descriptor.Descriptor{MediaType: d.MediaType, Digest: d.Digest, Size: d.Size}
 	}
 
 	// read config, or initialize to an empty json config
@@ -873,6 +864,7 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 		blobs = append(blobs, d)
 	}
 
+	mOpts := []manifest.Opts{}
 	switch artifactOpts.artifactMT {
 	case mediatype.OCI1Artifact:
 		m := v1.ArtifactManifest{
