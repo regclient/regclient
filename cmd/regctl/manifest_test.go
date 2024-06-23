@@ -47,7 +47,7 @@ func TestManifestHead(t *testing.T) {
 		{
 			name:      "Platform unknown",
 			args:      []string{"manifest", "head", "ocidir://../../testdata/testrepo:v1", "--platform", "linux/unknown"},
-			expectErr: ErrNotFound,
+			expectErr: errs.ErrNotFound,
 		},
 	}
 	for _, tc := range tt {

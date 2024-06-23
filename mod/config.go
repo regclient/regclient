@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/types/descriptor"
-	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 )
@@ -150,34 +148,7 @@ func WithConfigTimestamp(optTime OptTime) Opts {
 			}
 			// offset startHistory from base image history
 			if !optTime.BaseRef.IsZero() {
-				var d descriptor.Descriptor
-				for {
-					mOpts := []regclient.ManifestOpts{}
-					if d.Digest != "" {
-						mOpts = append(mOpts, regclient.WithManifestDesc(d))
-					}
-					m, err := rc.ManifestGet(c, optTime.BaseRef, mOpts...)
-					if err != nil {
-						return fmt.Errorf("unable to get base image: %w", err)
-					}
-					if mi, ok := m.(manifest.Imager); ok {
-						cd, err := mi.GetConfig()
-						if err != nil {
-							return fmt.Errorf("unable to get base image config descriptor: %w", err)
-						}
-						d = cd
-						break
-					} else if _, ok := m.(manifest.Indexer); ok {
-						pd, err := manifest.GetPlatformDesc(m, &oc.Platform)
-						if err != nil {
-							return fmt.Errorf("unable to get base image platform %s: %w", oc.Platform.String(), err)
-						}
-						d = *pd
-					} else {
-						return fmt.Errorf("unsupported base image manifest")
-					}
-				}
-				baseConfig, err := rc.BlobGetOCIConfig(c, optTime.BaseRef, d)
+				baseConfig, err := rc.ImageConfig(c, optTime.BaseRef, regclient.ImageWithPlatform(oc.Platform.String()))
 				if err != nil {
 					return fmt.Errorf("failed to get base image config: %w", err)
 				}

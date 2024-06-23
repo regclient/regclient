@@ -3,9 +3,84 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net/http/httptest"
+	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/olareg/olareg"
+	oConfig "github.com/olareg/olareg/config"
 )
+
+func TestImageCopy(t *testing.T) {
+	tempDir := t.TempDir()
+	srcRef := "ocidir://../../testdata/testrepo:v2"
+	boolT := true
+	regHandler := olareg.New(oConfig.Config{
+		Storage: oConfig.ConfigStorage{
+			StoreType: oConfig.StoreMem,
+			RootDir:   "../../testdata",
+		},
+		API: oConfig.ConfigAPI{
+			DeleteEnabled: &boolT,
+		},
+	})
+	ts := httptest.NewServer(regHandler)
+	tsURL, _ := url.Parse(ts.URL)
+	tsHost := tsURL.Host
+	t.Cleanup(func() {
+		ts.Close()
+		_ = regHandler.Close()
+	})
+	t.Setenv(ConfigEnv, filepath.Join(tempDir, "config.json"))
+	_, err := cobraTest(t, nil, "registry", "set", tsHost, "--tls", "disabled")
+	if err != nil {
+		t.Fatalf("failed to disable TLS for internal registry")
+	}
+	tt := []struct {
+		name        string
+		args        []string
+		expectErr   error
+		expectOut   string
+		outContains bool
+	}{
+		{
+			name:      "ocidir-to-ocidir",
+			args:      []string{"image", "copy", srcRef, "ocidir://" + tempDir + "testrepo:v2"},
+			expectOut: "ocidir://" + tempDir + "testrepo:v2",
+		},
+		{
+			name:      "ocidir-to-reg",
+			args:      []string{"image", "copy", srcRef, tsHost + "/newrepo:v2"},
+			expectOut: tsHost + "/newrepo:v2",
+		},
+		{
+			name:      "reg-to-reg-platform",
+			args:      []string{"image", "copy", "--platform", "linux/amd64", tsHost + "/testrepo:v3", tsHost + "/newrepo:v3"},
+			expectOut: tsHost + "/newrepo:v3",
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := cobraTest(t, nil, tc.args...)
+			if tc.expectErr != nil {
+				if err == nil {
+					t.Errorf("did not receive expected error: %v", tc.expectErr)
+				} else if !errors.Is(err, tc.expectErr) && err.Error() != tc.expectErr.Error() {
+					t.Errorf("unexpected error, received %v, expected %v", err, tc.expectErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("returned unexpected error: %v", err)
+			}
+			if (!tc.outContains && out != tc.expectOut) || (tc.outContains && !strings.Contains(out, tc.expectOut)) {
+				t.Errorf("unexpected output, expected %s, received %s", tc.expectOut, out)
+			}
+		})
+	}
+}
 
 func TestImageCreate(t *testing.T) {
 	tmpDir := t.TempDir()
