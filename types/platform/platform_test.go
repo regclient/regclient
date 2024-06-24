@@ -20,6 +20,16 @@ func TestPlatformParse(t *testing.T) {
 		winGoal.Variant = platLocal.Variant
 		winGoal.OSVersion = platLocal.OSVersion
 	}
+	amd64Goal := Platform{OS: platLocal.OS, Architecture: "amd64"}
+	if platLocal.Architecture == "amd64" {
+		amd64Goal.Variant = platLocal.Variant
+		amd64Goal.OSVersion = platLocal.OSVersion
+	}
+	arm64Goal := Platform{OS: platLocal.OS, Architecture: "arm64"}
+	if platLocal.Architecture == "arm64" {
+		arm64Goal.Variant = platLocal.Variant
+		arm64Goal.OSVersion = platLocal.OSVersion
+	}
 	tests := []struct {
 		name    string
 		parse   string
@@ -125,6 +135,16 @@ func TestPlatformParse(t *testing.T) {
 			name:  "windows",
 			parse: "windows",
 			goal:  winGoal,
+		},
+		{
+			name:  "amd64",
+			parse: "amd64",
+			goal:  amd64Goal,
+		},
+		{
+			name:  "arm64",
+			parse: "arm64",
+			goal:  arm64Goal,
 		},
 		{
 			name:  "local",
