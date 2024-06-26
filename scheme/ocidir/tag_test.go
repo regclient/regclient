@@ -3,9 +3,10 @@ package ocidir
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"testing"
 
-	"github.com/regclient/regclient/internal/rwfs"
+	"github.com/regclient/regclient/internal/copyfs"
 	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/ref"
 )
@@ -13,27 +14,21 @@ import (
 func TestTag(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	fsOS := rwfs.OSNew("")
-	fsMem := rwfs.MemNew()
-	err := rwfs.MkdirAll(fsMem, "testdata/regctl", 0777)
+	tempDir := t.TempDir()
+	err := copyfs.Copy(filepath.Join(tempDir, "testrepo"), "../../testdata/testrepo")
 	if err != nil {
-		t.Fatalf("failed to setup memfs dir: %v", err)
+		t.Fatalf("failed to setup tempDir: %v", err)
 	}
-	err = rwfs.CopyRecursive(fsOS, "testdata/regctl", fsMem, "testdata/regctl")
-	if err != nil {
-		t.Fatalf("failed to setup memfs copy: %v", err)
-	}
-	oMem := New(WithFS(fsMem))
-	tRef := "ocidir://testdata/regctl"
+	o := New()
+	tRef := "ocidir://" + tempDir + "/testrepo"
 	r, err := ref.New(tRef)
 	if err != nil {
 		t.Fatalf("failed to parse ref %s: %v", tRef, err)
 	}
-	rCp := r
 
 	t.Run("TagList", func(t *testing.T) {
-		exTags := []string{"broken", "latest", "v0.3", "v0.3.10"}
-		tl, err := oMem.TagList(ctx, r)
+		exTags := []string{"a1", "a2", "ai", "b1", "b2", "b3", "child", "loop", "mirror", "v1", "v2", "v3"}
+		tl, err := o.TagList(ctx, r)
 		if err != nil {
 			t.Fatalf("failed to retrieve tag list: %v", err)
 		}
@@ -41,30 +36,29 @@ func TestTag(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to get tags: %v", err)
 		}
-		if !cmpSliceString(exTags, tlTags) {
-			t.Errorf("unexpected tag list, expected %v, received %v", exTags, tlTags)
+		for _, exTag := range exTags {
+			if !inListStr(exTag, tlTags) {
+				t.Errorf("missing tag: %s", exTag)
+			}
 		}
 	})
 
 	t.Run("TagDelete", func(t *testing.T) {
-		exTags := []string{"broken", "v0.3"}
-		rCp.Tag = "missing"
-		err := oMem.TagDelete(ctx, rCp)
+		keepTags := []string{"a2", "ai", "b1", "b2", "b3", "child", "loop", "v2", "v3"}
+		rmTags := []string{"mirror", "a1", "v1"}
+		rCp := r.SetTag("missing")
+		err := o.TagDelete(ctx, rCp)
 		if err == nil || !errors.Is(err, errs.ErrNotFound) {
 			t.Errorf("deleting missing tag %s: %v", rCp.CommonName(), err)
 		}
-		rCp.Tag = "latest"
-		err = oMem.TagDelete(ctx, rCp)
-		if err != nil {
-			t.Errorf("failed to delete tag %s: %v", rCp.CommonName(), err)
+		for _, rmTag := range rmTags {
+			r := r.SetTag(rmTag)
+			err = o.TagDelete(ctx, r)
+			if err != nil {
+				t.Errorf("failed to delete tag %s: %v", r.CommonName(), err)
+			}
 		}
-		rCp.Tag = "v0.3.10"
-		err = oMem.TagDelete(ctx, rCp)
-		if err != nil {
-			t.Errorf("failed to delete tag %s: %v", rCp.CommonName(), err)
-		}
-
-		tl, err := oMem.TagList(ctx, r)
+		tl, err := o.TagList(ctx, r)
 		if err != nil {
 			t.Fatalf("failed to retrieve tag list: %v", err)
 		}
@@ -72,8 +66,24 @@ func TestTag(t *testing.T) {
 		if err != nil {
 			t.Errorf("failed to get tags: %v", err)
 		}
-		if !cmpSliceString(exTags, tlTags) {
-			t.Errorf("unexpected tag list, expected %v, received %v", exTags, tlTags)
+		for _, keep := range keepTags {
+			if !inListStr(keep, tlTags) {
+				t.Errorf("missing tag: %s", keep)
+			}
+		}
+		for _, rm := range rmTags {
+			if inListStr(rm, tlTags) {
+				t.Errorf("tag not removed: %s", rm)
+			}
 		}
 	})
+}
+
+func inListStr(str string, list []string) bool {
+	for _, s := range list {
+		if str == s {
+			return true
+		}
+	}
+	return false
 }

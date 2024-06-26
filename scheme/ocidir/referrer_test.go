@@ -3,13 +3,12 @@ package ocidir
 import (
 	"context"
 	"fmt"
-	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/opencontainers/go-digest"
-	"github.com/sirupsen/logrus"
 
-	"github.com/regclient/regclient/internal/rwfs"
+	"github.com/regclient/regclient/internal/copyfs"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/manifest"
@@ -22,23 +21,13 @@ import (
 func TestReferrer(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	fsOS := rwfs.OSNew("")
-	fsMem := rwfs.MemNew()
-	err := rwfs.CopyRecursive(fsOS, "../../testdata", fsMem, ".")
+	tempDir := t.TempDir()
+	err := copyfs.Copy(filepath.Join(tempDir, "testrepo"), "../../testdata/testrepo")
 	if err != nil {
-		t.Fatalf("failed to setup memfs copy: %v", err)
+		t.Fatalf("failed to setup tempDir: %v", err)
 	}
-	log := &logrus.Logger{
-		Out:       os.Stderr,
-		Formatter: new(logrus.TextFormatter),
-		Hooks:     make(logrus.LevelHooks),
-		Level:     logrus.WarnLevel,
-	}
-	o := New(
-		WithFS(fsMem),
-		WithLog(log),
-	)
-	repo := "ocidir://testrepo"
+	o := New()
+	repo := "ocidir://" + tempDir + "/testrepo"
 	tagName := "v3"
 	aType := "application/example.sbom"
 	bType := "application/example.sig"

@@ -6,8 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/regclient/regclient/internal/rwfs"
 )
 
 // test New
@@ -99,12 +97,12 @@ func TestNew(t *testing.T) {
 	}
 }
 
-// TestWriteOpen test Write and Open using MemFS
+// TestWriteOpen test Write and Open
 func TestWriteOpen(t *testing.T) {
 	t.Parallel()
-	memfs := rwfs.MemNew()
+	tempDir := t.TempDir()
 	confContent := []byte("hello test")
-	cf := New(WithFS(memfs), WithFullname("test.json"))
+	cf := New(WithFullname(filepath.Join(tempDir, "test.json")))
 	err := cf.Write(bytes.NewReader(confContent))
 	if err != nil {
 		t.Fatalf("failed to write config file: %v", err)

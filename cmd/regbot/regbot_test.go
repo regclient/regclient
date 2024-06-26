@@ -4,33 +4,70 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
+	"github.com/olareg/olareg"
+	oConfig "github.com/olareg/olareg/config"
+
 	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/internal/rwfs"
+	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/throttle"
+	"github.com/regclient/regclient/scheme/reg"
 	"github.com/regclient/regclient/types/ref"
 )
 
 func TestRegbot(t *testing.T) {
 	ctx := context.Background()
-	// setup sample source with an in-memory ocidir directory
-	fsOS := rwfs.OSNew("")
-	fsMem := rwfs.MemNew()
-	err := rwfs.CopyRecursive(fsOS, "testdata", fsMem, ".")
-	if err != nil {
-		t.Fatalf("failed to setup memfs copy: %v", err)
+	boolT := true
+	var err error
+	regHandler := olareg.New(oConfig.Config{
+		Storage: oConfig.ConfigStorage{
+			StoreType: oConfig.StoreMem,
+			RootDir:   "../../testdata",
+		},
+		API: oConfig.ConfigAPI{
+			DeleteEnabled: &boolT,
+		},
+	})
+	ts := httptest.NewServer(regHandler)
+	tsURL, _ := url.Parse(ts.URL)
+	tsHost := tsURL.Host
+	t.Cleanup(func() {
+		ts.Close()
+		_ = regHandler.Close()
+	})
+	rcHosts := []config.Host{
+		{
+			Name:      tsHost,
+			Hostname:  tsHost,
+			TLS:       config.TLSDisabled,
+			ReqPerSec: 1000,
+		},
+		{
+			Name:      "registry.example.org",
+			Hostname:  tsHost,
+			TLS:       config.TLSDisabled,
+			ReqPerSec: 1000,
+		},
 	}
+	delayInit, _ := time.ParseDuration("0.05s")
+	delayMax, _ := time.ParseDuration("0.10s")
+	// replace regclient with one configured for test hosts
+	rc = regclient.New(
+		regclient.WithConfigHost(rcHosts...),
+		regclient.WithRegOpts(reg.WithDelay(delayInit, delayMax)),
+	)
 	// setup various globals normally done by loadConf
 	throttleC = throttle.New(1)
-	rc = regclient.New(regclient.WithFS(fsMem))
 	var confBytes = `
-  version: 1
-  defaults:
-    parallel: 1
-    timeout: 60s
-  `
+version: 1
+defaults:
+  parallel: 1
+  timeout: 60s
+`
 	confRdr := bytes.NewReader([]byte(confBytes))
 	conf, err = ConfigLoadReader(confRdr)
 	if err != nil {
@@ -41,14 +78,12 @@ func TestRegbot(t *testing.T) {
 		t.Fatalf("failed to setup shortTime: %v", err)
 	}
 	tests := []struct {
-		name      string
-		script    ConfigScript
-		dryrun    bool
-		exists    []string
-		missing   []string
-		desired   []string
-		undesired []string
-		expErr    error
+		name    string
+		script  ConfigScript
+		dryrun  bool
+		exists  []string
+		missing []string
+		expErr  error
 	}{
 		{
 			name: "Noop",
@@ -62,7 +97,7 @@ func TestRegbot(t *testing.T) {
 			name: "List",
 			script: ConfigScript{
 				Name:   "List",
-				Script: `tag.ls "ocidir://testrepo"`,
+				Script: `tag.ls "registry.example.org/testrepo"`,
 			},
 			expErr: nil,
 		},
@@ -71,7 +106,7 @@ func TestRegbot(t *testing.T) {
 			script: ConfigScript{
 				Name: "GetConfig",
 				Script: `
-				m = manifest.get("ocidir://testrepo:v1", "linux/amd64")
+				m = manifest.get("registry.example.org/testrepo:v1", "linux/amd64")
 				ic = image.config(m)
 				if ic.Config.Labels["version"] ~= "1" then
 				  log("Config version: " .. ic.Config.Labels["version"])
@@ -86,36 +121,22 @@ func TestRegbot(t *testing.T) {
 			script: ConfigScript{
 				Name: "CopyLatest",
 				Script: `
-				image.copy("ocidir://testrepo:v1", "ocidir://testcopy:latest")
+				image.copy("registry.example.org/testrepo:v1", "registry.example.org/testcopy:latest")
 				`,
 			},
-			exists: []string{"ocidir://testcopy:latest"},
-			desired: []string{
-				"testcopy/index.json",
-				"testcopy/oci-layout",
-				"testcopy/blobs/sha256/94ec59b4c55eb2341b63ea9a0abab63590a923e7cb5cd682217ca209ef362694", // v1
-			},
-			expErr: nil,
+			exists: []string{"registry.example.org/testcopy:latest"},
 		},
 		{
 			name: "DeleteCopy",
 			script: ConfigScript{
 				Name: "DeleteCopy",
 				Script: `
-				image.copy("ocidir://testrepo:v1", "ocidir://testdel:old")
-				tag.delete("ocidir://testdel:old")
+				image.copy("registry.example.org/testrepo:v1", "registry.example.org/testdel:old")
+				tag.delete("registry.example.org/testdel:old")
 				`,
 			},
-			// exists: []string{"ocidir://testcopy:latest"},
-			missing: []string{"ocidir://testdel:old"},
-			desired: []string{
-				"testcopy/index.json",
-				"testcopy/oci-layout",
-			},
-			undesired: []string{
-				"testdel/blobs/sha256/94ec59b4c55eb2341b63ea9a0abab63590a923e7cb5cd682217ca209ef362694", // v1
-			},
-			expErr: nil,
+			missing: []string{"registry.example.org/testdel:old"},
+			expErr:  nil,
 		},
 		{
 			name:   "DryRun",
@@ -123,17 +144,11 @@ func TestRegbot(t *testing.T) {
 			script: ConfigScript{
 				Name: "DryRun",
 				Script: `
-				image.copy("ocidir://testrepo:v1", "ocidir://testdryrun:latest")
+				image.copy("registry.example.org/testrepo:v1", "registry.example.org/testdryrun:latest")
 				`,
 			},
-			// exists: []string{"ocidir://testcopy:latest"},
-			missing: []string{"ocidir://testdryrun:latest"},
-			undesired: []string{
-				"testdryrun/index.json",
-				"testdryrun/oci-layout",
-				"testdryrun/blobs/sha256/94ec59b4c55eb2341b63ea9a0abab63590a923e7cb5cd682217ca209ef362694", // v1
-			},
-			expErr: nil,
+			missing: []string{"registry.example.org/testdryrun:latest"},
+			expErr:  nil,
 		},
 		{
 			name: "Timeout",
@@ -141,7 +156,7 @@ func TestRegbot(t *testing.T) {
 				Name: "Timeout",
 				Script: `
 				while true do
-					tag.ls "ocidir://testrepo"
+					tag.ls "registry.example.org/testrepo"
 				end
 				`,
 				Timeout: shortTime,
@@ -185,18 +200,6 @@ func TestRegbot(t *testing.T) {
 				_, err = rc.ManifestHead(ctx, r)
 				if err == nil {
 					t.Errorf("ref exists: %s", missing)
-				}
-			}
-			for _, file := range tt.desired {
-				_, err = rwfs.Stat(fsMem, file)
-				if err != nil {
-					t.Errorf("missing file in sync: %s", file)
-				}
-			}
-			for _, file := range tt.undesired {
-				_, err = rwfs.Stat(fsMem, file)
-				if err == nil {
-					t.Errorf("undesired file after sync: %s", file)
 				}
 			}
 		})

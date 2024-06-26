@@ -6,7 +6,6 @@ import (
 
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/errs"
@@ -23,46 +22,22 @@ var (
 	_ scheme.Throttler = (*OCIDir)(nil)
 )
 
-func cmpSliceString(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
 func TestIndex(t *testing.T) {
 	t.Parallel()
 	// ctx := context.Background()
-	fsMem := rwfs.MemNew()
-	o := New(WithFS(fsMem))
+	tempDir := t.TempDir()
+	o := New()
 	dig1 := digest.FromString("test digest 1")
 	dig2 := digest.FromString("test digest 2")
 	dig3 := digest.FromString("test digest 3")
-	r, err := ref.New("ocidir://testrepo")
+	r, err := ref.New("ocidir://" + tempDir + "/testrepo")
 	if err != nil {
-		t.Errorf("failed to generate ref: %v", err)
+		t.Fatalf("failed to generate ref: %v", err)
 	}
-	rA, err := ref.New("ocidir://testrepo:tag-a")
-	if err != nil {
-		t.Errorf("failed to generate ref: %v", err)
-	}
-	rB, err := ref.New("ocidir://testrepo:tag-b")
-	if err != nil {
-		t.Errorf("failed to generate ref: %v", err)
-	}
-	rC, err := ref.New("ocidir://testrepo:tag-c")
-	if err != nil {
-		t.Errorf("failed to generate ref: %v", err)
-	}
-	rDig, err := ref.New("ocidir://testrepo@" + dig1.String())
-	if err != nil {
-		t.Errorf("failed to generate ref: %v", err)
-	}
+	rA := r.SetTag("tag-a")
+	rB := r.SetTag("tag-b")
+	rC := r.SetTag("tag-c")
+	rDig := r.SetDigest(dig1.String())
 	descNoTag := descriptor.Descriptor{
 		MediaType: mediatype.Docker2Manifest,
 		Size:      1234,
