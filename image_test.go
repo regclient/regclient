@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -16,7 +17,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/internal/rwfs"
+	"github.com/regclient/regclient/internal/copyfs"
+	"github.com/regclient/regclient/scheme/reg"
 	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/ref"
 )
@@ -24,24 +26,55 @@ import (
 func TestImageCheckBase(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	fsOS := rwfs.OSNew("")
-	fsMem := rwfs.MemNew()
-	err := rwfs.CopyRecursive(fsOS, "testdata", fsMem, ".")
-	if err != nil {
-		t.Fatalf("failed to setup memfs copy: %v", err)
+	regHandler := olareg.New(oConfig.Config{
+		Storage: oConfig.ConfigStorage{
+			StoreType: oConfig.StoreMem,
+			RootDir:   "./testdata",
+		},
+	})
+	ts := httptest.NewServer(regHandler)
+	tsURL, _ := url.Parse(ts.URL)
+	tsHost := tsURL.Host
+	t.Cleanup(func() {
+		ts.Close()
+		_ = regHandler.Close()
+	})
+	rcHosts := []config.Host{
+		{
+			Name:      tsHost,
+			Hostname:  tsHost,
+			TLS:       config.TLSDisabled,
+			ReqPerSec: 1000,
+		},
+		{
+			Name:      "registry.example.org",
+			Hostname:  tsHost,
+			TLS:       config.TLSDisabled,
+			ReqPerSec: 1000,
+		},
+	}
+	log := &logrus.Logger{
+		Out:       os.Stderr,
+		Formatter: new(logrus.TextFormatter),
+		Hooks:     make(logrus.LevelHooks),
+		Level:     logrus.WarnLevel,
 	}
 	delayInit, _ := time.ParseDuration("0.05s")
 	delayMax, _ := time.ParseDuration("0.10s")
-	rc := New(WithFS(fsMem), WithRetryDelay(delayInit, delayMax))
-	rb1, err := ref.New("ocidir://testrepo:b1")
+	rc := New(
+		WithConfigHost(rcHosts...),
+		WithLog(log),
+		WithRegOpts(reg.WithDelay(delayInit, delayMax)),
+	)
+	rb1, err := ref.New(tsHost + "/testrepo:b1")
 	if err != nil {
 		t.Fatalf("failed to setup ref: %v", err)
 	}
-	rb2, err := ref.New("ocidir://testrepo:b2")
+	rb2, err := ref.New(tsHost + "/testrepo:b2")
 	if err != nil {
 		t.Fatalf("failed to setup ref: %v", err)
 	}
-	rb3, err := ref.New("ocidir://testrepo:b3")
+	rb3, err := ref.New(tsHost + "/testrepo:b3")
 	if err != nil {
 		t.Fatalf("failed to setup ref: %v", err)
 	}
@@ -50,15 +83,15 @@ func TestImageCheckBase(t *testing.T) {
 		t.Fatalf("failed to get digest for base3: %v", err)
 	}
 	dig3 := m3.GetDescriptor().Digest
-	r1, err := ref.New("ocidir://testrepo:v1")
+	r1, err := ref.New(tsHost + "/testrepo:v1")
 	if err != nil {
 		t.Fatalf("failed to setup ref: %v", err)
 	}
-	r2, err := ref.New("ocidir://testrepo:v2")
+	r2, err := ref.New(tsHost + "/testrepo:v2")
 	if err != nil {
 		t.Fatalf("failed to setup ref: %v", err)
 	}
-	r3, err := ref.New("ocidir://testrepo:v3")
+	r3, err := ref.New(tsHost + "/testrepo:v3")
 	if err != nil {
 		t.Fatalf("failed to setup ref: %v", err)
 	}
@@ -404,36 +437,33 @@ func TestCopy(t *testing.T) {
 func TestExportImport(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	// copy testdata images into memory
-	fsOS := rwfs.OSNew("")
-	fsMem := rwfs.MemNew()
-	err := rwfs.CopyRecursive(fsOS, "testdata", fsMem, ".")
+	// copy testdata images into tempdir
+	tempDir := t.TempDir()
+	err := copyfs.Copy(tempDir+"/testrepo", "testdata/testrepo")
 	if err != nil {
-		t.Fatalf("failed to setup memfs copy: %v", err)
+		t.Fatalf("failed to copyfs to tempdir: %v", err)
 	}
 	// create regclient
-	delayInit, _ := time.ParseDuration("0.05s")
-	delayMax, _ := time.ParseDuration("0.10s")
-	rc := New(WithFS(fsMem), WithRetryDelay(delayInit, delayMax))
-	rIn1, err := ref.New("ocidir://testrepo:v1")
+	rc := New()
+	rIn1, err := ref.New("ocidir://" + tempDir + "/testrepo:v1")
 	if err != nil {
 		t.Fatalf("failed to parse ref: %v", err)
 	}
-	rOut1, err := ref.New("ocidir://testout:v1")
+	rOut1, err := ref.New("ocidir://" + tempDir + "/testout:v1")
 	if err != nil {
 		t.Fatalf("failed to parse ref: %v", err)
 	}
-	rIn3, err := ref.New("ocidir://testrepo:v3")
+	rIn3, err := ref.New("ocidir://" + tempDir + "/testrepo:v3")
 	if err != nil {
 		t.Fatalf("failed to parse ref: %v", err)
 	}
-	rOut3, err := ref.New("ocidir://testout:v3")
+	rOut3, err := ref.New("ocidir://" + tempDir + "/testout:v3")
 	if err != nil {
 		t.Fatalf("failed to parse ref: %v", err)
 	}
 
 	// export repo to tar
-	fileOut1, err := fsMem.Create("test1.tar")
+	fileOut1, err := os.Create(filepath.Join(tempDir, "test1.tar"))
 	if err != nil {
 		t.Fatalf("failed to create output tar: %v", err)
 	}
@@ -442,7 +472,7 @@ func TestExportImport(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to export: %v", err)
 	}
-	fileOut3, err := fsMem.Create("test3.tar.gz")
+	fileOut3, err := os.Create(filepath.Join(tempDir, "test3.tar.gz"))
 	if err != nil {
 		t.Fatalf("failed to create output tar: %v", err)
 	}
@@ -453,11 +483,11 @@ func TestExportImport(t *testing.T) {
 	}
 
 	// modify tar for tests
-	fileR, err := fsMem.Open("test1.tar")
+	fileR, err := os.Open(filepath.Join(tempDir, "test1.tar"))
 	if err != nil {
 		t.Fatalf("failed to open tar: %v", err)
 	}
-	fileW, err := fsMem.Create("test2.tar")
+	fileW, err := os.Create(filepath.Join(tempDir, "test2.tar"))
 	if err != nil {
 		t.Errorf("failed to create tar: %v", err)
 	}
@@ -487,30 +517,22 @@ func TestExportImport(t *testing.T) {
 	fileW.Close()
 
 	// import tar to repo
-	fileIn2, err := fsMem.Open("test2.tar")
+	fileIn2, err := os.Open(filepath.Join(tempDir, "test2.tar"))
 	if err != nil {
 		t.Fatalf("failed to open tar: %v", err)
 	}
 	defer fileIn2.Close()
-	fileIn2Seeker, ok := fileIn2.(io.ReadSeeker)
-	if !ok {
-		t.Fatalf("could not convert fileIn to io.ReadSeeker, type %T", fileIn2)
-	}
-	err = rc.ImageImport(ctx, rOut1, fileIn2Seeker)
+	err = rc.ImageImport(ctx, rOut1, fileIn2)
 	if err != nil {
 		t.Errorf("failed to import: %v", err)
 	}
 
-	fileIn3, err := fsMem.Open("test3.tar.gz")
+	fileIn3, err := os.Open(filepath.Join(tempDir, "test3.tar.gz"))
 	if err != nil {
 		t.Fatalf("failed to open tar: %v", err)
 	}
 	defer fileIn3.Close()
-	fileIn3Seeker, ok := fileIn3.(io.ReadSeeker)
-	if !ok {
-		t.Fatalf("could not convert fileIn to io.ReadSeeker, type %T", fileIn3)
-	}
-	err = rc.ImageImport(ctx, rOut3, fileIn3Seeker)
+	err = rc.ImageImport(ctx, rOut3, fileIn3)
 	if err != nil {
 		t.Errorf("failed to import: %v", err)
 	}
