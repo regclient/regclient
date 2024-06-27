@@ -111,6 +111,8 @@ jobs:
         platforms: linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x
         target: release-${{ matrix.type }}
         outputs: type=oci,dest=output/${{matrix.image}}-${{matrix.type}}.tar
+        cache-to: type=gha,mode=max
+        cache-from: type=gha
         build-args: |
           SOURCE_DATE_EPOCH=${{ steps.prep.outputs.vcs_sec }}
           BUILD_DATE=${{ steps.prep.outputs.created }}
