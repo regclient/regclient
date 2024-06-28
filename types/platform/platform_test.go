@@ -132,6 +132,11 @@ func TestPlatformParse(t *testing.T) {
 			goal:  Platform{OS: "windows", Architecture: "amd64", Variant: "v2"},
 		},
 		{
+			name:  "linux-with-prefers",
+			parse: "linux/arm64,prefer=\"com.example.gpu=model-123,org.example.runtime=sandbox-x\"",
+			goal:  Platform{OS: "linux", Architecture: "arm64", Prefer: map[string]string{"com.example.gpu": "model-123", "org.example.runtime": "sandbox-x"}},
+		},
+		{
 			name:  "windows",
 			parse: "windows",
 			goal:  winGoal,
@@ -166,6 +171,9 @@ func TestPlatformParse(t *testing.T) {
 			}
 			if p.OS != tt.goal.OS || p.Architecture != tt.goal.Architecture || p.Variant != tt.goal.Variant || p.OSVersion != tt.goal.OSVersion {
 				t.Errorf("platform did not match, want %v, received %v", tt.goal, p)
+			}
+			if !mapStrStrEq(p.Prefer, tt.goal.Prefer) {
+				t.Errorf("prefer list mismatch, want %v, received %v", tt.goal.Prefer, p.Prefer)
 			}
 		})
 	}
@@ -216,4 +224,16 @@ func TestPlatformString(t *testing.T) {
 			}
 		})
 	}
+}
+
+func mapStrStrEq(m1, m2 map[string]string) bool {
+	if len(m1) != len(m2) {
+		return false
+	}
+	for k, v := range m1 {
+		if v2, ok := m2[k]; !ok || v != v2 {
+			return false
+		}
+	}
+	return true
 }
