@@ -85,7 +85,7 @@ jobs:
         echo "repo_url=${REPO_URL}" >>$GITHUB_OUTPUT
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@d70bba72b1f3fd22344832f00baa16ece964efeb # v3.3.0
+      uses: docker/setup-buildx-action@4fd812986e6c8c2a69e18311145f9371337f27d4 # v3.4.0
 
     - name: Login to DockerHub
       if: github.repository_owner == 'regclient'
@@ -103,7 +103,7 @@ jobs:
         password: ${{ secrets.GHCR_TOKEN }}
 
     - name: Build
-      uses: docker/build-push-action@31159d49c0d4756269a0940a750801a1ea5d7003 # v6.1.0
+      uses: docker/build-push-action@1a162644f9a7e87d8f4b053101d1d9a712edc18c # v6.3.0
       id: build
       with:
         context: .
@@ -130,7 +130,7 @@ jobs:
       uses: anchore/sbom-action/download-syft@e8d2a6937ecead383dfe75190d104edd1f9c5751 # v0.16.0
       id: syft
       with:
-        syft-version: "v1.7.0"
+        syft-version: "v1.8.0"
     
     # Dogfooding, use regctl to modify regclient images to improve reproducibility
     - name: Install regctl
