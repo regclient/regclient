@@ -9,11 +9,6 @@ import (
 	"os"
 	"path"
 
-	// crypto libraries included for go-digest
-	_ "crypto/sha256"
-	_ "crypto/sha512"
-
-	"github.com/opencontainers/go-digest"
 	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient/types/blob"
@@ -26,12 +21,20 @@ import (
 // This method does not verify that blobs are unused.
 // Calling the [OCIDir.Close] method to trigger the garbage collection is preferred.
 func (o *OCIDir) BlobDelete(ctx context.Context, r ref.Ref, d descriptor.Descriptor) error {
+	err := d.Digest.Validate()
+	if err != nil {
+		return fmt.Errorf("failed to validate digest %s: %w", d.Digest.String(), err)
+	}
 	file := path.Join(r.Path, "blobs", d.Digest.Algorithm().String(), d.Digest.Encoded())
 	return os.Remove(file)
 }
 
 // BlobGet retrieves a blob, returning a reader
 func (o *OCIDir) BlobGet(ctx context.Context, r ref.Ref, d descriptor.Descriptor) (blob.Reader, error) {
+	err := d.Digest.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate digest %s: %w", d.Digest.String(), err)
+	}
 	file := path.Join(r.Path, "blobs", d.Digest.Algorithm().String(), d.Digest.Encoded())
 	//#nosec G304 users should validate references they attempt to open
 	fd, err := os.Open(file)
@@ -60,6 +63,10 @@ func (o *OCIDir) BlobGet(ctx context.Context, r ref.Ref, d descriptor.Descriptor
 
 // BlobHead verifies the existence of a blob, the reader contains the headers but no body to read
 func (o *OCIDir) BlobHead(ctx context.Context, r ref.Ref, d descriptor.Descriptor) (blob.Reader, error) {
+	err := d.Digest.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate digest %s: %w", d.Digest.String(), err)
+	}
 	file := path.Join(r.Path, "blobs", d.Digest.Algorithm().String(), d.Digest.Encoded())
 	//#nosec G304 users should validate references they attempt to open
 	fd, err := os.Open(file)
@@ -99,17 +106,11 @@ func (o *OCIDir) BlobPut(ctx context.Context, r ref.Ref, d descriptor.Descriptor
 	if err != nil {
 		return d, err
 	}
-	digester := digest.Canonical.Digester()
+	digester := d.DigestAlgo().Digester()
 	rdr = io.TeeReader(rdr, digester.Hash())
 	// write the blob to a tmp file
-	var dir, tmpPattern string
-	if d.Digest != "" && d.Size > 0 {
-		dir = path.Join(r.Path, "blobs", d.Digest.Algorithm().String())
-		tmpPattern = d.Digest.Encoded() + ".*.tmp"
-	} else {
-		dir = path.Join(r.Path, "blobs", digest.Canonical.String())
-		tmpPattern = "*.tmp"
-	}
+	dir := path.Join(r.Path, "blobs", d.DigestAlgo().String())
+	tmpPattern := "*.tmp"
 	//#nosec G301 defer to user umask settings
 	err = os.MkdirAll(dir, 0777)
 	if err != nil && !errors.Is(err, fs.ErrExist) {
@@ -133,7 +134,7 @@ func (o *OCIDir) BlobPut(ctx context.Context, r ref.Ref, d descriptor.Descriptor
 		return d, errC
 	}
 	// validate result matches descriptor, or update descriptor if it wasn't defined
-	if d.Digest == "" || d.Size <= 0 {
+	if d.Digest.Validate() != nil {
 		d.Digest = digester.Digest()
 	} else if d.Digest != digester.Digest() {
 		return d, fmt.Errorf("unexpected digest, expected %s, computed %s", d.Digest, digester.Digest())

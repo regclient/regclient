@@ -7,6 +7,10 @@ import (
 	"fmt"
 	"testing"
 
+	// crypto libraries included for go-digest
+	_ "crypto/sha256"
+	_ "crypto/sha512"
+
 	"github.com/opencontainers/go-digest"
 
 	"github.com/regclient/regclient/types/errs"
@@ -14,75 +18,7 @@ import (
 	"github.com/regclient/regclient/types/platform"
 )
 
-func TestDescriptorData(t *testing.T) {
-	t.Parallel()
-	tt := []struct {
-		name     string
-		d        Descriptor
-		wantData []byte
-		wantErr  error
-	}{
-		{
-			name: "No Data",
-			d: Descriptor{
-				MediaType: mediatype.Docker2LayerGzip,
-				Size:      941,
-				Digest:    digest.Digest("sha256:f6e2d7fa40092cf3d9817bf6ff54183d68d108a47fdf5a5e476c612626c80e14"),
-			},
-			wantErr: errs.ErrParsingFailed,
-		},
-		{
-			name: "Bad Digest",
-			d: Descriptor{
-				MediaType: mediatype.OCI1LayerGzip,
-				Size:      10,
-				Digest:    digest.Digest("sha256:e4a380728755139f156563e8b795581d5915dcc947fe937c524c6d52fd604b99"),
-				Data:      []byte("example data"),
-			},
-			wantErr: errs.ErrParsingFailed,
-		},
-		{
-			name: "Bad Size",
-			d: Descriptor{
-				MediaType: mediatype.OCI1LayerGzip,
-				Size:      1000,
-				Digest:    digest.Digest("sha256:44752f37272e944fd2c913a35342eaccdd1aaf189bae50676b301ab213fc5061"),
-				Data:      []byte("example data"),
-			},
-			wantErr: errs.ErrParsingFailed,
-		},
-		{
-			name: "Good data",
-			d: Descriptor{
-				MediaType: mediatype.OCI1LayerGzip,
-				Size:      12,
-				Digest:    digest.Digest("sha256:44752f37272e944fd2c913a35342eaccdd1aaf189bae50676b301ab213fc5061"),
-				Data:      []byte("example data"),
-			},
-			wantData: []byte("example data"),
-		},
-	}
-	for _, tc := range tt {
-		t.Run(tc.name, func(t *testing.T) {
-			out, err := tc.d.GetData()
-			if tc.wantErr != nil {
-				if err == nil || (!errors.Is(err, tc.wantErr) && err.Error() != tc.wantErr.Error()) {
-					t.Errorf("expected error %v, received %v", tc.wantErr, err)
-				}
-				return
-			}
-			if err != nil {
-				t.Errorf("received error %v", err)
-				return
-			}
-			if !bytes.Equal(out, tc.wantData) {
-				t.Errorf("data mismatch, expected %s, received %s", string(tc.wantData), string(out))
-			}
-		})
-	}
-}
-
-func TestDescriptorEq(t *testing.T) {
+func TestCompare(t *testing.T) {
 	t.Parallel()
 	digA := digest.FromString("test A")
 	digB := digest.FromString("test B")
@@ -450,7 +386,95 @@ func TestDescriptorEq(t *testing.T) {
 	}
 }
 
-func TestDataJSON(t *testing.T) {
+func TestGetDataDescriptor(t *testing.T) {
+	t.Parallel()
+	tt := []struct {
+		name     string
+		d        Descriptor
+		wantData []byte
+		wantErr  error
+	}{
+		{
+			name: "No Data",
+			d: Descriptor{
+				MediaType: mediatype.Docker2LayerGzip,
+				Size:      941,
+				Digest:    digest.Digest("sha256:f6e2d7fa40092cf3d9817bf6ff54183d68d108a47fdf5a5e476c612626c80e14"),
+			},
+			wantErr: errs.ErrParsingFailed,
+		},
+		{
+			name: "Bad Digest",
+			d: Descriptor{
+				MediaType: mediatype.OCI1LayerGzip,
+				Size:      12,
+				Digest:    digest.Digest("sha256:e4a380728755139f156563e8b795581d5915dcc947fe937c524c6d52fd604b99"),
+				Data:      []byte("example data"),
+			},
+			wantErr: errs.ErrParsingFailed,
+		},
+		{
+			name: "Bad Digest 512",
+			d: Descriptor{
+				MediaType: mediatype.OCI1LayerGzip,
+				Size:      12,
+				Digest:    digest.Digest("sha512:1239c5759a9ece516cec0c0623142d0e9fe70a27d750eee7fd38f4550d50addd873d0fa1a51fc823c1e3d5cada203f4a05d8325caacb7d3e0727a701f3f07e5f"),
+				Data:      []byte("example data"),
+			},
+			wantErr: errs.ErrParsingFailed,
+		},
+		{
+			name: "Bad Size",
+			d: Descriptor{
+				MediaType: mediatype.OCI1LayerGzip,
+				Size:      1000,
+				Digest:    digest.Digest("sha256:44752f37272e944fd2c913a35342eaccdd1aaf189bae50676b301ab213fc5061"),
+				Data:      []byte("example data"),
+			},
+			wantErr: errs.ErrParsingFailed,
+		},
+		{
+			name: "Good data",
+			d: Descriptor{
+				MediaType: mediatype.OCI1LayerGzip,
+				Size:      12,
+				Digest:    digest.Digest("sha256:44752f37272e944fd2c913a35342eaccdd1aaf189bae50676b301ab213fc5061"),
+				Data:      []byte("example data"),
+			},
+			wantData: []byte("example data"),
+		},
+		{
+			name: "Good data 512",
+			d: Descriptor{
+				MediaType: mediatype.OCI1LayerGzip,
+				Size:      12,
+				Digest:    digest.Digest("sha512:ed59c5759a9ece516cec0c0623142d0e9fe70a27d750eee7fd38f4550d50addd873d0fa1a51fc823c1e3d5cada203f4a05d8325caacb7d3e0727a701f3f07e5f"),
+				Data:      []byte("example data"),
+			},
+			wantData: []byte("example data"),
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := tc.d.GetData()
+			if tc.wantErr != nil {
+				if err == nil || (!errors.Is(err, tc.wantErr) && err.Error() != tc.wantErr.Error()) {
+					t.Errorf("expected error %v, received %v", tc.wantErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("received error %v", err)
+				return
+			}
+			if !bytes.Equal(out, tc.wantData) {
+				t.Errorf("data mismatch, expected %s, received %s", string(tc.wantData), string(out))
+			}
+		})
+	}
+}
+
+func TestGetDataJSON(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name     string
@@ -537,7 +561,7 @@ func TestDataJSON(t *testing.T) {
 	}
 }
 
-func TestDescriptorSearch(t *testing.T) {
+func TestListSearch(t *testing.T) {
 	t.Parallel()
 	dAMD64 := Descriptor{
 		MediaType: mediatype.OCI1Manifest,
@@ -782,6 +806,112 @@ func TestDescriptorSearch(t *testing.T) {
 			}
 			if !tc.expect.Equal(result) {
 				t.Errorf("unexpected result, expected %v, received %v", tc.expect, result)
+			}
+		})
+	}
+}
+
+func TestDigestAlgorithm(t *testing.T) {
+	dig256 := digest.SHA256.FromString("hello world")
+	dig512 := digest.SHA512.FromString("hello world")
+	digInvalidHash := digest.Digest("sha512:1234")
+	digInvalidFormat := digest.Digest("unknown")
+	digInvalidAlgorithm := digest.Digest("sha123:123412341234")
+	tt := []struct {
+		name         string
+		d            Descriptor
+		setPref      digest.Algorithm
+		expectSetErr error
+		expectAlgo   digest.Algorithm
+	}{
+		{
+			name:       "empty",
+			d:          Descriptor{},
+			expectAlgo: digest.Canonical,
+		},
+		{
+			name: "valid-sha256",
+			d: Descriptor{
+				Digest: dig256,
+			},
+			expectAlgo: digest.SHA256,
+		},
+		{
+			name: "valid-sha512",
+			d: Descriptor{
+				Digest: dig512,
+			},
+			expectAlgo: digest.SHA512,
+		},
+		{
+			name: "invalid-hash",
+			d: Descriptor{
+				Digest: digInvalidHash,
+			},
+			expectAlgo: digest.Canonical,
+		},
+		{
+			name: "invalid-format",
+			d: Descriptor{
+				Digest: digInvalidFormat,
+			},
+			expectAlgo: digest.Canonical,
+		},
+		{
+			name: "invalid-algorithm",
+			d: Descriptor{
+				Digest: digInvalidAlgorithm,
+			},
+			expectAlgo: digest.Canonical,
+		},
+		{
+			name:       "empty-prefer-512",
+			d:          Descriptor{},
+			setPref:    digest.SHA512,
+			expectAlgo: digest.SHA512,
+		},
+		{
+			name: "valid-sha256-prefer-512",
+			d: Descriptor{
+				Digest: dig256,
+			},
+			setPref:    digest.SHA512,
+			expectAlgo: digest.SHA256,
+		},
+		{
+			name:         "empty-set-invalid",
+			d:            Descriptor{},
+			setPref:      digest.Algorithm("invalid"),
+			expectSetErr: errs.ErrUnsupported,
+			expectAlgo:   digest.Canonical,
+		},
+		{
+			name: "invalid-hash-failed-set",
+			d: Descriptor{
+				Digest: digInvalidHash,
+			},
+			setPref:      digest.Algorithm("invalid"),
+			expectSetErr: errs.ErrUnsupported,
+			expectAlgo:   digest.Canonical,
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.setPref != "" {
+				err := tc.d.DigestAlgoPrefer(tc.setPref)
+				if tc.expectSetErr != nil {
+					if err == nil {
+						t.Errorf("setting preferred algorithm to %s did not fail, expected %v", tc.setPref, tc.expectSetErr)
+					} else if !errors.Is(err, tc.expectSetErr) && err.Error() != tc.expectSetErr.Error() {
+						t.Errorf("unexpected error, expected %v, received %v", tc.expectSetErr, err)
+					}
+				} else if err != nil {
+					t.Errorf("failed to set preferred algorithm: %v", err)
+				}
+			}
+			algo := tc.d.DigestAlgo()
+			if algo != tc.expectAlgo {
+				t.Errorf("expected %s, received %s", tc.expectAlgo.String(), algo.String())
 			}
 		})
 	}

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"testing"
 	"time"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
+	"github.com/regclient/regclient/internal/copyfs"
 	"github.com/regclient/regclient/pkg/archive"
 	"github.com/regclient/regclient/scheme/reg"
 	"github.com/regclient/regclient/types/errs"
@@ -73,6 +75,11 @@ func TestMod(t *testing.T) {
 		tTgt.Close()
 		_ = regTgt.Close()
 	})
+	tempDir := t.TempDir()
+	err = copyfs.Copy(filepath.Join(tempDir, "testrepo"), "../testdata/testrepo")
+	if err != nil {
+		t.Fatalf("failed to setup tempDir: %v", err)
+	}
 
 	// create regclient
 	rcHosts := []config.Host{
@@ -333,6 +340,21 @@ func TestMod(t *testing.T) {
 			wantErr: fmt.Errorf("label not found: org.opencontainers.image.created"),
 		},
 		{
+			name: "Config Digest sha256",
+			opts: []Opts{
+				WithConfigDigestAlgo(digest.SHA256),
+			},
+			ref:      tTgtHost + "/testrepo:v1",
+			wantSame: true,
+		},
+		{
+			name: "Config Digest sha512 ocidir",
+			opts: []Opts{
+				WithConfigDigestAlgo(digest.SHA512),
+			},
+			ref: "ocidir://" + tempDir + "/testrepo:v1",
+		},
+		{
 			name: "Config Time",
 			opts: []Opts{
 				WithConfigTimestampMax(baseTime),
@@ -431,6 +453,21 @@ func TestMod(t *testing.T) {
 			ref: tTgtHost + "/testrepo:v1",
 		},
 		{
+			name: "Digest sha256",
+			opts: []Opts{
+				WithDigestAlgo(digest.SHA256),
+			},
+			ref:      tTgtHost + "/testrepo:v1",
+			wantSame: true,
+		},
+		{
+			name: "Digest sha512 ocidir",
+			opts: []Opts{
+				WithDigestAlgo(digest.SHA512),
+			},
+			ref: "ocidir://" + tempDir + "/testrepo:v1",
+		},
+		{
 			name: "Expose Port",
 			opts: []Opts{
 				WithExposeAdd("8080"),
@@ -490,6 +527,29 @@ func TestMod(t *testing.T) {
 			},
 			ref: tTgtHost + "/testrepo:v1",
 		},
+		{
+			name: "Layer Digest sha256",
+			opts: []Opts{
+				WithLayerDigestAlgo(digest.SHA256),
+			},
+			ref:      tTgtHost + "/testrepo:v1",
+			wantSame: true,
+		},
+		{
+			name: "Layer Digest sha512 ocidir",
+			opts: []Opts{
+				WithLayerDigestAlgo(digest.SHA512),
+			},
+			ref: "ocidir://" + tempDir + "/testrepo:v1",
+		},
+		// TODO(bmitch): enable when registry support is added
+		// {
+		// 	name: "Layer Digest sha512 registry",
+		// 	opts: []Opts{
+		// 		WithLayerDigestAlgo(digest.SHA512),
+		// 	},
+		// 	ref: tTgtHost + "/testrepo:v1",
+		// },
 		{
 			name: "Layer Reproducible",
 			opts: []Opts{
@@ -702,6 +762,21 @@ func TestMod(t *testing.T) {
 			},
 			ref:     r3amd.CommonName(),
 			wantErr: fmt.Errorf("layer not found"),
+		},
+		{
+			name: "Manifest Digest sha256",
+			opts: []Opts{
+				WithManifestDigestAlgo(digest.SHA256),
+			},
+			ref:      tTgtHost + "/testrepo:v1",
+			wantSame: true,
+		},
+		{
+			name: "Manifest Digest sha512 ocidir",
+			opts: []Opts{
+				WithManifestDigestAlgo(digest.SHA512),
+			},
+			ref: "ocidir://" + tempDir + "/testrepo:v1",
 		},
 		{
 			name: "Add volume",

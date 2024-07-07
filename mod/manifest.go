@@ -281,6 +281,47 @@ func WithLabelToAnnotation() Opts {
 	}
 }
 
+// WithManifestDigestAlgo changes the digester algorithm.
+func WithManifestDigestAlgo(algo digest.Algorithm) Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		if !algo.Available() {
+			return fmt.Errorf("digest algorithm is not available: %s", string(algo))
+		}
+		dc.stepsManifest = append(dc.stepsManifest, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
+			if dm.mod == deleted {
+				return nil
+			}
+			origDig := dm.m.GetDescriptor().Digest
+			if dm.newDesc.Digest != "" {
+				origDig = dm.newDesc.Digest
+			}
+			if origDig.Validate() == nil && origDig.Algorithm() == algo {
+				return nil
+			}
+			desc := dm.m.GetDescriptor()
+			desc.Digest = ""
+			err := desc.DigestAlgoPrefer(algo)
+			if err != nil {
+				return err
+			}
+			om := dm.m.GetOrig()
+			dm.m, err = manifest.New(
+				manifest.WithDesc(desc),
+				manifest.WithOrig(om),
+			)
+			if err != nil {
+				return err
+			}
+			dm.newDesc = dm.m.GetDescriptor()
+			if dm.mod == unchanged {
+				dm.mod = replaced
+			}
+			return nil
+		})
+		return nil
+	}
+}
+
 // WithManifestToDocker converts the manifest to Docker schema2 media types.
 func WithManifestToDocker() Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {

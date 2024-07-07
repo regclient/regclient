@@ -8,7 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opencontainers/go-digest"
+
 	"github.com/regclient/regclient"
+	"github.com/regclient/regclient/types/blob"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 )
@@ -63,6 +66,39 @@ func WithConfigCmd(cmd []string) Opts {
 			}
 			oc.Config.Cmd = cmd
 			doc.oc.SetConfig(oc)
+			doc.modified = true
+			return nil
+		})
+		return nil
+	}
+}
+
+// WithConfigDigestAlgo changes the digest algorithm.
+func WithConfigDigestAlgo(algo digest.Algorithm) Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		if !algo.Available() {
+			return fmt.Errorf("digest algorithm is not available: %s", string(algo))
+		}
+		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
+			desc := doc.oc.GetDescriptor()
+			if doc.newDesc.MediaType != "" {
+				desc = doc.newDesc
+			}
+			if desc.DigestAlgo() == algo {
+				return nil
+			}
+			if !algo.Available() {
+				return fmt.Errorf("unavailable digest algorithm: %s", string(algo))
+			}
+			body, err := doc.oc.RawBody()
+			if err != nil {
+				return fmt.Errorf("failed to get config body: %w", err)
+			}
+			desc.Digest = algo.FromBytes(body)
+			doc.oc = blob.NewOCIConfig(
+				blob.WithDesc(desc),
+				blob.WithRawBody(body),
+			)
 			doc.modified = true
 			return nil
 		})

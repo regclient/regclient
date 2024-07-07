@@ -378,7 +378,7 @@ func fromOrig(c common, orig interface{}) (Manifest, error) {
 		c.rawBody = mj
 	}
 	if _, ok := orig.(schema1.SignedManifest); !ok {
-		c.desc.Digest = digest.FromBytes(mj)
+		c.desc.Digest = c.desc.DigestAlgo().FromBytes(mj)
 	}
 	if c.desc.Size == 0 {
 		c.desc.Size = int64(len(mj))
@@ -396,7 +396,7 @@ func fromOrig(c common, orig interface{}) (Manifest, error) {
 		mt = mOrig.MediaType
 		c.desc.MediaType = mediatype.Docker1ManifestSigned
 		// recompute digest on the canonical data
-		c.desc.Digest = digest.FromBytes(mOrig.Canonical)
+		c.desc.Digest = c.desc.DigestAlgo().FromBytes(mOrig.Canonical)
 		m = &docker1SignedManifest{
 			common:         c,
 			SignedManifest: mOrig,
@@ -492,7 +492,7 @@ func fromCommon(c common) (Manifest, error) {
 		}
 		// compute digest
 		if c.desc.MediaType != mediatype.Docker1ManifestSigned {
-			d := digest.FromBytes(c.rawBody)
+			d := c.desc.DigestAlgo().FromBytes(c.rawBody)
 			c.desc.Digest = d
 			c.desc.Size = int64(len(c.rawBody))
 		}
@@ -510,7 +510,7 @@ func fromCommon(c common) (Manifest, error) {
 		if len(c.rawBody) > 0 {
 			err = json.Unmarshal(c.rawBody, &mOrig)
 			mt = mOrig.MediaType
-			d := digest.FromBytes(mOrig.Canonical)
+			d := c.desc.DigestAlgo().FromBytes(mOrig.Canonical)
 			c.desc.Digest = d
 			c.desc.Size = int64(len(mOrig.Canonical))
 		}

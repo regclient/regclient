@@ -419,12 +419,12 @@ func TestBlobPut(t *testing.T) {
 	blobLen5 := 500  // single chunk
 	d1, blob1 := reqresp.NewRandomBlob(blobLen, seed)
 	d2, blob2 := reqresp.NewRandomBlob(blobLen, seed+1)
-	d2Bad := digest.Canonical.FromString("digest 2 bad")
+	d2Bad := digest.SHA256.FromString("digest 2 bad")
 	d3, blob3 := reqresp.NewRandomBlob(blobLen3, seed+2)
 	d4, blob4 := reqresp.NewRandomBlob(blobLen4, seed+3)
 	d5, blob5 := reqresp.NewRandomBlob(blobLen5, seed+4)
 	blob6 := []byte{}
-	d6 := digest.Canonical.FromBytes(blob6)
+	d6 := digest.SHA256.FromBytes(blob6)
 	uuid1 := reqresp.NewRandomID(seed + 10)
 	uuid2 := reqresp.NewRandomID(seed + 11)
 	uuid2Bad := reqresp.NewRandomID(seed + 12)
