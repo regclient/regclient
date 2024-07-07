@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 
 	// crypto libraries included for go-digest
@@ -15,6 +16,7 @@ import (
 
 type digestCmd struct {
 	rootOpts *rootCmd
+	algo     string
 	format   string
 }
 
@@ -36,13 +38,18 @@ echo hello world | regctl digest`,
 		RunE: digestOpts.runDigest,
 	}
 
+	digestCmd.Flags().StringVar(&digestOpts.algo, "algorithm", "sha256", "Digest algorithm")
 	digestCmd.Flags().StringVar(&digestOpts.format, "format", "{{.String}}", "Go template to output the digest result")
 
 	return digestCmd
 }
 
 func (digestOpts *digestCmd) runDigest(cmd *cobra.Command, args []string) error {
-	digester := digest.Canonical.Digester()
+	algo := digest.Algorithm(digestOpts.algo)
+	if !algo.Available() {
+		return fmt.Errorf("digest algorithm %s is not available", digestOpts.algo)
+	}
+	digester := algo.Digester()
 
 	_, err := io.Copy(digester.Hash(), cmd.InOrStdin())
 	if err != nil {

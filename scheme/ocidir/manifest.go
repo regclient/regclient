@@ -117,6 +117,9 @@ func (o *OCIDir) manifestGet(_ context.Context, r ref.Ref) (manifest.Manifest, e
 	if desc.Digest == "" {
 		return nil, errs.ErrNotFound
 	}
+	if err = desc.Digest.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid digest in index: %s: %w", string(desc.Digest), err)
+	}
 	file := path.Join(r.Path, "blobs", desc.Digest.Algorithm().String(), desc.Digest.Encoded())
 	//#nosec G304 users should validate references they attempt to open
 	fd, err := os.Open(file)
@@ -161,6 +164,9 @@ func (o *OCIDir) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest
 	}
 	if desc.Digest == "" {
 		return nil, errs.ErrNotFound
+	}
+	if err = desc.Digest.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid digest in index: %s: %w", string(desc.Digest), err)
 	}
 	// verify underlying file exists
 	file := path.Join(r.Path, "blobs", desc.Digest.Algorithm().String(), desc.Digest.Encoded())
@@ -220,6 +226,9 @@ func (o *OCIDir) manifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 		return err
 	}
 	desc := m.GetDescriptor()
+	if err = desc.Digest.Validate(); err != nil {
+		return fmt.Errorf("invalid digest for manifest: %s: %w", string(desc.Digest), err)
+	}
 	b, err := m.RawBody()
 	if err != nil {
 		return fmt.Errorf("could not serialize manifest: %w", err)

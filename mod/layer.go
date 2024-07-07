@@ -48,7 +48,9 @@ func WithLayerAddTar(rdr io.Reader, mt string, platforms []platform.Platform) Op
 			return fmt.Errorf("unsupported new layer media type %s%.0w", mt, errs.ErrUnsupportedMediaType)
 		}
 		var ucDig digest.Digest
-		var desc descriptor.Descriptor
+		desc := descriptor.Descriptor{
+			MediaType: mt,
+		}
 		dc.stepsManifest = append(dc.stepsManifest, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
 			// skip deleted, manifest lists, and platforms that aren't listed
 			if dm.mod == deleted || dm.m.IsList() {
@@ -67,25 +69,26 @@ func WithLayerAddTar(rdr io.Reader, mt string, platforms []platform.Platform) Op
 					return nil
 				}
 			}
-			// push the layer
+			// push the layer once, then save descriptor for other manifests
 			if ucDig == "" {
-				digUC := digest.Canonical.Digester() // uncompressed digest
+				err := desc.DigestAlgoPrefer(dm.m.GetDescriptor().DigestAlgo())
+				if err != nil {
+					return fmt.Errorf("failed to configure digest algorithm for new layer: %w", err)
+				}
+				digUC := desc.DigestAlgo().Digester() // uncompressed digest
 				ucDigRdr := io.TeeReader(rdr, digUC.Hash())
 				cRdr, err := archive.Compress(ucDigRdr, comp)
 				if err != nil {
 					return fmt.Errorf("failed to compress layer with %s: %w", comp.String(), err)
 				}
-				descPut, err := rc.BlobPut(ctx, rTgt, descriptor.Descriptor{}, cRdr)
+				descPut, err := rc.BlobPut(ctx, rTgt, desc, cRdr)
 				_ = cRdr.Close()
 				if err != nil {
 					return fmt.Errorf("failed to push layer to %s: %w", rTgt.CommonName(), err)
 				}
 				ucDig = digUC.Digest()
-				desc = descriptor.Descriptor{
-					MediaType: mt,
-					Digest:    descPut.Digest,
-					Size:      descPut.Size,
-				}
+				desc.Digest = descPut.Digest
+				desc.Size = descPut.Size
 			}
 			// add the layer to the dag
 			dm.layers = append(dm.layers, &dagLayer{
@@ -111,29 +114,32 @@ func WithLayerCompression(algo archive.CompressType) Opts {
 			if dl.mod == deleted {
 				return rdr, nil
 			}
-			mt := dl.desc.MediaType
+			desc := dl.desc
 			if dl.newDesc.MediaType != "" {
-				mt = dl.newDesc.MediaType
+				desc = dl.newDesc
 			}
+			desc.Size = 0
+			err := desc.DigestAlgoPrefer(desc.DigestAlgo())
+			if err != nil {
+				return nil, fmt.Errorf("failed to configure digest algorithm for changing layer compression: %w", err)
+			}
+			desc.Digest = ""
 			switch algo {
 			case archive.CompressGzip:
-				switch mt {
+				switch desc.MediaType {
 				case mediatype.Docker2Layer, mediatype.Docker2LayerZstd:
-					dl.newDesc = descriptor.Descriptor{
-						MediaType: mediatype.Docker2LayerGzip,
-					}
+					desc.MediaType = mediatype.Docker2LayerGzip
 				case mediatype.OCI1Layer, mediatype.OCI1LayerZstd:
-					dl.newDesc = descriptor.Descriptor{
-						MediaType: mediatype.OCI1LayerGzip,
-					}
+					desc.MediaType = mediatype.OCI1LayerGzip
 				default:
 					return rdr, nil
 				}
 				if dl.mod == unchanged {
 					dl.mod = replaced
 				}
-				digRaw := digest.Canonical.Digester() // raw/compressed digest
-				digUC := digest.Canonical.Digester()  // uncompressed digest
+				dl.newDesc = desc
+				digRaw := desc.DigestAlgo().Digester() // raw/compressed digest
+				digUC := desc.DigestAlgo().Digester()  // uncompressed digest
 				ucRdr, err := archive.Decompress(rdr)
 				if err != nil {
 					_ = rdr.Close()
@@ -160,23 +166,20 @@ func WithLayerCompression(algo archive.CompressType) Opts {
 					}}, nil
 
 			case archive.CompressZstd:
-				switch mt {
+				switch desc.MediaType {
 				case mediatype.Docker2Layer, mediatype.Docker2LayerGzip:
-					dl.newDesc = descriptor.Descriptor{
-						MediaType: mediatype.Docker2LayerZstd,
-					}
+					desc.MediaType = mediatype.Docker2LayerZstd
 				case mediatype.OCI1Layer, mediatype.OCI1LayerGzip:
-					dl.newDesc = descriptor.Descriptor{
-						MediaType: mediatype.OCI1LayerZstd,
-					}
+					desc.MediaType = mediatype.OCI1LayerZstd
 				default:
 					return rdr, nil
 				}
 				if dl.mod == unchanged {
 					dl.mod = replaced
 				}
-				digRaw := digest.Canonical.Digester() // raw/compressed digest
-				digUC := digest.Canonical.Digester()  // uncompressed digest
+				dl.newDesc = desc
+				digRaw := desc.DigestAlgo().Digester() // raw/compressed digest
+				digUC := desc.DigestAlgo().Digester()  // uncompressed digest
 				ucRdr, err := archive.Decompress(rdr)
 				if err != nil {
 					_ = rdr.Close()
@@ -203,22 +206,19 @@ func WithLayerCompression(algo archive.CompressType) Opts {
 					}}, nil
 
 			case archive.CompressNone:
-				switch mt {
+				switch desc.MediaType {
 				case mediatype.Docker2LayerGzip, mediatype.Docker2LayerZstd:
-					dl.newDesc = descriptor.Descriptor{
-						MediaType: mediatype.Docker2Layer,
-					}
+					desc.MediaType = mediatype.Docker2Layer
 				case mediatype.OCI1LayerGzip, mediatype.OCI1LayerZstd:
-					dl.newDesc = descriptor.Descriptor{
-						MediaType: mediatype.OCI1Layer,
-					}
+					desc.MediaType = mediatype.OCI1Layer
 				default:
 					return rdr, nil
 				}
 				if dl.mod == unchanged {
 					dl.mod = replaced
 				}
-				dig := digest.Canonical.Digester()
+				dl.newDesc = desc
+				dig := desc.DigestAlgo().Digester()
 				ucRdr, err := archive.Decompress(rdr)
 				if err != nil {
 					_ = rdr.Close()
@@ -240,6 +240,77 @@ func WithLayerCompression(algo archive.CompressType) Opts {
 			default:
 				return rdr, nil
 			}
+		})
+		return nil
+	}
+}
+
+// WithLayerDigestAlgo changes the digester algorithm.
+func WithLayerDigestAlgo(algo digest.Algorithm) Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		if !algo.Available() {
+			return fmt.Errorf("digest algorithm is not available: %s", string(algo))
+		}
+		dc.stepsLayer = append(dc.stepsLayer, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dl *dagLayer, rdr io.ReadCloser) (io.ReadCloser, error) {
+			if dl.mod == deleted {
+				return rdr, nil
+			}
+			origDig := dl.desc.Digest
+			if dl.newDesc.Digest != "" {
+				origDig = dl.newDesc.Digest
+			}
+			if origDig.Validate() == nil && origDig.Algorithm() == algo {
+				return rdr, nil
+			}
+			if dl.mod == unchanged {
+				dl.mod = replaced
+				dl.newDesc = dl.desc
+			}
+			dl.newDesc.Digest = ""
+			err := dl.newDesc.DigestAlgoPrefer(algo)
+			if err != nil {
+				return nil, err
+			}
+			digRaw := algo.Digester()
+			rdrRaw := io.TeeReader(rdr, digRaw.Hash())
+			pr, pw := io.Pipe()
+			digRdr := io.TeeReader(rdrRaw, pw)
+			digUC := algo.Digester()
+			doneDecomp := make(chan struct{}, 1)
+			go func() {
+				decompRdr, err := archive.Decompress(pr)
+				if err != nil {
+					_ = pr.CloseWithError(err)
+					return
+				}
+				defer close(doneDecomp)
+				_, err = io.Copy(digUC.Hash(), decompRdr)
+				if err != nil {
+					_ = pr.CloseWithError(err)
+				} else {
+					_ = pr.Close()
+				}
+			}()
+			return readCloserFn{
+				Reader: digRdr,
+				closeFn: func() error {
+					errs := []error{}
+					err := rdr.Close()
+					if err != nil {
+						errs = append(errs, err)
+					}
+					err = pw.Close()
+					if err != nil {
+						errs = append(errs, err)
+					}
+					<-doneDecomp // wait for decompress go routine to finish
+					dl.newDesc.Digest = digRaw.Digest()
+					dl.ucDigest = digUC.Digest()
+					if len(errs) > 0 {
+						return errors.Join(errs...)
+					}
+					return nil
+				}}, nil
 		})
 		return nil
 	}

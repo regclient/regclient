@@ -546,6 +546,13 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
+			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithDigestAlgo(digest.Algorithm(val)))
+			return nil
+		},
+	}, "digest-algo", "", `change the digest algorithm (sha256, sha512)`)
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "stringArray",
+		f: func(val string) error {
 			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithExposeAdd(val))
 			return nil
 		},

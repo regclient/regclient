@@ -67,7 +67,7 @@ func NewReader(opts ...Opts) *BReader {
 	}
 	if bc.rdr != nil {
 		br.blobSet = true
-		br.digester = digest.Canonical.Digester()
+		br.digester = br.desc.DigestAlgo().Digester()
 		rdr := bc.rdr
 		if br.desc.Size > 0 {
 			rdr = &limitread.LimitRead{
@@ -115,7 +115,7 @@ func (r *BReader) Read(p []byte) (int, error) {
 			err = fmt.Errorf("%w [expected %d, received %d]: %w", errs.ErrSizeLimitExceeded, r.desc.Size, r.readBytes, err)
 		}
 		// check/save digest
-		if r.desc.Digest == "" {
+		if r.desc.Digest.Validate() != nil {
 			r.desc.Digest = r.digester.Digest()
 		} else if r.desc.Digest != r.digester.Digest() {
 			err = fmt.Errorf("%w [expected %s, calculated %s]: %w", errs.ErrDigestMismatch, r.desc.Digest.String(), r.digester.Digest().String(), err)
@@ -152,9 +152,8 @@ func (r *BReader) Seek(offset int64, whence int) (int64, error) {
 			Limit:  r.desc.Size,
 		}
 	}
-	digester := digest.Canonical.Digester()
-	r.reader = io.TeeReader(rdr, digester.Hash())
-	r.digester = digester
+	r.digester = r.desc.DigestAlgo().Digester()
+	r.reader = io.TeeReader(rdr, r.digester.Hash())
 	r.readBytes = 0
 
 	return 0, nil

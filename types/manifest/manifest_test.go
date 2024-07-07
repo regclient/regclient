@@ -391,15 +391,16 @@ var (
 )
 
 var (
-	digestDockerSchema2          = digest.FromBytes(rawDockerSchema2)
-	digestDockerSchema2List      = digest.FromBytes(rawDockerSchema2List)
-	digestInvalid                = digest.FromString("invalid")
+	digestDockerSchema2          = digest.SHA256.FromBytes(rawDockerSchema2)
+	digestDockerSchema2List      = digest.SHA256.FromBytes(rawDockerSchema2List)
+	digestInvalid                = digest.SHA256.FromString("invalid")
 	digestDockerSchema1Signed, _ = digest.Parse("sha256:f3ef067962554c3352dc0c659ca563f73cc396fe0dea2a2c23a7964c6290f782")
-	digestOCIImage               = digest.FromBytes(rawOCIImage)
-	digestOCIIndex               = digest.FromBytes(rawOCIIndex)
-	digestOCIImageDuck           = digest.FromBytes(rawOCIImageDuck)
-	digestOCIIndexDuck           = digest.FromBytes(rawOCIIndexDuck)
-	digestOCIArtifact            = digest.FromBytes(rawOCI1Artifact)
+	digestOCIImage               = digest.SHA256.FromBytes(rawOCIImage)
+	digestOCIImage512            = digest.SHA512.FromBytes(rawOCIImage)
+	digestOCIIndex               = digest.SHA256.FromBytes(rawOCIIndex)
+	digestOCIImageDuck           = digest.SHA256.FromBytes(rawOCIImageDuck)
+	digestOCIIndexDuck           = digest.SHA256.FromBytes(rawOCIIndexDuck)
+	digestOCIArtifact            = digest.SHA256.FromBytes(rawOCI1Artifact)
 )
 
 func TestNew(t *testing.T) {
@@ -424,6 +425,11 @@ func TestNew(t *testing.T) {
 	err = json.Unmarshal(rawDockerSchema1Signed, &manifestDockerSchema1Signed)
 	if err != nil {
 		t.Fatalf("failed to unmarshal docker schema1 signed json: %v", err)
+	}
+	desc512 := descriptor.Descriptor{}
+	err = desc512.DigestAlgoPrefer(digest.SHA512)
+	if err != nil {
+		t.Fatalf("failed to setup preferred digest algorithm to sha512: %v", err)
 	}
 	var tt = []struct {
 		name        string
@@ -554,6 +560,27 @@ func TestNew(t *testing.T) {
 				MediaType: mediatype.OCI1Manifest,
 				Size:      int64(len(rawOCIImage)),
 				Digest:    digestOCIImage,
+			},
+			wantE:       nil,
+			isSet:       true,
+			testAnnot:   true,
+			testSubject: true,
+			hasAnnot:    true,
+			hasSubject:  true,
+			wantSize:    1794499,
+		},
+		{
+			name: "OCI 1 Manifest 512",
+			opts: []Opts{
+				WithRef(r),
+				WithRaw(rawOCIImage),
+				WithDesc(desc512),
+			},
+			wantR: r,
+			wantDesc: descriptor.Descriptor{
+				MediaType: mediatype.OCI1Manifest,
+				Size:      int64(len(rawOCIImage)),
+				Digest:    digestOCIImage512,
 			},
 			wantE:       nil,
 			isSet:       true,
