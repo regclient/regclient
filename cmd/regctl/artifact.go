@@ -429,6 +429,9 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 	if artifactOpts.outputDir != "" {
 		// loop through each matching layer
 		for _, l := range layers {
+			if err = l.Digest.Validate(); err != nil {
+				return fmt.Errorf("layer contains invalid digest: %s: %w", string(l.Digest), err)
+			}
 			// wrap in a closure to trigger defer on each step, avoiding open file handles
 			err = func() error {
 				// perform blob get
@@ -610,7 +613,6 @@ func (artifactOpts *artifactCmd) runArtifactList(cmd *cobra.Command, args []stri
 
 func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
-	mOpts := []manifest.Opts{}
 	hasConfig := false
 	var r, rArt, rSubject ref.Ref
 	var err error
@@ -720,28 +722,20 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 
 	var subjectDesc *descriptor.Descriptor
 	if rSubject.IsSet() {
-		smh, err := rc.ManifestHead(ctx, rSubject, regclient.WithManifestRequireDigest())
+		mOpts := []regclient.ManifestOpts{regclient.WithManifestRequireDigest()}
+		if artifactOpts.platform != "" {
+			p, err := platform.Parse(artifactOpts.platform)
+			if err != nil {
+				return fmt.Errorf("failed to parse platform %s: %w", artifactOpts.platform, err)
+			}
+			mOpts = append(mOpts, regclient.WithManifestPlatform(p))
+		}
+		smh, err := rc.ManifestHead(ctx, rSubject, mOpts...)
 		if err != nil {
 			return fmt.Errorf("unable to find subject manifest: %w", err)
 		}
-		if smh.IsList() && artifactOpts.platform != "" {
-			sml, err := rc.ManifestGet(ctx, rSubject)
-			if err != nil {
-				return fmt.Errorf("unable to get subject manifest: %w", err)
-			}
-			plat, err := platform.Parse(artifactOpts.platform)
-			if err != nil {
-				return fmt.Errorf("failed to parse platform: %w", err)
-			}
-			d, err := manifest.GetPlatformDesc(sml, &plat)
-			if err != nil {
-				return fmt.Errorf("failed to get platform descriptor: %w", err)
-			}
-			subjectDesc = &descriptor.Descriptor{MediaType: d.MediaType, Digest: d.Digest, Size: d.Size}
-		} else {
-			d := smh.GetDescriptor()
-			subjectDesc = &descriptor.Descriptor{MediaType: d.MediaType, Digest: d.Digest, Size: d.Size}
-		}
+		d := smh.GetDescriptor()
+		subjectDesc = &descriptor.Descriptor{MediaType: d.MediaType, Digest: d.Digest, Size: d.Size}
 	}
 
 	// read config, or initialize to an empty json config
@@ -758,7 +752,7 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 			if err != nil {
 				return err
 			}
-			configDigest = digest.FromBytes(configBytes)
+			configDigest = digest.Canonical.FromBytes(configBytes)
 		}
 		// push config to registry
 		_, err = rc.BlobPut(ctx, r, descriptor.Descriptor{Digest: configDigest, Size: int64(len(configBytes))}, bytes.NewReader(configBytes))
@@ -811,18 +805,17 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 				}
 				defer rdr.Close()
 				// compute digest on file
-				digester := digest.Canonical.Digester()
+				desc := descriptor.Descriptor{
+					MediaType: mt,
+				}
+				digester := desc.DigestAlgo().Digester()
 				l, err := io.Copy(digester.Hash(), rdr)
 				if err != nil {
 					return err
 				}
-				d := digester.Digest()
+				desc.Size = l
+				desc.Digest = digester.Digest()
 				// add layer to manifest
-				desc := descriptor.Descriptor{
-					MediaType: mt,
-					Digest:    d,
-					Size:      l,
-				}
 				if artifactOpts.artifactTitle {
 					af := f
 					if artifactOpts.stripDirs {
@@ -839,7 +832,7 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 				}
 				blobs = append(blobs, desc)
 				// if blob already exists, skip Put
-				bRdr, err := rc.BlobHead(ctx, r, descriptor.Descriptor{Digest: d})
+				bRdr, err := rc.BlobHead(ctx, r, desc)
 				if err == nil {
 					_ = bRdr.Close()
 					return nil
@@ -849,7 +842,7 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 				if err != nil {
 					return err
 				}
-				_, err = rc.BlobPut(ctx, r, descriptor.Descriptor{Digest: d, Size: l}, rdr)
+				_, err = rc.BlobPut(ctx, r, desc, rdr)
 				if err != nil {
 					return err
 				}
@@ -873,6 +866,7 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 		blobs = append(blobs, d)
 	}
 
+	mOpts := []manifest.Opts{}
 	switch artifactOpts.artifactMT {
 	case mediatype.OCI1Artifact:
 		m := v1.ArtifactManifest{

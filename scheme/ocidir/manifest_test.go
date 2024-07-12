@@ -4,14 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
+	"os"
 	"path"
+	"path/filepath"
 	"testing"
 
-	"github.com/opencontainers/go-digest"
-
-	"github.com/regclient/regclient/internal/rwfs"
+	"github.com/regclient/regclient/internal/copyfs"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/mediatype"
 	v1 "github.com/regclient/regclient/types/oci/v1"
@@ -21,18 +20,16 @@ import (
 func TestManifest(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	// copy testdata images into memory
-	fsOS := rwfs.OSNew("")
-	fsMem := rwfs.MemNew()
-	err := rwfs.CopyRecursive(fsOS, "../../testdata", fsMem, ".")
+	tempDir := t.TempDir()
+	err := copyfs.Copy(filepath.Join(tempDir, "testrepo"), "../../testdata/testrepo")
 	if err != nil {
-		t.Fatalf("failed to setup memfs copy: %v", err)
+		t.Fatalf("failed to setup tempDir: %v", err)
 	}
-	o := New(WithFS(fsMem))
-	rs := "ocidir://testrepo:v1"
-	r, err := ref.New(rs)
+	o := New()
+	rStr := "ocidir://" + tempDir + "/testrepo:v1"
+	r, err := ref.New(rStr)
 	if err != nil {
-		t.Fatalf("failed to parse ref %s: %v", rs, err)
+		t.Fatalf("failed to parse ref %s: %v", rStr, err)
 	}
 	// manifest head
 	_, err = o.ManifestHead(ctx, r)
@@ -59,17 +56,12 @@ func TestManifest(t *testing.T) {
 		t.Fatalf("descriptor list (%d): %v", len(dl), err)
 	}
 	// manifest head on a child digest
-	rs = fmt.Sprintf("%s@%s", rs, dl[0].Digest)
-	r, err = ref.New(rs)
-	if err != nil {
-		t.Fatalf("failed to parse ref %s: %v", rs, err)
-	}
+	r = r.SetDigest(dl[0].Digest.String())
 	_, err = o.ManifestHead(ctx, r)
 	if err != nil {
 		t.Errorf("manifest head failed on child digest: %v", err)
 	}
-	rMissing := r
-	rMissing.Digest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	rMissing := r.SetDigest("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 	_, err = o.ManifestHead(ctx, rMissing)
 	if err == nil {
 		t.Errorf("manifest head succeeded on missing digest: %s", rMissing.CommonName())
@@ -89,13 +81,17 @@ func TestManifest(t *testing.T) {
 	}
 
 	// test manifest put to a memfs
-	fm := rwfs.MemNew()
-	om := New(WithFS(fm))
-	err = om.ManifestPut(ctx, r, m)
+	rStr = "ocidir://" + tempDir + "/put:v1"
+	putPath := filepath.Join(tempDir, "put")
+	rPut, err := ref.New(rStr)
+	if err != nil {
+		t.Fatalf("failed to parse ref %s: %v", rStr, err)
+	}
+	err = o.ManifestPut(ctx, rPut, m)
 	if err != nil {
 		t.Errorf("manifest put: %v", err)
 	}
-	fh, err := fm.Open("testrepo/" + imageLayoutFile)
+	fh, err := os.Open(filepath.Join(putPath, imageLayoutFile))
 	if err != nil {
 		t.Fatalf("open oci-layout: %v", err)
 	}
@@ -111,8 +107,8 @@ func TestManifest(t *testing.T) {
 	if l.Version != "1.0.0" {
 		t.Errorf("oci-layout version, expected 1.0.0, received %s", l.Version)
 	}
-	d := digest.Digest(r.Digest)
-	fh, err = fm.Open(path.Join(r.Path, "blobs", d.Algorithm().String(), d.Encoded()))
+	d := m.GetDescriptor().Digest
+	fh, err = os.Open(path.Join(putPath, "blobs", d.Algorithm().String(), d.Encoded()))
 	if err != nil {
 		t.Errorf("failed to open manifest blob: %v", err)
 	}
@@ -127,7 +123,7 @@ func TestManifest(t *testing.T) {
 	if !bytes.Equal(bRaw, mRaw) {
 		t.Errorf("blob and raw do not match, raw %s, blob %s", string(mRaw), string(bRaw))
 	}
-	tl, err := om.TagList(ctx, r)
+	tl, err := o.TagList(ctx, rPut)
 	if err != nil {
 		t.Fatalf("tag list: %v", err)
 	}
@@ -139,11 +135,11 @@ func TestManifest(t *testing.T) {
 		t.Errorf("tag list, expected v1, received %v", tlt)
 	}
 	// test manifest delete
-	err = om.ManifestDelete(ctx, r)
+	err = o.ManifestDelete(ctx, rPut.SetDigest(d.String()))
 	if err != nil {
 		t.Errorf("failed to delete tag: %v", err)
 	}
-	tl, err = om.TagList(ctx, r)
+	tl, err = o.TagList(ctx, rPut)
 	if err != nil {
 		t.Fatalf("tag list: %v", err)
 	}
@@ -154,14 +150,13 @@ func TestManifest(t *testing.T) {
 	if len(tlt) != 0 {
 		t.Errorf("tag list, expected empty list, received %v", tlt)
 	}
-	err = om.ManifestDelete(ctx, r)
+	err = o.ManifestDelete(ctx, rPut)
 	if err == nil {
 		t.Errorf("deleted tag twice")
 	}
 
 	// test tag delete on v1 and v2
-	r.Digest = ""
-	r.Tag = "v1"
+	r = r.SetTag("v1")
 	mh1, err := o.ManifestHead(ctx, r)
 	if err != nil {
 		t.Errorf("failed getting %s manifest head: %v", r.Tag, err)
@@ -174,23 +169,22 @@ func TestManifest(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed closing: %v", err)
 	}
-	// verify digest for v1 still exists but v2 has been deleted
+	// verify digest for v1 has been deleted
 	mh1D := mh1.GetDescriptor().Digest
-	fh, err = fsMem.Open(path.Join(r.Path, "blobs", mh1D.Algorithm().String(), mh1D.Encoded()))
+	fh, err = os.Open(path.Join(tempDir, "testrepo/blobs", mh1D.Algorithm().String(), mh1D.Encoded()))
 	if err == nil {
 		t.Errorf("manifest blob exists for %s: %v", r.Tag, err)
 		fh.Close()
 	}
 	// verify v1 tag removed
-	o = New(WithFS(fsMem))
+	o = New()
 	_, err = o.ManifestHead(ctx, r)
 	if err == nil {
 		t.Errorf("succeeded getting deleted tag %s: %v", r.Tag, err)
 	}
 
 	// push a dup tag
-	r11 := r
-	r11.Tag = "v1.1"
+	r11 := r.SetTag("v1.1")
 	err = o.ManifestPut(ctx, r11, ml)
 	if err != nil {
 		t.Errorf("failed pushing manifest: %v", err)
@@ -202,8 +196,7 @@ func TestManifest(t *testing.T) {
 		t.Errorf("failed pushing manifest: %v", err)
 	}
 	// push second tag
-	r12 := r
-	r12.Tag = "v1.2"
+	r12 := r.SetTag("v1.2")
 	err = o.ManifestPut(ctx, r12, ml)
 	if err != nil {
 		t.Errorf("failed pushing manifest: %v", err)
@@ -212,7 +205,7 @@ func TestManifest(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed closing: %v", err)
 	}
-	o = New(WithFS(fsMem))
+	o = New()
 	// verify original tag has not been deleted
 	_, err = o.ManifestHead(ctx, r11)
 	if err != nil {

@@ -304,6 +304,37 @@ func TestReferrer(t *testing.T) {
 		},
 		{
 			ReqEntry: reqresp.ReqEntry{
+				Name:   "Head manifest",
+				Method: "HEAD",
+				Path:   "/v2" + repoPath + "/manifests/" + mDigest.String(),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", mLen)},
+					"Content-Type":          []string{mediatype.Docker2Manifest},
+					"Docker-Content-Digest": []string{mDigest.String()},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "Get manifest",
+				Method: "GET",
+				Path:   "/v2" + repoPath + "/manifests/" + mDigest.String(),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", mLen)},
+					"Content-Type":          []string{mediatype.Docker2Manifest},
+					"Docker-Content-Digest": []string{mDigest.String()},
+				},
+				Body: mBody,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
 				Name:    "Get A",
 				Method:  "GET",
 				Path:    "/v2" + repoPath + "/manifests/" + string(artifactDigest),

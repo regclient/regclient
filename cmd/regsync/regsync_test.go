@@ -6,12 +6,21 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/http/httptest"
+	"net/url"
 	"testing"
+	"time"
+
+	"github.com/olareg/olareg"
+	oConfig "github.com/olareg/olareg/config"
+	"github.com/opencontainers/go-digest"
 
 	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/internal/rwfs"
+	"github.com/regclient/regclient/config"
+	"github.com/regclient/regclient/internal/copyfs"
 	"github.com/regclient/regclient/internal/throttle"
 	"github.com/regclient/regclient/scheme"
+	"github.com/regclient/regclient/scheme/reg"
 	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
@@ -21,22 +30,53 @@ import (
 
 func TestProcess(t *testing.T) {
 	ctx := context.Background()
-	boolTrue := true
-	// setup sample source with an in-memory ocidir directory
-	fsOS := rwfs.OSNew("")
-	fsMem := rwfs.MemNew()
-	err := rwfs.CopyRecursive(fsOS, "../../testdata", fsMem, ".")
+	boolT := true
+	var err error
+	tempDir := t.TempDir()
+	err = copyfs.Copy(tempDir+"/testrepo", "../../testdata/testrepo")
 	if err != nil {
-		t.Fatalf("failed to setup memfs copy: %v", err)
+		t.Fatalf("failed to copy testrepo to tempdir: %v", err)
 	}
-	// setup various globals normally done by loadConf
-	rc = regclient.New(regclient.WithFS(fsMem))
+	regHandler := olareg.New(oConfig.Config{
+		Storage: oConfig.ConfigStorage{
+			StoreType: oConfig.StoreMem,
+			RootDir:   "../../testdata",
+		},
+	})
+	ts := httptest.NewServer(regHandler)
+	tsURL, _ := url.Parse(ts.URL)
+	tsHost := tsURL.Host
+	t.Cleanup(func() {
+		ts.Close()
+		_ = regHandler.Close()
+	})
+	rcHosts := []config.Host{
+		{
+			Name:      tsHost,
+			Hostname:  tsHost,
+			TLS:       config.TLSDisabled,
+			ReqPerSec: 1000,
+		},
+		{
+			Name:      "registry.example.org",
+			Hostname:  tsHost,
+			TLS:       config.TLSDisabled,
+			ReqPerSec: 1000,
+		},
+	}
+	delayInit, _ := time.ParseDuration("0.05s")
+	delayMax, _ := time.ParseDuration("0.10s")
+	// replace regclient with one configured for test hosts
+	rc = regclient.New(
+		regclient.WithConfigHost(rcHosts...),
+		regclient.WithRegOpts(reg.WithDelay(delayInit, delayMax)),
+	)
 	throttleC = throttle.New(1)
 	var confBytes = `
-  version: 1
-  defaults:
-    parallel: 1
-  `
+version: 1
+defaults:
+  parallel: 1
+`
 	confRdr := bytes.NewReader([]byte(confBytes))
 	conf, err = ConfigLoadReader(confRdr)
 	if err != nil {
@@ -50,27 +90,27 @@ func TestProcess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to parse arm platform: %v", err)
 	}
-	r1, err := ref.New("ocidir://testrepo:v1")
+	r1, err := ref.New(tsHost + "/testrepo:v1")
 	if err != nil {
 		t.Fatalf("failed to parse v1 reference: %v", err)
 	}
-	r2, err := ref.New("ocidir://testrepo:v2")
+	r2, err := ref.New(tsHost + "/testrepo:v2")
 	if err != nil {
 		t.Fatalf("failed to parse v2 reference: %v", err)
 	}
-	r3, err := ref.New("ocidir://testrepo:v3")
+	r3, err := ref.New(tsHost + "/testrepo:v3")
 	if err != nil {
 		t.Fatalf("failed to parse v3 reference: %v", err)
 	}
-	rMirror, err := ref.New("ocidir://testrepo:mirror")
+	rMirror, err := ref.New(tsHost + "/testrepo:mirror")
 	if err != nil {
 		t.Fatalf("failed to parse mirror reference: %v", err)
 	}
-	rChild, err := ref.New("ocidir://testrepo:child")
+	rChild, err := ref.New(tsHost + "/testrepo:child")
 	if err != nil {
 		t.Fatalf("failed to parse child reference: %v", err)
 	}
-	rLoop, err := ref.New("ocidir://testrepo:loop")
+	rLoop, err := ref.New(tsHost + "/testrepo:loop")
 	if err != nil {
 		t.Fatalf("failed to parse loop reference: %v", err)
 	}
@@ -132,323 +172,292 @@ func TestProcess(t *testing.T) {
 
 	// run process on each entry
 	tt := []struct {
-		name      string
-		sync      ConfigSync
-		action    actionType
-		exists    []string
-		desired   []string
-		undesired []string
-		expErr    error
+		name    string
+		sync    ConfigSync
+		action  actionType
+		expect  map[string]digest.Digest
+		exists  []string
+		missing []string
+		expErr  error
 	}{
 		{
 			name: "Action Missing",
 			sync: ConfigSync{
-				Source: "ocidir://testrepo:v1",
-				Target: "ocidir://test1:latest",
+				Source: tsHost + "/testrepo:v1",
+				Target: tsHost + "/test1:latest",
 				Type:   "image",
 			},
 			action: actionMissing,
-			exists: []string{"ocidir://test1:latest"},
-			desired: []string{
-				"test1/index.json",
-				"test1/oci-layout",
-				"test1/blobs/sha256/" + d1.Hex(),    // v1
-				"test1/blobs/sha256/" + d1AMD.Hex(), // amd64
-				"test1/blobs/sha256/" + d1ARM.Hex(), // arm64
+			expect: map[string]digest.Digest{
+				tsHost + "/test1:latest": d1,
+			},
+			exists: []string{
+				tsHost + "/test1@" + d1AMD.String(),
+				tsHost + "/test1@" + d1ARM.String(),
+			},
+			missing: []string{
+				tsHost + "/test1@" + d2.String(),
+				tsHost + "/test1@" + d2SBOM.String(),
+				tsHost + "/test1@" + d2Sig.String(),
 			},
 			expErr: nil,
 		},
 		{
 			name: "RepoCopy",
 			sync: ConfigSync{
-				Source: "ocidir://testrepo",
-				Target: "ocidir://test2",
+				Source: tsHost + "/testrepo",
+				Target: tsHost + "/test2",
 				Type:   "repository",
 			},
 			action: actionCopy,
-			exists: []string{"ocidir://test2:v1", "ocidir://test2:v2", "ocidir://test2:v3"},
-			desired: []string{
-				"test2/index.json",
-				"test2/oci-layout",
-				"test2/blobs/sha256/" + d1.Hex(), // v1
-				"test2/blobs/sha256/" + d2.Hex(), // v2
-				"test2/blobs/sha256/" + d3.Hex(), // v3
+			expect: map[string]digest.Digest{
+				tsHost + "/test2:v1": d1,
+				tsHost + "/test2:v2": d2,
+				tsHost + "/test2:v3": d3,
 			},
 			expErr: nil,
 		},
 		{
 			name: "Overwrite",
 			sync: ConfigSync{
-				Source: "ocidir://testrepo:v2",
-				Target: "ocidir://test1:latest",
+				Source: tsHost + "/testrepo:v2",
+				Target: tsHost + "/test1:latest",
 				Type:   "image",
 			},
 			action: actionCopy,
-			exists: []string{"ocidir://test1:latest"},
-			desired: []string{
-				"test1/index.json",
-				"test1/oci-layout",
-				"test2/blobs/sha256/" + d2.Hex(), // v2
+			expect: map[string]digest.Digest{
+				tsHost + "/test1:latest": d2,
 			},
-			undesired: []string{
-				"test1/blobs/sha256/" + d1.Hex(),     // v1
-				"test1/blobs/sha256/" + d1AMD.Hex(),  // amd64
-				"test1/blobs/sha256/" + d1ARM.Hex(),  // arm64
-				"test1/blobs/sha256/" + d2SBOM.Hex(), // v2 referrer sbom
-				"test1/blobs/sha256/" + d2Sig.Hex(),  // v2 referrer sig
+			exists: []string{},
+			missing: []string{
+				tsHost + "/test1@" + d2SBOM.String(),
+				tsHost + "/test1@" + d2Sig.String(),
 			},
 			expErr: nil,
 		},
 		{
 			name: "Fast Check",
 			sync: ConfigSync{
-				Source:     "ocidir://testrepo:v2",
-				Target:     "ocidir://test1:latest",
+				Source:     tsHost + "/testrepo:v2",
+				Target:     tsHost + "/test1:latest",
 				Type:       "image",
-				FastCheck:  &boolTrue,
-				Referrers:  &boolTrue,
-				DigestTags: &boolTrue,
+				FastCheck:  &boolT,
+				Referrers:  &boolT,
+				DigestTags: &boolT,
 			},
 			action: actionCopy,
-			exists: []string{"ocidir://test1:latest"},
-			desired: []string{
-				"test1/index.json",
-				"test1/oci-layout",
-				"test2/blobs/sha256/" + d2.Hex(), // v2
+			expect: map[string]digest.Digest{
+				tsHost + "/test1:latest": d2,
 			},
-			undesired: []string{
-				"test1/blobs/sha256/" + d1.Hex(),     // v1
-				"test1/blobs/sha256/" + d1AMD.Hex(),  // amd64
-				"test1/blobs/sha256/" + d1ARM.Hex(),  // arm64
-				"test1/blobs/sha256/" + d2SBOM.Hex(), // v2 referrer sbom
-				"test1/blobs/sha256/" + d2Sig.Hex(),  // v2 referrer sig
+			exists: []string{},
+			missing: []string{
+				tsHost + "/test1@" + d2SBOM.String(),
+				tsHost + "/test1@" + d2Sig.String(),
 			},
 			expErr: nil,
 		},
 		{
 			name: "Action Check",
 			sync: ConfigSync{
-				Source:     "ocidir://testrepo:v1",
-				Target:     "ocidir://test1:latest",
+				Source:     tsHost + "/testrepo:v1",
+				Target:     tsHost + "/test1:latest",
 				Type:       "image",
-				Referrers:  &boolTrue,
-				DigestTags: &boolTrue,
+				Referrers:  &boolT,
+				DigestTags: &boolT,
 			},
 			action: actionCheck,
-			exists: []string{"ocidir://test1:latest"},
-			desired: []string{
-				"test1/index.json",
-				"test1/oci-layout",
-				"test2/blobs/sha256/" + d2.Hex(), // v2
+			expect: map[string]digest.Digest{
+				tsHost + "/test1:latest": d2,
 			},
-			undesired: []string{
-				"test1/blobs/sha256/" + d1.Hex(),     // v1
-				"test1/blobs/sha256/" + d1AMD.Hex(),  // amd64
-				"test1/blobs/sha256/" + d1ARM.Hex(),  // arm64
-				"test1/blobs/sha256/" + d2SBOM.Hex(), // v2 referrer sbom
-				"test1/blobs/sha256/" + d2Sig.Hex(),  // v2 referrer sig
-			},
+			exists: []string{},
 			expErr: nil,
 		},
 		{
 			name: "Action Missing Exists",
 			sync: ConfigSync{
-				Source:     "ocidir://testrepo:v1",
-				Target:     "ocidir://test1:latest",
+				Source:     tsHost + "/testrepo:v1",
+				Target:     tsHost + "/test1:latest",
 				Type:       "image",
-				Referrers:  &boolTrue,
-				DigestTags: &boolTrue,
+				Referrers:  &boolT,
+				DigestTags: &boolT,
 			},
 			action: actionMissing,
-			exists: []string{"ocidir://test1:latest"},
-			desired: []string{
-				"test1/index.json",
-				"test1/oci-layout",
-				"test2/blobs/sha256/" + d2.Hex(), // v2
+			expect: map[string]digest.Digest{
+				tsHost + "/test1:latest": d2,
 			},
-			undesired: []string{
-				"test1/blobs/sha256/" + d1.Hex(),     // v1
-				"test1/blobs/sha256/" + d1AMD.Hex(),  // amd64
-				"test1/blobs/sha256/" + d1ARM.Hex(),  // arm64
-				"test1/blobs/sha256/" + d2SBOM.Hex(), // v2 referrer sbom
-				"test1/blobs/sha256/" + d2Sig.Hex(),  // v2 referrer sig
+			exists: []string{},
+			missing: []string{
+				tsHost + "/test1@" + d2SBOM.String(),
+				tsHost + "/test1@" + d2Sig.String(),
 			},
 			expErr: nil,
 		},
 		{
 			name: "RepoTagFilterAllow",
 			sync: ConfigSync{
-				Source: "ocidir://testrepo",
-				Target: "ocidir://test3",
+				Source: tsHost + "/testrepo",
+				Target: tsHost + "/test3",
 				Type:   "repository",
 				Tags: AllowDeny{
 					Allow: []string{"v1", "v3", "latest"},
 				},
 			},
 			action: actionCopy,
-			exists: []string{"ocidir://test3:v1", "ocidir://test3:v3"},
-			desired: []string{
-				"test3/index.json",
-				"test3/oci-layout",
-				"test3/blobs/sha256/" + d1.Hex(), // v1
-				"test3/blobs/sha256/" + d3.Hex(), // v3
+			expect: map[string]digest.Digest{
+				tsHost + "/test3:v1": d1,
+				tsHost + "/test3:v3": d3,
 			},
-			undesired: []string{
-				"test3/blobs/sha256/" + d2.Hex(), // v2
+			exists: []string{},
+			missing: []string{
+				tsHost + "/test3:v2",
+				tsHost + "/test3@" + d2.String(),
 			},
 			expErr: nil,
 		},
 		{
 			name: "RepoTagFilterDeny",
 			sync: ConfigSync{
-				Source: "ocidir://testrepo",
-				Target: "ocidir://test4",
+				Source: tsHost + "/testrepo",
+				Target: tsHost + "/test4",
 				Type:   "repository",
 				Tags: AllowDeny{
 					Deny: []string{"v2", "old"},
 				},
 			},
 			action: actionCopy,
-			exists: []string{"ocidir://test4:v1", "ocidir://test4:v3"},
-			desired: []string{
-				"test4/index.json",
-				"test4/oci-layout",
-				"test4/blobs/sha256/" + d1.Hex(), // v1
-				"test4/blobs/sha256/" + d3.Hex(), // v3
+			expect: map[string]digest.Digest{
+				tsHost + "/test4:v1": d1,
+				tsHost + "/test4:v3": d3,
 			},
-			undesired: []string{
-				"test4/blobs/sha256/" + d2.Hex(), // v2
+			exists: []string{},
+			missing: []string{
+				tsHost + "/test4:v2",
+				tsHost + "/test4@" + d2.String(),
 			},
 			expErr: nil,
 		},
 		{
 			name: "Missing Setup v1",
 			sync: ConfigSync{
-				Source: "ocidir://testrepo:v2",
-				Target: "ocidir://test-missing:v1",
+				Source: tsHost + "/testrepo:v2",
+				Target: tsHost + "/test-missing:v1",
 				Type:   "image",
 			},
 			action: actionCopy,
-			exists: []string{"ocidir://test-missing:v1"},
-			desired: []string{
-				"test-missing/index.json",
-				"test-missing/oci-layout",
-				"test-missing/blobs/sha256/" + d2.Hex(), // v2
+			expect: map[string]digest.Digest{
+				tsHost + "/test-missing:v1": d2,
 			},
-			undesired: []string{
-				"test-missing/blobs/sha256/" + d1.Hex(), // v1
-				"test-missing/blobs/sha256/" + d3.Hex(), // v3
+			missing: []string{
+				tsHost + "/test-missing@" + d1.String(),
+				tsHost + "/test-missing@" + d3.String(),
 			},
 			expErr: nil,
 		},
 		{
 			name: "Missing Setup v1.1",
 			sync: ConfigSync{
-				Source: "ocidir://testrepo:v2",
-				Target: "ocidir://test-missing:v1.1",
+				Source: tsHost + "/testrepo:v2",
+				Target: tsHost + "/test-missing:v1.1",
 				Type:   "image",
 			},
 			action: actionCopy,
-			exists: []string{"ocidir://test-missing:v1.1"},
+			expect: map[string]digest.Digest{
+				tsHost + "/test-missing:v1":   d2,
+				tsHost + "/test-missing:v1.1": d2,
+			},
+			missing: []string{
+				tsHost + "/test-missing@" + d1.String(),
+				tsHost + "/test-missing@" + d3.String(),
+			},
 			expErr: nil,
 		},
 		{
 			name: "Missing Setup v3",
 			sync: ConfigSync{
-				Source: "ocidir://testrepo:v3",
-				Target: "ocidir://test-missing:v3",
+				Source: tsHost + "/testrepo:v3",
+				Target: tsHost + "/test-missing:v3",
 				Type:   "image",
 			},
 			action: actionCopy,
-			exists: []string{"ocidir://test-missing:v1", "ocidir://test-missing:v3"},
-			desired: []string{
-				"test-missing/index.json",
-				"test-missing/oci-layout",
-				"test-missing/blobs/sha256/" + d2.Hex(), // v2
-				"test-missing/blobs/sha256/" + d3.Hex(), // v3
+			expect: map[string]digest.Digest{
+				tsHost + "/test-missing:v1":   d2,
+				tsHost + "/test-missing:v1.1": d2,
+				tsHost + "/test-missing:v3":   d3,
 			},
-			undesired: []string{
-				"test-missing/blobs/sha256/" + d1.Hex(), // v1
+			missing: []string{
+				tsHost + "/test-missing@" + d1.String(),
 			},
 			expErr: nil,
 		},
 		{
 			name: "Missing",
 			sync: ConfigSync{
-				Source: "ocidir://testrepo",
-				Target: "ocidir://test-missing",
+				Source: tsHost + "/testrepo",
+				Target: tsHost + "/test-missing",
 				Type:   "repository",
 				Tags: AllowDeny{
 					Allow: []string{"v1", "v2", "v3", "latest"},
 				},
 			},
 			action: actionMissing,
-			exists: []string{"ocidir://test-missing:v1", "ocidir://test-missing:v2", "ocidir://test-missing:v3"},
-			desired: []string{
-				"test-missing/index.json",
-				"test-missing/oci-layout",
-				"test-missing/blobs/sha256/" + d2.Hex(), // v2
-				"test-missing/blobs/sha256/" + d3.Hex(), // v3
+			expect: map[string]digest.Digest{
+				tsHost + "/test-missing:v1":   d2,
+				tsHost + "/test-missing:v1.1": d2,
+				tsHost + "/test-missing:v2":   d2,
+				tsHost + "/test-missing:v3":   d3,
 			},
-			undesired: []string{
-				"test-missing/blobs/sha256/" + d1.Hex(), // v1
+			missing: []string{
+				tsHost + "/test-missing@" + d1.String(),
 			},
 			expErr: nil,
 		},
 		{
 			name: "ImageDigestTags",
 			sync: ConfigSync{
-				Source:     "ocidir://testrepo:v1",
-				Target:     "ocidir://test5:v1",
+				Source:     "ocidir://" + tempDir + "/testrepo:v1",
+				Target:     "ocidir://" + tempDir + "/test5:v1",
 				Type:       "image",
-				DigestTags: &boolTrue,
+				DigestTags: &boolT,
 			},
 			action: actionCopy,
-			exists: []string{"ocidir://test5:v1", fmt.Sprintf("ocidir://test5:sha256-%s.%.16s.meta", d1.Hex(), d3.Hex())},
-			desired: []string{
-				"test5/index.json",
-				"test5/oci-layout",
-				"test5/blobs/sha256/" + d1.Hex(), // v1
-				"test5/blobs/sha256/" + d3.Hex(), // v3 + meta digest tag
-			},
-			undesired: []string{
-				"test5/blobs/sha256/" + d2.Hex(), // v2
+			expect: map[string]digest.Digest{
+				"ocidir://" + tempDir + "/test5:v1":                                                d1,
+				fmt.Sprintf("ocidir://%s/test5:sha256-%s.%.16s.meta", tempDir, d1.Hex(), d3.Hex()): digest.Digest(d3.String()),
 			},
 			expErr: nil,
 		},
 		{
 			name: "ImageReferrers Fast",
 			sync: ConfigSync{
-				Source:          "ocidir://testrepo:v2",
-				Target:          "ocidir://test-referrer:v2",
+				Source:          tsHost + "/testrepo:v2",
+				Target:          tsHost + "/test-referrer:v2",
 				Type:            "image",
-				FastCheck:       &boolTrue,
-				Referrers:       &boolTrue,
+				FastCheck:       &boolT,
+				Referrers:       &boolT,
 				ReferrerFilters: []ConfigReferrerFilter{},
 			},
 			action: actionCopy,
-			exists: []string{"ocidir://test-referrer:v2", "ocidir://test-referrer:sha256-" + d2.Hex()},
-			desired: []string{
-				"test-referrer/index.json",
-				"test-referrer/oci-layout",
-				"test-referrer/blobs/sha256/" + d2.Hex(),     // v2
-				"test-referrer/blobs/sha256/" + d2AMD.Hex(),  // v2 amd64
-				"test-referrer/blobs/sha256/" + d2SBOM.Hex(), // v2 sbom
-				"test-referrer/blobs/sha256/" + d2Sig.Hex(),  // v2 sig
+			expect: map[string]digest.Digest{
+				tsHost + "/test-referrer:v2": d2,
 			},
-			undesired: []string{
-				"test-referrer/blobs/sha256/" + d1.Hex(), // v1
-				"test-referrer/blobs/sha256/" + d3.Hex(), // v3 + meta digest tag
+			exists: []string{
+				tsHost + "/test-referrer@" + d2AMD.String(),
+				tsHost + "/test-referrer@" + d2SBOM.String(),
+				tsHost + "/test-referrer@" + d2Sig.String(),
+			},
+			missing: []string{
+				tsHost + "/test-referrer@" + d1.String(),
+				tsHost + "/test-referrer@" + d3.String(),
 			},
 			expErr: nil,
 		},
 		{
 			name: "ImageReferrers",
 			sync: ConfigSync{
-				Source:    "ocidir://testrepo:v2",
-				Target:    "ocidir://test-referrer2:v2",
+				Source:    tsHost + "/testrepo:v2",
+				Target:    tsHost + "/test-referrer2:v2",
 				Type:      "image",
-				Referrers: &boolTrue,
+				Referrers: &boolT,
 				ReferrerFilters: []ConfigReferrerFilter{
 					{
 						ArtifactType: "application/example.sbom",
@@ -456,176 +465,151 @@ func TestProcess(t *testing.T) {
 				},
 			},
 			action: actionCopy,
-			exists: []string{"ocidir://test-referrer2:v2", "ocidir://test-referrer2:sha256-" + d2.Hex()},
-			desired: []string{
-				"test-referrer2/index.json",
-				"test-referrer2/oci-layout",
-				"test-referrer2/blobs/sha256/" + d2.Hex(),     // v2
-				"test-referrer2/blobs/sha256/" + d2AMD.Hex(),  // v2 amd64
-				"test-referrer2/blobs/sha256/" + d2SBOM.Hex(), // v2 sbom
+			expect: map[string]digest.Digest{
+				tsHost + "/test-referrer2:v2": d2,
 			},
-			undesired: []string{
-				"test-referrer2/blobs/sha256/" + d1.Hex(),    // v1
-				"test-referrer2/blobs/sha256/" + d2Sig.Hex(), // v2 sig
-				"test-referrer2/blobs/sha256/" + d3.Hex(),    // v3 + meta digest tag
+			exists: []string{
+				tsHost + "/test-referrer2@" + d2AMD.String(),
+				tsHost + "/test-referrer2@" + d2SBOM.String(),
+			},
+			missing: []string{
+				tsHost + "/test-referrer2@" + d2Sig.String(),
+				tsHost + "/test-referrer2@" + d1.String(),
+				tsHost + "/test-referrer2@" + d3.String(),
 			},
 			expErr: nil,
 		},
 		{
 			name: "Backup",
 			sync: ConfigSync{
-				Source: "ocidir://testrepo:v3",
-				Target: "ocidir://test1:latest",
+				Source: tsHost + "/testrepo:v3",
+				Target: tsHost + "/test1:latest",
 				Type:   "image",
 				Backup: "old",
 			},
 			action: actionCopy,
-			exists: []string{"ocidir://test1:latest", "ocidir://test1:old"},
-			desired: []string{
-				"test1/index.json",
-				"test1/oci-layout",
-				"test2/blobs/sha256/" + d2.Hex(), // v2
-				"test2/blobs/sha256/" + d3.Hex(), // v3
-			},
-			undesired: []string{
-				"test1/blobs/sha256/" + d1.Hex(),    // v1
-				"test1/blobs/sha256/" + d1AMD.Hex(), // amd64
-				"test1/blobs/sha256/" + d1ARM.Hex(), // arm64
+			expect: map[string]digest.Digest{
+				tsHost + "/test1:latest": d3,
+				tsHost + "/test1:old":    d2,
 			},
 			expErr: nil,
 		},
 		{
 			name: "BackupFormat",
 			sync: ConfigSync{
-				Source: "ocidir://testrepo:v1",
-				Target: "ocidir://test1:latest",
+				Source: tsHost + "/testrepo:v1",
+				Target: tsHost + "/test1:latest",
 				Type:   "image",
-				Backup: "ocidir://backups:{{.Ref.Tag}}",
+				Backup: tsHost + "/backups:{{.Ref.Tag}}",
 			},
 			action: actionCopy,
-			exists: []string{"ocidir://test1:latest", "ocidir://backups:latest"},
-			desired: []string{
-				"test1/index.json",
-				"test1/oci-layout",
-				"test1/blobs/sha256/" + d1.Hex(),   // v1
-				"backups/blobs/sha256/" + d3.Hex(), // v3
-			},
-			undesired: []string{
-				"test1/blobs/sha256/" + d3.Hex(), // v3
+			expect: map[string]digest.Digest{
+				tsHost + "/test1:latest":   d1,
+				tsHost + "/backups:latest": d3,
 			},
 			expErr: nil,
 		},
 		{
 			name: "Image Self Digest Tag",
 			sync: ConfigSync{
-				Source:     "ocidir://testrepo:mirror",
-				Target:     "ocidir://test-mirror:mirror",
+				Source:     "ocidir://" + tempDir + "/testrepo:mirror",
+				Target:     "ocidir://" + tempDir + "/test-mirror:mirror",
 				Type:       "image",
-				DigestTags: &boolTrue,
+				DigestTags: &boolT,
 			},
 			action: actionCopy,
-			exists: []string{"ocidir://test-mirror:mirror", "ocidir://test-mirror:sha256-" + dMirror.Hex()},
-			desired: []string{
-				"test-mirror/index.json",
-				"test-mirror/oci-layout",
-				"test-mirror/blobs/sha256/" + dMirror.Hex(), // mirror
+			expect: map[string]digest.Digest{
+				"ocidir://" + tempDir + "/test-mirror:mirror":                  dMirror,
+				"ocidir://" + tempDir + "/test-mirror:sha256-" + dMirror.Hex(): dMirror,
 			},
 			expErr: nil,
 		},
 		{
 			name: "Image Loop",
 			sync: ConfigSync{
-				Source:    "ocidir://testrepo:loop",
-				Target:    "ocidir://test-loop:loop",
+				Source:    tsHost + "/testrepo:loop",
+				Target:    tsHost + "/test-loop:loop",
 				Type:      "image",
-				Referrers: &boolTrue,
+				Referrers: &boolT,
 			},
 			action: actionCopy,
-			exists: []string{"ocidir://test-loop:loop", "ocidir://test-loop:sha256-" + dChild.Hex()},
-			desired: []string{
-				"test-loop/index.json",
-				"test-loop/oci-layout",
-				"test-loop/blobs/sha256/" + dChild.Hex(), // child
-				"test-loop/blobs/sha256/" + dLoop.Hex(),  // loop
+			expect: map[string]digest.Digest{
+				tsHost + "/test-loop:loop": dLoop,
+			},
+			exists: []string{
+				tsHost + "/test-loop@" + dChild.String(),
 			},
 			expErr: nil,
 		},
 		{
 			name: "MissingImage",
 			sync: ConfigSync{
-				Source: "ocidir://testmissing:v1",
-				Target: "ocidir://testmissing:v1.1",
+				Source: tsHost + "/testmissing:v1",
+				Target: tsHost + "/testmissing:v1.1",
 				Type:   "image",
 			},
-			action:  actionCopy,
-			desired: []string{},
-			expErr:  fs.ErrNotExist,
+			action: actionCopy,
+			expErr: errs.ErrNotFound,
 		},
 		{
 			name: "MissingRepository",
 			sync: ConfigSync{
-				Source: "ocidir://testmissing:v1",
-				Target: "ocidir://testmissing:v1.1",
+				Source: "ocidir://" + tempDir + "/testmissing",
+				Target: tsHost + "/testmissing",
 				Type:   "repository",
 			},
-			action:  actionCopy,
-			desired: []string{},
-			expErr:  fs.ErrNotExist,
+			action: actionCopy,
+			expErr: fs.ErrNotExist,
 		},
 		{
 			name: "InvalidSourceImage",
 			sync: ConfigSync{
 				Source: "InvalidTestmissing:v1:garbage",
-				Target: "ocidir://testrepo:v1",
+				Target: tsHost + "/testrepo:v1",
 				Type:   "image",
 			},
-			action:  actionCopy,
-			desired: []string{},
-			expErr:  errs.ErrInvalidReference,
+			action: actionCopy,
+			expErr: errs.ErrInvalidReference,
 		},
 		{
 			name: "InvalidTargetImage",
 			sync: ConfigSync{
-				Source: "ocidir://testrepo:v1",
+				Source: tsHost + "/testrepo:v1",
 				Target: "InvalidTestmissing:v1:garbage",
 				Type:   "image",
 			},
-			action:  actionCopy,
-			desired: []string{},
-			expErr:  errs.ErrInvalidReference,
+			action: actionCopy,
+			expErr: errs.ErrInvalidReference,
 		},
 		{
 			name: "InvalidSourceRepository",
 			sync: ConfigSync{
 				Source: "InvalidTestmissing:garbage",
-				Target: "ocidir://testrepo",
+				Target: tsHost + "/testrepo",
 				Type:   "repository",
 			},
-			action:  actionCopy,
-			desired: []string{},
-			expErr:  errs.ErrInvalidReference,
+			action: actionCopy,
+			expErr: errs.ErrInvalidReference,
 		},
 		{
 			name: "InvalidTargetRepository",
 			sync: ConfigSync{
-				Source: "ocidir://testrepo",
+				Source: tsHost + "/testrepo",
 				Target: "InvalidTestmissing:garbage",
 				Type:   "repository",
 			},
-			action:  actionCopy,
-			desired: []string{},
-			expErr:  errs.ErrInvalidReference,
+			action: actionCopy,
+			expErr: errs.ErrInvalidReference,
 		},
 		{
 			name: "InvalidType",
 			sync: ConfigSync{
-				Source: "ocidir://testrepo:v1",
-				Target: "ocidir://test1:v1",
+				Source: tsHost + "/testrepo:v1",
+				Target: tsHost + "/test1:v1",
 				Type:   "invalid",
 			},
-			action:  actionCopy,
-			desired: []string{},
-			expErr:  ErrInvalidInput,
+			action: actionCopy,
+			expErr: ErrInvalidInput,
 		},
 	}
 	for _, tc := range tt {
@@ -646,7 +630,19 @@ func TestProcess(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error on process: %v", err)
 			}
-			// validate tags and files exist/don't exist
+			// validate expected digests, refs that exist, and don't exist
+			for tag, d := range tc.expect {
+				r, err := ref.New(tag)
+				if err != nil {
+					t.Fatalf("cannot parse ref %s: %v", tag, err)
+				}
+				m, err := rc.ManifestHead(ctx, r)
+				if err != nil {
+					t.Errorf("ref does not exist: %s", tag)
+				} else if m.GetDescriptor().Digest != d {
+					t.Errorf("digest mismatch for %s, expected %s, received %s", tag, d.String(), m.GetDescriptor().Digest.String())
+				}
+			}
 			for _, exist := range tc.exists {
 				r, err := ref.New(exist)
 				if err != nil {
@@ -657,16 +653,14 @@ func TestProcess(t *testing.T) {
 					t.Errorf("ref does not exist: %s", exist)
 				}
 			}
-			for _, file := range tc.desired {
-				_, err = rwfs.Stat(fsMem, file)
+			for _, missing := range tc.missing {
+				r, err := ref.New(missing)
 				if err != nil {
-					t.Errorf("missing file in sync: %s", file)
+					t.Fatalf("cannot parse ref %s: %v", missing, err)
 				}
-			}
-			for _, file := range tc.undesired {
-				_, err = rwfs.Stat(fsMem, file)
+				_, err = rc.ManifestHead(ctx, r)
 				if err == nil {
-					t.Errorf("undesired file after sync: %s", file)
+					t.Errorf("ref exists that should be missing: %s", missing)
 				}
 			}
 		})
@@ -675,18 +669,17 @@ func TestProcess(t *testing.T) {
 
 func TestProcessRef(t *testing.T) {
 	ctx := context.Background()
-	// setup sample source with an in-memory ocidir directory
-	fsOS := rwfs.OSNew("")
-	fsMem := rwfs.MemNew()
-	err := rwfs.CopyRecursive(fsOS, "../../testdata", fsMem, ".")
+	// setup tempDir
+	tempDir := t.TempDir()
+	err := copyfs.Copy(tempDir+"/testrepo", "../../testdata/testrepo")
 	if err != nil {
-		t.Fatalf("failed to setup memfs copy: %v", err)
+		t.Fatalf("failed to copyfs to tempdir: %v", err)
 	}
 	// setup various globals normally done by loadConf
-	rc = regclient.New(regclient.WithFS(fsMem))
+	rc = regclient.New()
 	cs := ConfigSync{
-		Source: "ocidir://testrepo",
-		Target: "ocidir://testdest",
+		Source: "ocidir://" + tempDir + "/testrepo",
+		Target: "ocidir://" + tempDir + "/testdest",
 		Type:   "repository",
 	}
 	syncSetDefaults(&cs, conf.Defaults)
@@ -738,8 +731,8 @@ func TestProcessRef(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create tgt ref: %v", err)
 			}
-			src.Tag = tc.src
-			tgt.Tag = tc.tgt
+			src = src.SetTag(tc.src)
+			tgt = tgt.SetTag(tc.tgt)
 			err = rootOpts.processRef(ctx, cs, src, tgt, tc.action)
 			// validate err
 			if tc.expErr != nil {

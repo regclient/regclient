@@ -1,11 +1,9 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -156,9 +154,9 @@ regctl manifest put \
 	_ = manifestHeadCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	_ = manifestHeadCmd.Flags().MarkHidden("list")
 
-	manifestGetCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Output manifest list if available (enabled by default)")
+	manifestGetCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Deprecated: Output manifest list if available")
 	manifestGetCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
-	manifestGetCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
+	manifestGetCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Deprecated: Fail if manifest list is not received")
 	manifestGetCmd.Flags().StringVarP(&manifestOpts.formatGet, "format", "", "{{printPretty .}}", "Format output with go template syntax (use \"raw-body\" for the original manifest)")
 	_ = manifestGetCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	_ = manifestGetCmd.RegisterFlagCompletionFunc("format", completeArgNone)
@@ -268,10 +266,11 @@ func (manifestOpts *manifestCmd) runManifestDiff(cmd *cobra.Command, args []stri
 
 func (manifestOpts *manifestCmd) runManifestHead(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
-	if manifestOpts.platform != "" && !flagChanged(cmd, "list") {
-		manifestOpts.list = false
-	} else if !manifestOpts.list && !flagChanged(cmd, "list") {
-		manifestOpts.list = true
+	if flagChanged(cmd, "list") {
+		log.Info("list option has been deprecated, manifest list is output by default until a platform is specified")
+	}
+	if manifestOpts.platform != "" && manifestOpts.requireList {
+		return fmt.Errorf("cannot request a platform and require-list simultaneously")
 	}
 
 	r, err := ref.New(args[0])
@@ -279,6 +278,7 @@ func (manifestOpts *manifestCmd) runManifestHead(cmd *cobra.Command, args []stri
 		return err
 	}
 	rc := manifestOpts.rootOpts.newRegClient()
+	defer rc.Close(ctx, r)
 
 	log.WithFields(logrus.Fields{
 		"host": r.Registry,
@@ -290,33 +290,17 @@ func (manifestOpts *manifestCmd) runManifestHead(cmd *cobra.Command, args []stri
 	if manifestOpts.requireDigest || (!flagChanged(cmd, "require-digest") && !flagChanged(cmd, "format")) {
 		mOpts = append(mOpts, regclient.WithManifestRequireDigest())
 	}
+	if manifestOpts.platform != "" {
+		p, err := platform.Parse(manifestOpts.platform)
+		if err != nil {
+			return fmt.Errorf("failed to parse platform %s: %w", manifestOpts.platform, err)
+		}
+		mOpts = append(mOpts, regclient.WithManifestPlatform(p))
+	}
 
-	// attempt to request only the headers, avoids Docker Hub rate limits
 	m, err := rc.ManifestHead(ctx, r, mOpts...)
 	if err != nil {
 		return err
-	}
-
-	// add warning if not list and list required or platform requested
-	if !m.IsList() && manifestOpts.requireList {
-		log.Warn("Manifest list unavailable")
-		return ErrNotFound
-	}
-	if !m.IsList() && manifestOpts.platform != "" {
-		log.Info("Manifest list unavailable, ignoring platform flag")
-	}
-
-	// retrieve the specified platform from the manifest list
-	for m.IsList() && !manifestOpts.list && !manifestOpts.requireList {
-		desc, err := getPlatformDesc(ctx, rc, m, manifestOpts.platform)
-		if err != nil {
-			return fmt.Errorf("failed retrieving platform specific digest: %w", err)
-		}
-		r.Digest = desc.Digest.String()
-		m, err = rc.ManifestHead(ctx, r, mOpts...)
-		if err != nil {
-			return fmt.Errorf("failed retrieving platform specific digest: %w", err)
-		}
 	}
 
 	switch manifestOpts.formatHead {
@@ -330,10 +314,11 @@ func (manifestOpts *manifestCmd) runManifestHead(cmd *cobra.Command, args []stri
 
 func (manifestOpts *manifestCmd) runManifestGet(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
-	if manifestOpts.platform != "" && !flagChanged(cmd, "list") {
-		manifestOpts.list = false
-	} else if !manifestOpts.list && !flagChanged(cmd, "list") {
-		manifestOpts.list = true
+	if flagChanged(cmd, "list") {
+		log.Info("list option has been deprecated, manifest list is output by default until a platform is specified")
+	}
+	if manifestOpts.platform != "" && manifestOpts.requireList {
+		return fmt.Errorf("cannot request a platform and require-list simultaneously")
 	}
 
 	r, err := ref.New(args[0])
@@ -343,7 +328,22 @@ func (manifestOpts *manifestCmd) runManifestGet(cmd *cobra.Command, args []strin
 	rc := manifestOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
-	m, err := getManifest(ctx, rc, r, manifestOpts.platform, manifestOpts.list, manifestOpts.requireList)
+	log.WithFields(logrus.Fields{
+		"host": r.Registry,
+		"repo": r.Repository,
+		"tag":  r.Tag,
+	}).Debug("Manifest get")
+
+	mOpts := []regclient.ManifestOpts{}
+	if manifestOpts.platform != "" {
+		p, err := platform.Parse(manifestOpts.platform)
+		if err != nil {
+			return fmt.Errorf("failed to parse platform %s: %w", manifestOpts.platform, err)
+		}
+		mOpts = append(mOpts, regclient.WithManifestPlatform(p))
+	}
+
+	m, err := rc.ManifestGet(ctx, r, mOpts...)
 	if err != nil {
 		return err
 	}
@@ -368,7 +368,7 @@ func (manifestOpts *manifestCmd) runManifestPut(cmd *cobra.Command, args []strin
 	rc := manifestOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
-	raw, err := io.ReadAll(os.Stdin)
+	raw, err := io.ReadAll(cmd.InOrStdin())
 	if err != nil {
 		return err
 	}
@@ -404,80 +404,4 @@ func (manifestOpts *manifestCmd) runManifestPut(cmd *cobra.Command, args []strin
 		manifestOpts.formatPut = "{{ printf \"%s\\n\" .Manifest.GetDescriptor.Digest }}"
 	}
 	return template.Writer(cmd.OutOrStdout(), manifestOpts.formatPut, result)
-}
-
-func getManifest(ctx context.Context, rc *regclient.RegClient, r ref.Ref, pStr string, list, reqList bool) (manifest.Manifest, error) {
-	m, err := rc.ManifestGet(context.Background(), r)
-	if err != nil {
-		return m, err
-	}
-
-	// add warning if not list and list required or platform requested
-	if !m.IsList() && reqList {
-		log.Warn("Manifest list unavailable")
-		return m, ErrNotFound
-	}
-	if !m.IsList() && pStr != "" {
-		log.Info("Manifest list unavailable, ignoring platform flag")
-	}
-
-	// retrieve the specified platform from the manifest list
-	if m.IsList() && !list && !reqList {
-		desc, err := getPlatformDesc(ctx, rc, m, pStr)
-		if err != nil {
-			return m, fmt.Errorf("failed to lookup platform specific digest: %w", err)
-		}
-		m, err = rc.ManifestGet(ctx, r, regclient.WithManifestDesc(*desc))
-		if err != nil {
-			return m, fmt.Errorf("failed to pull platform specific digest: %w", err)
-		}
-	}
-	return m, nil
-}
-
-func getPlatformDesc(ctx context.Context, rc *regclient.RegClient, m manifest.Manifest, pStr string) (*descriptor.Descriptor, error) {
-	var desc *descriptor.Descriptor
-	var err error
-	if !m.IsList() {
-		return desc, fmt.Errorf("%w: manifest is not a list", ErrInvalidInput)
-	}
-	if !m.IsSet() {
-		m, err = rc.ManifestGet(ctx, m.GetRef())
-		if err != nil {
-			return desc, fmt.Errorf("unable to retrieve manifest list: %w", err)
-		}
-	}
-
-	var plat platform.Platform
-	if pStr != "" && pStr != "local" {
-		plat, err = platform.Parse(pStr)
-		if err != nil {
-			log.WithFields(logrus.Fields{
-				"platform": pStr,
-				"err":      err,
-			}).Warn("Could not parse platform")
-		}
-	}
-	if plat.OS == "" {
-		plat = platform.Local()
-	}
-	desc, err = manifest.GetPlatformDesc(m, &plat)
-	if err != nil {
-		pl, _ := manifest.GetPlatformList(m)
-		var ps []string
-		for _, p := range pl {
-			ps = append(ps, p.String())
-		}
-		log.WithFields(logrus.Fields{
-			"platform":  plat,
-			"err":       err,
-			"platforms": strings.Join(ps, ", "),
-		}).Warn("Platform could not be found in manifest list")
-		return desc, ErrNotFound
-	}
-	log.WithFields(logrus.Fields{
-		"platform": plat,
-		"digest":   desc.Digest.String(),
-	}).Debug("Found platform specific digest in manifest list")
-	return desc, nil
 }

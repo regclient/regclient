@@ -13,7 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/internal/copy"
+	"github.com/regclient/regclient/internal/copyfs"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -22,11 +22,15 @@ func TestTag(t *testing.T) {
 	existingRepo := "testrepo"
 	existingTag := "v2"
 	ctx := context.Background()
-	falseV := false
+	boolT := true
+	boolF := false
 	regRWHandler := olareg.New(oConfig.Config{
 		Storage: oConfig.ConfigStorage{
 			StoreType: oConfig.StoreMem,
 			RootDir:   "./testdata",
+		},
+		API: oConfig.ConfigAPI{
+			DeleteEnabled: &boolT,
 		},
 	})
 	regROHandler := olareg.New(oConfig.Config{
@@ -35,10 +39,9 @@ func TestTag(t *testing.T) {
 			RootDir:   "./testdata",
 		},
 		API: oConfig.ConfigAPI{
-			DeleteEnabled: &falseV,
+			DeleteEnabled: &boolF,
 		},
 	})
-	// TODO: test with a registry without the delete APIs
 	tsRW := httptest.NewServer(regRWHandler)
 	tsRWURL, _ := url.Parse(tsRW.URL)
 	tsRWHost := tsRWURL.Host
@@ -79,7 +82,7 @@ func TestTag(t *testing.T) {
 		WithRetryDelay(delayInit, delayMax),
 	)
 	tempDir := t.TempDir()
-	err := copy.Copy(tempDir+"/"+existingRepo, "./testdata/"+existingRepo)
+	err := copyfs.Copy(tempDir+"/"+existingRepo, "./testdata/"+existingRepo)
 	if err != nil {
 		t.Fatalf("failed to copy %s to tempDir: %v", existingRepo, err)
 	}

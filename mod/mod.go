@@ -131,10 +131,11 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 				return dl, nil
 			}
 			if len(dc.stepsLayer) > 0 {
-				rdr, err = rc.BlobGet(ctx, rSrc, dl.desc)
+				bRdr, err := rc.BlobGet(ctx, rSrc, dl.desc)
 				if err != nil {
 					return nil, err
 				}
+				rdr = bRdr
 				for _, sl := range dc.stepsLayer {
 					rdrNext, err := sl(ctx, rc, rSrc, rTgt, dl, rdr)
 					if err != nil {
@@ -148,19 +149,20 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 					return dl, nil
 				}
 				if rdr == nil {
-					rdr, err = rc.BlobGet(ctx, rSrc, dl.desc)
+					bRdr, err := rc.BlobGet(ctx, rSrc, dl.desc)
 					if err != nil {
 						return nil, err
 					}
+					rdr = bRdr
 				}
 				changed := false
 				empty := true
-				mt := dl.desc.MediaType
+				desc := dl.desc
 				if dl.newDesc.MediaType != "" {
-					mt = dl.newDesc.MediaType
+					desc = dl.newDesc
 				}
 				// if compressed, setup a decompressing reader that passes through the close
-				if mt != mediatype.OCI1Layer && mt != mediatype.Docker2Layer {
+				if desc.MediaType != mediatype.OCI1Layer && desc.MediaType != mediatype.Docker2Layer {
 					dr, err := archive.Decompress(rdr)
 					if err != nil {
 						_ = rdr.Close()
@@ -183,8 +185,8 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 				var tw *tar.Writer
 				var gw *gzip.Writer
 				var zw *zstd.Encoder
-				digRaw := digest.Canonical.Digester() // raw/compressed digest
-				digUC := digest.Canonical.Digester()  // uncompressed digest
+				digRaw := desc.DigestAlgo().Digester() // raw/compressed digest
+				digUC := desc.DigestAlgo().Digester()  // uncompressed digest
 				if dl.desc.MediaType == mediatype.Docker2LayerGzip || dl.desc.MediaType == mediatype.OCI1LayerGzip {
 					cw := io.MultiWriter(fh, digRaw.Hash())
 					gw = gzip.NewWriter(cw)
@@ -288,11 +290,9 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 						return nil, err
 					}
 					rdr = fh
-					dl.newDesc = descriptor.Descriptor{
-						MediaType: mt,
-						Digest:    digRaw.Digest(),
-						Size:      l,
-					}
+					desc.Digest = digRaw.Digest()
+					desc.Size = l
+					dl.newDesc = desc
 					dl.ucDigest = digUC.Digest()
 					if dl.mod == unchanged {
 						dl.mod = replaced
@@ -302,7 +302,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 			// if added or replaced, and reader not nil, push blob
 			if (dl.mod == added || dl.mod == replaced) && rdr != nil {
 				// push the blob and verify the results
-				dNew, err := rc.BlobPut(ctx, rTgt, descriptor.Descriptor{}, rdr)
+				dNew, err := rc.BlobPut(ctx, rTgt, dl.newDesc, rdr)
 				if err != nil {
 					return nil, err
 				}
@@ -358,6 +358,28 @@ func WithRefTgt(rTgt ref.Ref) Opts {
 func WithData(maxDataSize int64) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.maxDataSize = maxDataSize
+		return nil
+	}
+}
+
+// WithDigestAlgo sets the digest algorithm for both manifests and layers.
+func WithDigestAlgo(algo digest.Algorithm) Opts {
+	layerOpt := WithLayerDigestAlgo(algo)
+	configOpt := WithConfigDigestAlgo(algo)
+	manOpt := WithManifestDigestAlgo(algo)
+	return func(dc *dagConfig, dm *dagManifest) error {
+		err := layerOpt(dc, dm)
+		if err != nil {
+			return err
+		}
+		err = configOpt(dc, dm)
+		if err != nil {
+			return err
+		}
+		err = manOpt(dc, dm)
+		if err != nil {
+			return err
+		}
 		return nil
 	}
 }

@@ -407,6 +407,8 @@ func TestBlobPut(t *testing.T) {
 	blobRepo := "/proj/repo"
 	blobRepo5 := "/proj/repo5"
 	blobRepo6 := "/proj/repo6"
+	blobRepo1sha512 := "/proj/repo1-sha512"
+	blobRepo5sha512 := "/proj/repo5-sha512"
 	// privateRepo := "/proj/private"
 	ctx := context.Background()
 	// include a random blob
@@ -419,12 +421,14 @@ func TestBlobPut(t *testing.T) {
 	blobLen5 := 500  // single chunk
 	d1, blob1 := reqresp.NewRandomBlob(blobLen, seed)
 	d2, blob2 := reqresp.NewRandomBlob(blobLen, seed+1)
-	d2Bad := digest.Canonical.FromString("digest 2 bad")
+	d2Bad := digest.SHA256.FromString("digest 2 bad")
 	d3, blob3 := reqresp.NewRandomBlob(blobLen3, seed+2)
 	d4, blob4 := reqresp.NewRandomBlob(blobLen4, seed+3)
 	d5, blob5 := reqresp.NewRandomBlob(blobLen5, seed+4)
 	blob6 := []byte{}
-	d6 := digest.Canonical.FromBytes(blob6)
+	d6 := digest.SHA256.FromBytes(blob6)
+	d1sha512 := digest.SHA512.FromBytes(blob1)
+	d5sha512 := digest.SHA512.FromBytes(blob5)
 	uuid1 := reqresp.NewRandomID(seed + 10)
 	uuid2 := reqresp.NewRandomID(seed + 11)
 	uuid2Bad := reqresp.NewRandomID(seed + 12)
@@ -483,6 +487,51 @@ func TestBlobPut(t *testing.T) {
 				},
 			},
 		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "PUT for d1 sha512",
+				Method: "PUT",
+				Path:   "/v2" + blobRepo1sha512 + "/blobs/uploads/" + uuid1,
+				Query: map[string][]string{
+					"digest": {d1sha512.String()},
+				},
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", len(blob1))},
+					"Content-Type":   {"application/octet-stream"},
+					"Authorization":  {fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(user+":"+pass)))},
+				},
+				Body: blob1,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusCreated,
+				Headers: http.Header{
+					"Content-Length":        {"0"},
+					"Location":              {"/v2" + blobRepo + "/blobs/" + d1.String()},
+					"Docker-Content-Digest": {d1sha512.String()},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "PUT for d1 sha512 unauth",
+				Method: "PUT",
+				Path:   "/v2" + blobRepo1sha512 + "/blobs/uploads/" + uuid1,
+				Query: map[string][]string{
+					"digest": {d1sha512.String()},
+				},
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", len(blob1))},
+					"Content-Type":   {"application/octet-stream"},
+				},
+				Body: blob1,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusUnauthorized,
+				Headers: http.Header{
+					"WWW-Authenticate": {"Basic realm=\"testing\""},
+				},
+			},
+		},
 	}
 	blobTS := httptest.NewServer(reqresp.NewHandler(t, blobRRS))
 	defer blobTS.Close()
@@ -519,6 +568,43 @@ func TestBlobPut(t *testing.T) {
 				Path:   "/v2" + blobRepo + "/blobs/uploads/",
 				Query: map[string][]string{
 					"mount": {d1.String()},
+				},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusUnauthorized,
+				Headers: http.Header{
+					"Content-Length":   {"0"},
+					"WWW-Authenticate": {"Basic realm=\"testing\""},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "POST for d1 sha512",
+				Method: "POST",
+				Path:   "/v2" + blobRepo1sha512 + "/blobs/uploads/",
+				Query: map[string][]string{
+					"mount": {d1sha512.String()},
+				},
+				Headers: http.Header{
+					"Authorization": {fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(user+":"+pass)))},
+				},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusAccepted,
+				Headers: http.Header{
+					"Content-Length": {"0"},
+					"Location":       {fmt.Sprintf("http://%s/v2%s/blobs/uploads/%s", blobHost, blobRepo1sha512, uuid1)},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "POST for d1  sha512 unauth",
+				Method: "POST",
+				Path:   "/v2" + blobRepo1sha512 + "/blobs/uploads/",
+				Query: map[string][]string{
+					"mount": {d1sha512.String()},
 				},
 			},
 			RespEntry: reqresp.RespEntry{
@@ -1152,7 +1238,72 @@ func TestBlobPut(t *testing.T) {
 				},
 			},
 		},
-		// get upload6 location
+		// get upload5 location
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "POST for d5 sha512",
+				Method: "POST",
+				Path:   "/v2" + blobRepo5sha512 + "/blobs/uploads/",
+				Query: map[string][]string{
+					"digest-algorithm": {digest.SHA512.String()},
+				},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusAccepted,
+				Headers: http.Header{
+					"Content-Length": {"0"},
+					"Location":       {uuid5},
+				},
+			},
+		},
+		// upload put for d5
+		{
+			ReqEntry: reqresp.ReqEntry{
+				DelOnUse: false,
+				Name:     "PUT for chunked d5 sha512",
+				Method:   "PUT",
+				Path:     "/v2" + blobRepo5sha512 + "/blobs/uploads/" + uuid5,
+				Query: map[string][]string{
+					"digest": {d5sha512.String()},
+					"chunk":  {"1"},
+				},
+				Headers: http.Header{
+					"Content-Length": {"0"},
+					"Content-Type":   {"application/octet-stream"},
+				},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusCreated,
+				Headers: http.Header{
+					"Content-Length":        {"0"},
+					"Location":              {"/v2" + blobRepo5 + "/blobs/" + d5.String()},
+					"Docker-Content-Digest": {d5sha512.String()},
+				},
+			},
+		},
+		// upload patch d5
+		{
+			ReqEntry: reqresp.ReqEntry{
+				DelOnUse: false,
+				Name:     "PATCH for d5 sha512",
+				Method:   "PATCH",
+				Path:     "/v2" + blobRepo5sha512 + "/blobs/uploads/" + uuid5,
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", blobLen5)},
+					"Content-Range":  {fmt.Sprintf("%d-%d", 0, blobLen5-1)},
+					"Content-Type":   {"application/octet-stream"},
+				},
+				Body: blob5,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusAccepted,
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", 0)},
+					"Range":          {fmt.Sprintf("bytes=0-%d", blobLen5-1)},
+					"Location":       {uuid5 + "?chunk=1"},
+				},
+			},
+		}, // get upload6 location
 		{
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "POST for d6",
@@ -1371,6 +1522,29 @@ func TestBlobPut(t *testing.T) {
 		}
 		if dp.Digest.String() != d5.String() {
 			t.Errorf("Digest mismatch, expected %s, received %s", d5.String(), dp.Digest.String())
+		}
+		if dp.Size != int64(len(blob5)) {
+			t.Errorf("Content length mismatch, expected %d, received %d", len(blob5), dp.Size)
+		}
+	})
+	// test put without a descriptor
+	t.Run("Digest-algorithm-sha512", func(t *testing.T) {
+		r, err := ref.New(tsURL.Host + blobRepo5sha512)
+		if err != nil {
+			t.Fatalf("Failed creating ref: %v", err)
+		}
+		br := bytes.NewReader(blob5)
+		d := descriptor.Descriptor{}
+		err = d.DigestAlgoPrefer(digest.SHA512)
+		if err != nil {
+			t.Fatalf("failed to set preferred digest algorithm: %v", err)
+		}
+		dp, err := reg.BlobPut(ctx, r, d, br)
+		if err != nil {
+			t.Fatalf("Failed running BlobPut: %v", err)
+		}
+		if dp.Digest.String() != d5sha512.String() {
+			t.Errorf("Digest mismatch, expected %s, received %s", d5sha512.String(), dp.Digest.String())
 		}
 		if dp.Size != int64(len(blob5)) {
 			t.Errorf("Content length mismatch, expected %d, received %d", len(blob5), dp.Size)

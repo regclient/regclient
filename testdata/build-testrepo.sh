@@ -61,7 +61,7 @@ done
 # set the base image annotations
 for i in 2 3; do
   regctl image mod \
-    --annotation "org.opencontainers.image.base.name=ocidir://testrepo:b${i}" \
+    --annotation "org.opencontainers.image.base.name=registry.example.org/testrepo:b${i}" \
     --annotation "org.opencontainers.image.base.digest=$(regctl image digest ocidir://testrepo:b1)" \
     --replace "ocidir://testrepo:v${i}"
 done

@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1
 
 ARG REGISTRY=docker.io
-ARG ALPINE_VER=3.19.1@sha256:c5b1261d6d3e43071626931fc004f70149baeba2c8ec672bd4f27761f8e1ad6b
-ARG GO_VER=1.22.3-alpine@sha256:2a882244fb51835ebbd8313bffee83775b0c076aaf56b497b43d8a4c72db65e1
-ARG ECR_HELPER_VER=b99368f3064d606193d46aa0fd72437b2b28de5a
+ARG ALPINE_VER=3.20.1@sha256:b89d9c93e9ed3597455c90a0b88a8bbb5cb7188438f70953fede212a0c4394e0
+ARG GO_VER=1.22.5-alpine@sha256:8c9183f715b0b4eca05b8b3dbf59766aaedb41ec07477b132ee2891ac0110a07
+ARG ECR_HELPER_VER=efa334f881fc4cdb9b6054c7112899b0ccfcd616
 ARG GCR_HELPER_VER=v2.1.22
 
-FROM --platform=$BUILDPLATFORM ${REGISTRY}/library/golang:${GO_VER} as golang
+FROM --platform=$BUILDPLATFORM ${REGISTRY}/library/golang:${GO_VER} AS golang
 RUN apk add --no-cache \
       ca-certificates \
       git \
@@ -17,7 +17,7 @@ RUN addgroup -g 1000 appuser \
  && chown -R appuser /home/appuser
 WORKDIR /src
 
-FROM --platform=$BUILDPLATFORM golang as build
+FROM --platform=$BUILDPLATFORM golang AS build
 COPY go.* /src/
 ARG TARGETOS
 ARG TARGETARCH
@@ -33,10 +33,10 @@ RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
 USER appuser
 CMD [ "bin/regsync" ]
 
-FROM scratch as artifact
+FROM scratch AS artifact
 COPY --from=build /src/bin/regsync /regsync
 
-FROM --platform=$BUILDPLATFORM golang as docker-cred-ecr-login
+FROM --platform=$BUILDPLATFORM golang AS docker-cred-ecr-login
 ARG TARGETOS
 ARG TARGETARCH
 ARG ECR_HELPER_VER
@@ -47,7 +47,7 @@ RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
  && ( cp "${GOPATH}/bin/docker-credential-ecr-login" /usr/local/bin/docker-credential-ecr-login \
    || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-ecr-login" /usr/local/bin/docker-credential-ecr-login )
 
-FROM --platform=$BUILDPLATFORM golang as docker-cred-gcr
+FROM --platform=$BUILDPLATFORM golang AS docker-cred-gcr
 ARG TARGETOS
 ARG TARGETARCH
 ARG GCR_HELPER_VER
@@ -59,7 +59,7 @@ RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
  && ( cp "${GOPATH}/bin/docker-credential-gcr" /usr/local/bin/docker-credential-gcr \
    || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-gcr" /usr/local/bin/docker-credential-gcr )
 
-FROM ${REGISTRY}/library/alpine:${ALPINE_VER} as release-alpine
+FROM ${REGISTRY}/library/alpine:${ALPINE_VER} AS release-alpine
 COPY --from=build /etc/passwd /etc/group /etc/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build --chown=1000:1000 /home/appuser/ /home/appuser/
@@ -85,7 +85,7 @@ LABEL maintainer="" \
       org.opencontainers.image.title="regsync" \
       org.opencontainers.image.description="regclient/regsync utility for mirroring registry content (alpine)"
 
-FROM scratch as release-scratch
+FROM scratch AS release-scratch
 ADD  build/root.tgz /
 COPY --from=build /etc/passwd /etc/group /etc/
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/

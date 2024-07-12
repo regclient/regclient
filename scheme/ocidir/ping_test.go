@@ -4,16 +4,14 @@ import (
 	"context"
 	"testing"
 
-	"github.com/regclient/regclient/internal/rwfs"
 	"github.com/regclient/regclient/types/ref"
 )
 
 func TestPing(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	f := rwfs.OSNew("")
-	o := New(WithFS(f))
-	rOkay, err := ref.NewHost("ocidir://testdata/regctl")
+	o := New()
+	rOkay, err := ref.NewHost("ocidir://../../testdata/testrepo")
 	if err != nil {
 		t.Fatalf("failed to create ref: %v", err)
 	}
@@ -32,7 +30,7 @@ func TestPing(t *testing.T) {
 		}
 	}
 
-	rMissing, err := ref.NewHost("ocidir://testdata/missing")
+	rMissing, err := ref.NewHost("ocidir://../../testdata/missing")
 	if err != nil {
 		t.Fatalf("failed to create ref: %v", err)
 	}
@@ -47,7 +45,7 @@ func TestPing(t *testing.T) {
 		t.Errorf("stat on missing is not nil")
 	}
 
-	rFile, err := ref.NewHost("ocidir://testdata/regctl/index.json")
+	rFile, err := ref.NewHost("ocidir://../../testdata/testrepo/index.json")
 	if err != nil {
 		t.Fatalf("failed to create ref: %v", err)
 	}

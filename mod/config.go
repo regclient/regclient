@@ -8,9 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opencontainers/go-digest"
+
 	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/types/descriptor"
-	"github.com/regclient/regclient/types/manifest"
+	"github.com/regclient/regclient/types/blob"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 )
@@ -65,6 +66,39 @@ func WithConfigCmd(cmd []string) Opts {
 			}
 			oc.Config.Cmd = cmd
 			doc.oc.SetConfig(oc)
+			doc.modified = true
+			return nil
+		})
+		return nil
+	}
+}
+
+// WithConfigDigestAlgo changes the digest algorithm.
+func WithConfigDigestAlgo(algo digest.Algorithm) Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		if !algo.Available() {
+			return fmt.Errorf("digest algorithm is not available: %s", string(algo))
+		}
+		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
+			desc := doc.oc.GetDescriptor()
+			if doc.newDesc.MediaType != "" {
+				desc = doc.newDesc
+			}
+			if desc.DigestAlgo() == algo {
+				return nil
+			}
+			if !algo.Available() {
+				return fmt.Errorf("unavailable digest algorithm: %s", string(algo))
+			}
+			body, err := doc.oc.RawBody()
+			if err != nil {
+				return fmt.Errorf("failed to get config body: %w", err)
+			}
+			desc.Digest = algo.FromBytes(body)
+			doc.oc = blob.NewOCIConfig(
+				blob.WithDesc(desc),
+				blob.WithRawBody(body),
+			)
 			doc.modified = true
 			return nil
 		})
@@ -150,34 +184,7 @@ func WithConfigTimestamp(optTime OptTime) Opts {
 			}
 			// offset startHistory from base image history
 			if !optTime.BaseRef.IsZero() {
-				var d descriptor.Descriptor
-				for {
-					mOpts := []regclient.ManifestOpts{}
-					if d.Digest != "" {
-						mOpts = append(mOpts, regclient.WithManifestDesc(d))
-					}
-					m, err := rc.ManifestGet(c, optTime.BaseRef, mOpts...)
-					if err != nil {
-						return fmt.Errorf("unable to get base image: %w", err)
-					}
-					if mi, ok := m.(manifest.Imager); ok {
-						cd, err := mi.GetConfig()
-						if err != nil {
-							return fmt.Errorf("unable to get base image config descriptor: %w", err)
-						}
-						d = cd
-						break
-					} else if _, ok := m.(manifest.Indexer); ok {
-						pd, err := manifest.GetPlatformDesc(m, &oc.Platform)
-						if err != nil {
-							return fmt.Errorf("unable to get base image platform %s: %w", oc.Platform.String(), err)
-						}
-						d = *pd
-					} else {
-						return fmt.Errorf("unsupported base image manifest")
-					}
-				}
-				baseConfig, err := rc.BlobGetOCIConfig(c, optTime.BaseRef, d)
+				baseConfig, err := rc.ImageConfig(c, optTime.BaseRef, regclient.ImageWithPlatform(oc.Platform.String()))
 				if err != nil {
 					return fmt.Errorf("failed to get base image config: %w", err)
 				}

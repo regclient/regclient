@@ -173,7 +173,7 @@ func NewRandomBlob(size int, seed int64) (digest.Digest, []byte) {
 	} else if n != size {
 		panic("unable to read enough bytes")
 	}
-	return digest.FromBytes(b), b
+	return digest.Canonical.FromBytes(b), b
 }
 
 // NewRandomID outputs a reproducible random ID (based on the seed) appropriate for blob upload URLs.

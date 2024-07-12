@@ -254,6 +254,7 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rT
 					return err
 				}
 				bBytes, err := io.ReadAll(br)
+				_ = br.Close()
 				if err != nil {
 					return err
 				}
