@@ -238,6 +238,11 @@ func (reg *Reg) BlobPut(ctx context.Context, r ref.Ref, d descriptor.Descriptor,
 }
 
 func (reg *Reg) blobGetUploadURL(ctx context.Context, r ref.Ref, d descriptor.Descriptor) (*url.URL, error) {
+	q := url.Values{}
+	if d.DigestAlgo() != digest.Canonical {
+		// TODO(bmitch): EXPERIMENTAL parameter, registry support and OCI spec change needed
+		q.Add(paramBlobDigestAlgo, d.DigestAlgo().String())
+	}
 	// request an upload location
 	req := &reghttp.Req{
 		Host:      r.Registry,
@@ -247,10 +252,7 @@ func (reg *Reg) blobGetUploadURL(ctx context.Context, r ref.Ref, d descriptor.De
 				Method:     "POST",
 				Repository: r.Repository,
 				Path:       "blobs/uploads/",
-				// TODO(bmitch): EXPERIMENTAL parameter, registry support and OCI spec change needed
-				Query: url.Values{
-					paramDigestAlgo: []string{d.DigestAlgo().String()},
-				},
+				Query:      q,
 			},
 		},
 	}
