@@ -1,6 +1,7 @@
 package reg
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -29,16 +30,19 @@ import (
 func TestManifest(t *testing.T) {
 	t.Parallel()
 	repoPath := "/proj"
-	getTag := "get"
+	getTag256 := "get256"
+	getTag512 := "get512"
 	bigTag := "big"
 	shortReadTag := "short"
 	headTag := "head"
 	noheadTag := "nohead"
 	missingTag := "missing"
-	putTag := "put"
+	putTag256 := "put256"
+	putTag512 := "put512"
 	digest1 := digest.FromString("example1")
 	digest2 := digest.FromString("example2")
 	m := schema2.Manifest{
+		Versioned: schema2.ManifestSchemaVersion,
 		Config: descriptor.Descriptor{
 			MediaType: mediatype.Docker2ImageConfig,
 			Size:      8,
@@ -56,38 +60,73 @@ func TestManifest(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to marshal manifest: %v", err)
 	}
-	mDigest := digest.FromBytes(mBody)
+	padding := bytes.Repeat([]byte(" "), defaultManifestMaxPull)
+	mBodyBig := append(mBody, padding...)
+	mDigest256 := digest.SHA256.FromBytes(mBody)
+	mDigest512 := digest.SHA512.FromBytes(mBody)
 	mLen := len(mBody)
 	ctx := context.Background()
 	rrs := []reqresp.ReqResp{
 		{
 			ReqEntry: reqresp.ReqEntry{
-				Name:   "Get",
+				Name:   "Get tag",
 				Method: "GET",
-				Path:   "/v2" + repoPath + "/manifests/" + getTag,
+				Path:   "/v2" + repoPath + "/manifests/" + getTag256,
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusOK,
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", mLen)},
 					"Content-Type":          []string{mediatype.Docker2Manifest},
-					"Docker-Content-Digest": []string{mDigest.String()},
+					"Docker-Content-Digest": []string{mDigest256.String()},
 				},
 				Body: mBody,
 			},
 		},
 		{
 			ReqEntry: reqresp.ReqEntry{
-				Name:   "Get",
+				Name:   "Get 512 tag",
 				Method: "GET",
-				Path:   "/v2" + repoPath + "/manifests/" + mDigest.String(),
+				Path:   "/v2" + repoPath + "/manifests/" + getTag512,
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusOK,
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", mLen)},
 					"Content-Type":          []string{mediatype.Docker2Manifest},
-					"Docker-Content-Digest": []string{mDigest.String()},
+					"Docker-Content-Digest": []string{mDigest512.String()},
+				},
+				Body: mBody,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "Get 256 digest",
+				Method: "GET",
+				Path:   "/v2" + repoPath + "/manifests/" + mDigest256.String(),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", mLen)},
+					"Content-Type":          []string{mediatype.Docker2Manifest},
+					"Docker-Content-Digest": []string{mDigest256.String()},
+				},
+				Body: mBody,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "Get 512 digest",
+				Method: "GET",
+				Path:   "/v2" + repoPath + "/manifests/" + mDigest512.String(),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", mLen)},
+					"Content-Type":          []string{mediatype.Docker2Manifest},
+					"Docker-Content-Digest": []string{mDigest512.String()},
 				},
 				Body: mBody,
 			},
@@ -103,7 +142,7 @@ func TestManifest(t *testing.T) {
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", mLen)},
 					"Content-Type":          []string{mediatype.Docker2Manifest},
-					"Docker-Content-Digest": []string{mDigest.String()},
+					"Docker-Content-Digest": []string{mDigest256.String()},
 				},
 			},
 		},
@@ -111,14 +150,29 @@ func TestManifest(t *testing.T) {
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "Head",
 				Method: "HEAD",
-				Path:   "/v2" + repoPath + "/manifests/" + mDigest.String(),
+				Path:   "/v2" + repoPath + "/manifests/" + mDigest256.String(),
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusOK,
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", mLen)},
 					"Content-Type":          []string{mediatype.Docker2Manifest},
-					"Docker-Content-Digest": []string{mDigest.String()},
+					"Docker-Content-Digest": []string{mDigest256.String()},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "Head 512",
+				Method: "HEAD",
+				Path:   "/v2" + repoPath + "/manifests/" + mDigest512.String(),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", mLen)},
+					"Content-Type":          []string{mediatype.Docker2Manifest},
+					"Docker-Content-Digest": []string{mDigest512.String()},
 				},
 			},
 		},
@@ -133,7 +187,7 @@ func TestManifest(t *testing.T) {
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", mLen)},
 					"Content-Type":          []string{mediatype.Docker2Manifest},
-					"Docker-Content-Digest": []string{mDigest.String()},
+					"Docker-Content-Digest": []string{mDigest256.String()},
 				},
 				Body: mBody,
 			},
@@ -149,9 +203,9 @@ func TestManifest(t *testing.T) {
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", mLen+defaultManifestMaxPull)},
 					"Content-Type":          []string{mediatype.Docker2Manifest},
-					"Docker-Content-Digest": []string{mDigest.String()},
+					"Docker-Content-Digest": []string{mDigest256.String()},
 				},
-				Body: mBody,
+				Body: mBodyBig,
 			},
 		},
 		{
@@ -165,7 +219,7 @@ func TestManifest(t *testing.T) {
 				Headers: http.Header{
 					"Content-Length":        {fmt.Sprintf("%d", mLen+10)},
 					"Content-Type":          []string{mediatype.Docker2Manifest},
-					"Docker-Content-Digest": []string{mDigest.String()},
+					"Docker-Content-Digest": []string{mDigest256.String()},
 				},
 				Body: mBody,
 			},
@@ -182,9 +236,9 @@ func TestManifest(t *testing.T) {
 		},
 		{
 			ReqEntry: reqresp.ReqEntry{
-				Name:   "Put",
+				Name:   "Put tag 256",
 				Method: "PUT",
-				Path:   "/v2" + repoPath + "/manifests/" + putTag,
+				Path:   "/v2" + repoPath + "/manifests/" + putTag256,
 				Headers: http.Header{
 					"Content-Type":   []string{mediatype.Docker2Manifest},
 					"Content-Length": {fmt.Sprintf("%d", mLen)},
@@ -194,7 +248,64 @@ func TestManifest(t *testing.T) {
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusCreated,
 				Headers: http.Header{
-					"Docker-Content-Digest": []string{mDigest.String()},
+					"Docker-Content-Digest": []string{mDigest256.String()},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "Put tag 512",
+				Method: "PUT",
+				Path:   "/v2" + repoPath + "/manifests/" + putTag512,
+				Query: map[string][]string{
+					paramManifestDigest: {mDigest512.String()},
+				},
+				Headers: http.Header{
+					"Content-Type":   []string{mediatype.Docker2Manifest},
+					"Content-Length": {fmt.Sprintf("%d", mLen)},
+				},
+				Body: mBody,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusCreated,
+				Headers: http.Header{
+					"Docker-Content-Digest": []string{mDigest512.String()},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "Put digest 256",
+				Method: "PUT",
+				Path:   "/v2" + repoPath + "/manifests/" + mDigest256.String(),
+				Headers: http.Header{
+					"Content-Type":   []string{mediatype.Docker2Manifest},
+					"Content-Length": {fmt.Sprintf("%d", mLen)},
+				},
+				Body: mBody,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusCreated,
+				Headers: http.Header{
+					"Docker-Content-Digest": []string{mDigest256.String()},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "Put digest 512",
+				Method: "PUT",
+				Path:   "/v2" + repoPath + "/manifests/" + mDigest512.String(),
+				Headers: http.Header{
+					"Content-Type":   []string{mediatype.Docker2Manifest},
+					"Content-Length": {fmt.Sprintf("%d", mLen)},
+				},
+				Body: mBody,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusCreated,
+				Headers: http.Header{
+					"Docker-Content-Digest": []string{mDigest512.String()},
 				},
 			},
 		},
@@ -248,7 +359,7 @@ func TestManifest(t *testing.T) {
 	)
 
 	t.Run("Get", func(t *testing.T) {
-		getRef, err := ref.New(tsURL.Host + repoPath + ":" + getTag)
+		getRef, err := ref.New(tsURL.Host + repoPath + ":" + getTag256)
 		if err != nil {
 			t.Fatalf("Failed creating getRef: %v", err)
 		}
@@ -259,7 +370,7 @@ func TestManifest(t *testing.T) {
 		if manifest.GetMediaType(mGet) != mediatype.Docker2Manifest {
 			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mGet))
 		}
-		if mGet.GetDescriptor().Digest != mDigest {
+		if mGet.GetDescriptor().Digest != mDigest256 {
 			t.Errorf("Unexpected digest: %s", mGet.GetDescriptor().Digest.String())
 		}
 	})
@@ -275,7 +386,7 @@ func TestManifest(t *testing.T) {
 		if manifest.GetMediaType(mHead) != mediatype.Docker2Manifest {
 			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mHead))
 		}
-		if mHead.GetDescriptor().Digest != mDigest {
+		if mHead.GetDescriptor().Digest != mDigest256 {
 			t.Errorf("Unexpected digest: %s", mHead.GetDescriptor().Digest.String())
 		}
 	})
@@ -303,7 +414,7 @@ func TestManifest(t *testing.T) {
 		if manifest.GetMediaType(mNohead) != mediatype.Docker2Manifest {
 			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mNohead))
 		}
-		if mNohead.GetDescriptor().Digest != mDigest {
+		if mNohead.GetDescriptor().Digest != mDigest256 {
 			t.Errorf("Unexpected digest: %s", mNohead.GetDescriptor().Digest.String())
 		}
 	})
@@ -318,7 +429,7 @@ func TestManifest(t *testing.T) {
 		}
 	})
 	t.Run("Get Digest", func(t *testing.T) {
-		getRef, err := ref.New(tsURL.Host + repoPath + "@" + mDigest.String())
+		getRef, err := ref.New(tsURL.Host + repoPath + "@" + mDigest256.String())
 		if err != nil {
 			t.Fatalf("Failed creating getRef: %v", err)
 		}
@@ -329,12 +440,12 @@ func TestManifest(t *testing.T) {
 		if manifest.GetMediaType(mGet) != mediatype.Docker2Manifest {
 			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mGet))
 		}
-		if mGet.GetDescriptor().Digest != mDigest {
+		if mGet.GetDescriptor().Digest != mDigest256 {
 			t.Errorf("Unexpected digest: %s", mGet.GetDescriptor().Digest.String())
 		}
 	})
 	t.Run("Head Digest", func(t *testing.T) {
-		headRef, err := ref.New(tsURL.Host + repoPath + "@" + mDigest.String())
+		headRef, err := ref.New(tsURL.Host + repoPath + "@" + mDigest256.String())
 		if err != nil {
 			t.Fatalf("Failed creating getRef: %v", err)
 		}
@@ -345,12 +456,12 @@ func TestManifest(t *testing.T) {
 		if manifest.GetMediaType(mHead) != mediatype.Docker2Manifest {
 			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mHead))
 		}
-		if mHead.GetDescriptor().Digest != mDigest {
+		if mHead.GetDescriptor().Digest != mDigest256 {
 			t.Errorf("Unexpected digest: %s", mHead.GetDescriptor().Digest.String())
 		}
 	})
-	t.Run("Cache Get", func(t *testing.T) {
-		getRef, err := ref.New(tsURL.Host + repoPath + "@" + mDigest.String())
+	t.Run("Get Digest 512", func(t *testing.T) {
+		getRef, err := ref.New(tsURL.Host + repoPath + "@" + mDigest512.String())
 		if err != nil {
 			t.Fatalf("Failed creating getRef: %v", err)
 		}
@@ -361,7 +472,39 @@ func TestManifest(t *testing.T) {
 		if manifest.GetMediaType(mGet) != mediatype.Docker2Manifest {
 			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mGet))
 		}
-		if mGet.GetDescriptor().Digest != mDigest {
+		if mGet.GetDescriptor().Digest != mDigest512 {
+			t.Errorf("Unexpected digest: %s", mGet.GetDescriptor().Digest.String())
+		}
+	})
+	t.Run("Head Digest 512", func(t *testing.T) {
+		headRef, err := ref.New(tsURL.Host + repoPath + "@" + mDigest512.String())
+		if err != nil {
+			t.Fatalf("Failed creating getRef: %v", err)
+		}
+		mHead, err := regCache.ManifestHead(ctx, headRef)
+		if err != nil {
+			t.Fatalf("Failed running ManifestHead: %v", err)
+		}
+		if manifest.GetMediaType(mHead) != mediatype.Docker2Manifest {
+			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mHead))
+		}
+		if mHead.GetDescriptor().Digest != mDigest512 {
+			t.Errorf("Unexpected digest: %s", mHead.GetDescriptor().Digest.String())
+		}
+	})
+	t.Run("Cache Get", func(t *testing.T) {
+		getRef, err := ref.New(tsURL.Host + repoPath + "@" + mDigest256.String())
+		if err != nil {
+			t.Fatalf("Failed creating getRef: %v", err)
+		}
+		mGet, err := regCache.ManifestGet(ctx, getRef)
+		if err != nil {
+			t.Fatalf("Failed running ManifestGet: %v", err)
+		}
+		if manifest.GetMediaType(mGet) != mediatype.Docker2Manifest {
+			t.Errorf("Unexpected media type: %s", manifest.GetMediaType(mGet))
+		}
+		if mGet.GetDescriptor().Digest != mDigest256 {
 			t.Errorf("Unexpected digest: %s", mGet.GetDescriptor().Digest.String())
 		}
 		_, err = reg.ManifestGet(ctx, getRef)
@@ -401,8 +544,8 @@ func TestManifest(t *testing.T) {
 		}
 	})
 
-	t.Run("PUT", func(t *testing.T) {
-		putRef, err := ref.New(tsURL.Host + repoPath + ":" + putTag)
+	t.Run("PUT tag 256", func(t *testing.T) {
+		putRef, err := ref.New(tsURL.Host + repoPath + ":" + putTag256)
 		if err != nil {
 			t.Fatalf("failed creating ref: %v", err)
 		}
@@ -415,8 +558,59 @@ func TestManifest(t *testing.T) {
 			t.Errorf("failed to put manifest: %v", err)
 		}
 	})
+	t.Run("PUT tag 512", func(t *testing.T) {
+		putRef, err := ref.New(tsURL.Host + repoPath + ":" + putTag512)
+		if err != nil {
+			t.Fatalf("failed creating ref: %v", err)
+		}
+		mm, err := manifest.New(manifest.WithRaw(mBody), manifest.WithDesc(descriptor.Descriptor{
+			MediaType: mediatype.Docker2Manifest,
+			Size:      int64(len(mBody)),
+			Digest:    mDigest512,
+		}))
+		if err != nil {
+			t.Fatalf("failed to create manifest: %v", err)
+		}
+		err = reg.ManifestPut(ctx, putRef, mm)
+		if err != nil {
+			t.Errorf("failed to put manifest: %v", err)
+		}
+	})
+	t.Run("PUT digest 256", func(t *testing.T) {
+		putRef, err := ref.New(tsURL.Host + repoPath + "@" + mDigest256.String())
+		if err != nil {
+			t.Fatalf("failed creating ref: %v", err)
+		}
+		mm, err := manifest.New(manifest.WithRaw(mBody))
+		if err != nil {
+			t.Fatalf("failed to create manifest: %v", err)
+		}
+		err = reg.ManifestPut(ctx, putRef, mm)
+		if err != nil {
+			t.Errorf("failed to put manifest: %v", err)
+		}
+	})
+	t.Run("PUT tag 512", func(t *testing.T) {
+		putRef, err := ref.New(tsURL.Host + repoPath + "@" + mDigest512.String())
+		if err != nil {
+			t.Fatalf("failed creating ref: %v", err)
+		}
+		mm, err := manifest.New(manifest.WithRaw(mBody), manifest.WithDesc(descriptor.Descriptor{
+			MediaType: mediatype.Docker2Manifest,
+			Size:      int64(len(mBody)),
+			Digest:    mDigest512,
+		}))
+		if err != nil {
+			t.Fatalf("failed to create manifest: %v", err)
+		}
+		err = reg.ManifestPut(ctx, putRef, mm)
+		if err != nil {
+			t.Errorf("failed to put manifest: %v", err)
+		}
+	})
+
 	t.Run("PUT size limit", func(t *testing.T) {
-		putRef, err := ref.New(tsURL.Host + repoPath + ":" + putTag)
+		putRef, err := ref.New(tsURL.Host + repoPath + ":" + putTag256)
 		if err != nil {
 			t.Fatalf("failed creating ref: %v", err)
 		}
