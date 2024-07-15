@@ -86,7 +86,9 @@ func WithAnnotation(name, value string) Opts {
 			if err != nil {
 				return err
 			}
-			dm.mod = replaced
+			if dm.mod == unchanged {
+				dm.mod = replaced
+			}
 			dm.newDesc = dm.m.GetDescriptor()
 			return nil
 		})
@@ -147,7 +149,9 @@ func WithAnnotationOCIBase(rBase ref.Ref, dBase digest.Digest) Opts {
 				}
 			}
 			if changed {
-				dm.mod = replaced
+				if dm.mod == unchanged {
+					dm.mod = replaced
+				}
 				err := dm.m.SetOrig(om)
 				if err != nil {
 					return err
@@ -216,7 +220,9 @@ func WithAnnotationPromoteCommon() Opts {
 				}
 			}
 			if changed {
-				dm.mod = replaced
+				if dm.mod == unchanged {
+					dm.mod = replaced
+				}
 				err = dm.m.SetOrig(ociI)
 				if err != nil {
 					return err
@@ -274,7 +280,9 @@ func WithLabelToAnnotation() Opts {
 				return err
 			}
 			dm.newDesc = dm.m.GetDescriptor()
-			dm.mod = replaced
+			if dm.mod == unchanged {
+				dm.mod = replaced
+			}
 			return nil
 		})
 		return nil
@@ -393,7 +401,9 @@ func WithManifestToDocker() Opts {
 			}
 			dm.m = newM
 			dm.newDesc = dm.m.GetDescriptor()
-			dm.mod = replaced
+			if dm.mod == unchanged {
+				dm.mod = replaced
+			}
 			return nil
 		})
 		return nil
@@ -458,7 +468,9 @@ func WithManifestToOCI() Opts {
 			}
 			dm.m = newM
 			dm.newDesc = dm.m.GetDescriptor()
-			dm.mod = replaced
+			if dm.mod == unchanged {
+				dm.mod = replaced
+			}
 			return nil
 		})
 		return nil
@@ -607,7 +619,9 @@ func WithExternalURLsRm() Opts {
 				return err
 			}
 			dm.newDesc = dm.m.GetDescriptor()
-			dm.mod = replaced
+			if dm.mod == unchanged {
+				dm.mod = replaced
+			}
 			return nil
 		})
 		return nil
@@ -856,7 +870,9 @@ func rebaseAddStep(dc *dagConfig, rBaseOld, rBaseNew ref.Ref) error {
 
 		// set modified flags on config and manifest
 		dm.config.modified = true
-		dm.mod = replaced
+		if dm.mod == unchanged {
+			dm.mod = replaced
+		}
 		dc.forceLayerWalk = true
 
 		return nil
