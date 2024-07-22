@@ -597,6 +597,13 @@ func TestMod(t *testing.T) {
 			ref: tTgtHost + "/testrepo:v3",
 		},
 		{
+			name: "Layer Trim File With Local Separator",
+			opts: []Opts{
+				WithLayerStripFile(string(filepath.Separator) + "layer2"),
+			},
+			ref: tTgtHost + "/testrepo:v3",
+		},
+		{
 			name: "Layer Timestamp Set Missing",
 			opts: []Opts{
 				WithLayerTimestamp(OptTime{}),
