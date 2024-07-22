@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -1826,25 +1827,34 @@ func (trd *tarReadData) tarReadFileJSON(data interface{}) error {
 
 var errTarFileExists = errors.New("tar file already exists")
 
-func (td *tarWriteData) tarWriteHeader(filename string, size int64) error {
-	dirname := filepath.Dir(filename)
-	if !td.dirs[dirname] && dirname != "." {
-		header := tar.Header{
-			Format:     tar.FormatPAX,
-			Typeflag:   tar.TypeDir,
-			Name:       dirname,
-			Size:       0,
-			Mode:       td.mode | 0511,
-			ModTime:    td.timestamp,
-			AccessTime: td.timestamp,
-			ChangeTime: td.timestamp,
-		}
-		err := td.tw.WriteHeader(&header)
-		if err != nil {
-			return err
-		}
-		td.dirs[dirname] = true
+func (td *tarWriteData) tarWriteDirHeader(dirname string) error {
+	dirname = filepath.ToSlash(dirname)
+	if td.dirs[dirname] || dirname == "." {
+		return nil
 	}
+	if err := td.tarWriteDirHeader(filepath.Dir(dirname)); err != nil {
+		return err
+	}
+	header := tar.Header{
+		Format:     tar.FormatPAX,
+		Typeflag:   tar.TypeDir,
+		Name:       dirname + "/",
+		Size:       0,
+		Mode:       td.mode | 0511,
+		ModTime:    td.timestamp,
+		AccessTime: td.timestamp,
+		ChangeTime: td.timestamp,
+	}
+	if err := td.tw.WriteHeader(&header); err != nil {
+		return err
+	}
+	td.dirs[dirname] = true
+	return nil
+}
+
+func (td *tarWriteData) tarWriteHeader(filename string, size int64) error {
+	filename = filepath.ToSlash(filename)
+	td.tarWriteDirHeader(filepath.Dir(filename))
 	if td.files[filename] {
 		return fmt.Errorf("%w: %s", errTarFileExists, filename)
 	}
@@ -1879,5 +1889,5 @@ func (td *tarWriteData) tarWriteFileJSON(filename string, data interface{}) erro
 }
 
 func tarOCILayoutDescPath(d descriptor.Descriptor) string {
-	return filepath.Clean(fmt.Sprintf("blobs/%s/%s", d.Digest.Algorithm(), d.Digest.Encoded()))
+	return path.Join("blobs", string(d.Digest.Algorithm()), d.Digest.Encoded())
 }
