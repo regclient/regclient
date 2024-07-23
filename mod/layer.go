@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -426,7 +427,7 @@ func WithLayerRmIndex(index int) Opts {
 
 // WithLayerStripFile removes a file from within the layer tar.
 func WithLayerStripFile(file string) Opts {
-	file = strings.Trim(file, "/")
+	file = strings.Trim(filepath.ToSlash(file), "/")
 	fileRE := regexp.MustCompile("^/?" + regexp.QuoteMeta(file) + "(/.*)?$")
 	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsLayerFile = append(dc.stepsLayerFile, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dl *dagLayer, th *tar.Header, tr io.Reader) (*tar.Header, io.Reader, changes, error) {
