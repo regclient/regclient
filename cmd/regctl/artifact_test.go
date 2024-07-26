@@ -50,6 +50,11 @@ func TestArtifactGet(t *testing.T) {
 			args:      []string{"artifact", "get", "ocidir://../../testdata/testrepo:ai", "--filter-annotation", "type=sbom"},
 			expectOut: "eggs",
 		},
+		{
+			name:      "Get Config",
+			args:      []string{"artifact", "get", "ocidir://../../testdata/testrepo:ai", "--filter-annotation", "type=sbom", "--config"},
+			expectOut: "{}",
+		},
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
