@@ -10,8 +10,9 @@ import (
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/cache"
+	"github.com/regclient/regclient/internal/pqueue"
 	"github.com/regclient/regclient/internal/reghttp"
-	"github.com/regclient/regclient/internal/throttle"
+	"github.com/regclient/regclient/internal/reqmeta"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/regclient/regclient/types/referrer"
@@ -92,8 +93,8 @@ func New(opts ...Opts) *Reg {
 }
 
 // Throttle is used to limit concurrency
-func (reg *Reg) Throttle(r ref.Ref, put bool) []*throttle.Throttle {
-	tList := []*throttle.Throttle{}
+func (reg *Reg) Throttle(r ref.Ref, put bool) []*pqueue.Queue[reqmeta.Data] {
+	tList := []*pqueue.Queue[reqmeta.Data]{}
 	host := reg.hostGet(r.Registry)
 	t := host.Throttle()
 	if t != nil {

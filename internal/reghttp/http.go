@@ -30,7 +30,7 @@ import (
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/auth"
-	"github.com/regclient/regclient/internal/throttle"
+	"github.com/regclient/regclient/internal/reqmeta"
 	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/warning"
 )
@@ -111,7 +111,7 @@ type clientResp struct {
 	digester         digest.Digester
 	reader           io.Reader
 	readCur, readMax int64
-	throttle         *throttle.Throttle
+	throttleDone     func()
 }
 
 // Opts is used to configure client options
@@ -284,7 +284,7 @@ func (resp *clientResp) Next() error {
 			return ctxErr
 		}
 		// wait for other concurrent requests to this host
-		throttleErr := h.config.Throttle().Acquire(resp.ctx)
+		throttleDone, throttleErr := h.config.Throttle().Acquire(resp.ctx, reqmeta.Data{})
 		if throttleErr != nil {
 			return throttleErr
 		}
@@ -520,14 +520,11 @@ func (resp *clientResp) Next() error {
 		}()
 		// return on success
 		if loopErr == nil {
-			resp.throttle = h.config.Throttle()
+			resp.throttleDone = throttleDone
 			return nil
 		}
 		// backoff, dropHost, and/or go to next host in the list
-		throttleErr = h.config.Throttle().Release(resp.ctx)
-		if throttleErr != nil {
-			return throttleErr
-		}
+		throttleDone()
 		if backoff {
 			if api.IgnoreErr {
 				// don't set a backoff, immediately drop the host when errors ignored
@@ -613,9 +610,9 @@ func (resp *clientResp) Read(b []byte) (int, error) {
 }
 
 func (resp *clientResp) Close() error {
-	if resp.throttle != nil {
-		_ = resp.throttle.Release(resp.ctx)
-		resp.throttle = nil
+	if resp.throttleDone != nil {
+		resp.throttleDone()
+		resp.throttleDone = nil
 	}
 	if resp.resp == nil {
 		return errs.ErrNotFound
