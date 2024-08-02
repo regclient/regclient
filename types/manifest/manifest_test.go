@@ -828,7 +828,15 @@ func TestNew(t *testing.T) {
 			wantE: fmt.Errorf("manifest contains an unexpected media type: expected %s, received %s", mediatype.OCI1Manifest, mediatype.OCI1ManifestList),
 		},
 		{
-			name: "Invalid digest",
+			name: "Invalid ref digest",
+			opts: []Opts{
+				WithRef(r.SetDigest(digestInvalid.String())),
+				WithRaw(rawDockerSchema2),
+			},
+			wantE: errs.ErrDigestMismatch,
+		},
+		{
+			name: "Invalid descriptor digest",
 			opts: []Opts{
 				WithRef(r),
 				WithRaw(rawDockerSchema2),
@@ -838,7 +846,7 @@ func TestNew(t *testing.T) {
 					Size:      int64(len(rawDockerSchema2)),
 				}),
 			},
-			wantE: fmt.Errorf("manifest digest mismatch, expected %s, computed %s", digestInvalid, digestDockerSchema2),
+			wantE: errs.ErrDigestMismatch,
 		},
 		{
 			name: "Invalid Media Type",
