@@ -71,6 +71,7 @@ type artifactCmd struct {
 	formatList       string
 	formatPut        string
 	formatTree       string
+	getConfig        bool
 	index            bool
 	latest           bool
 	outputDir        string
@@ -104,7 +105,10 @@ regctl artifact get registry.example.org/helm-charts/chart:0.0.1 > chart.tgz
 regctl artifact get \
   --subject ghcr.io/regclient/regsync:latest \
   --filter-artifact-type application/spdx+json \
-  --platform local | jq .`,
+  --platform local | jq .
+  
+# retrieve the artifact config rather than the artifact itself
+regctl artifact get registry.example.org/artifact:0.0.1 --config`,
 		Args:      cobra.RangeArgs(0, 1),
 		ValidArgs: []string{}, // do not auto complete repository/tag
 		RunE:      artifactOpts.runArtifactGet,
@@ -177,7 +181,8 @@ regctl artifact tree --digest-tags ghcr.io/regclient/regsync:latest`,
 	artifactGetCmd.Flags().StringVarP(&artifactOpts.platform, "platform", "p", "", "Specify platform of a subject (e.g. linux/amd64 or local)")
 	artifactGetCmd.Flags().StringVar(&artifactOpts.filterAT, "filter-artifact-type", "", "Filter referrers by artifactType")
 	artifactGetCmd.Flags().StringArrayVar(&artifactOpts.filterAnnot, "filter-annotation", []string{}, "Filter referrers by annotation (key=value)")
-	artifactGetCmd.Flags().StringVar(&artifactOpts.artifactConfig, "config-file", "", "Config filename to output")
+	artifactGetCmd.Flags().BoolVar(&artifactOpts.getConfig, "config", false, "Show the config, overrides file options")
+	artifactGetCmd.Flags().StringVar(&artifactOpts.artifactConfig, "config-file", "", "Output config to a file")
 	artifactGetCmd.Flags().StringArrayVarP(&artifactOpts.artifactFile, "file", "f", []string{}, "Filter by artifact filename")
 	artifactGetCmd.Flags().StringArrayVarP(&artifactOpts.artifactFileMT, "file-media-type", "m", []string{}, "Filter by artifact media-type")
 	_ = artifactGetCmd.RegisterFlagCompletionFunc("file-media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -360,7 +365,7 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 	}
 
 	// if config-file defined, create file as writer, perform a blob get
-	if artifactOpts.artifactConfig != "" {
+	if artifactOpts.artifactConfig != "" || artifactOpts.getConfig {
 		d, err := mi.GetConfig()
 		if err != nil {
 			return err
@@ -370,14 +375,25 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 			return err
 		}
 		defer rdr.Close()
-		fh, err := os.Create(artifactOpts.artifactConfig)
-		if err != nil {
-			return err
+		if artifactOpts.artifactConfig != "" {
+			fh, err := os.Create(artifactOpts.artifactConfig)
+			if err != nil {
+				return err
+			}
+			defer fh.Close()
+			_, err = io.Copy(fh, rdr)
+			if err != nil {
+				return err
+			}
+		} else {
+			_, err = io.Copy(cmd.OutOrStdout(), rdr)
+			if err != nil {
+				return err
+			}
 		}
-		defer fh.Close()
-		_, err = io.Copy(fh, rdr)
-		if err != nil {
-			return err
+		if artifactOpts.getConfig {
+			// do not return layer contents if request is only for a config
+			return nil
 		}
 	}
 

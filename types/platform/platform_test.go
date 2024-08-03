@@ -20,15 +20,39 @@ func TestPlatformParse(t *testing.T) {
 		winGoal.Variant = platLocal.Variant
 		winGoal.OSVersion = platLocal.OSVersion
 	}
-	amd64Goal := Platform{OS: platLocal.OS, Architecture: "amd64"}
-	if platLocal.Architecture == "amd64" {
-		amd64Goal.Variant = platLocal.Variant
-		amd64Goal.OSVersion = platLocal.OSVersion
+	linuxAMD64Goal := Platform{OS: "linux", Architecture: "amd64"}
+	if Compatible(Platform{OS: platLocal.OS, Architecture: platLocal.Architecture}, linuxAMD64Goal) {
+		linuxAMD64Goal.Variant = platLocal.Variant
+		linuxAMD64Goal.OSVersion = platLocal.OSVersion
 	}
-	arm64Goal := Platform{OS: platLocal.OS, Architecture: "arm64"}
-	if platLocal.Architecture == "arm64" {
-		arm64Goal.Variant = platLocal.Variant
-		arm64Goal.OSVersion = platLocal.OSVersion
+	darwinAMD64Goal := Platform{OS: "darwin", Architecture: "amd64"}
+	if Compatible(Platform{OS: platLocal.OS, Architecture: platLocal.Architecture}, darwinAMD64Goal) {
+		darwinAMD64Goal.Variant = platLocal.Variant
+		darwinAMD64Goal.OSVersion = platLocal.OSVersion
+	}
+	darwinARM64Goal := Platform{OS: "darwin", Architecture: "arm64"}
+	if Compatible(Platform{OS: platLocal.OS, Architecture: platLocal.Architecture}, darwinARM64Goal) {
+		darwinARM64Goal.Variant = platLocal.Variant
+		darwinARM64Goal.OSVersion = platLocal.OSVersion
+	}
+	windowsAMD64Goal := Platform{OS: "windows", Architecture: "amd64"}
+	if Compatible(Platform{OS: platLocal.OS, Architecture: platLocal.Architecture}, windowsAMD64Goal) {
+		windowsAMD64Goal.Variant = platLocal.Variant
+		windowsAMD64Goal.OSVersion = platLocal.OSVersion
+	}
+	windowsAMD64v2Goal := Platform{OS: "windows", Architecture: "amd64", Variant: "v2"}
+	if Compatible(Platform{OS: platLocal.OS, Architecture: platLocal.Architecture}, windowsAMD64Goal) {
+		windowsAMD64Goal.OSVersion = platLocal.OSVersion
+	}
+	localAMD64Goal := Platform{OS: platLocal.OS, Architecture: "amd64"}
+	if Compatible(Platform{OS: platLocal.OS, Architecture: platLocal.Architecture}, localAMD64Goal) {
+		localAMD64Goal.Variant = platLocal.Variant
+		localAMD64Goal.OSVersion = platLocal.OSVersion
+	}
+	localARM64Goal := Platform{OS: platLocal.OS, Architecture: "arm64"}
+	if Compatible(Platform{OS: platLocal.OS, Architecture: platLocal.Architecture}, localARM64Goal) {
+		localARM64Goal.Variant = platLocal.Variant
+		localARM64Goal.OSVersion = platLocal.OSVersion
 	}
 	tests := []struct {
 		name    string
@@ -78,7 +102,7 @@ func TestPlatformParse(t *testing.T) {
 		},
 		{
 			name:  "linux arm64/v8",
-			parse: "linux/arm64",
+			parse: "linux/arm64/v8",
 			goal:  Platform{OS: "linux", Architecture: "arm64"},
 		},
 		{
@@ -114,22 +138,22 @@ func TestPlatformParse(t *testing.T) {
 		{
 			name:  "macos amd64",
 			parse: "macos/amd64",
-			goal:  Platform{OS: "darwin", Architecture: "amd64"},
+			goal:  darwinAMD64Goal,
 		},
 		{
 			name:  "darwin arm64",
 			parse: "darwin/arm64",
-			goal:  Platform{OS: "darwin", Architecture: "arm64"},
+			goal:  darwinARM64Goal,
 		},
 		{
 			name:  "windows amd64 with version",
 			parse: "windows/amd64,osver=10.0.17763.4974",
-			goal:  Platform{OS: "windows", Architecture: "amd64", OSVersion: "10.0.17763.4974"},
+			goal:  Platform{OS: "windows", Architecture: "amd64", Variant: windowsAMD64Goal.Variant, OSVersion: "10.0.17763.4974"},
 		},
 		{
 			name:  "windows amd64",
 			parse: "windows/amd64/v2",
-			goal:  Platform{OS: "windows", Architecture: "amd64", Variant: "v2"},
+			goal:  windowsAMD64v2Goal,
 		},
 		{
 			name:  "windows",
@@ -139,12 +163,12 @@ func TestPlatformParse(t *testing.T) {
 		{
 			name:  "amd64",
 			parse: "amd64",
-			goal:  amd64Goal,
+			goal:  localAMD64Goal,
 		},
 		{
 			name:  "arm64",
 			parse: "arm64",
-			goal:  arm64Goal,
+			goal:  localARM64Goal,
 		},
 		{
 			name:  "local",
