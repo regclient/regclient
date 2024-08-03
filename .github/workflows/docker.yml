@@ -85,7 +85,7 @@ jobs:
         echo "repo_url=${REPO_URL}" >>$GITHUB_OUTPUT
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@aa33708b10e362ff993539393ff100fa93ed6a27 # v3.5.0
+      uses: docker/setup-buildx-action@988b5a0280414f521da01fcc63a27aeeb4b104db # v3.6.1
 
     - name: Login to DockerHub
       if: github.repository_owner == 'regclient'
@@ -128,7 +128,7 @@ jobs:
       uses: anchore/sbom-action/download-syft@d94f46e13c6c62f59525ac9a1e147a99dc0b9bf5 # v0.17.0
       id: syft
       with:
-        syft-version: "v1.9.0"
+        syft-version: "v1.10.0"
     
     # Dogfooding, use regctl to modify regclient images to improve reproducibility
     - name: Install regctl
