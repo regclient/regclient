@@ -760,7 +760,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project",
 			Path:       "manifests/tag-get",
 			Headers:    headers,
-			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err != nil {
@@ -787,7 +786,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project",
 			Path:       "manifests/tag-get",
 			Headers:    headers,
-			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err != nil {
@@ -833,7 +831,6 @@ func TestRegHttp(t *testing.T) {
 			Method:    "GET",
 			DirectURL: u,
 			Headers:   headers,
-			Digest:    getDigest,
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err != nil {
@@ -853,62 +850,6 @@ func TestRegHttp(t *testing.T) {
 			t.Errorf("error closing request: %v", err)
 		}
 	})
-	// test digest validation
-	t.Run("Bad Digest", func(t *testing.T) {
-		badDigestReq := &Req{
-			Host:       tsHost,
-			Method:     "GET",
-			Repository: "project",
-			Path:       "manifests/tag-get",
-			Headers:    headers,
-			Digest:     digest.FromString("bad digest"),
-		}
-		resp, err := hc.Do(ctx, badDigestReq)
-		if err != nil {
-			t.Fatalf("failed to run get: %v", err)
-		}
-		if resp.HTTPResponse().StatusCode != 200 {
-			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
-		}
-		body, err := io.ReadAll(resp)
-		if err == nil {
-			t.Errorf("body read unexpectedly succeeded: %s", body)
-		} else if !errors.Is(err, errs.ErrDigestMismatch) {
-			t.Errorf("unexpected error from digest mismatch: %v", err)
-		}
-		err = resp.Close()
-		if err != nil {
-			t.Errorf("error closing request: %v", err)
-		}
-	})
-	t.Run("Direct Digest", func(t *testing.T) {
-		u, _ := url.Parse(ts.URL)
-		u.Path = "/v2/project/manifests/tag-get"
-		getReq := &Req{
-			Host:      tsHost,
-			Method:    "GET",
-			DirectURL: u,
-			Headers:   headers,
-			Digest:    digest.FromString("bad digest"),
-		}
-		resp, err := hc.Do(ctx, getReq)
-		if err != nil {
-			t.Fatalf("failed to run get: %v", err)
-		}
-		if resp.HTTPResponse().StatusCode != 200 {
-			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
-		}
-		body, err := io.ReadAll(resp)
-		if err == nil {
-			t.Errorf("body read unexpectedly succeeded: %s", body)
-		} else if !errors.Is(err, errs.ErrDigestMismatch) {
-			t.Errorf("unexpected error from digest mismatch: %v", err)
-		}
-		err = resp.Close()
-		if err != nil {
-			t.Errorf("error closing request: %v", err)
-		}
-	})
 	// test context already expired
 	t.Run("Expired Context", func(t *testing.T) {
 		deadline := time.Now().Add(-1 * time.Second)
@@ -921,7 +862,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project",
 			Path:       "manifests/tag-get",
 			Headers:    headers,
-			Digest:     getDigest,
 		}
 		resp, err := hc.Do(expCtx, getReq)
 		if err == nil {
@@ -937,7 +877,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project",
 			Path:       "manifests/tag-get",
 			Headers:    headers,
-			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, headReq)
 		if err != nil {
@@ -965,7 +904,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project",
 			Path:       "manifests/tag-get",
 			Headers:    headers,
-			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, headReq)
 		if err == nil {
@@ -981,7 +919,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project",
 			Path:       "manifests/tag-auth",
 			Headers:    headers,
-			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, authReq)
 		if err != nil {
@@ -1008,7 +945,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project",
 			Path:       "manifests/tag-auth",
 			Headers:    headers,
-			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, authReq)
 		if err == nil {
@@ -1025,7 +961,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project-bad-auth",
 			Path:       "manifests/tag-repoauth",
 			Headers:    headers,
-			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, authReq)
 		if err == nil {
@@ -1042,7 +977,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project-missing-auth",
 			Path:       "manifests/tag-repoauth",
 			Headers:    headers,
-			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, authReq)
 		if err == nil {
@@ -1060,7 +994,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project",
 			Path:       "manifests/tag-repoauth",
 			Headers:    headers,
-			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, authReq1G)
 		if err != nil {
@@ -1086,7 +1019,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project",
 			Path:       "manifests/tag-repoauth",
 			Headers:    headers,
-			Digest:     getDigest,
 			BodyBytes:  putBody,
 		}
 		resp, err = hc.Do(ctx, authReq1P)
@@ -1107,7 +1039,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project2",
 			Path:       "manifests/tag-repoauth",
 			Headers:    headers,
-			Digest:     getDigest,
 		}
 		resp, err = hc.Do(ctx, authReq2G)
 		if err != nil {
@@ -1133,7 +1064,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project2",
 			Path:       "manifests/tag-repoauth",
 			Headers:    headers,
-			Digest:     getDigest,
 			BodyBytes:  putBody,
 		}
 		resp, err = hc.Do(ctx, authReq2P)
@@ -1263,7 +1193,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project",
 			Path:       "manifests/tag-get",
 			Headers:    headers,
-			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err != nil {
@@ -1291,7 +1220,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project",
 			Path:       "manifests/tag-get",
 			Headers:    headers,
-			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err == nil {
@@ -1308,7 +1236,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project",
 			Path:       "manifests/tag-get",
 			Headers:    headers,
-			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err == nil {
@@ -1325,7 +1252,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project",
 			Path:       "manifests/tag-get",
 			Headers:    headers,
-			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err == nil {
@@ -1342,7 +1268,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project",
 			Path:       "manifests/tag-get",
 			Headers:    headers,
-			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err == nil {
@@ -1359,7 +1284,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project",
 			Path:       "manifests/tag-get",
 			Headers:    headers,
-			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err == nil {
@@ -1379,7 +1303,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project",
 			Path:       "manifests/tag-get",
 			Headers:    headers,
-			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctxTimeout, getReq)
 		if err == nil {
@@ -1423,7 +1346,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project",
 			Path:       "manifests/tag-retry",
 			Headers:    headers,
-			Digest:     retryDigest,
 		}
 		resp, err := hc.Do(ctx, retryReq)
 		if err != nil {
@@ -1450,7 +1372,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project",
 			Path:       "manifests/warning",
 			Headers:    headers,
-			Digest:     getDigest,
 		}
 		w := &warning.Warning{}
 		wCtx := warning.NewContext(ctx, w)
@@ -1480,7 +1401,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project",
 			Path:       "manifests/tag-get",
 			Headers:    headers,
-			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err != nil {
@@ -1510,7 +1430,6 @@ func TestRegHttp(t *testing.T) {
 			Repository: "project",
 			Path:       "manifests/tag-get",
 			Headers:    headers,
-			Digest:     getDigest,
 		}
 		chResults := make(chan error)
 		for i := 0; i < count; i++ {

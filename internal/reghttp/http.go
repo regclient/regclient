@@ -25,7 +25,6 @@ import (
 	_ "crypto/sha256"
 	_ "crypto/sha512"
 
-	"github.com/opencontainers/go-digest"
 	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient/config"
@@ -83,7 +82,6 @@ type Req struct {
 	BodyBytes  []byte
 	BodyFunc   func() (io.ReadCloser, error)
 	Headers    http.Header
-	Digest     digest.Digest
 	NoPrefix   bool
 	NoMirrors  bool
 	IgnoreErr  bool
@@ -102,8 +100,6 @@ type clientResp struct {
 	resp             *http.Response
 	mirror           string
 	done             bool
-	digest           digest.Digest
-	digester         digest.Digester
 	reader           io.Reader
 	readCur, readMax int64
 	throttleDone     func()
@@ -291,12 +287,6 @@ func (resp *clientResp) Next() error {
 				}
 			}
 
-			// store the desired digest and setup digester at first byte
-			resp.digest = req.Digest
-			if resp.readCur == 0 && resp.digest.Validate() == nil {
-				resp.digester = resp.digest.Algorithm().Digester()
-			}
-
 			// build the url
 			var u url.URL
 			if req.DirectURL != nil {
@@ -482,12 +472,7 @@ func (resp *clientResp) Next() error {
 				return fmt.Errorf("request failed: %w: %s", errHTTP, errBody)
 			}
 
-			// setup reader, with a digester if configured
-			if resp.digester == nil {
-				resp.reader = resp.resp.Body
-			} else {
-				resp.reader = io.TeeReader(resp.resp.Body, resp.digester.Hash())
-			}
+			resp.reader = resp.resp.Body
 			resp.done = false
 			// set variables from headers if found
 			if resp.readCur == 0 && resp.readMax == 0 && resp.resp.Header.Get("Content-Length") != "" {
@@ -575,17 +560,6 @@ func (resp *clientResp) Read(b []byte) (int, error) {
 			}
 			// retry successful, no EOF
 			return i, nil
-		}
-		// validate the digest if specified
-		if resp.resp.Request.Method != "HEAD" && resp.digester != nil && resp.digest.Validate() == nil && resp.digest != resp.digester.Digest() {
-			resp.client.log.WithFields(logrus.Fields{
-				"expected": resp.digest,
-				"computed": resp.digester.Digest(),
-			}).Warn("Digest mismatch")
-			_ = resp.backoffSet()
-			resp.done = true
-			return i, fmt.Errorf("%w, expected %s, computed %s", errs.ErrDigestMismatch,
-				resp.digest.String(), resp.digester.Digest().String())
 		}
 	}
 
