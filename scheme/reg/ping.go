@@ -15,12 +15,8 @@ func (reg *Reg) Ping(ctx context.Context, r ref.Ref) (ping.Result, error) {
 	req := &reghttp.Req{
 		Host:      r.Registry,
 		NoMirrors: true,
-		APIs: map[string]reghttp.ReqAPI{
-			"": {
-				Method: "GET",
-				Path:   "",
-			},
-		},
+		Method:    "GET",
+		Path:      "",
 	}
 
 	resp, err := reg.reghttp.Do(ctx, req)

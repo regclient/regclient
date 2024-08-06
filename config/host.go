@@ -122,7 +122,7 @@ type Host struct {
 	Mirrors       []string                    `json:"mirrors,omitempty" yaml:"mirrors"`             // list of other Host Names to use as mirrors
 	Priority      uint                        `json:"priority,omitempty" yaml:"priority"`           // priority when sorting mirrors, higher priority attempted first
 	RepoAuth      bool                        `json:"repoAuth,omitempty" yaml:"repoAuth"`           // tracks a separate auth per repo
-	API           string                      `json:"api,omitempty" yaml:"api"`                     // experimental: registry API to use
+	API           string                      `json:"api,omitempty" yaml:"api"`                     // Deprecated: registry API to use
 	APIOpts       map[string]string           `json:"apiOpts,omitempty" yaml:"apiOpts"`             // options for APIs
 	BlobChunk     int64                       `json:"blobChunk,omitempty" yaml:"blobChunk"`         // size of each blob chunk
 	BlobMax       int64                       `json:"blobMax,omitempty" yaml:"blobMax"`             // threshold to switch to chunked upload, -1 to disable, 0 for regclient.blobMaxPut
@@ -391,15 +391,12 @@ func (host *Host) Merge(newHost Host, log *logrus.Logger) error {
 		host.RepoAuth = newHost.RepoAuth
 	}
 
+	// TODO: eventually delete
 	if newHost.API != "" {
-		if host.API != "" && host.API != newHost.API {
-			log.WithFields(logrus.Fields{
-				"orig": host.API,
-				"new":  newHost.API,
-				"host": name,
-			}).Warn("Changing API settings for registry")
-		}
-		host.API = newHost.API
+		log.WithFields(logrus.Fields{
+			"api":  newHost.API,
+			"host": name,
+		}).Warn("API field has been deprecated")
 	}
 
 	if len(newHost.APIOpts) > 0 {

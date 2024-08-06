@@ -57,15 +57,11 @@ func (reg *Reg) ManifestDelete(ctx context.Context, r ref.Ref, opts ...scheme.Ma
 
 	// build/send request
 	req := &reghttp.Req{
-		Host:      r.Registry,
-		NoMirrors: true,
-		APIs: map[string]reghttp.ReqAPI{
-			"": {
-				Method:     "DELETE",
-				Repository: r.Repository,
-				Path:       "manifests/" + r.Digest,
-			},
-		},
+		Host:       r.Registry,
+		NoMirrors:  true,
+		Method:     "DELETE",
+		Repository: r.Repository,
+		Path:       "manifests/" + r.Digest,
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
@@ -107,15 +103,11 @@ func (reg *Reg) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest, 
 		},
 	}
 	req := &reghttp.Req{
-		Host: r.Registry,
-		APIs: map[string]reghttp.ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: r.Repository,
-				Path:       "manifests/" + tagOrDigest,
-				Headers:    headers,
-			},
-		},
+		Host:       r.Registry,
+		Method:     "GET",
+		Repository: r.Repository,
+		Path:       "manifests/" + tagOrDigest,
+		Headers:    headers,
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
@@ -184,15 +176,11 @@ func (reg *Reg) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest,
 		},
 	}
 	req := &reghttp.Req{
-		Host: r.Registry,
-		APIs: map[string]reghttp.ReqAPI{
-			"": {
-				Method:     "HEAD",
-				Repository: r.Repository,
-				Path:       "manifests/" + tagOrDigest,
-				Headers:    headers,
-			},
-		},
+		Host:       r.Registry,
+		Method:     "HEAD",
+		Repository: r.Repository,
+		Path:       "manifests/" + tagOrDigest,
+		Headers:    headers,
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
@@ -248,19 +236,15 @@ func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest,
 		q.Add(paramManifestDigest, m.GetDescriptor().Digest.String())
 	}
 	req := &reghttp.Req{
-		Host:      r.Registry,
-		NoMirrors: true,
-		APIs: map[string]reghttp.ReqAPI{
-			"": {
-				Method:     "PUT",
-				Repository: r.Repository,
-				Path:       "manifests/" + tagOrDigest,
-				Query:      q,
-				Headers:    headers,
-				BodyLen:    int64(len(mj)),
-				BodyBytes:  mj,
-			},
-		},
+		Host:       r.Registry,
+		NoMirrors:  true,
+		Method:     "PUT",
+		Repository: r.Repository,
+		Path:       "manifests/" + tagOrDigest,
+		Query:      q,
+		Headers:    headers,
+		BodyLen:    int64(len(mj)),
+		BodyBytes:  mj,
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {

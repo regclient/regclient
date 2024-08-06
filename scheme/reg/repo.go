@@ -38,15 +38,11 @@ func (reg *Reg) RepoList(ctx context.Context, hostname string, opts ...scheme.Re
 	req := &reghttp.Req{
 		Host:      hostname,
 		NoMirrors: true,
-		APIs: map[string]reghttp.ReqAPI{
-			"": {
-				Method:   "GET",
-				Path:     "_catalog",
-				NoPrefix: true,
-				Query:    query,
-				Headers:  headers,
-			},
-		},
+		Method:    "GET",
+		Path:      "_catalog",
+		NoPrefix:  true,
+		Query:     query,
+		Headers:   headers,
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {

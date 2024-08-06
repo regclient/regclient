@@ -232,7 +232,6 @@ func (rc *RegClient) hostLoad(src string, hosts []config.Host) {
 			"tls":        string(tls),
 			"pathPrefix": configHost.PathPrefix,
 			"mirrors":    configHost.Mirrors,
-			"api":        configHost.API,
 			"blobMax":    configHost.BlobMax,
 			"blobChunk":  configHost.BlobChunk,
 		}).Debugf("Loading %s config", src)

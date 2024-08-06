@@ -183,24 +183,17 @@ func (reg *Reg) referrerListByAPIPage(ctx context.Context, r ref.Ref, config sch
 		query.Set("artifactType", config.MatchOpt.ArtifactType)
 	}
 	req := &reghttp.Req{
-		Host: r.Registry,
-		APIs: map[string]reghttp.ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: r.Repository,
-				Path:       "referrers/" + r.Digest,
-				Query:      query,
-				IgnoreErr:  true,
-			},
-		},
+		Host:       r.Registry,
+		Method:     "GET",
+		Repository: r.Repository,
 	}
-	// replace the API if a link is provided
+	if link == nil {
+		req.Path = "referrers/" + r.Digest
+		req.Query = query
+		req.IgnoreErr = true
+	}
 	if link != nil {
-		req.APIs[""] = reghttp.ReqAPI{
-			Method:     "GET",
-			DirectURL:  link,
-			Repository: r.Repository,
-		}
+		req.DirectURL = link
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
@@ -382,14 +375,10 @@ func (reg *Reg) referrerPing(ctx context.Context, r ref.Ref) bool {
 		return referrerEnabled
 	}
 	req := &reghttp.Req{
-		Host: r.Registry,
-		APIs: map[string]reghttp.ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: r.Repository,
-				Path:       "referrers/" + r.Digest,
-			},
-		},
+		Host:       r.Registry,
+		Method:     "GET",
+		Repository: r.Repository,
+		Path:       "referrers/" + r.Digest,
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {

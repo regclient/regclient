@@ -754,18 +754,13 @@ func TestRegHttp(t *testing.T) {
 	// test getting http response
 	// test read/closer
 	t.Run("Get", func(t *testing.T) {
-		apiGet := map[string]ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: "project",
-				Path:       "manifests/tag-get",
-				Headers:    headers,
-				Digest:     getDigest,
-			},
-		}
 		getReq := &Req{
-			Host: tsHost,
-			APIs: apiGet,
+			Host:       tsHost,
+			Method:     "GET",
+			Repository: "project",
+			Path:       "manifests/tag-get",
+			Headers:    headers,
+			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err != nil {
@@ -786,18 +781,13 @@ func TestRegHttp(t *testing.T) {
 		}
 	})
 	t.Run("Seek", func(t *testing.T) {
-		apiGet := map[string]ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: "project",
-				Path:       "manifests/tag-get",
-				Headers:    headers,
-				Digest:     getDigest,
-			},
-		}
 		getReq := &Req{
-			Host: tsHost,
-			APIs: apiGet,
+			Host:       tsHost,
+			Method:     "GET",
+			Repository: "project",
+			Path:       "manifests/tag-get",
+			Headers:    headers,
+			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err != nil {
@@ -838,17 +828,12 @@ func TestRegHttp(t *testing.T) {
 	t.Run("Direct", func(t *testing.T) {
 		u, _ := url.Parse(ts.URL)
 		u.Path = "/v2/project/manifests/tag-get"
-		apiGet := map[string]ReqAPI{
-			"": {
-				Method:    "GET",
-				DirectURL: u,
-				Headers:   headers,
-				Digest:    getDigest,
-			},
-		}
 		getReq := &Req{
-			Host: tsHost,
-			APIs: apiGet,
+			Host:      tsHost,
+			Method:    "GET",
+			DirectURL: u,
+			Headers:   headers,
+			Digest:    getDigest,
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err != nil {
@@ -870,18 +855,13 @@ func TestRegHttp(t *testing.T) {
 	})
 	// test digest validation
 	t.Run("Bad Digest", func(t *testing.T) {
-		apiBadDigest := map[string]ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: "project",
-				Path:       "manifests/tag-get",
-				Headers:    headers,
-				Digest:     digest.FromString("bad digest"),
-			},
-		}
 		badDigestReq := &Req{
-			Host: tsHost,
-			APIs: apiBadDigest,
+			Host:       tsHost,
+			Method:     "GET",
+			Repository: "project",
+			Path:       "manifests/tag-get",
+			Headers:    headers,
+			Digest:     digest.FromString("bad digest"),
 		}
 		resp, err := hc.Do(ctx, badDigestReq)
 		if err != nil {
@@ -904,17 +884,12 @@ func TestRegHttp(t *testing.T) {
 	t.Run("Direct Digest", func(t *testing.T) {
 		u, _ := url.Parse(ts.URL)
 		u.Path = "/v2/project/manifests/tag-get"
-		apiGet := map[string]ReqAPI{
-			"": {
-				Method:    "GET",
-				DirectURL: u,
-				Headers:   headers,
-				Digest:    digest.FromString("bad digest"),
-			},
-		}
 		getReq := &Req{
-			Host: tsHost,
-			APIs: apiGet,
+			Host:      tsHost,
+			Method:    "GET",
+			DirectURL: u,
+			Headers:   headers,
+			Digest:    digest.FromString("bad digest"),
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err != nil {
@@ -940,18 +915,13 @@ func TestRegHttp(t *testing.T) {
 		expCtx, cancelFunc := context.WithDeadline(ctx, deadline)
 		defer cancelFunc()
 
-		apiGet := map[string]ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: "project",
-				Path:       "manifests/tag-get",
-				Headers:    headers,
-				Digest:     getDigest,
-			},
-		}
 		getReq := &Req{
-			Host: tsHost,
-			APIs: apiGet,
+			Host:       tsHost,
+			Method:     "GET",
+			Repository: "project",
+			Path:       "manifests/tag-get",
+			Headers:    headers,
+			Digest:     getDigest,
 		}
 		resp, err := hc.Do(expCtx, getReq)
 		if err == nil {
@@ -961,18 +931,13 @@ func TestRegHttp(t *testing.T) {
 	})
 	// test head requests
 	t.Run("Head", func(t *testing.T) {
-		apiHead := map[string]ReqAPI{
-			"": {
-				Method:     "HEAD",
-				Repository: "project",
-				Path:       "manifests/tag-get",
-				Headers:    headers,
-				Digest:     getDigest,
-			},
-		}
 		headReq := &Req{
-			Host: tsHost,
-			APIs: apiHead,
+			Host:       tsHost,
+			Method:     "HEAD",
+			Repository: "project",
+			Path:       "manifests/tag-get",
+			Headers:    headers,
+			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, headReq)
 		if err != nil {
@@ -994,18 +959,13 @@ func TestRegHttp(t *testing.T) {
 	})
 	// test disabled head request
 	t.Run("Disabled Head", func(t *testing.T) {
-		apiHead := map[string]ReqAPI{
-			"": {
-				Method:     "HEAD",
-				Repository: "project",
-				Path:       "manifests/tag-get",
-				Headers:    headers,
-				Digest:     getDigest,
-			},
-		}
 		headReq := &Req{
-			Host: "nohead." + tsHost,
-			APIs: apiHead,
+			Host:       "nohead." + tsHost,
+			Method:     "HEAD",
+			Repository: "project",
+			Path:       "manifests/tag-get",
+			Headers:    headers,
+			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, headReq)
 		if err == nil {
@@ -1015,18 +975,13 @@ func TestRegHttp(t *testing.T) {
 	})
 	// test auth
 	t.Run("Auth", func(t *testing.T) {
-		apiAuth := map[string]ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: "project",
-				Path:       "manifests/tag-auth",
-				Headers:    headers,
-				Digest:     getDigest,
-			},
-		}
 		authReq := &Req{
-			Host: "auth." + tsHost,
-			APIs: apiAuth,
+			Host:       "auth." + tsHost,
+			Method:     "GET",
+			Repository: "project",
+			Path:       "manifests/tag-auth",
+			Headers:    headers,
+			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, authReq)
 		if err != nil {
@@ -1047,18 +1002,13 @@ func TestRegHttp(t *testing.T) {
 		}
 	})
 	t.Run("Unauth", func(t *testing.T) {
-		apiAuth := map[string]ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: "project",
-				Path:       "manifests/tag-auth",
-				Headers:    headers,
-				Digest:     getDigest,
-			},
-		}
 		authReq := &Req{
-			Host: "unauth." + tsHost,
-			APIs: apiAuth,
+			Host:       "unauth." + tsHost,
+			Method:     "GET",
+			Repository: "project",
+			Path:       "manifests/tag-auth",
+			Headers:    headers,
+			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, authReq)
 		if err == nil {
@@ -1069,18 +1019,13 @@ func TestRegHttp(t *testing.T) {
 		}
 	})
 	t.Run("Bad auth", func(t *testing.T) {
-		apiAuth := map[string]ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: "project-bad-auth",
-				Path:       "manifests/tag-repoauth",
-				Headers:    headers,
-				Digest:     getDigest,
-			},
-		}
 		authReq := &Req{
-			Host: "repoauth." + tsHost,
-			APIs: apiAuth,
+			Host:       "repoauth." + tsHost,
+			Method:     "GET",
+			Repository: "project-bad-auth",
+			Path:       "manifests/tag-repoauth",
+			Headers:    headers,
+			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, authReq)
 		if err == nil {
@@ -1091,18 +1036,13 @@ func TestRegHttp(t *testing.T) {
 		}
 	})
 	t.Run("Missing auth", func(t *testing.T) {
-		apiAuth := map[string]ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: "project-missing-auth",
-				Path:       "manifests/tag-repoauth",
-				Headers:    headers,
-				Digest:     getDigest,
-			},
-		}
 		authReq := &Req{
-			Host: "repoauth." + tsHost,
-			APIs: apiAuth,
+			Host:       "repoauth." + tsHost,
+			Method:     "GET",
+			Repository: "project-missing-auth",
+			Path:       "manifests/tag-repoauth",
+			Headers:    headers,
+			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, authReq)
 		if err == nil {
@@ -1114,18 +1054,13 @@ func TestRegHttp(t *testing.T) {
 	})
 	// test repoauth
 	t.Run("RepoAuth", func(t *testing.T) {
-		apiAuth1G := map[string]ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: "project",
-				Path:       "manifests/tag-repoauth",
-				Headers:    headers,
-				Digest:     getDigest,
-			},
-		}
 		authReq1G := &Req{
-			Host: "repoauth." + tsHost,
-			APIs: apiAuth1G,
+			Host:       "repoauth." + tsHost,
+			Method:     "GET",
+			Repository: "project",
+			Path:       "manifests/tag-repoauth",
+			Headers:    headers,
+			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, authReq1G)
 		if err != nil {
@@ -1145,19 +1080,14 @@ func TestRegHttp(t *testing.T) {
 			t.Errorf("error closing request: %v", err)
 		}
 
-		apiAuth1P := map[string]ReqAPI{
-			"": {
-				Method:     "PUT",
-				Repository: "project",
-				Path:       "manifests/tag-repoauth",
-				Headers:    headers,
-				Digest:     getDigest,
-				BodyBytes:  putBody,
-			},
-		}
 		authReq1P := &Req{
-			Host: "repoauth." + tsHost,
-			APIs: apiAuth1P,
+			Host:       "repoauth." + tsHost,
+			Method:     "PUT",
+			Repository: "project",
+			Path:       "manifests/tag-repoauth",
+			Headers:    headers,
+			Digest:     getDigest,
+			BodyBytes:  putBody,
 		}
 		resp, err = hc.Do(ctx, authReq1P)
 		if err != nil {
@@ -1171,18 +1101,13 @@ func TestRegHttp(t *testing.T) {
 			t.Errorf("error closing request: %v", err)
 		}
 
-		apiAuth2G := map[string]ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: "project2",
-				Path:       "manifests/tag-repoauth",
-				Headers:    headers,
-				Digest:     getDigest,
-			},
-		}
 		authReq2G := &Req{
-			Host: "repoauth." + tsHost,
-			APIs: apiAuth2G,
+			Host:       "repoauth." + tsHost,
+			Method:     "GET",
+			Repository: "project2",
+			Path:       "manifests/tag-repoauth",
+			Headers:    headers,
+			Digest:     getDigest,
 		}
 		resp, err = hc.Do(ctx, authReq2G)
 		if err != nil {
@@ -1202,19 +1127,14 @@ func TestRegHttp(t *testing.T) {
 			t.Errorf("error closing request: %v", err)
 		}
 
-		apiAuth2P := map[string]ReqAPI{
-			"": {
-				Method:     "PUT",
-				Repository: "project2",
-				Path:       "manifests/tag-repoauth",
-				Headers:    headers,
-				Digest:     getDigest,
-				BodyBytes:  putBody,
-			},
-		}
 		authReq2P := &Req{
-			Host: "repoauth." + tsHost,
-			APIs: apiAuth2P,
+			Host:       "repoauth." + tsHost,
+			Method:     "PUT",
+			Repository: "project2",
+			Path:       "manifests/tag-repoauth",
+			Headers:    headers,
+			Digest:     getDigest,
+			BodyBytes:  putBody,
 		}
 		resp, err = hc.Do(ctx, authReq2P)
 		if err != nil {
@@ -1230,18 +1150,13 @@ func TestRegHttp(t *testing.T) {
 	})
 	// test body func and body string
 	t.Run("Post body string", func(t *testing.T) {
-		apiPost := map[string]ReqAPI{
-			"": {
-				Method:     "POST",
-				Repository: "project",
-				Path:       "manifests/tag-post",
-				BodyBytes:  postBody,
-				BodyLen:    int64(len(postBody)),
-			},
-		}
 		postReq := &Req{
-			Host: tsHost,
-			APIs: apiPost,
+			Host:       tsHost,
+			Method:     "POST",
+			Repository: "project",
+			Path:       "manifests/tag-post",
+			BodyBytes:  postBody,
+			BodyLen:    int64(len(postBody)),
 		}
 		resp, err := hc.Do(ctx, postReq)
 		if err != nil {
@@ -1262,17 +1177,12 @@ func TestRegHttp(t *testing.T) {
 		}
 	})
 	t.Run("Put body retry", func(t *testing.T) {
-		apiPut := map[string]ReqAPI{
-			"": {
-				Method:     "PUT",
-				Repository: "project",
-				Path:       "manifests/tag-put-fail",
-				BodyBytes:  putBody,
-			},
-		}
 		putReq := &Req{
-			Host: tsHost,
-			APIs: apiPut,
+			Host:       tsHost,
+			Method:     "PUT",
+			Repository: "project",
+			Path:       "manifests/tag-put-fail",
+			BodyBytes:  putBody,
 		}
 		resp, err := hc.Do(ctx, putReq)
 		if err != nil {
@@ -1293,18 +1203,13 @@ func TestRegHttp(t *testing.T) {
 		}
 	})
 	t.Run("Put body func", func(t *testing.T) {
-		apiPut := map[string]ReqAPI{
-			"": {
-				Method:     "PUT",
-				Repository: "project",
-				Path:       "manifests/tag-put",
-				BodyFunc:   func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(putBody)), nil },
-				BodyLen:    int64(len(putBody)),
-			},
-		}
 		putReq := &Req{
-			Host: tsHost,
-			APIs: apiPut,
+			Host:       tsHost,
+			Method:     "PUT",
+			Repository: "project",
+			Path:       "manifests/tag-put",
+			BodyFunc:   func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(putBody)), nil },
+			BodyLen:    int64(len(putBody)),
 		}
 		resp, err := hc.Do(ctx, putReq)
 		if err != nil {
@@ -1326,16 +1231,11 @@ func TestRegHttp(t *testing.T) {
 	})
 	// test delete
 	t.Run("Delete", func(t *testing.T) {
-		apiDelete := map[string]ReqAPI{
-			"": {
-				Method:     "DELETE",
-				Repository: "project",
-				Path:       "manifests/tag-delete",
-			},
-		}
 		deleteReq := &Req{
-			Host: tsHost,
-			APIs: apiDelete,
+			Host:       tsHost,
+			Method:     "DELETE",
+			Repository: "project",
+			Path:       "manifests/tag-delete",
 		}
 		resp, err := hc.Do(ctx, deleteReq)
 		if err != nil {
@@ -1357,19 +1257,13 @@ func TestRegHttp(t *testing.T) {
 	})
 	// test a list of bad mirrors to ensure fall back
 	t.Run("Mirrors", func(t *testing.T) {
-		apiGet := map[string]ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: "project",
-				Path:       "manifests/tag-get",
-				Headers:    headers,
-				Digest:     getDigest,
-				// IgnoreErr:  true,
-			},
-		}
 		getReq := &Req{
-			Host: "mirrors." + tsHost,
-			APIs: apiGet,
+			Host:       "mirrors." + tsHost,
+			Method:     "GET",
+			Repository: "project",
+			Path:       "manifests/tag-get",
+			Headers:    headers,
+			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err != nil {
@@ -1391,18 +1285,13 @@ func TestRegHttp(t *testing.T) {
 	})
 	// test error statuses (404, rate limit, timeout, server error)
 	t.Run("Missing", func(t *testing.T) {
-		apiGet := map[string]ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: "project",
-				Path:       "manifests/tag-get",
-				Headers:    headers,
-				Digest:     getDigest,
-			},
-		}
 		getReq := &Req{
-			Host: "missing." + tsHost,
-			APIs: apiGet,
+			Host:       "missing." + tsHost,
+			Method:     "GET",
+			Repository: "project",
+			Path:       "manifests/tag-get",
+			Headers:    headers,
+			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err == nil {
@@ -1413,18 +1302,13 @@ func TestRegHttp(t *testing.T) {
 		}
 	})
 	t.Run("Forbidden", func(t *testing.T) {
-		apiGet := map[string]ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: "project",
-				Path:       "manifests/tag-get",
-				Headers:    headers,
-				Digest:     getDigest,
-			},
-		}
 		getReq := &Req{
-			Host: "forbidden." + tsHost,
-			APIs: apiGet,
+			Host:       "forbidden." + tsHost,
+			Method:     "GET",
+			Repository: "project",
+			Path:       "manifests/tag-get",
+			Headers:    headers,
+			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err == nil {
@@ -1435,18 +1319,13 @@ func TestRegHttp(t *testing.T) {
 		}
 	})
 	t.Run("Bad GW", func(t *testing.T) {
-		apiGet := map[string]ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: "project",
-				Path:       "manifests/tag-get",
-				Headers:    headers,
-				Digest:     getDigest,
-			},
-		}
 		getReq := &Req{
-			Host: "bad-gw." + tsHost,
-			APIs: apiGet,
+			Host:       "bad-gw." + tsHost,
+			Method:     "GET",
+			Repository: "project",
+			Path:       "manifests/tag-get",
+			Headers:    headers,
+			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err == nil {
@@ -1457,18 +1336,13 @@ func TestRegHttp(t *testing.T) {
 		}
 	})
 	t.Run("GW Timeout", func(t *testing.T) {
-		apiGet := map[string]ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: "project",
-				Path:       "manifests/tag-get",
-				Headers:    headers,
-				Digest:     getDigest,
-			},
-		}
 		getReq := &Req{
-			Host: "gw-timeout." + tsHost,
-			APIs: apiGet,
+			Host:       "gw-timeout." + tsHost,
+			Method:     "GET",
+			Repository: "project",
+			Path:       "manifests/tag-get",
+			Headers:    headers,
+			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err == nil {
@@ -1479,18 +1353,13 @@ func TestRegHttp(t *testing.T) {
 		}
 	})
 	t.Run("Server error", func(t *testing.T) {
-		apiGet := map[string]ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: "project",
-				Path:       "manifests/tag-get",
-				Headers:    headers,
-				Digest:     getDigest,
-			},
-		}
 		getReq := &Req{
-			Host: "server-error." + tsHost,
-			APIs: apiGet,
+			Host:       "server-error." + tsHost,
+			Method:     "GET",
+			Repository: "project",
+			Path:       "manifests/tag-get",
+			Headers:    headers,
+			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err == nil {
@@ -1504,18 +1373,13 @@ func TestRegHttp(t *testing.T) {
 	t.Run("Rate limit and timeout", func(t *testing.T) {
 		ctxTimeout, cancel := context.WithTimeout(ctx, delayInit*2)
 		defer cancel()
-		apiGet := map[string]ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: "project",
-				Path:       "manifests/tag-get",
-				Headers:    headers,
-				Digest:     getDigest,
-			},
-		}
 		getReq := &Req{
-			Host: "rate-limit." + tsHost,
-			APIs: apiGet,
+			Host:       "rate-limit." + tsHost,
+			Method:     "GET",
+			Repository: "project",
+			Path:       "manifests/tag-get",
+			Headers:    headers,
+			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctxTimeout, getReq)
 		if err == nil {
@@ -1527,17 +1391,12 @@ func TestRegHttp(t *testing.T) {
 	})
 	// test connection dropping during read and retry
 	t.Run("Short", func(t *testing.T) {
-		apiShort := map[string]ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: "project",
-				Path:       "manifests/tag-short",
-				Headers:    headers,
-			},
-		}
 		shortReq := &Req{
-			Host: tsHost,
-			APIs: apiShort,
+			Host:       tsHost,
+			Method:     "GET",
+			Repository: "project",
+			Path:       "manifests/tag-short",
+			Headers:    headers,
 		}
 		resp, err := hc.Do(ctx, shortReq)
 		if err != nil {
@@ -1558,18 +1417,13 @@ func TestRegHttp(t *testing.T) {
 		}
 	})
 	t.Run("Retry", func(t *testing.T) {
-		apiRetry := map[string]ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: "project",
-				Path:       "manifests/tag-retry",
-				Headers:    headers,
-				Digest:     retryDigest,
-			},
-		}
 		retryReq := &Req{
-			Host: "retry." + tsHost,
-			APIs: apiRetry,
+			Host:       "retry." + tsHost,
+			Method:     "GET",
+			Repository: "project",
+			Path:       "manifests/tag-retry",
+			Headers:    headers,
+			Digest:     retryDigest,
 		}
 		resp, err := hc.Do(ctx, retryReq)
 		if err != nil {
@@ -1590,18 +1444,13 @@ func TestRegHttp(t *testing.T) {
 		}
 	})
 	t.Run("Warning", func(t *testing.T) {
-		apiGet := map[string]ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: "project",
-				Path:       "manifests/warning",
-				Headers:    headers,
-				Digest:     getDigest,
-			},
-		}
 		getReq := &Req{
-			Host: tsHost,
-			APIs: apiGet,
+			Host:       tsHost,
+			Method:     "GET",
+			Repository: "project",
+			Path:       "manifests/warning",
+			Headers:    headers,
+			Digest:     getDigest,
 		}
 		w := &warning.Warning{}
 		wCtx := warning.NewContext(ctx, w)
@@ -1625,18 +1474,13 @@ func TestRegHttp(t *testing.T) {
 		}
 	})
 	t.Run("Host Normalized", func(t *testing.T) {
-		apiGet := map[string]ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: "project",
-				Path:       "manifests/tag-get",
-				Headers:    headers,
-				Digest:     getDigest,
-			},
-		}
 		getReq := &Req{
-			Host: tsHost + "/path",
-			APIs: apiGet,
+			Host:       tsHost + "/path",
+			Method:     "GET",
+			Repository: "project",
+			Path:       "manifests/tag-get",
+			Headers:    headers,
+			Digest:     getDigest,
 		}
 		resp, err := hc.Do(ctx, getReq)
 		if err != nil {
@@ -1660,18 +1504,13 @@ func TestRegHttp(t *testing.T) {
 		count := 3
 		ctxTimeout, cancel := context.WithTimeout(ctx, delayInit*4)
 		defer cancel()
-		apiGet := map[string]ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: "project",
-				Path:       "manifests/tag-get",
-				Headers:    headers,
-				Digest:     getDigest,
-			},
-		}
 		getReq := &Req{
-			Host: "rate-limit." + tsHost,
-			APIs: apiGet,
+			Host:       "rate-limit." + tsHost,
+			Method:     "GET",
+			Repository: "project",
+			Path:       "manifests/tag-get",
+			Headers:    headers,
+			Digest:     getDigest,
 		}
 		chResults := make(chan error)
 		for i := 0; i < count; i++ {

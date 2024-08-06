@@ -73,16 +73,9 @@ type clientHost struct {
 
 // Req is a request to send to a registry
 type Req struct {
-	Host      string
-	NoMirrors bool
-	APIs      map[string]ReqAPI // allow different types of registries (registry/2.0, OCI, default to empty string)
-}
-
-// ReqAPI handles API specific settings in a request
-type ReqAPI struct {
+	Host       string
 	Method     string
 	DirectURL  *url.URL
-	NoPrefix   bool
 	Repository string
 	Path       string
 	Query      url.Values
@@ -91,6 +84,8 @@ type ReqAPI struct {
 	BodyFunc   func() (io.ReadCloser, error)
 	Headers    http.Header
 	Digest     digest.Digest
+	NoPrefix   bool
+	NoMirrors  bool
 	IgnoreErr  bool
 }
 
@@ -273,11 +268,6 @@ func (resp *clientResp) Next() error {
 		h := hosts[curHost]
 		resp.mirror = h.config.Name
 
-		api, okAPI := req.APIs[h.config.API]
-		if !okAPI {
-			api, okAPI = req.APIs[""]
-		}
-
 		// check that context isn't canceled/done
 		ctxErr := resp.ctx.Err()
 		if ctxErr != nil {
@@ -292,11 +282,7 @@ func (resp *clientResp) Next() error {
 		// try each host in a closure to handle all the backoff/dropHost from one place
 		loopErr := func() error {
 			var err error
-			if !okAPI {
-				dropHost = true
-				return fmt.Errorf("failed looking up api \"%s\" for host \"%s\": %w", h.config.API, h.config.Name, errs.ErrAPINotFound)
-			}
-			if api.Method == "HEAD" && h.config.APIOpts != nil {
+			if req.Method == "HEAD" && h.config.APIOpts != nil {
 				var disableHead bool
 				disableHead, err = strconv.ParseBool(h.config.APIOpts["disableHead"])
 				if err == nil && disableHead {
@@ -306,15 +292,15 @@ func (resp *clientResp) Next() error {
 			}
 
 			// store the desired digest and setup digester at first byte
-			resp.digest = api.Digest
+			resp.digest = req.Digest
 			if resp.readCur == 0 && resp.digest.Validate() == nil {
 				resp.digester = resp.digest.Algorithm().Digester()
 			}
 
 			// build the url
 			var u url.URL
-			if api.DirectURL != nil {
-				u = *api.DirectURL
+			if req.DirectURL != nil {
+				u = *req.DirectURL
 			} else {
 				u = url.URL{
 					Host:   h.config.Hostname,
@@ -322,19 +308,19 @@ func (resp *clientResp) Next() error {
 				}
 				path := strings.Builder{}
 				path.WriteString("/v2")
-				if h.config.PathPrefix != "" && !api.NoPrefix {
+				if h.config.PathPrefix != "" && !req.NoPrefix {
 					path.WriteString("/" + h.config.PathPrefix)
 				}
-				if api.Repository != "" {
-					path.WriteString("/" + api.Repository)
+				if req.Repository != "" {
+					path.WriteString("/" + req.Repository)
 				}
-				path.WriteString("/" + api.Path)
+				path.WriteString("/" + req.Path)
 				u.Path = path.String()
 				if h.config.TLS == config.TLSDisabled {
 					u.Scheme = "http"
 				}
-				if api.Query != nil {
-					u.RawQuery = api.Query.Encode()
+				if req.Query != nil {
+					u.RawQuery = req.Query.Encode()
 				}
 			}
 			// close previous response
@@ -356,28 +342,28 @@ func (resp *clientResp) Next() error {
 				}
 			}
 			var httpReq *http.Request
-			httpReq, err = http.NewRequestWithContext(resp.ctx, api.Method, u.String(), nil)
+			httpReq, err = http.NewRequestWithContext(resp.ctx, req.Method, u.String(), nil)
 			if err != nil {
 				dropHost = true
 				return err
 			}
-			if api.BodyFunc != nil {
-				body, err := api.BodyFunc()
+			if req.BodyFunc != nil {
+				body, err := req.BodyFunc()
 				if err != nil {
 					dropHost = true
 					return err
 				}
 				httpReq.Body = body
-				httpReq.GetBody = api.BodyFunc
-				httpReq.ContentLength = api.BodyLen
-			} else if len(api.BodyBytes) > 0 {
-				body := io.NopCloser(bytes.NewReader(api.BodyBytes))
+				httpReq.GetBody = req.BodyFunc
+				httpReq.ContentLength = req.BodyLen
+			} else if len(req.BodyBytes) > 0 {
+				body := io.NopCloser(bytes.NewReader(req.BodyBytes))
 				httpReq.Body = body
 				httpReq.GetBody = func() (io.ReadCloser, error) { return body, nil }
-				httpReq.ContentLength = api.BodyLen
+				httpReq.ContentLength = req.BodyLen
 			}
-			if len(api.Headers) > 0 {
-				httpReq.Header = api.Headers.Clone()
+			if len(req.Headers) > 0 {
+				httpReq.Header = req.Headers.Clone()
 			}
 			if c.userAgent != "" && httpReq.Header.Get("User-Agent") == "" {
 				httpReq.Header.Add("User-Agent", c.userAgent)
@@ -391,12 +377,12 @@ func (resp *clientResp) Next() error {
 				}
 			}
 
-			hAuth := h.getAuth(api.Repository)
+			hAuth := h.getAuth(req.Repository)
 			if hAuth != nil {
 				// include docker generated scope to emulate docker clients
-				if api.Repository != "" {
-					scope := "repository:" + api.Repository + ":pull"
-					if api.Method != "HEAD" && api.Method != "GET" {
+				if req.Repository != "" {
+					scope := "repository:" + req.Repository + ":pull"
+					if req.Method != "HEAD" && req.Method != "GET" {
 						scope = scope + ",push"
 					}
 					_ = hAuth.AddScope(h.config.Hostname, scope)
@@ -526,7 +512,7 @@ func (resp *clientResp) Next() error {
 		// backoff, dropHost, and/or go to next host in the list
 		throttleDone()
 		if backoff {
-			if api.IgnoreErr {
+			if req.IgnoreErr {
 				// don't set a backoff, immediately drop the host when errors ignored
 				dropHost = true
 			} else {

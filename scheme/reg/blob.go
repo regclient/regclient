@@ -32,14 +32,10 @@ var (
 // BlobDelete removes a blob from the repository
 func (reg *Reg) BlobDelete(ctx context.Context, r ref.Ref, d descriptor.Descriptor) error {
 	req := &reghttp.Req{
-		Host: r.Registry,
-		APIs: map[string]reghttp.ReqAPI{
-			"": {
-				Method:     "DELETE",
-				Repository: r.Repository,
-				Path:       "blobs/" + d.Digest.String(),
-			},
-		},
+		Host:       r.Registry,
+		Method:     "DELETE",
+		Repository: r.Repository,
+		Path:       "blobs/" + d.Digest.String(),
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
@@ -55,14 +51,10 @@ func (reg *Reg) BlobDelete(ctx context.Context, r ref.Ref, d descriptor.Descript
 func (reg *Reg) BlobGet(ctx context.Context, r ref.Ref, d descriptor.Descriptor) (blob.Reader, error) {
 	// build/send request
 	req := &reghttp.Req{
-		Host: r.Registry,
-		APIs: map[string]reghttp.ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: r.Repository,
-				Path:       "blobs/" + d.Digest.String(),
-			},
-		},
+		Host:       r.Registry,
+		Method:     "GET",
+		Repository: r.Repository,
+		Path:       "blobs/" + d.Digest.String(),
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil && len(d.URLs) > 0 {
@@ -74,15 +66,11 @@ func (reg *Reg) BlobGet(ctx context.Context, r ref.Ref, d descriptor.Descriptor)
 				return nil, fmt.Errorf("failed to parse external url \"%s\": %w", curURL, err)
 			}
 			req = &reghttp.Req{
-				Host: r.Registry,
-				APIs: map[string]reghttp.ReqAPI{
-					"": {
-						Method:     "GET",
-						Repository: r.Repository,
-						DirectURL:  u,
-					},
-				},
-				NoMirrors: true,
+				Host:       r.Registry,
+				Method:     "GET",
+				Repository: r.Repository,
+				DirectURL:  u,
+				NoMirrors:  true,
 			}
 			resp, err = reg.reghttp.Do(ctx, req)
 			if err == nil {
@@ -110,14 +98,10 @@ func (reg *Reg) BlobGet(ctx context.Context, r ref.Ref, d descriptor.Descriptor)
 func (reg *Reg) BlobHead(ctx context.Context, r ref.Ref, d descriptor.Descriptor) (blob.Reader, error) {
 	// build/send request
 	req := &reghttp.Req{
-		Host: r.Registry,
-		APIs: map[string]reghttp.ReqAPI{
-			"": {
-				Method:     "HEAD",
-				Repository: r.Repository,
-				Path:       "blobs/" + d.Digest.String(),
-			},
-		},
+		Host:       r.Registry,
+		Method:     "HEAD",
+		Repository: r.Repository,
+		Path:       "blobs/" + d.Digest.String(),
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil && len(d.URLs) > 0 {
@@ -129,15 +113,11 @@ func (reg *Reg) BlobHead(ctx context.Context, r ref.Ref, d descriptor.Descriptor
 				return nil, fmt.Errorf("failed to parse external url \"%s\": %w", curURL, err)
 			}
 			req = &reghttp.Req{
-				Host: r.Registry,
-				APIs: map[string]reghttp.ReqAPI{
-					"": {
-						Method:     "HEAD",
-						Repository: r.Repository,
-						DirectURL:  u,
-					},
-				},
-				NoMirrors: true,
+				Host:       r.Registry,
+				Method:     "HEAD",
+				Repository: r.Repository,
+				DirectURL:  u,
+				NoMirrors:  true,
 			}
 			resp, err = reg.reghttp.Do(ctx, req)
 			if err == nil {
@@ -245,16 +225,12 @@ func (reg *Reg) blobGetUploadURL(ctx context.Context, r ref.Ref, d descriptor.De
 	}
 	// request an upload location
 	req := &reghttp.Req{
-		Host:      r.Registry,
-		NoMirrors: true,
-		APIs: map[string]reghttp.ReqAPI{
-			"": {
-				Method:     "POST",
-				Repository: r.Repository,
-				Path:       "blobs/uploads/",
-				Query:      q,
-			},
-		},
+		Host:       r.Registry,
+		NoMirrors:  true,
+		Method:     "POST",
+		Repository: r.Repository,
+		Path:       "blobs/uploads/",
+		Query:      q,
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
@@ -321,17 +297,13 @@ func (reg *Reg) blobMount(ctx context.Context, rTgt ref.Ref, d descriptor.Descri
 	}
 
 	req := &reghttp.Req{
-		Host:      rTgt.Registry,
-		NoMirrors: true,
-		APIs: map[string]reghttp.ReqAPI{
-			"": {
-				Method:     "POST",
-				Repository: rTgt.Repository,
-				Path:       "blobs/uploads/",
-				Query:      query,
-				IgnoreErr:  ignoreErr,
-			},
-		},
+		Host:       rTgt.Registry,
+		NoMirrors:  true,
+		Method:     "POST",
+		Repository: rTgt.Repository,
+		Path:       "blobs/uploads/",
+		Query:      query,
+		IgnoreErr:  ignoreErr,
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
@@ -424,18 +396,14 @@ func (reg *Reg) blobPutUploadFull(ctx context.Context, r ref.Ref, d descriptor.D
 		"Content-Type": {"application/octet-stream"},
 	}
 	req := &reghttp.Req{
-		Host: r.Registry,
-		APIs: map[string]reghttp.ReqAPI{
-			"": {
-				Method:     "PUT",
-				Repository: r.Repository,
-				DirectURL:  putURL,
-				BodyFunc:   bodyFunc,
-				BodyLen:    d.Size,
-				Headers:    header,
-			},
-		},
-		NoMirrors: true,
+		Host:       r.Registry,
+		Method:     "PUT",
+		Repository: r.Repository,
+		DirectURL:  putURL,
+		BodyFunc:   bodyFunc,
+		BodyLen:    d.Size,
+		Headers:    header,
+		NoMirrors:  true,
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
@@ -524,18 +492,14 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, d descripto
 				"Content-Range": {fmt.Sprintf("%d-%d", chunkStart, chunkStart+int64(chunkSize)-1)},
 			}
 			req := &reghttp.Req{
-				Host: r.Registry,
-				APIs: map[string]reghttp.ReqAPI{
-					"": {
-						Method:     "PATCH",
-						Repository: r.Repository,
-						DirectURL:  &chunkURL,
-						BodyFunc:   bodyFunc,
-						BodyLen:    int64(chunkSize),
-						Headers:    header,
-					},
-				},
-				NoMirrors: true,
+				Host:       r.Registry,
+				Method:     "PATCH",
+				Repository: r.Repository,
+				DirectURL:  &chunkURL,
+				BodyFunc:   bodyFunc,
+				BodyLen:    int64(chunkSize),
+				Headers:    header,
+				NoMirrors:  true,
 			}
 			resp, err := reg.reghttp.Do(ctx, req)
 			if err != nil && !errors.Is(err, errs.ErrHTTPStatus) && !errors.Is(err, errs.ErrNotFound) {
@@ -620,17 +584,13 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, d descripto
 		"Content-Type": {"application/octet-stream"},
 	}
 	req := &reghttp.Req{
-		Host: r.Registry,
-		APIs: map[string]reghttp.ReqAPI{
-			"": {
-				Method:     "PUT",
-				Repository: r.Repository,
-				DirectURL:  &chunkURL,
-				BodyLen:    int64(0),
-				Headers:    header,
-			},
-		},
-		NoMirrors: true,
+		Host:       r.Registry,
+		Method:     "PUT",
+		Repository: r.Repository,
+		DirectURL:  &chunkURL,
+		BodyLen:    int64(0),
+		Headers:    header,
+		NoMirrors:  true,
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
@@ -651,15 +611,11 @@ func (reg *Reg) blobUploadCancel(ctx context.Context, r ref.Ref, putURL *url.URL
 		return fmt.Errorf("failed to cancel upload %s: url undefined", r.CommonName())
 	}
 	req := &reghttp.Req{
-		Host:      r.Registry,
-		NoMirrors: true,
-		APIs: map[string]reghttp.ReqAPI{
-			"": {
-				Method:     "DELETE",
-				Repository: r.Repository,
-				DirectURL:  putURL,
-			},
-		},
+		Host:       r.Registry,
+		NoMirrors:  true,
+		Method:     "DELETE",
+		Repository: r.Repository,
+		DirectURL:  putURL,
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
@@ -675,15 +631,11 @@ func (reg *Reg) blobUploadCancel(ctx context.Context, r ref.Ref, putURL *url.URL
 // blobUploadStatus provides a response with headers indicating the progress of an upload
 func (reg *Reg) blobUploadStatus(ctx context.Context, r ref.Ref, putURL *url.URL) (*http.Response, error) {
 	req := &reghttp.Req{
-		Host: r.Registry,
-		APIs: map[string]reghttp.ReqAPI{
-			"": {
-				Method:     "GET",
-				Repository: r.Repository,
-				DirectURL:  putURL,
-			},
-		},
-		NoMirrors: true,
+		Host:       r.Registry,
+		Method:     "GET",
+		Repository: r.Repository,
+		DirectURL:  putURL,
+		NoMirrors:  true,
 	}
 	resp, err := reg.reghttp.Do(ctx, req)
 	if err != nil {
