@@ -135,10 +135,9 @@ func (reg *Reg) referrerListByAPI(ctx context.Context, r ref.Ref, config scheme.
 		Tags:    []string{},
 	}
 	var link *url.URL
-	var resp reghttp.Resp
 	// loop for paging
 	for {
-		rlAdd, respNext, err := reg.referrerListByAPIPage(ctx, r, config, link)
+		rlAdd, linkNext, err := reg.referrerListByAPIPage(ctx, r, config, link)
 		if err != nil {
 			return rl, err
 		}
@@ -147,33 +146,15 @@ func (reg *Reg) referrerListByAPI(ctx context.Context, r ref.Ref, config scheme.
 		} else {
 			rl.Descriptors = append(rl.Descriptors, rlAdd.Descriptors...)
 		}
-		resp = respNext
-		if resp.HTTPResponse() == nil {
-			return rl, fmt.Errorf("missing http response")
-		}
-		respHead := resp.HTTPResponse().Header
-		links, err := httplink.Parse((respHead.Values("Link")))
-		if err != nil {
-			return rl, err
-		}
-		next, err := links.Get("rel", "next")
-		if err != nil {
-			// no next link
+		if linkNext == nil {
 			break
 		}
-		link = resp.HTTPResponse().Request.URL
-		if link == nil {
-			return rl, fmt.Errorf("referrers list failed to get URL of previous request")
-		}
-		link, err = link.Parse(next.URI)
-		if err != nil {
-			return rl, fmt.Errorf("referrers list failed to parse Link: %w", err)
-		}
+		link = linkNext
 	}
 	return rl, nil
 }
 
-func (reg *Reg) referrerListByAPIPage(ctx context.Context, r ref.Ref, config scheme.ReferrerConfig, link *url.URL) (referrer.ReferrerList, reghttp.Resp, error) {
+func (reg *Reg) referrerListByAPIPage(ctx context.Context, r ref.Ref, config scheme.ReferrerConfig, link *url.URL) (referrer.ReferrerList, *url.URL, error) {
 	rl := referrer.ReferrerList{
 		Subject: r,
 		Tags:    []string{},
@@ -226,7 +207,28 @@ func (reg *Reg) referrerListByAPIPage(ctx context.Context, r ref.Ref, config sch
 	rl.Descriptors = ociML.Manifests
 	rl.Annotations = ociML.Annotations
 
-	return rl, resp, nil
+	// lookup next link
+	respHead := resp.HTTPResponse().Header
+	links, err := httplink.Parse((respHead.Values("Link")))
+	if err != nil {
+		return rl, nil, err
+	}
+	next, err := links.Get("rel", "next")
+	if err != nil {
+		// no next link
+		link = nil
+	} else {
+		link = resp.HTTPResponse().Request.URL
+		if link == nil {
+			return rl, nil, fmt.Errorf("referrers list failed to get URL of previous request")
+		}
+		link, err = link.Parse(next.URI)
+		if err != nil {
+			return rl, nil, fmt.Errorf("referrers list failed to parse Link: %w", err)
+		}
+	}
+
+	return rl, link, nil
 }
 
 func (reg *Reg) referrerListByTag(ctx context.Context, r ref.Ref) (referrer.ReferrerList, error) {

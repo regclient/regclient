@@ -88,12 +88,7 @@ type Req struct {
 }
 
 // Resp is used to handle the result of a request
-type Resp interface {
-	io.ReadSeekCloser
-	HTTPResponse() *http.Response
-}
-
-type clientResp struct {
+type Resp struct {
 	ctx              context.Context
 	client           *Client
 	req              *Req
@@ -220,8 +215,8 @@ func WithUserAgent(ua string) Opts {
 }
 
 // Do runs a request, returning the response result
-func (c *Client) Do(ctx context.Context, req *Req) (Resp, error) {
-	resp := &clientResp{
+func (c *Client) Do(ctx context.Context, req *Req) (*Resp, error) {
+	resp := &Resp{
 		ctx:    ctx,
 		client: c,
 		req:    req,
@@ -231,7 +226,7 @@ func (c *Client) Do(ctx context.Context, req *Req) (Resp, error) {
 }
 
 // Next sends requests until a mirror responds or all requests fail
-func (resp *clientResp) Next() error {
+func (resp *Resp) Next() error {
 	var err error
 	c := resp.client
 	req := resp.req
@@ -521,11 +516,11 @@ func (resp *clientResp) Next() error {
 	}
 }
 
-func (resp *clientResp) HTTPResponse() *http.Response {
+func (resp *Resp) HTTPResponse() *http.Response {
 	return resp.resp
 }
 
-func (resp *clientResp) Read(b []byte) (int, error) {
+func (resp *Resp) Read(b []byte) (int, error) {
 	if resp.done {
 		return 0, io.EOF
 	}
@@ -569,7 +564,7 @@ func (resp *clientResp) Read(b []byte) (int, error) {
 	return i, err
 }
 
-func (resp *clientResp) Close() error {
+func (resp *Resp) Close() error {
 	if resp.throttleDone != nil {
 		resp.throttleDone()
 		resp.throttleDone = nil
@@ -584,7 +579,7 @@ func (resp *clientResp) Close() error {
 	return resp.resp.Body.Close()
 }
 
-func (resp *clientResp) Seek(offset int64, whence int) (int64, error) {
+func (resp *Resp) Seek(offset int64, whence int) (int64, error) {
 	newOffset := resp.readCur
 	switch whence {
 	case io.SeekStart:
@@ -614,7 +609,7 @@ func (resp *clientResp) Seek(offset int64, whence int) (int64, error) {
 	return resp.readCur, nil
 }
 
-func (resp *clientResp) backoffClear() {
+func (resp *Resp) backoffClear() {
 	c := resp.client
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -630,7 +625,7 @@ func (resp *clientResp) backoffClear() {
 	}
 }
 
-func (resp *clientResp) backoffSet() error {
+func (resp *Resp) backoffSet() error {
 	c := resp.client
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -662,7 +657,7 @@ func (resp *clientResp) backoffSet() error {
 	return nil
 }
 
-func (resp *clientResp) backoffUntil() time.Time {
+func (resp *Resp) backoffUntil() time.Time {
 	c := resp.client
 	c.mu.Lock()
 	defer c.mu.Unlock()
