@@ -74,6 +74,15 @@ func (reg *Reg) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Refe
 		if err != nil {
 			return rl, err
 		}
+		if m.GetDescriptor().Digest == "" {
+			m, err = reg.ManifestGet(ctx, r)
+			if err != nil {
+				return rl, err
+			}
+		}
+		if m.GetDescriptor().Digest == "" {
+			return rl, fmt.Errorf("unable to resolve digest for ref %s", r.CommonName())
+		}
 		r = r.SetDigest(m.GetDescriptor().Digest.String())
 	}
 	rl.Subject = r
