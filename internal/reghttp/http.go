@@ -66,8 +66,10 @@ type clientHost struct {
 	httpClient   *http.Client
 	auth         map[string]auth.Auth
 	newAuth      func() auth.Auth
-	mu           sync.Mutex
-	ratelimit    *time.Ticker
+	muAuth       sync.Mutex
+	reqFreq      time.Duration
+	reqNext      time.Time
+	muNext       sync.Mutex
 }
 
 // Req is a request to send to a registry
@@ -385,8 +387,15 @@ func (resp *Resp) Next() error {
 			}
 
 			// delay for the rate limit
-			if h.ratelimit != nil {
-				<-h.ratelimit.C
+			if h.reqFreq > 0 {
+				h.muNext.Lock()
+				if time.Now().Before(h.reqNext) {
+					time.Sleep(time.Until(h.reqNext))
+					h.reqNext = h.reqNext.Add(h.reqFreq)
+				} else {
+					h.reqNext = time.Now().Add(h.reqFreq)
+				}
+				h.muNext.Unlock()
 			}
 
 			// update http client for insecure requests and root certs
@@ -693,8 +702,8 @@ func (c *Client) getHost(host string) *clientHost {
 	if h.auth == nil {
 		h.auth = map[string]auth.Auth{}
 	}
-	if h.ratelimit == nil && h.config.ReqPerSec > 0 {
-		h.ratelimit = time.NewTicker(time.Duration(float64(time.Second) / h.config.ReqPerSec))
+	if h.config.ReqPerSec > 0 && h.reqFreq == 0 {
+		h.reqFreq = time.Duration(float64(time.Second) / h.config.ReqPerSec)
 	}
 
 	if h.httpClient == nil {
@@ -762,8 +771,8 @@ func (c *Client) getHost(host string) *clientHost {
 
 // getAuth returns an auth, which may be repository specific
 func (ch *clientHost) getAuth(repo string) auth.Auth {
-	ch.mu.Lock()
-	defer ch.mu.Unlock()
+	ch.muAuth.Lock()
+	defer ch.muAuth.Unlock()
 	if !ch.config.RepoAuth {
 		repo = "" // without RepoAuth, unset the provided repo
 	}
