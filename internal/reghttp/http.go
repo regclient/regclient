@@ -223,12 +223,12 @@ func (c *Client) Do(ctx context.Context, req *Req) (*Resp, error) {
 		client: c,
 		req:    req,
 	}
-	err := resp.Next()
+	err := resp.next()
 	return resp, err
 }
 
-// Next sends requests until a mirror responds or all requests fail
-func (resp *Resp) Next() error {
+// next sends requests until a mirror responds or all requests fail
+func (resp *Resp) next() error {
 	var err error
 	c := resp.client
 	req := resp.req
@@ -525,10 +525,12 @@ func (resp *Resp) Next() error {
 	}
 }
 
+// HTTPResponse returns the [http.Response] from the last request.
 func (resp *Resp) HTTPResponse() *http.Response {
 	return resp.resp
 }
 
+// Read provides a retryable read from the body of the response.
 func (resp *Resp) Read(b []byte) (int, error) {
 	if resp.done {
 		return 0, io.EOF
@@ -552,7 +554,7 @@ func (resp *Resp) Read(b []byte) (int, error) {
 			// retry
 			respErr := resp.backoffSet()
 			if respErr == nil {
-				respErr = resp.Next()
+				respErr = resp.next()
 			}
 			// unrecoverable EOF
 			if respErr != nil {
@@ -573,6 +575,7 @@ func (resp *Resp) Read(b []byte) (int, error) {
 	return i, err
 }
 
+// Close frees up resources from the request.
 func (resp *Resp) Close() error {
 	if resp.throttleDone != nil {
 		resp.throttleDone()
@@ -588,6 +591,7 @@ func (resp *Resp) Close() error {
 	return resp.resp.Body.Close()
 }
 
+// Seek provides a limited ability seek within the request response.
 func (resp *Resp) Seek(offset int64, whence int) (int64, error) {
 	newOffset := resp.readCur
 	switch whence {
@@ -605,15 +609,13 @@ func (resp *Resp) Seek(offset int64, whence int) (int64, error) {
 	default:
 		return resp.readCur, fmt.Errorf("unknown value of whence: %d", whence)
 	}
-	if newOffset == 0 {
-		resp.readCur = 0
+	if newOffset != resp.readCur {
+		resp.readCur = newOffset
 		// rerun the request to restart
-		err := resp.Next()
+		err := resp.next()
 		if err != nil {
 			return resp.readCur, err
 		}
-	} else if newOffset != resp.readCur {
-		return resp.readCur, fmt.Errorf("seek to arbitrary position is not supported")
 	}
 	return resp.readCur, nil
 }
