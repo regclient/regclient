@@ -42,8 +42,8 @@ const (
 	DefaultRetryLimit = 3
 )
 
-// Client is an HTTP client wrapper
-// It handles features like authentication, retries, backoff delays, TLS settings
+// Client is an HTTP client wrapper.
+// It handles features like authentication, retries, backoff delays, TLS settings.
 type Client struct {
 	getConfigHost func(string) *config.Host
 	host          map[string]*clientHost
@@ -72,24 +72,27 @@ type clientHost struct {
 	muNext       sync.Mutex
 }
 
-// Req is a request to send to a registry
+// Req is a request to send to a registry.
 type Req struct {
-	Host       string
-	Method     string
-	DirectURL  *url.URL
-	Repository string
-	Path       string
-	Query      url.Values
-	BodyLen    int64
-	BodyBytes  []byte
-	BodyFunc   func() (io.ReadCloser, error)
-	Headers    http.Header
-	NoPrefix   bool
-	NoMirrors  bool
-	IgnoreErr  bool
+	MetaKind    reqmeta.Kind                  // kind of request for the priority queue
+	Host        string                        // registry name, hostname and mirrors will be looked up from host configuration
+	Method      string                        // http method to call
+	DirectURL   *url.URL                      // url to query, overrides repository, path, and query
+	Repository  string                        // repository to scope the request
+	Path        string                        // path of the request within a repository
+	Query       url.Values                    // url query parameters
+	BodyLen     int64                         // length of body to send
+	BodyBytes   []byte                        // bytes of the body, overridden by BodyFunc
+	BodyFunc    func() (io.ReadCloser, error) // function to return a new body
+	Headers     http.Header                   // headers to send in the request
+	NoPrefix    bool                          // do not include the repository prefix
+	NoMirrors   bool                          // do not send request to a mirror
+	ExpectLen   int64                         // expected size of the returned body
+	TransactLen int64                         // size of an overall transaction for the priority queue
+	IgnoreErr   bool                          // ignore http errors and do not trigger backoffs
 }
 
-// Resp is used to handle the result of a request
+// Resp is used to handle the result of a request.
 type Resp struct {
 	ctx              context.Context
 	client           *Client
@@ -102,10 +105,10 @@ type Resp struct {
 	throttleDone     func()
 }
 
-// Opts is used to configure client options
+// Opts is used to configure client options.
 type Opts func(*Client)
 
-// NewClient returns a client for handling requests
+// NewClient returns a client for handling requests.
 func NewClient(opts ...Opts) *Client {
 	c := Client{
 		httpClient: &http.Client{},
@@ -123,21 +126,21 @@ func NewClient(opts ...Opts) *Client {
 	return &c
 }
 
-// WithCerts adds certificates
+// WithCerts adds certificates.
 func WithCerts(certs [][]byte) Opts {
 	return func(c *Client) {
 		c.rootCAPool = append(c.rootCAPool, certs...)
 	}
 }
 
-// WithCertDirs adds directories to check for host specific certs
+// WithCertDirs adds directories to check for host specific certs.
 func WithCertDirs(dirs []string) Opts {
 	return func(c *Client) {
 		c.rootCADirs = append(c.rootCADirs, dirs...)
 	}
 }
 
-// WithCertFiles adds certificates by filename
+// WithCertFiles adds certificates by filename.
 func WithCertFiles(files []string) Opts {
 	return func(c *Client) {
 		for _, f := range files {
@@ -155,14 +158,14 @@ func WithCertFiles(files []string) Opts {
 	}
 }
 
-// WithConfigHost adds the callback to request a config.Host struct
+// WithConfigHost adds the callback to request a [config.Host] struct.
 func WithConfigHost(gch func(string) *config.Host) Opts {
 	return func(c *Client) {
 		c.getConfigHost = gch
 	}
 }
 
-// WithDelay initial time to wait between retries (increased with exponential backoff)
+// WithDelay initial time to wait between retries (increased with exponential backoff).
 func WithDelay(delayInit time.Duration, delayMax time.Duration) Opts {
 	return func(c *Client) {
 		if delayInit > 0 {
@@ -179,14 +182,14 @@ func WithDelay(delayInit time.Duration, delayMax time.Duration) Opts {
 	}
 }
 
-// WithHTTPClient uses a specific http client with retryable requests
+// WithHTTPClient uses a specific http client with retryable requests.
 func WithHTTPClient(hc *http.Client) Opts {
 	return func(c *Client) {
 		c.httpClient = hc
 	}
 }
 
-// WithRetryLimit restricts the number of retries (defaults to 5)
+// WithRetryLimit restricts the number of retries (defaults to 5).
 func WithRetryLimit(rl int) Opts {
 	return func(c *Client) {
 		if rl > 0 {
@@ -195,39 +198,41 @@ func WithRetryLimit(rl int) Opts {
 	}
 }
 
-// WithLog injects a logrus Logger configuration
+// WithLog injects a logrus Logger configuration.
 func WithLog(log *logrus.Logger) Opts {
 	return func(c *Client) {
 		c.log = log
 	}
 }
 
-// WithTransport uses a specific http transport with retryable requests
+// WithTransport uses a specific http transport with retryable requests.
 func WithTransport(t *http.Transport) Opts {
 	return func(c *Client) {
 		c.httpClient = &http.Client{Transport: t}
 	}
 }
 
-// WithUserAgent sets a user agent header
+// WithUserAgent sets a user agent header.
 func WithUserAgent(ua string) Opts {
 	return func(c *Client) {
 		c.userAgent = ua
 	}
 }
 
-// Do runs a request, returning the response result
+// Do runs a request, returning the response result.
 func (c *Client) Do(ctx context.Context, req *Req) (*Resp, error) {
 	resp := &Resp{
-		ctx:    ctx,
-		client: c,
-		req:    req,
+		ctx:     ctx,
+		client:  c,
+		req:     req,
+		readCur: 0,
+		readMax: req.ExpectLen,
 	}
 	err := resp.next()
 	return resp, err
 }
 
-// next sends requests until a mirror responds or all requests fail
+// next sends requests until a mirror responds or all requests fail.
 func (resp *Resp) next() error {
 	var err error
 	c := resp.client
@@ -267,7 +272,10 @@ func (resp *Resp) next() error {
 			return ctxErr
 		}
 		// wait for other concurrent requests to this host
-		throttleDone, throttleErr := h.config.Throttle().Acquire(resp.ctx, reqmeta.Data{})
+		throttleDone, throttleErr := h.config.Throttle().Acquire(resp.ctx, reqmeta.Data{
+			Kind: req.MetaKind,
+			Size: req.BodyLen + req.ExpectLen + req.TransactLen,
+		})
 		if throttleErr != nil {
 			return throttleErr
 		}
@@ -356,9 +364,10 @@ func (resp *Resp) next() error {
 				httpReq.Header.Add("User-Agent", c.userAgent)
 			}
 			if resp.readCur > 0 && resp.readMax > 0 {
-				if httpReq.Header.Get("Range") == "" {
+				if req.Headers.Get("Range") == "" {
 					httpReq.Header.Add("Range", fmt.Sprintf("bytes=%d-%d", resp.readCur, resp.readMax))
 				} else {
+					// TODO: support Seek within a range request
 					dropHost = true
 					return fmt.Errorf("unable to resume a connection within a range request")
 				}
@@ -418,6 +427,7 @@ func (resp *Resp) next() error {
 				return err
 			}
 			// extract any warnings
+			// TODO: move warning handler into RoundTripper to get warnings from each round trip
 			for _, wh := range resp.resp.Header.Values("Warning") {
 				if match := warnRegexp.FindStringSubmatch(wh); len(match) == 2 {
 					// TODO: pass other fields (registry hostname) with structured logging
@@ -479,9 +489,19 @@ func (resp *Resp) next() error {
 			resp.reader = resp.resp.Body
 			resp.done = false
 			// set variables from headers if found
-			if resp.readCur == 0 && resp.readMax == 0 && resp.resp.Header.Get("Content-Length") != "" {
-				cl, parseErr := strconv.ParseInt(resp.resp.Header.Get("Content-Length"), 10, 64)
-				if parseErr == nil {
+			clHeader := resp.resp.Header.Get("Content-Length")
+			if resp.readCur == 0 && clHeader != "" {
+				cl, parseErr := strconv.ParseInt(clHeader, 10, 64)
+				if parseErr != nil {
+					c.log.WithFields(logrus.Fields{
+						"err":    err,
+						"header": clHeader,
+					}).Debug("failed to parse content-length header")
+				} else if resp.readMax > 0 {
+					if resp.readMax != cl {
+						return fmt.Errorf("unexpected content-length, expected %d, received %d", resp.readMax, cl)
+					}
+				} else {
 					resp.readMax = cl
 				}
 			}
@@ -771,7 +791,7 @@ func (c *Client) getHost(host string) *clientHost {
 	return h
 }
 
-// getAuth returns an auth, which may be repository specific
+// getAuth returns an auth, which may be repository specific.
 func (ch *clientHost) getAuth(repo string) auth.Auth {
 	ch.muAuth.Lock()
 	defer ch.muAuth.Unlock()
@@ -794,7 +814,7 @@ func (ch *clientHost) AuthCreds() func(h string) auth.Cred {
 	}
 }
 
-// HTTPError returns an error based on the status code
+// HTTPError returns an error based on the status code.
 func HTTPError(statusCode int) error {
 	switch statusCode {
 	case 401:
@@ -861,7 +881,7 @@ func makeRootPool(rootCAPool [][]byte, rootCADirs []string, hostname string, hos
 	return pool, nil
 }
 
-// sortHostCmp to sort host list of mirrors
+// sortHostCmp to sort host list of mirrors.
 func sortHostsCmp(hosts []*clientHost, upstream string) func(i, j int) bool {
 	now := time.Now()
 	// sort by backoff first, then priority decending, then upstream name last

@@ -247,8 +247,9 @@ func AcquireMulti[T any](ctx context.Context, e T, qList ...*Queue[T]) (context.
 	newCtx := context.WithValue(ctx, ctxKey, &ctxVal)
 	cleanup := func() {
 		ctxVal.qList = nil
-		for _, doneFn := range doneList {
-			doneFn()
+		// dequeue in reverse order to minimize chance of another AcquireMulti being freed and immediately blocking on the next queue
+		for i := len(doneList) - 1; i >= 0; i-- {
+			doneList[i]()
 		}
 	}
 	return newCtx, cleanup, nil

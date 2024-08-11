@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/regclient/regclient/internal/reghttp"
+	"github.com/regclient/regclient/internal/reqmeta"
 	"github.com/regclient/regclient/types/ping"
 	"github.com/regclient/regclient/types/ref"
 )
@@ -13,6 +14,7 @@ import (
 func (reg *Reg) Ping(ctx context.Context, r ref.Ref) (ping.Result, error) {
 	ret := ping.Result{}
 	req := &reghttp.Req{
+		MetaKind:  reqmeta.Query,
 		Host:      r.Registry,
 		NoMirrors: true,
 		Method:    "GET",

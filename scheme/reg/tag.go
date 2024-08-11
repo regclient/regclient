@@ -21,6 +21,7 @@ import (
 
 	"github.com/regclient/regclient/internal/httplink"
 	"github.com/regclient/regclient/internal/reghttp"
+	"github.com/regclient/regclient/internal/reqmeta"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/docker/schema2"
@@ -44,6 +45,7 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 
 	// attempt to delete the tag directly, available in OCI distribution-spec, and Hub API
 	req := &reghttp.Req{
+		MetaKind:   reqmeta.Query,
 		Host:       r.Registry,
 		NoMirrors:  true,
 		Method:     "DELETE",
@@ -256,6 +258,7 @@ func (reg *Reg) tagListOCI(ctx context.Context, r ref.Ref, config scheme.TagConf
 		"Accept": []string{"application/json"},
 	}
 	req := &reghttp.Req{
+		MetaKind:   reqmeta.Query,
 		Host:       r.Registry,
 		Method:     "GET",
 		Repository: r.Repository,
@@ -301,6 +304,7 @@ func (reg *Reg) tagListLink(ctx context.Context, r ref.Ref, _ scheme.TagConfig, 
 		"Accept": []string{"application/json"},
 	}
 	req := &reghttp.Req{
+		MetaKind:   reqmeta.Query,
 		Host:       r.Registry,
 		Method:     "GET",
 		DirectURL:  link,

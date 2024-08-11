@@ -14,6 +14,7 @@ import (
 
 	"github.com/regclient/regclient/internal/limitread"
 	"github.com/regclient/regclient/internal/reghttp"
+	"github.com/regclient/regclient/internal/reqmeta"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
@@ -57,6 +58,7 @@ func (reg *Reg) ManifestDelete(ctx context.Context, r ref.Ref, opts ...scheme.Ma
 
 	// build/send request
 	req := &reghttp.Req{
+		MetaKind:   reqmeta.Query,
 		Host:       r.Registry,
 		NoMirrors:  true,
 		Method:     "DELETE",
@@ -103,6 +105,7 @@ func (reg *Reg) ManifestGet(ctx context.Context, r ref.Ref) (manifest.Manifest, 
 		},
 	}
 	req := &reghttp.Req{
+		MetaKind:   reqmeta.Manifest,
 		Host:       r.Registry,
 		Method:     "GET",
 		Repository: r.Repository,
@@ -176,6 +179,7 @@ func (reg *Reg) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest,
 		},
 	}
 	req := &reghttp.Req{
+		MetaKind:   reqmeta.Head,
 		Host:       r.Registry,
 		Method:     "HEAD",
 		Repository: r.Repository,
@@ -236,6 +240,7 @@ func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest,
 		q.Add(paramManifestDigest, m.GetDescriptor().Digest.String())
 	}
 	req := &reghttp.Req{
+		MetaKind:   reqmeta.Manifest,
 		Host:       r.Registry,
 		NoMirrors:  true,
 		Method:     "PUT",

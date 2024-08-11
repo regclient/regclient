@@ -11,6 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient/internal/reghttp"
+	"github.com/regclient/regclient/internal/reqmeta"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types/mediatype"
 	"github.com/regclient/regclient/types/repo"
@@ -36,6 +37,7 @@ func (reg *Reg) RepoList(ctx context.Context, hostname string, opts ...scheme.Re
 		"Accept": []string{"application/json"},
 	}
 	req := &reghttp.Req{
+		MetaKind:  reqmeta.Query,
 		Host:      hostname,
 		NoMirrors: true,
 		Method:    "GET",

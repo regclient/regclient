@@ -9,6 +9,7 @@ import (
 
 	"github.com/regclient/regclient/internal/httplink"
 	"github.com/regclient/regclient/internal/reghttp"
+	"github.com/regclient/regclient/internal/reqmeta"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
@@ -164,6 +165,7 @@ func (reg *Reg) referrerListByAPIPage(ctx context.Context, r ref.Ref, config sch
 		query.Set("artifactType", config.MatchOpt.ArtifactType)
 	}
 	req := &reghttp.Req{
+		MetaKind:   reqmeta.Query,
 		Host:       r.Registry,
 		Method:     "GET",
 		Repository: r.Repository,
@@ -377,6 +379,7 @@ func (reg *Reg) referrerPing(ctx context.Context, r ref.Ref) bool {
 		return referrerEnabled
 	}
 	req := &reghttp.Req{
+		MetaKind:   reqmeta.Query,
 		Host:       r.Registry,
 		Method:     "GET",
 		Repository: r.Repository,

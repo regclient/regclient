@@ -481,7 +481,7 @@ func (host *Host) Throttle() *pqueue.Queue[reqmeta.Data] {
 	mu.Lock()
 	defer mu.Unlock()
 	if host.throttle == nil {
-		host.throttle = pqueue.New(pqueue.Opts[reqmeta.Data]{Max: int(host.ReqConcurrent)})
+		host.throttle = pqueue.New(pqueue.Opts[reqmeta.Data]{Max: int(host.ReqConcurrent), Next: reqmeta.DataNext})
 	}
 	return host.throttle
 }

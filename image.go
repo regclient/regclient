@@ -672,6 +672,111 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 		}
 	}
 
+	// If source is image, copy blobs
+	if mSrcImg, ok := mSrc.(manifest.Imager); ok && mSrc.IsSet() && !ref.EqualRepository(refSrc, refTgt) {
+		// copy the config
+		cd, err := mSrcImg.GetConfig()
+		if err != nil {
+			// docker schema v1 does not have a config object, ignore if it's missing
+			if !errors.Is(err, errs.ErrUnsupportedMediaType) {
+				rc.log.WithFields(logrus.Fields{
+					"ref": refSrc.Reference,
+					"err": err,
+				}).Warn("Failed to get config digest from manifest")
+				return fmt.Errorf("failed to get config digest for %s: %w", refSrc.CommonName(), err)
+			}
+		} else {
+			waitCount++
+			go func() {
+				rc.log.WithFields(logrus.Fields{
+					"source": refSrc.Reference,
+					"target": refTgt.Reference,
+					"digest": cd.Digest.String(),
+				}).Info("Copy config")
+				err := rc.imageCopyBlob(ctx, refSrc, refTgt, cd, opt, bOpt...)
+				if err != nil && !errors.Is(err, context.Canceled) {
+					rc.log.WithFields(logrus.Fields{
+						"source": refSrc.Reference,
+						"target": refTgt.Reference,
+						"digest": cd.Digest.String(),
+						"err":    err,
+					}).Warn("Failed to copy config")
+				}
+				waitCh <- err
+			}()
+		}
+
+		// copy filesystem layers
+		l, err := mSrcImg.GetLayers()
+		if err != nil {
+			return err
+		}
+		for _, layerSrc := range l {
+			if len(layerSrc.URLs) > 0 && !opt.includeExternal {
+				// skip blobs where the URLs are defined, these aren't hosted and won't be pulled from the source
+				rc.log.WithFields(logrus.Fields{
+					"source":        refSrc.Reference,
+					"target":        refTgt.Reference,
+					"layer":         layerSrc.Digest.String(),
+					"external-urls": layerSrc.URLs,
+				}).Debug("Skipping external layer")
+				continue
+			}
+			waitCount++
+			layerSrc := layerSrc
+			go func() {
+				rc.log.WithFields(logrus.Fields{
+					"source": refSrc.Reference,
+					"target": refTgt.Reference,
+					"layer":  layerSrc.Digest.String(),
+				}).Info("Copy layer")
+				err := rc.imageCopyBlob(ctx, refSrc, refTgt, layerSrc, opt, bOpt...)
+				if err != nil && !errors.Is(err, context.Canceled) {
+					rc.log.WithFields(logrus.Fields{
+						"source": refSrc.Reference,
+						"target": refTgt.Reference,
+						"layer":  layerSrc.Digest.String(),
+						"err":    err,
+					}).Warn("Failed to copy layer")
+				}
+				waitCh <- err
+			}()
+		}
+	}
+
+	// check for any errors and abort early if found
+	err = nil
+	done := false
+	for !done && waitCount > 0 {
+		if err == nil {
+			select {
+			case err = <-waitCh:
+				if err != nil {
+					cancel()
+				}
+			default:
+				done = true // happy path
+			}
+		} else {
+			if errors.Is(err, context.Canceled) {
+				// try to find a better error message than context canceled
+				err = <-waitCh
+			} else {
+				<-waitCh
+			}
+		}
+		if !done {
+			waitCount--
+		}
+	}
+	if err != nil {
+		rc.log.WithFields(logrus.Fields{
+			"err":  err,
+			"sDig": sDig,
+		}).Debug("child manifest copy failed")
+		return err
+	}
+
 	// copy referrers
 	referrerTags := []string{}
 	if opt.referrerConfs != nil {
@@ -793,111 +898,6 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 					}
 				}()
 			}
-		}
-	}
-
-	// check for any errors and abort early if found
-	err = nil
-	done := false
-	for !done && waitCount > 0 {
-		if err == nil {
-			select {
-			case err = <-waitCh:
-				if err != nil {
-					cancel()
-				}
-			default:
-				done = true // happy path
-			}
-		} else {
-			if errors.Is(err, context.Canceled) {
-				// try to find a better error message than context canceled
-				err = <-waitCh
-			} else {
-				<-waitCh
-			}
-		}
-		if !done {
-			waitCount--
-		}
-	}
-	if err != nil {
-		rc.log.WithFields(logrus.Fields{
-			"err":  err,
-			"sDig": sDig,
-		}).Debug("child manifest copy failed")
-		return err
-	}
-
-	// If source is image, copy blobs
-	if mSrcImg, ok := mSrc.(manifest.Imager); ok && mSrc.IsSet() && !ref.EqualRepository(refSrc, refTgt) {
-		// copy the config
-		cd, err := mSrcImg.GetConfig()
-		if err != nil {
-			// docker schema v1 does not have a config object, ignore if it's missing
-			if !errors.Is(err, errs.ErrUnsupportedMediaType) {
-				rc.log.WithFields(logrus.Fields{
-					"ref": refSrc.Reference,
-					"err": err,
-				}).Warn("Failed to get config digest from manifest")
-				return fmt.Errorf("failed to get config digest for %s: %w", refSrc.CommonName(), err)
-			}
-		} else {
-			waitCount++
-			go func() {
-				rc.log.WithFields(logrus.Fields{
-					"source": refSrc.Reference,
-					"target": refTgt.Reference,
-					"digest": cd.Digest.String(),
-				}).Info("Copy config")
-				err := rc.imageCopyBlob(ctx, refSrc, refTgt, cd, opt, bOpt...)
-				if err != nil && !errors.Is(err, context.Canceled) {
-					rc.log.WithFields(logrus.Fields{
-						"source": refSrc.Reference,
-						"target": refTgt.Reference,
-						"digest": cd.Digest.String(),
-						"err":    err,
-					}).Warn("Failed to copy config")
-				}
-				waitCh <- err
-			}()
-		}
-
-		// copy filesystem layers
-		l, err := mSrcImg.GetLayers()
-		if err != nil {
-			return err
-		}
-		for _, layerSrc := range l {
-			if len(layerSrc.URLs) > 0 && !opt.includeExternal {
-				// skip blobs where the URLs are defined, these aren't hosted and won't be pulled from the source
-				rc.log.WithFields(logrus.Fields{
-					"source":        refSrc.Reference,
-					"target":        refTgt.Reference,
-					"layer":         layerSrc.Digest.String(),
-					"external-urls": layerSrc.URLs,
-				}).Debug("Skipping external layer")
-				continue
-			}
-			waitCount++
-			layerSrc := layerSrc
-			go func() {
-				rc.log.WithFields(logrus.Fields{
-					"source": refSrc.Reference,
-					"target": refTgt.Reference,
-					"layer":  layerSrc.Digest.String(),
-				}).Info("Copy layer")
-				err := rc.imageCopyBlob(ctx, refSrc, refTgt, layerSrc, opt, bOpt...)
-				if err != nil && !errors.Is(err, context.Canceled) {
-					rc.log.WithFields(logrus.Fields{
-						"source": refSrc.Reference,
-						"target": refTgt.Reference,
-						"layer":  layerSrc.Digest.String(),
-						"err":    err,
-					}).Warn("Failed to copy layer")
-				}
-				waitCh <- err
-			}()
 		}
 	}
 
