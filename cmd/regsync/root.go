@@ -826,7 +826,7 @@ func (rootOpts *rootCmd) processRef(ctx context.Context, s ConfigSync, src, tgt 
 		opts = append(opts, regclient.ImageWithDigestTags())
 	}
 	if s.Referrers != nil && *s.Referrers {
-		if s.ReferrerFilters == nil || len(s.ReferrerFilters) == 0 {
+		if len(s.ReferrerFilters) == 0 {
 			opts = append(opts, regclient.ImageWithReferrers())
 		} else {
 			for _, filter := range s.ReferrerFilters {

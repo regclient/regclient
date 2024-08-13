@@ -349,7 +349,7 @@ func WithLayerRmCreatedBy(re regexp.Regexp) Opts {
 			if dm.m.IsList() || dm.config.oc == nil {
 				return nil
 			}
-			if dm.layers == nil || len(dm.layers) == 0 {
+			if len(dm.layers) == 0 {
 				return fmt.Errorf("no layers found")
 			}
 			delLayers := []int{}
@@ -399,7 +399,7 @@ func WithLayerRmIndex(index int) Opts {
 			if !dm.top || dm.m.IsList() || dm.config.oc == nil {
 				return fmt.Errorf("remove layer by index requires v2 image manifest")
 			}
-			if dm.layers == nil || len(dm.layers) == 0 {
+			if len(dm.layers) == 0 {
 				return fmt.Errorf("no layers found")
 			}
 			curLayer := 0
