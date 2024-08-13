@@ -124,7 +124,16 @@ func (q *Queue[T]) release(prev *T) {
 		}
 	}
 	// skip checks when at limit or nothing queued
-	if len(q.active) >= q.max || len(q.queued) == 0 {
+	if len(q.queued) == 0 {
+		if len(q.active) == 0 {
+			// free up slices if this was the last active entry
+			q.active = nil
+			q.queued = nil
+			q.wait = nil
+		}
+		return
+	}
+	if len(q.active) >= q.max {
 		return
 	}
 	i := 0
