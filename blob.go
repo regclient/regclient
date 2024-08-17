@@ -10,7 +10,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/regclient/regclient/internal/throttle"
+	"github.com/regclient/regclient/internal/pqueue"
+	"github.com/regclient/regclient/internal/reqmeta"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/blob"
@@ -78,7 +79,7 @@ func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Re
 		return nil
 	}
 	// acquire throttle for both src and tgt to avoid deadlocks
-	tList := []*throttle.Throttle{}
+	tList := []*pqueue.Queue[reqmeta.Data]{}
 	schemeSrcAPI, err := rc.schemeGet(refSrc.Scheme)
 	if err != nil {
 		return err
@@ -94,11 +95,14 @@ func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Re
 		tList = append(tList, tTgt.Throttle(refTgt, true)...)
 	}
 	if len(tList) > 0 {
-		ctx, err = throttle.AcquireMulti(ctx, tList)
+		ctxMulti, done, err := pqueue.AcquireMulti[reqmeta.Data](ctx, reqmeta.Data{Kind: reqmeta.Blob, Size: d.Size}, tList...)
 		if err != nil {
 			return err
 		}
-		defer throttle.ReleaseMulti(ctx, tList)
+		if done != nil {
+			defer done()
+		}
+		ctx = ctxMulti
 	}
 
 	// try mounting blob from the source repo is the registry is the same

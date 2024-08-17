@@ -11,7 +11,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/regclient/regclient/internal/throttle"
+	"github.com/regclient/regclient/internal/pqueue"
+	"github.com/regclient/regclient/internal/reqmeta"
 	"github.com/regclient/regclient/internal/timejson"
 )
 
@@ -43,7 +44,7 @@ const (
 	// defaultConcurrent is the default number of concurrent registry connections.
 	defaultConcurrent = 3
 	// defaultReqPerSec is the default maximum frequency to send requests to a registry.
-	defaultReqPerSec = 10
+	defaultReqPerSec = 0
 	// tokenUser is the username returned by credential helpers that indicates the password is an identity token.
 	tokenUser = "<token>"
 )
@@ -105,31 +106,31 @@ func (t *TLSConf) UnmarshalText(b []byte) error {
 
 // Host defines settings for connecting to a registry.
 type Host struct {
-	Name          string             `json:"-" yaml:"registry,omitempty"`                  // Name of the registry (required) (yaml configs pass this as a field, json provides this from the object key)
-	TLS           TLSConf            `json:"tls,omitempty" yaml:"tls"`                     // TLS setting: enabled (default), disabled, insecure
-	RegCert       string             `json:"regcert,omitempty" yaml:"regcert"`             // public pem cert of registry
-	ClientCert    string             `json:"clientCert,omitempty" yaml:"clientCert"`       // public pem cert for client (mTLS)
-	ClientKey     string             `json:"clientKey,omitempty" yaml:"clientKey"`         // private pem cert for client (mTLS)
-	Hostname      string             `json:"hostname,omitempty" yaml:"hostname"`           // hostname of registry, default is the registry name
-	User          string             `json:"user,omitempty" yaml:"user"`                   // username, not used with credHelper
-	Pass          string             `json:"pass,omitempty" yaml:"pass"`                   // password, not used with credHelper
-	Token         string             `json:"token,omitempty" yaml:"token"`                 // token, experimental for specific APIs
-	CredHelper    string             `json:"credHelper,omitempty" yaml:"credHelper"`       // credential helper command for requesting logins
-	CredExpire    timejson.Duration  `json:"credExpire,omitempty" yaml:"credExpire"`       // time until credential expires
-	CredHost      string             `json:"credHost" yaml:"credHost"`                     // used when a helper hostname doesn't match Hostname
-	PathPrefix    string             `json:"pathPrefix,omitempty" yaml:"pathPrefix"`       // used for mirrors defined within a repository namespace
-	Mirrors       []string           `json:"mirrors,omitempty" yaml:"mirrors"`             // list of other Host Names to use as mirrors
-	Priority      uint               `json:"priority,omitempty" yaml:"priority"`           // priority when sorting mirrors, higher priority attempted first
-	RepoAuth      bool               `json:"repoAuth,omitempty" yaml:"repoAuth"`           // tracks a separate auth per repo
-	API           string             `json:"api,omitempty" yaml:"api"`                     // experimental: registry API to use
-	APIOpts       map[string]string  `json:"apiOpts,omitempty" yaml:"apiOpts"`             // options for APIs
-	BlobChunk     int64              `json:"blobChunk,omitempty" yaml:"blobChunk"`         // size of each blob chunk
-	BlobMax       int64              `json:"blobMax,omitempty" yaml:"blobMax"`             // threshold to switch to chunked upload, -1 to disable, 0 for regclient.blobMaxPut
-	ReqPerSec     float64            `json:"reqPerSec,omitempty" yaml:"reqPerSec"`         // requests per second, default is defaultReqPerSec(10)
-	ReqConcurrent int64              `json:"reqConcurrent,omitempty" yaml:"reqConcurrent"` // concurrent requests, default is defaultConcurrent(3)
-	Scheme        string             `json:"scheme,omitempty" yaml:"scheme"`               // Deprecated: use TLS instead
-	credRefresh   time.Time          `json:"-" yaml:"-"`                                   // internal use, when to refresh credentials
-	throttle      *throttle.Throttle `json:"-" yaml:"-"`                                   // internal use, limit for concurrent requests
+	Name          string                      `json:"-" yaml:"registry,omitempty"`                  // Name of the registry (required) (yaml configs pass this as a field, json provides this from the object key)
+	TLS           TLSConf                     `json:"tls,omitempty" yaml:"tls"`                     // TLS setting: enabled (default), disabled, insecure
+	RegCert       string                      `json:"regcert,omitempty" yaml:"regcert"`             // public pem cert of registry
+	ClientCert    string                      `json:"clientCert,omitempty" yaml:"clientCert"`       // public pem cert for client (mTLS)
+	ClientKey     string                      `json:"clientKey,omitempty" yaml:"clientKey"`         // private pem cert for client (mTLS)
+	Hostname      string                      `json:"hostname,omitempty" yaml:"hostname"`           // hostname of registry, default is the registry name
+	User          string                      `json:"user,omitempty" yaml:"user"`                   // username, not used with credHelper
+	Pass          string                      `json:"pass,omitempty" yaml:"pass"`                   // password, not used with credHelper
+	Token         string                      `json:"token,omitempty" yaml:"token"`                 // token, experimental for specific APIs
+	CredHelper    string                      `json:"credHelper,omitempty" yaml:"credHelper"`       // credential helper command for requesting logins
+	CredExpire    timejson.Duration           `json:"credExpire,omitempty" yaml:"credExpire"`       // time until credential expires
+	CredHost      string                      `json:"credHost" yaml:"credHost"`                     // used when a helper hostname doesn't match Hostname
+	PathPrefix    string                      `json:"pathPrefix,omitempty" yaml:"pathPrefix"`       // used for mirrors defined within a repository namespace
+	Mirrors       []string                    `json:"mirrors,omitempty" yaml:"mirrors"`             // list of other Host Names to use as mirrors
+	Priority      uint                        `json:"priority,omitempty" yaml:"priority"`           // priority when sorting mirrors, higher priority attempted first
+	RepoAuth      bool                        `json:"repoAuth,omitempty" yaml:"repoAuth"`           // tracks a separate auth per repo
+	API           string                      `json:"api,omitempty" yaml:"api"`                     // Deprecated: registry API to use
+	APIOpts       map[string]string           `json:"apiOpts,omitempty" yaml:"apiOpts"`             // options for APIs
+	BlobChunk     int64                       `json:"blobChunk,omitempty" yaml:"blobChunk"`         // size of each blob chunk
+	BlobMax       int64                       `json:"blobMax,omitempty" yaml:"blobMax"`             // threshold to switch to chunked upload, -1 to disable, 0 for regclient.blobMaxPut
+	ReqPerSec     float64                     `json:"reqPerSec,omitempty" yaml:"reqPerSec"`         // requests per second
+	ReqConcurrent int64                       `json:"reqConcurrent,omitempty" yaml:"reqConcurrent"` // concurrent requests, default is defaultConcurrent(3)
+	Scheme        string                      `json:"scheme,omitempty" yaml:"scheme"`               // Deprecated: use TLS instead
+	credRefresh   time.Time                   `json:"-" yaml:"-"`                                   // internal use, when to refresh credentials
+	throttle      *pqueue.Queue[reqmeta.Data] `json:"-" yaml:"-"`                                   // internal use, limit for concurrent requests
 }
 
 // Cred defines a user credential for accessing a registry.
@@ -390,15 +391,12 @@ func (host *Host) Merge(newHost Host, log *logrus.Logger) error {
 		host.RepoAuth = newHost.RepoAuth
 	}
 
+	// TODO: eventually delete
 	if newHost.API != "" {
-		if host.API != "" && host.API != newHost.API {
-			log.WithFields(logrus.Fields{
-				"orig": host.API,
-				"new":  newHost.API,
-				"host": name,
-			}).Warn("Changing API settings for registry")
-		}
-		host.API = newHost.API
+		log.WithFields(logrus.Fields{
+			"api":  newHost.API,
+			"host": name,
+		}).Warn("API field has been deprecated")
 	}
 
 	if len(newHost.APIOpts) > 0 {
@@ -443,7 +441,7 @@ func (host *Host) Merge(newHost Host, log *logrus.Logger) error {
 		host.BlobMax = newHost.BlobMax
 	}
 
-	if newHost.ReqPerSec > 0 {
+	if newHost.ReqPerSec != 0 {
 		if host.ReqPerSec != 0 && host.ReqPerSec != newHost.ReqPerSec {
 			log.WithFields(logrus.Fields{
 				"orig": host.ReqPerSec,
@@ -476,14 +474,14 @@ func (host *Host) Merge(newHost Host, log *logrus.Logger) error {
 	return nil
 }
 
-func (host *Host) Throttle() *throttle.Throttle {
+func (host *Host) Throttle() *pqueue.Queue[reqmeta.Data] {
 	if host.ReqConcurrent <= 0 {
 		return nil
 	}
 	mu.Lock()
 	defer mu.Unlock()
 	if host.throttle == nil {
-		host.throttle = throttle.New(int(host.ReqConcurrent))
+		host.throttle = pqueue.New(pqueue.Opts[reqmeta.Data]{Max: int(host.ReqConcurrent), Next: reqmeta.DataNext})
 	}
 	return host.throttle
 }
