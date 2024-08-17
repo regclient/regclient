@@ -44,7 +44,7 @@ const (
 	// defaultConcurrent is the default number of concurrent registry connections.
 	defaultConcurrent = 3
 	// defaultReqPerSec is the default maximum frequency to send requests to a registry.
-	defaultReqPerSec = 10
+	defaultReqPerSec = 0
 	// tokenUser is the username returned by credential helpers that indicates the password is an identity token.
 	tokenUser = "<token>"
 )
@@ -126,7 +126,7 @@ type Host struct {
 	APIOpts       map[string]string           `json:"apiOpts,omitempty" yaml:"apiOpts"`             // options for APIs
 	BlobChunk     int64                       `json:"blobChunk,omitempty" yaml:"blobChunk"`         // size of each blob chunk
 	BlobMax       int64                       `json:"blobMax,omitempty" yaml:"blobMax"`             // threshold to switch to chunked upload, -1 to disable, 0 for regclient.blobMaxPut
-	ReqPerSec     float64                     `json:"reqPerSec,omitempty" yaml:"reqPerSec"`         // requests per second, default is defaultReqPerSec(10)
+	ReqPerSec     float64                     `json:"reqPerSec,omitempty" yaml:"reqPerSec"`         // requests per second
 	ReqConcurrent int64                       `json:"reqConcurrent,omitempty" yaml:"reqConcurrent"` // concurrent requests, default is defaultConcurrent(3)
 	Scheme        string                      `json:"scheme,omitempty" yaml:"scheme"`               // Deprecated: use TLS instead
 	credRefresh   time.Time                   `json:"-" yaml:"-"`                                   // internal use, when to refresh credentials
@@ -441,7 +441,7 @@ func (host *Host) Merge(newHost Host, log *logrus.Logger) error {
 		host.BlobMax = newHost.BlobMax
 	}
 
-	if newHost.ReqPerSec > 0 {
+	if newHost.ReqPerSec != 0 {
 		if host.ReqPerSec != 0 && host.ReqPerSec != newHost.ReqPerSec {
 			log.WithFields(logrus.Fields{
 				"orig": host.ReqPerSec,

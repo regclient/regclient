@@ -34,12 +34,13 @@ import (
 	"github.com/regclient/regclient/types/warning"
 )
 
-var defaultDelayInit, _ = time.ParseDuration("1s")
+var defaultDelayInit, _ = time.ParseDuration("0.1s")
 var defaultDelayMax, _ = time.ParseDuration("30s")
 var warnRegexp = regexp.MustCompile(`^299\s+-\s+"([^"]+)"`)
 
 const (
-	DefaultRetryLimit = 3
+	DefaultRetryLimit = 5 // number of times a request will be retried
+	backoffResetCount = 5 // number of successful requests needed to reduce the backoff
 )
 
 // Client is an HTTP client wrapper.
@@ -61,7 +62,8 @@ type Client struct {
 type clientHost struct {
 	initialized  bool
 	backoffCur   int
-	backoffUntil time.Time
+	backoffLast  time.Time
+	backoffReset int
 	config       *config.Host
 	httpClient   *http.Client
 	auth         map[string]auth.Auth
@@ -323,13 +325,13 @@ func (resp *Resp) next() error {
 				_ = resp.resp.Body.Close()
 			}
 			// delay for backoff if needed
-			bu := resp.backoffUntil()
+			bu := resp.backoffGet()
 			if !bu.IsZero() && bu.After(time.Now()) {
 				sleepTime := time.Until(bu)
 				c.log.WithFields(logrus.Fields{
 					"Host":    h.config.Name,
 					"Seconds": sleepTime.Seconds(),
-				}).Warn("Sleeping for backoff")
+				}).Debug("Sleeping for backoff")
 				select {
 				case <-resp.ctx.Done():
 					return errs.ErrCanceled
@@ -407,16 +409,8 @@ func (resp *Resp) next() error {
 				h.muNext.Unlock()
 			}
 
-			// update http client for insecure requests and root certs
-			httpClient := *h.httpClient
-
 			// send request
-			resp.client.log.WithFields(logrus.Fields{
-				"url":      httpReq.URL.String(),
-				"method":   httpReq.Method,
-				"withAuth": (len(httpReq.Header.Values("Authorization")) > 0),
-			}).Debug("http req")
-			resp.resp, err = httpClient.Do(httpReq)
+			resp.resp, err = h.httpClient.Do(httpReq)
 
 			if err != nil {
 				c.log.WithFields(logrus.Fields{
@@ -426,14 +420,7 @@ func (resp *Resp) next() error {
 				backoff = true
 				return err
 			}
-			// extract any warnings
-			// TODO: move warning handler into RoundTripper to get warnings from each round trip
-			for _, wh := range resp.resp.Header.Values("Warning") {
-				if match := warnRegexp.FindStringSubmatch(wh); len(match) == 2 {
-					// TODO: pass other fields (registry hostname) with structured logging
-					warning.Handle(resp.ctx, resp.client.log, match[1])
-				}
-			}
+
 			statusCode := resp.resp.StatusCode
 			if statusCode < 200 || statusCode >= 300 {
 				switch statusCode {
@@ -468,7 +455,7 @@ func (resp *Resp) next() error {
 				case http.StatusRequestedRangeNotSatisfiable:
 					// if range request error (blob push), drop mirror for this req, but other requests don't need backoff
 					dropHost = true
-				case http.StatusTooManyRequests, http.StatusRequestTimeout, http.StatusGatewayTimeout, http.StatusInternalServerError:
+				case http.StatusTooManyRequests, http.StatusRequestTimeout, http.StatusGatewayTimeout, http.StatusBadGateway, http.StatusInternalServerError:
 					// server is likely overloaded, backoff but still retry
 					backoff = true
 				default:
@@ -476,10 +463,6 @@ func (resp *Resp) next() error {
 					backoff = true
 					dropHost = true
 				}
-				c.log.WithFields(logrus.Fields{
-					"URL":    u.String(),
-					"Status": http.StatusText(statusCode),
-				}).Debug("Request failed")
 				errHTTP := HTTPError(resp.resp.StatusCode)
 				errBody, _ := io.ReadAll(resp.resp.Body)
 				_ = resp.resp.Body.Close()
@@ -519,7 +502,6 @@ func (resp *Resp) next() error {
 			return nil
 		}
 		// backoff, dropHost, and/or go to next host in the list
-		throttleDone()
 		if backoff {
 			if req.IgnoreErr {
 				// don't set a backoff, immediately drop the host when errors ignored
@@ -532,6 +514,7 @@ func (resp *Resp) next() error {
 				}
 			}
 		}
+		throttleDone()
 		// when error does not allow retries, abort with the last known err value
 		if err != nil && errors.Is(loopErr, errs.ErrNotRetryable) {
 			return err
@@ -563,7 +546,7 @@ func (resp *Resp) Read(b []byte) (int, error) {
 	resp.readCur += int64(i)
 	if err == io.EOF || err == io.ErrUnexpectedEOF {
 		if resp.resp.Request.Method == "HEAD" || resp.readCur >= resp.readMax {
-			resp.backoffClear()
+			resp.backoffReset()
 			resp.done = true
 		} else {
 			// short read, retry?
@@ -605,7 +588,7 @@ func (resp *Resp) Close() error {
 		return errs.ErrNotFound
 	}
 	if !resp.done {
-		resp.backoffClear()
+		resp.backoffReset()
 	}
 	resp.done = true
 	return resp.resp.Body.Close()
@@ -640,20 +623,29 @@ func (resp *Resp) Seek(offset int64, whence int) (int64, error) {
 	return resp.readCur, nil
 }
 
-func (resp *Resp) backoffClear() {
+func (resp *Resp) backoffGet() time.Time {
 	c := resp.client
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	ch := c.host[resp.mirror]
-	if ch.backoffCur > c.retryLimit {
-		ch.backoffCur = c.retryLimit
-	}
 	if ch.backoffCur > 0 {
-		ch.backoffCur--
-		if ch.backoffCur == 0 {
-			ch.backoffUntil = time.Time{}
+		delay := c.delayInit << ch.backoffCur
+		if delay > c.delayMax {
+			delay = c.delayMax
 		}
+		next := ch.backoffLast.Add(delay)
+		now := time.Now()
+		if now.After(next) {
+			next = now
+		}
+		ch.backoffLast = next
+		return next
 	}
+	// reset a stale "retry-after" time
+	if !ch.backoffLast.IsZero() && ch.backoffLast.Before(time.Now()) {
+		ch.backoffLast = time.Time{}
+	}
+	return ch.backoffLast
 }
 
 func (resp *Resp) backoffSet() error {
@@ -661,26 +653,24 @@ func (resp *Resp) backoffSet() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	ch := c.host[resp.mirror]
-	ch.backoffCur++
-	// sleep for backoff time
-	sleepTime := c.delayInit << ch.backoffCur
-	// limit to max delay
-	if sleepTime > c.delayMax {
-		sleepTime = c.delayMax
-	}
-	// check rate limit header
+	// check rate limit header and use that directly if possible
 	if resp.resp != nil && resp.resp.Header.Get("Retry-After") != "" {
 		ras := resp.resp.Header.Get("Retry-After")
 		ra, _ := time.ParseDuration(ras + "s")
-		if ra > c.delayMax {
-			sleepTime = c.delayMax
-		} else if ra > sleepTime {
-			sleepTime = ra
+		if ra > 0 {
+			next := time.Now().Add(ra)
+			if ch.backoffLast.Before(next) {
+				ch.backoffLast = next
+			}
+			return nil
 		}
 	}
-
-	ch.backoffUntil = time.Now().Add(sleepTime)
-
+	// Else track the number of backoffs and fail when the limit is exceeded.
+	// New requests always get at least one try, but fail fast if the server has been throwing errors.
+	ch.backoffCur++
+	if ch.backoffLast.IsZero() {
+		ch.backoffLast = time.Now()
+	}
 	if ch.backoffCur >= c.retryLimit {
 		return fmt.Errorf("%w: backoffs %d", errs.ErrBackoffLimit, ch.backoffCur)
 	}
@@ -688,12 +678,24 @@ func (resp *Resp) backoffSet() error {
 	return nil
 }
 
-func (resp *Resp) backoffUntil() time.Time {
+func (resp *Resp) backoffReset() {
 	c := resp.client
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	ch := c.host[resp.mirror]
-	return ch.backoffUntil
+	if ch.backoffCur > 0 {
+		ch.backoffReset++
+		// If enough successful requests are seen, lower the backoffCur count.
+		// This requires multiple successful requests of a flaky server, but quickly drops when above the retry limit.
+		if ch.backoffReset > backoffResetCount || ch.backoffCur > c.retryLimit {
+			ch.backoffReset = 0
+			ch.backoffCur--
+			if ch.backoffCur == 0 {
+				// reset the last time to the zero value
+				ch.backoffLast = time.Time{}
+			}
+		}
+	}
 }
 
 func (c *Client) getHost(host string) *clientHost {
@@ -729,15 +731,15 @@ func (c *Client) getHost(host string) *clientHost {
 	}
 
 	if h.httpClient == nil {
-		h.httpClient = c.httpClient
+		// create a new client and configure the transport
+		hc := *c.httpClient
+		h.httpClient = &hc
+		if h.httpClient.Transport == nil {
+			h.httpClient.Transport = http.DefaultTransport.(*http.Transport).Clone()
+		}
 		// update http client for insecure requests and root certs
 		if h.config.TLS == config.TLSInsecure || len(c.rootCAPool) > 0 || len(c.rootCADirs) > 0 || h.config.RegCert != "" || (h.config.ClientCert != "" && h.config.ClientKey != "") {
-			// create a new client and modify the transport
-			httpClient := *c.httpClient
-			if httpClient.Transport == nil {
-				httpClient.Transport = http.DefaultTransport.(*http.Transport).Clone()
-			}
-			t, ok := httpClient.Transport.(*http.Transport)
+			t, ok := h.httpClient.Transport.(*http.Transport)
 			if ok {
 				var tlsc *tls.Config
 				if t.TLSClientConfig != nil {
@@ -769,10 +771,11 @@ func (c *Client) getHost(host string) *clientHost {
 					}
 				}
 				t.TLSClientConfig = tlsc
-				httpClient.Transport = t
+				h.httpClient.Transport = t
 			}
-			h.httpClient = &httpClient
 		}
+		// wrap the transport
+		h.httpClient.Transport = &wrapTransport{c: c, orig: h.httpClient.Transport}
 	}
 
 	if h.newAuth == nil {
@@ -812,6 +815,44 @@ func (ch *clientHost) AuthCreds() func(h string) auth.Cred {
 		hCred := ch.config.GetCred()
 		return auth.Cred{User: hCred.User, Password: hCred.Password, Token: hCred.Token}
 	}
+}
+
+type wrapTransport struct {
+	c    *Client
+	orig http.RoundTripper
+}
+
+func (wt *wrapTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := wt.orig.RoundTrip(req)
+	// copy headers to censor auth field
+	reqHead := req.Header.Clone()
+	if reqHead.Get("Authorization") != "" {
+		reqHead.Set("Authorization", "[censored]")
+	}
+	if err != nil {
+		wt.c.log.WithFields(logrus.Fields{
+			"req-method":  req.Method,
+			"req-url":     req.URL.String(),
+			"req-headers": reqHead,
+			"err":         err,
+		}).Debug("reg http request")
+	} else {
+		// extract any warnings
+		for _, wh := range resp.Header.Values("Warning") {
+			if match := warnRegexp.FindStringSubmatch(wh); len(match) == 2 {
+				// TODO(bmitch): pass other fields (registry hostname) with structured logging
+				warning.Handle(req.Context(), wt.c.log, match[1])
+			}
+		}
+		wt.c.log.WithFields(logrus.Fields{
+			"req-method":   req.Method,
+			"req-url":      req.URL.String(),
+			"req-headers":  reqHead,
+			"resp-status":  resp.Status,
+			"resp-headers": resp.Header,
+		}).Trace("reg http request")
+	}
+	return resp, err
 }
 
 // HTTPError returns an error based on the status code.
@@ -886,8 +927,8 @@ func sortHostsCmp(hosts []*clientHost, upstream string) func(i, j int) bool {
 	now := time.Now()
 	// sort by backoff first, then priority decending, then upstream name last
 	return func(i, j int) bool {
-		if now.Before(hosts[i].backoffUntil) || now.Before(hosts[j].backoffUntil) {
-			return hosts[i].backoffUntil.Before(hosts[j].backoffUntil)
+		if now.Before(hosts[i].backoffLast) || now.Before(hosts[j].backoffLast) {
+			return hosts[i].backoffLast.Before(hosts[j].backoffLast)
 		}
 		if hosts[i].config.Priority != hosts[j].config.Priority {
 			return hosts[i].config.Priority < hosts[j].config.Priority
