@@ -84,7 +84,7 @@ func New(opts ...Opts) *Reg {
 		hosts:           map[string]*config.Host{},
 		features:        map[featureKey]*featureVal{},
 	}
-	r.reghttpOpts = append(r.reghttpOpts, reghttp.WithConfigHost(r.hostGet))
+	r.reghttpOpts = append(r.reghttpOpts, reghttp.WithConfigHostFn(r.hostGet))
 	for _, opt := range opts {
 		opt(&r)
 	}

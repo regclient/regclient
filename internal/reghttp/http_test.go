@@ -17,7 +17,6 @@ import (
 	"github.com/opencontainers/go-digest"
 
 	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/internal/auth"
 	"github.com/regclient/regclient/internal/reqresp"
 	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/warning"
@@ -25,6 +24,15 @@ import (
 
 // TODO: test for race conditions
 // TODO: test rate limits and concurrency
+
+type testBearerToken struct {
+	Token        string    `json:"token"`
+	AccessToken  string    `json:"access_token"`
+	ExpiresIn    int       `json:"expires_in"`
+	IssuedAt     time.Time `json:"issued_at"`
+	RefreshToken string    `json:"refresh_token"`
+	Scope        string    `json:"scope"`
+}
 
 func TestRegHttp(t *testing.T) {
 	t.Parallel()
@@ -43,6 +51,7 @@ func TestRegHttp(t *testing.T) {
 	user := "user"
 	pass := "testpass"
 	userAuth := base64.StdEncoding.EncodeToString([]byte(user + ":" + pass))
+	reqPerSec := 10.0
 	token1GForm := url.Values{}
 	token1GForm.Set("scope", "repository:project:pull")
 	token1GForm.Set("service", "test")
@@ -52,7 +61,7 @@ func TestRegHttp(t *testing.T) {
 	token1GForm.Set("password", pass)
 	token1GBody := token1GForm.Encode()
 	token1GValue := "token1GValue"
-	token1GResp, _ := json.Marshal(auth.BearerToken{
+	token1GResp, _ := json.Marshal(testBearerToken{
 		Token:        token1GValue,
 		ExpiresIn:    900,
 		IssuedAt:     time.Now(),
@@ -68,7 +77,7 @@ func TestRegHttp(t *testing.T) {
 	token1PForm.Set("password", pass)
 	token1PBody := token1PForm.Encode()
 	token1PValue := "token1PValue"
-	token1PResp, _ := json.Marshal(auth.BearerToken{
+	token1PResp, _ := json.Marshal(testBearerToken{
 		Token:        token1PValue,
 		ExpiresIn:    900,
 		IssuedAt:     time.Now(),
@@ -84,7 +93,7 @@ func TestRegHttp(t *testing.T) {
 	token2GForm.Set("password", pass)
 	token2GBody := token2GForm.Encode()
 	token2GValue := "token2GValue"
-	token2GResp, _ := json.Marshal(auth.BearerToken{
+	token2GResp, _ := json.Marshal(testBearerToken{
 		Token:        token2GValue,
 		ExpiresIn:    900,
 		IssuedAt:     time.Now(),
@@ -100,7 +109,7 @@ func TestRegHttp(t *testing.T) {
 	token2PForm.Set("password", pass)
 	token2PBody := token2PForm.Encode()
 	token2PValue := "token2PValue"
-	token2PResp, _ := json.Marshal(auth.BearerToken{
+	token2PResp, _ := json.Marshal(testBearerToken{
 		Token:        token2PValue,
 		ExpiresIn:    900,
 		IssuedAt:     time.Now(),
@@ -226,6 +235,19 @@ func TestRegHttp(t *testing.T) {
 				Body:   []byte("Unauthorized"),
 				Headers: http.Header{
 					"WWW-Authenticate": []string{"Basic realm=\"test\""},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "redirect req",
+				Method: "GET",
+				Path:   "/v2/project-redirect/manifests/tag-auth",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusTemporaryRedirect,
+				Headers: http.Header{
+					"Location": []string{"/v2/project/manifests/tag-auth"},
 				},
 			},
 		},
@@ -726,6 +748,12 @@ func TestRegHttp(t *testing.T) {
 			Hostname: tsHost,
 			TLS:      config.TLSDisabled,
 		},
+		"req-per-sec." + tsHost: {
+			Name:      "req-per-sec." + tsHost,
+			Hostname:  tsHost,
+			TLS:       config.TLSDisabled,
+			ReqPerSec: reqPerSec,
+		},
 	}
 
 	// create APIs for requests to run
@@ -740,7 +768,7 @@ func TestRegHttp(t *testing.T) {
 	delayInit, _ := time.ParseDuration("0.05s")
 	delayMax, _ := time.ParseDuration("0.10s")
 	hc := NewClient(
-		WithConfigHost(func(name string) *config.Host {
+		WithConfigHostFn(func(name string) *config.Host {
 			if configHosts[name] == nil {
 				configHosts[name] = config.HostNewName(name)
 			}
@@ -984,6 +1012,33 @@ func TestRegHttp(t *testing.T) {
 			t.Fatalf("unexpected success with missing auth header")
 		} else if !errors.Is(err, errs.ErrEmptyChallenge) {
 			t.Errorf("expected error %v, received error %v", errs.ErrEmptyChallenge, err)
+		}
+	})
+	// test redirect with auth
+	t.Run("redirect-auth", func(t *testing.T) {
+		authReq := &Req{
+			Host:       "auth." + tsHost,
+			Method:     "GET",
+			Repository: "project-redirect",
+			Path:       "manifests/tag-auth",
+			Headers:    headers,
+		}
+		resp, err := hc.Do(ctx, authReq)
+		if err != nil {
+			t.Fatalf("failed to run get: %v", err)
+		}
+		if resp.HTTPResponse().StatusCode != 200 {
+			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
+		}
+		body, err := io.ReadAll(resp)
+		if err != nil {
+			t.Fatalf("body read failure: %v", err)
+		} else if !bytes.Equal(body, getBody) {
+			t.Errorf("body read mismatch, expected %s, received %s", getBody, body)
+		}
+		err = resp.Close()
+		if err != nil {
+			t.Errorf("error closing request: %v", err)
 		}
 	})
 	// test repoauth
@@ -1446,6 +1501,40 @@ func TestRegHttp(t *testing.T) {
 			if err == nil {
 				t.Errorf("unexpected success on get for missing manifest")
 			}
+		}
+	})
+	t.Run("req-per-sec", func(t *testing.T) {
+		getReq := &Req{
+			Host:       "req-per-sec." + tsHost,
+			Method:     "GET",
+			Repository: "project",
+			Path:       "manifests/tag-get",
+			Headers:    headers,
+		}
+		start := time.Now()
+		for i := 0; i < 5; i++ {
+			resp, err := hc.Do(ctx, getReq)
+			if err != nil {
+				t.Fatalf("failed to run get: %v", err)
+			}
+			if resp.HTTPResponse().StatusCode != 200 {
+				t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
+			}
+			body, err := io.ReadAll(resp)
+			if err != nil {
+				t.Fatalf("body read failure: %v", err)
+			} else if !bytes.Equal(body, getBody) {
+				t.Errorf("body read mismatch, expected %s, received %s", getBody, body)
+			}
+			err = resp.Close()
+			if err != nil {
+				t.Errorf("error closing request: %v", err)
+			}
+		}
+		dur := time.Since(start)
+		expectMin := (time.Second / time.Duration(reqPerSec)) * 4
+		if dur < expectMin {
+			t.Errorf("requests finished faster than expected time, expected %s, received %s", expectMin.String(), dur.String())
 		}
 	})
 	// TODO: test various TLS configs (custom root for all hosts, custom root for one host, insecure)
