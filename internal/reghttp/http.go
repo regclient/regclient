@@ -46,9 +46,9 @@ const (
 // Client is an HTTP client wrapper.
 // It handles features like authentication, retries, backoff delays, TLS settings.
 type Client struct {
+	httpClient    *http.Client
 	getConfigHost func(string) *config.Host
 	host          map[string]*clientHost
-	httpClient    *http.Client
 	rootCAPool    [][]byte
 	rootCADirs    []string
 	retryLimit    int
@@ -60,18 +60,17 @@ type Client struct {
 }
 
 type clientHost struct {
-	initialized  bool
+	config       *config.Host // config entry
+	httpClient   *http.Client // modified http client for registry specific settings
+	userAgent    string
+	log          *logrus.Logger
+	auth         map[string]*auth.Auth // map of auth handlers by repository
 	backoffCur   int
 	backoffLast  time.Time
 	backoffReset int
-	config       *config.Host
-	httpClient   *http.Client
-	auth         map[string]auth.Auth
-	newAuth      func() auth.Auth
-	muAuth       sync.Mutex
 	reqFreq      time.Duration
 	reqNext      time.Time
-	muNext       sync.Mutex
+	mu           sync.Mutex
 }
 
 // Req is a request to send to a registry.
@@ -160,8 +159,9 @@ func WithCertFiles(files []string) Opts {
 	}
 }
 
-// WithConfigHost adds the callback to request a [config.Host] struct.
-func WithConfigHost(gch func(string) *config.Host) Opts {
+// WithConfigHostFn adds the callback to request a [config.Host] struct.
+// The function must normalize the hostname for Docker Hub support.
+func WithConfigHostFn(gch func(string) *config.Host) Opts {
 	return func(c *Client) {
 		c.getConfigHost = gch
 	}
@@ -399,18 +399,23 @@ func (resp *Resp) next() error {
 
 			// delay for the rate limit
 			if h.reqFreq > 0 {
-				h.muNext.Lock()
+				sleep := time.Duration(0)
+				h.mu.Lock()
 				if time.Now().Before(h.reqNext) {
-					time.Sleep(time.Until(h.reqNext))
+					sleep = time.Until(h.reqNext)
 					h.reqNext = h.reqNext.Add(h.reqFreq)
 				} else {
 					h.reqNext = time.Now().Add(h.reqFreq)
 				}
-				h.muNext.Unlock()
+				h.mu.Unlock()
+				if sleep > 0 {
+					time.Sleep(sleep)
+				}
 			}
 
 			// send request
-			resp.resp, err = h.httpClient.Do(httpReq)
+			hc := h.getHTTPClient(req.Repository)
+			resp.resp, err = hc.Do(httpReq)
 
 			if err != nil {
 				c.log.WithFields(logrus.Fields{
@@ -625,9 +630,9 @@ func (resp *Resp) Seek(offset int64, whence int) (int64, error) {
 
 func (resp *Resp) backoffGet() time.Time {
 	c := resp.client
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	ch := c.host[resp.mirror]
+	ch := c.getHost(resp.mirror)
+	ch.mu.Lock()
+	defer ch.mu.Unlock()
 	if ch.backoffCur > 0 {
 		delay := c.delayInit << ch.backoffCur
 		if delay > c.delayMax {
@@ -650,9 +655,9 @@ func (resp *Resp) backoffGet() time.Time {
 
 func (resp *Resp) backoffSet() error {
 	c := resp.client
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	ch := c.host[resp.mirror]
+	ch := c.getHost(resp.mirror)
+	ch.mu.Lock()
+	defer ch.mu.Unlock()
 	// check rate limit header and use that directly if possible
 	if resp.resp != nil && resp.resp.Header.Get("Retry-After") != "" {
 		ras := resp.resp.Header.Get("Retry-After")
@@ -680,9 +685,9 @@ func (resp *Resp) backoffSet() error {
 
 func (resp *Resp) backoffReset() {
 	c := resp.client
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	ch := c.host[resp.mirror]
+	ch := c.getHost(resp.mirror)
+	ch.mu.Lock()
+	defer ch.mu.Unlock()
 	if ch.backoffCur > 0 {
 		ch.backoffReset++
 		// If enough successful requests are seen, lower the backoffCur count.
@@ -698,111 +703,130 @@ func (resp *Resp) backoffReset() {
 	}
 }
 
+// getHost looks up or creates a clientHost for a given registry.
 func (c *Client) getHost(host string) *clientHost {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	h, ok := c.host[host]
-	if ok && h.initialized {
+	if h, ok := c.host[host]; ok {
 		return h
 	}
-	if !ok {
-		h = &clientHost{}
+	var conf *config.Host
+	if c.getConfigHost != nil {
+		conf = c.getConfigHost(host)
+	} else {
+		conf = config.HostNewName(host)
 	}
-	if h.config == nil {
-		if c.getConfigHost != nil {
-			h.config = c.getConfigHost(host)
-		} else {
-			h.config = config.HostNewName(host)
-		}
-		// check for normalized hostname
-		if h.config.Name != host {
-			host = h.config.Name
-			hNormal, ok := c.host[host]
-			if ok && hNormal.initialized {
-				return hNormal
-			}
+	if conf.Name != host {
+		if h, ok := c.host[conf.Name]; ok {
+			return h
 		}
 	}
-	if h.auth == nil {
-		h.auth = map[string]auth.Auth{}
+	h := &clientHost{
+		config:    conf,
+		userAgent: c.userAgent,
+		log:       c.log,
+		auth:      map[string]*auth.Auth{},
 	}
-	if h.config.ReqPerSec > 0 && h.reqFreq == 0 {
+	if h.config.ReqPerSec > 0 {
 		h.reqFreq = time.Duration(float64(time.Second) / h.config.ReqPerSec)
 	}
-
-	if h.httpClient == nil {
-		// create a new client and configure the transport
-		hc := *c.httpClient
-		h.httpClient = &hc
-		if h.httpClient.Transport == nil {
-			h.httpClient.Transport = http.DefaultTransport.(*http.Transport).Clone()
-		}
-		// update http client for insecure requests and root certs
-		if h.config.TLS == config.TLSInsecure || len(c.rootCAPool) > 0 || len(c.rootCADirs) > 0 || h.config.RegCert != "" || (h.config.ClientCert != "" && h.config.ClientKey != "") {
-			t, ok := h.httpClient.Transport.(*http.Transport)
-			if ok {
-				var tlsc *tls.Config
-				if t.TLSClientConfig != nil {
-					tlsc = t.TLSClientConfig.Clone()
-				} else {
-					//#nosec G402 the default TLS 1.2 minimum version is allowed to support older registries
-					tlsc = &tls.Config{}
-				}
-				if h.config.TLS == config.TLSInsecure {
-					tlsc.InsecureSkipVerify = true
-				} else {
-					rootPool, err := makeRootPool(c.rootCAPool, c.rootCADirs, h.config.Hostname, h.config.RegCert)
-					if err != nil {
-						c.log.WithFields(logrus.Fields{
-							"err": err,
-						}).Warn("failed to setup CA pool")
-					} else {
-						tlsc.RootCAs = rootPool
-					}
-				}
-				if h.config.ClientCert != "" && h.config.ClientKey != "" {
-					cert, err := tls.X509KeyPair([]byte(h.config.ClientCert), []byte(h.config.ClientKey))
-					if err != nil {
-						c.log.WithFields(logrus.Fields{
-							"err": err,
-						}).Warn("failed to configure client certs")
-					} else {
-						tlsc.Certificates = []tls.Certificate{cert}
-					}
-				}
-				t.TLSClientConfig = tlsc
-				h.httpClient.Transport = t
+	// copy the http client and configure registry specific settings
+	hc := *c.httpClient
+	h.httpClient = &hc
+	if h.httpClient.Transport == nil {
+		h.httpClient.Transport = http.DefaultTransport.(*http.Transport).Clone()
+	}
+	// configure transport for insecure requests and root certs
+	if h.config.TLS == config.TLSInsecure || len(c.rootCAPool) > 0 || len(c.rootCADirs) > 0 || h.config.RegCert != "" || (h.config.ClientCert != "" && h.config.ClientKey != "") {
+		t, ok := h.httpClient.Transport.(*http.Transport)
+		if ok {
+			var tlsc *tls.Config
+			if t.TLSClientConfig != nil {
+				tlsc = t.TLSClientConfig.Clone()
+			} else {
+				//#nosec G402 the default TLS 1.2 minimum version is allowed to support older registries
+				tlsc = &tls.Config{}
 			}
+			if h.config.TLS == config.TLSInsecure {
+				tlsc.InsecureSkipVerify = true
+			} else {
+				rootPool, err := makeRootPool(c.rootCAPool, c.rootCADirs, h.config.Hostname, h.config.RegCert)
+				if err != nil {
+					c.log.WithFields(logrus.Fields{
+						"err": err,
+					}).Warn("failed to setup CA pool")
+				} else {
+					tlsc.RootCAs = rootPool
+				}
+			}
+			if h.config.ClientCert != "" && h.config.ClientKey != "" {
+				cert, err := tls.X509KeyPair([]byte(h.config.ClientCert), []byte(h.config.ClientKey))
+				if err != nil {
+					c.log.WithFields(logrus.Fields{
+						"err": err,
+					}).Warn("failed to configure client certs")
+				} else {
+					tlsc.Certificates = []tls.Certificate{cert}
+				}
+			}
+			t.TLSClientConfig = tlsc
+			h.httpClient.Transport = t
 		}
-		// wrap the transport
-		h.httpClient.Transport = &wrapTransport{c: c, orig: h.httpClient.Transport}
 	}
+	// wrap the transport for logging and to handle warning headers
+	h.httpClient.Transport = &wrapTransport{c: c, orig: h.httpClient.Transport}
 
-	if h.newAuth == nil {
-		h.newAuth = func() auth.Auth {
-			return auth.NewAuth(
-				auth.WithLog(c.log),
-				auth.WithHTTPClient(h.httpClient),
-				auth.WithCreds(h.AuthCreds()),
-				auth.WithClientID(c.userAgent),
-			)
-		}
+	c.host[conf.Name] = h
+	if conf.Name != host {
+		// save another reference for faster lookups
+		c.host[host] = h
 	}
-
-	h.initialized = true
-	c.host[host] = h
 	return h
 }
 
+// getHTTPClient returns a client specific to the repo being queried.
+// Repository specific authentication needs a dedicated CheckRedirect handler.
+func (ch *clientHost) getHTTPClient(repo string) *http.Client {
+	hc := *ch.httpClient
+	hc.CheckRedirect = ch.checkRedirect(repo, hc.CheckRedirect)
+	return &hc
+}
+
+// checkRedirect wraps http.CheckRedirect to inject auth headers to specific hosts in the redirect chain
+func (ch *clientHost) checkRedirect(repo string, orig func(req *http.Request, via []*http.Request) error) func(req *http.Request, via []*http.Request) error {
+	return func(req *http.Request, via []*http.Request) error {
+		// fail on too many redirects
+		if len(via) >= 10 {
+			return errors.New("stopped after 10 redirects")
+		}
+		// add auth headers if appropriate for the target host
+		hAuth := ch.getAuth(repo)
+		err := hAuth.UpdateRequest(req)
+		if err != nil {
+			return err
+		}
+		// wrap original redirect check
+		if orig != nil {
+			return orig(req, via)
+		}
+		return nil
+	}
+}
+
 // getAuth returns an auth, which may be repository specific.
-func (ch *clientHost) getAuth(repo string) auth.Auth {
-	ch.muAuth.Lock()
-	defer ch.muAuth.Unlock()
+func (ch *clientHost) getAuth(repo string) *auth.Auth {
+	ch.mu.Lock()
+	defer ch.mu.Unlock()
 	if !ch.config.RepoAuth {
 		repo = "" // without RepoAuth, unset the provided repo
 	}
 	if _, ok := ch.auth[repo]; !ok {
-		ch.auth[repo] = ch.newAuth()
+		ch.auth[repo] = auth.NewAuth(
+			auth.WithLog(ch.log),
+			auth.WithHTTPClient(ch.httpClient),
+			auth.WithCreds(ch.AuthCreds()),
+			auth.WithClientID(ch.userAgent),
+		)
 	}
 	return ch.auth[repo]
 }
