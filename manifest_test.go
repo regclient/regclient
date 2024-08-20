@@ -182,22 +182,19 @@ func TestManifest(t *testing.T) {
 	tsInternalHost := tsInternalURL.Host
 	rcHosts := []config.Host{
 		{
-			Name:      tsOlaregHost,
-			Hostname:  tsOlaregHost,
-			TLS:       config.TLSDisabled,
-			ReqPerSec: 100,
+			Name:     tsOlaregHost,
+			Hostname: tsOlaregHost,
+			TLS:      config.TLSDisabled,
 		},
 		{
-			Name:      "missing." + tsOlaregHost,
-			Hostname:  tsOlaregHost,
-			TLS:       config.TLSDisabled,
-			ReqPerSec: 100,
+			Name:     "missing." + tsOlaregHost,
+			Hostname: tsOlaregHost,
+			TLS:      config.TLSDisabled,
 		},
 		{
-			Name:      tsInternalHost,
-			Hostname:  tsInternalHost,
-			TLS:       config.TLSDisabled,
-			ReqPerSec: 100,
+			Name:     tsInternalHost,
+			Hostname: tsInternalHost,
+			TLS:      config.TLSDisabled,
 		},
 		{
 			Name:     "nohead." + tsInternalHost,
@@ -206,7 +203,6 @@ func TestManifest(t *testing.T) {
 			APIOpts: map[string]string{
 				"disableHead": "true",
 			},
-			ReqPerSec: 100,
 		},
 	}
 	log := &logrus.Logger{

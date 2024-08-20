@@ -84,22 +84,19 @@ func TestMod(t *testing.T) {
 	// create regclient
 	rcHosts := []config.Host{
 		{
-			Name:      tSrcHost,
-			Hostname:  tSrcHost,
-			TLS:       config.TLSDisabled,
-			ReqPerSec: 1000,
+			Name:     tSrcHost,
+			Hostname: tSrcHost,
+			TLS:      config.TLSDisabled,
 		},
 		{
-			Name:      tTgtHost,
-			Hostname:  tTgtHost,
-			TLS:       config.TLSDisabled,
-			ReqPerSec: 1000,
+			Name:     tTgtHost,
+			Hostname: tTgtHost,
+			TLS:      config.TLSDisabled,
 		},
 		{
-			Name:      "registry.example.org",
-			Hostname:  tSrcHost,
-			TLS:       config.TLSDisabled,
-			ReqPerSec: 1000,
+			Name:     "registry.example.org",
+			Hostname: tSrcHost,
+			TLS:      config.TLSDisabled,
 		},
 	}
 	delayInit, _ := time.ParseDuration("0.05s")

@@ -41,16 +41,14 @@ func TestImageCheckBase(t *testing.T) {
 	})
 	rcHosts := []config.Host{
 		{
-			Name:      tsHost,
-			Hostname:  tsHost,
-			TLS:       config.TLSDisabled,
-			ReqPerSec: 1000,
+			Name:     tsHost,
+			Hostname: tsHost,
+			TLS:      config.TLSDisabled,
 		},
 		{
-			Name:      "registry.example.org",
-			Hostname:  tsHost,
-			TLS:       config.TLSDisabled,
-			ReqPerSec: 1000,
+			Name:     "registry.example.org",
+			Hostname: tsHost,
+			TLS:      config.TLSDisabled,
 		},
 	}
 	log := &logrus.Logger{
@@ -182,10 +180,9 @@ func TestImageConfig(t *testing.T) {
 	tsHost := tsURL.Host
 	rcHosts := []config.Host{
 		{
-			Name:      tsHost,
-			Hostname:  tsHost,
-			TLS:       config.TLSDisabled,
-			ReqPerSec: 1000,
+			Name:     tsHost,
+			Hostname: tsHost,
+			TLS:      config.TLSDisabled,
 		},
 	}
 	log := &logrus.Logger{
@@ -293,16 +290,14 @@ func TestCopy(t *testing.T) {
 	tsROHost := tsROURL.Host
 	rcHosts := []config.Host{
 		{
-			Name:      tsHost,
-			Hostname:  tsHost,
-			TLS:       config.TLSDisabled,
-			ReqPerSec: 1000,
+			Name:     tsHost,
+			Hostname: tsHost,
+			TLS:      config.TLSDisabled,
 		},
 		{
-			Name:      tsROHost,
-			Hostname:  tsROHost,
-			TLS:       config.TLSDisabled,
-			ReqPerSec: 1000,
+			Name:     tsROHost,
+			Hostname: tsROHost,
+			TLS:      config.TLSDisabled,
 		},
 	}
 	log := &logrus.Logger{

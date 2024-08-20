@@ -41,16 +41,14 @@ func TestRegbot(t *testing.T) {
 	})
 	rcHosts := []config.Host{
 		{
-			Name:      tsHost,
-			Hostname:  tsHost,
-			TLS:       config.TLSDisabled,
-			ReqPerSec: 1000,
+			Name:     tsHost,
+			Hostname: tsHost,
+			TLS:      config.TLSDisabled,
 		},
 		{
-			Name:      "registry.example.org",
-			Hostname:  tsHost,
-			TLS:       config.TLSDisabled,
-			ReqPerSec: 1000,
+			Name:     "registry.example.org",
+			Hostname: tsHost,
+			TLS:      config.TLSDisabled,
 		},
 	}
 	delayInit, _ := time.ParseDuration("0.05s")
