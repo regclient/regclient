@@ -18,6 +18,7 @@ import (
 	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/ref"
+	"github.com/regclient/regclient/types/warning"
 )
 
 const blobCBFreq = time.Millisecond * 100
@@ -49,6 +50,10 @@ func (rc *RegClient) BlobCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.Re
 	var opt blobOpt
 	for _, optFn := range opts {
 		optFn(&opt)
+	}
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
 	}
 	tDesc := d
 	tDesc.URLs = []string{} // ignore URLs when pushing to target

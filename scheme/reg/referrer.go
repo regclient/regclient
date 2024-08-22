@@ -18,6 +18,7 @@ import (
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/regclient/regclient/types/referrer"
+	"github.com/regclient/regclient/types/warning"
 )
 
 const OCISubjectHeader = "OCI-Subject"
@@ -30,6 +31,10 @@ func (reg *Reg) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Refe
 	}
 	rl := referrer.ReferrerList{
 		Tags: []string{},
+	}
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
 	}
 	// select a platform from a manifest list
 	if config.Platform != "" {
@@ -271,6 +276,10 @@ func (reg *Reg) referrerListByTag(ctx context.Context, r ref.Ref) (referrer.Refe
 
 // referrerDelete deletes a referrer associated with a manifest
 func (reg *Reg) referrerDelete(ctx context.Context, r ref.Ref, m manifest.Manifest) error {
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
+	}
 	// get subject field
 	mSubject, ok := m.(manifest.Subjecter)
 	if !ok {
@@ -320,6 +329,10 @@ func (reg *Reg) referrerDelete(ctx context.Context, r ref.Ref, m manifest.Manife
 
 // referrerPut pushes a new referrer associated with a manifest
 func (reg *Reg) referrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest) error {
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
+	}
 	// get subject field
 	mSubject, ok := m.(manifest.Subjecter)
 	if !ok {

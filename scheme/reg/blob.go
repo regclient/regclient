@@ -24,6 +24,7 @@ import (
 	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/ref"
+	"github.com/regclient/regclient/types/warning"
 )
 
 var (
@@ -170,6 +171,10 @@ func (reg *Reg) BlobPut(ctx context.Context, r ref.Ref, d descriptor.Descriptor,
 	var putURL *url.URL
 	var err error
 	validDesc := (d.Size > 0 && d.Digest.Validate() == nil) || (d.Size == 0 && d.Digest == zeroDig)
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
+	}
 
 	// attempt an anonymous blob mount
 	if validDesc {

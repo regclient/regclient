@@ -32,6 +32,7 @@ import (
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/regclient/regclient/types/tag"
+	"github.com/regclient/regclient/types/warning"
 )
 
 // TagDelete removes a tag from a repository.
@@ -41,6 +42,10 @@ func (reg *Reg) TagDelete(ctx context.Context, r ref.Ref) error {
 	var tempManifest manifest.Manifest
 	if r.Tag == "" {
 		return errs.ErrMissingTag
+	}
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
 	}
 
 	// attempt to delete the tag directly, available in OCI distribution-spec, and Hub API
