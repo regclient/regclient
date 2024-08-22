@@ -235,6 +235,10 @@ func (rc *RegClient) ImageCheckBase(ctx context.Context, r ref.Ref, opts ...Imag
 	var m manifest.Manifest
 	var err error
 
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
+	}
 	// if the base name is not provided, check image for base annotations
 	if opt.checkBaseRef == "" {
 		m, err = rc.ManifestGet(ctx, r)
@@ -445,6 +449,10 @@ func (rc *RegClient) ImageConfig(ctx context.Context, r ref.Ref, opts ...ImageOp
 	}
 	for _, optFn := range opts {
 		optFn(&opt)
+	}
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
 	}
 	p, err := platform.Parse(opt.platform)
 	if err != nil {
@@ -1037,6 +1045,10 @@ func (rc *RegClient) ImageExport(ctx context.Context, r ref.Ref, outStream io.Wr
 		opt.exportRef = r
 	}
 
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
+	}
 	// create tar writer object
 	out := outStream
 	if opt.exportCompress {
@@ -1270,6 +1282,10 @@ func (rc *RegClient) ImageImport(ctx context.Context, r ref.Ref, rs io.ReadSeeke
 		optFn(&opt)
 	}
 
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
+	}
 	trd := &tarReadData{
 		name:      opt.importName,
 		handlers:  map[string]tarFileHandler{},

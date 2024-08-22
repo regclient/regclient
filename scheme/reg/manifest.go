@@ -20,11 +20,16 @@ import (
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/mediatype"
 	"github.com/regclient/regclient/types/ref"
+	"github.com/regclient/regclient/types/warning"
 )
 
 // ManifestDelete removes a manifest by reference (digest) from a registry.
 // This will implicitly delete all tags pointing to that manifest.
 func (reg *Reg) ManifestDelete(ctx context.Context, r ref.Ref, opts ...scheme.ManifestOpts) error {
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
+	}
 	if r.Digest == "" {
 		return fmt.Errorf("digest required to delete manifest, reference %s%.0w", r.CommonName(), errs.ErrMissingDigest)
 	}
@@ -213,6 +218,10 @@ func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest,
 			"ref": r.Reference,
 		}).Warn("Manifest put requires a tag")
 		return errs.ErrMissingTag
+	}
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
 	}
 
 	// create the request body

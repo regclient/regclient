@@ -16,6 +16,7 @@ import (
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
+	"github.com/regclient/regclient/types/warning"
 )
 
 type manifestCmd struct {
@@ -177,6 +178,10 @@ regctl manifest put \
 
 func (manifestOpts *manifestCmd) runManifestDelete(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
+	}
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
@@ -222,6 +227,10 @@ func (manifestOpts *manifestCmd) runManifestDiff(cmd *cobra.Command, args []stri
 		diffOpts = append(diffOpts, diff.WithFullContext())
 	}
 	ctx := cmd.Context()
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
+	}
 	r1, err := ref.New(args[0])
 	if err != nil {
 		return err

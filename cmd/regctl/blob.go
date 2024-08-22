@@ -22,6 +22,7 @@ import (
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/ref"
+	"github.com/regclient/regclient/types/warning"
 )
 
 type blobCmd struct {
@@ -236,6 +237,10 @@ func (blobOpts *blobCmd) runBlobDiffConfig(cmd *cobra.Command, args []string) er
 		diffOpts = append(diffOpts, diff.WithFullContext())
 	}
 	ctx := cmd.Context()
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
+	}
 	r1, err := ref.New(args[0])
 	if err != nil {
 		return err
@@ -290,6 +295,10 @@ func (blobOpts *blobCmd) runBlobDiffLayer(cmd *cobra.Command, args []string) err
 		diffOpts = append(diffOpts, diff.WithFullContext())
 	}
 	ctx := cmd.Context()
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
+	}
 	r1, err := ref.New(args[0])
 	if err != nil {
 		return err

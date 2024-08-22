@@ -30,6 +30,7 @@ import (
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/regclient/regclient/types/referrer"
+	"github.com/regclient/regclient/types/warning"
 )
 
 const (
@@ -268,6 +269,10 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 		if !fi.IsDir() {
 			return fmt.Errorf("output must be a directory: \"%s\"", artifactOpts.outputDir)
 		}
+	}
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
 	}
 
 	r := ref.Ref{}
@@ -545,6 +550,10 @@ func (artifactOpts *artifactCmd) runArtifactList(cmd *cobra.Command, args []stri
 	if artifactOpts.latest && artifactOpts.sortAnnot != "" {
 		return fmt.Errorf("--latest cannot be used with --sort-annotation")
 	}
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
+	}
 
 	rc := artifactOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, rSubject)
@@ -641,6 +650,11 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 		hasConfig = true
 	default:
 		return fmt.Errorf("unsupported manifest media type: %s%.0w", artifactOpts.artifactMT, errs.ErrUnsupportedMediaType)
+	}
+
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
 	}
 
 	// validate inputs
@@ -1003,6 +1017,10 @@ func (artifactOpts *artifactCmd) runArtifactTree(cmd *cobra.Command, args []stri
 	rc := artifactOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
+	}
 	referrerOpts := []scheme.ReferrerOpts{}
 	if artifactOpts.filterAT != "" {
 		referrerOpts = append(referrerOpts, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{ArtifactType: artifactOpts.filterAT}))

@@ -37,6 +37,7 @@ import (
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
+	"github.com/regclient/regclient/types/warning"
 )
 
 type imageCmd struct {
@@ -1385,6 +1386,10 @@ func (imageOpts *imageCmd) runImageCreate(cmd *cobra.Command, args []string) err
 
 func (imageOpts *imageCmd) runImageExport(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
+	}
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
@@ -1430,6 +1435,10 @@ func (imageOpts *imageCmd) runImageExport(cmd *cobra.Command, args []string) err
 
 func (imageOpts *imageCmd) runImageGetFile(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
+	}
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
