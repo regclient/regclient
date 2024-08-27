@@ -46,31 +46,31 @@ const (
 // Client is an HTTP client wrapper.
 // It handles features like authentication, retries, backoff delays, TLS settings.
 type Client struct {
-	httpClient    *http.Client
-	getConfigHost func(string) *config.Host
-	host          map[string]*clientHost
-	rootCAPool    [][]byte
-	rootCADirs    []string
-	retryLimit    int
-	delayInit     time.Duration
-	delayMax      time.Duration
-	log           *logrus.Logger
-	userAgent     string
-	mu            sync.Mutex
+	httpClient    *http.Client              // upstream [http.Client], this is wrapped per repository for an auth handler on redirects
+	getConfigHost func(string) *config.Host // call-back to get the [config.Host] for a specific registry
+	host          map[string]*clientHost    // host specific settings, wrap access with a mutex lock
+	rootCAPool    [][]byte                  // list of root CAs for configuring the http.Client transport
+	rootCADirs    []string                  // list of directories for additional root CAs
+	retryLimit    int                       // number of retries before failing a request, this applies to each host, and each request
+	delayInit     time.Duration             // how long to initially delay requests on a failure
+	delayMax      time.Duration             // maximum time to delay a request
+	log           *logrus.Logger            // logging for tracing and failures
+	userAgent     string                    // user agent to specify in http request headers
+	mu            sync.Mutex                // mutex to prevent data races
 }
 
 type clientHost struct {
-	config       *config.Host // config entry
-	httpClient   *http.Client // modified http client for registry specific settings
-	userAgent    string
-	log          *logrus.Logger
+	config       *config.Host          // config entry
+	httpClient   *http.Client          // modified http client for registry specific settings
+	userAgent    string                // user agent to specify in http request headers
+	log          *logrus.Logger        // logging for tracing and failures
 	auth         map[string]*auth.Auth // map of auth handlers by repository
-	backoffCur   int
-	backoffLast  time.Time
-	backoffReset int
-	reqFreq      time.Duration
-	reqNext      time.Time
-	mu           sync.Mutex
+	backoffCur   int                   // current count of backoffs for this host
+	backoffLast  time.Time             // time the last request was released, this may be in the future if there is a queue, or zero if no delay is needed
+	backoffReset int                   // count of successful requests when a backoff is experienced, once [backoffResetCount] is reached, [backoffCur] is reduced by one and this is reset to 0
+	reqFreq      time.Duration         // how long between submitting requests for this host
+	reqNext      time.Time             // time to release the next request
+	mu           sync.Mutex            // mutex to prevent data races
 }
 
 // Req is a request to send to a registry.
@@ -103,6 +103,7 @@ type Resp struct {
 	done             bool
 	reader           io.Reader
 	readCur, readMax int64
+	retryCount       int
 	throttleDone     func()
 }
 
@@ -267,6 +268,11 @@ func (resp *Resp) next() error {
 		}
 		h := hosts[curHost]
 		resp.mirror = h.config.Name
+		// there is an intentional extra retry in this check to allow for auth requests
+		if resp.retryCount > c.retryLimit {
+			return errs.ErrRetryLimitExceeded
+		}
+		resp.retryCount++
 
 		// check that context isn't canceled/done
 		ctxErr := resp.ctx.Err()
@@ -620,6 +626,7 @@ func (resp *Resp) Seek(offset int64, whence int) (int64, error) {
 	if newOffset != resp.readCur {
 		resp.readCur = newOffset
 		// rerun the request to restart
+		resp.retryCount-- // do not count a seek as a retry
 		err := resp.next()
 		if err != nil {
 			return resp.readCur, err

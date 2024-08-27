@@ -23,7 +23,6 @@ import (
 )
 
 // TODO: test for race conditions
-// TODO: test rate limits and concurrency
 
 type testBearerToken struct {
 	Token        string    `json:"token"`
@@ -51,7 +50,7 @@ func TestRegHttp(t *testing.T) {
 	user := "user"
 	pass := "testpass"
 	userAuth := base64.StdEncoding.EncodeToString([]byte(user + ":" + pass))
-	reqPerSec := 10.0
+	reqPerSec := 50.0
 	token1GForm := url.Values{}
 	token1GForm.Set("scope", "repository:project:pull")
 	token1GForm.Set("service", "test")
@@ -548,6 +547,92 @@ func TestRegHttp(t *testing.T) {
 		},
 		{
 			ReqEntry: reqresp.ReqEntry{
+				Name:   "mirror-limit manifest",
+				Method: "GET",
+				Path:   "/v2/mirror-limit/project/manifests/tag-get",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Body:   getBody,
+				Headers: http.Header{
+					"Content-Length":        {fmt.Sprintf("%d", len(getBody))},
+					"Content-Type":          []string{"application/vnd.docker.distribution.manifest.v2+json"},
+					"Docker-Content-Digest": []string{getDigest.String()},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "mirror-1 down",
+				Method: "GET",
+				Path:   "/v2/mirror-1/project/manifests/tag-get",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusBadGateway,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "mirror-2 down",
+				Method: "GET",
+				Path:   "/v2/mirror-2/project/manifests/tag-get",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusBadGateway,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "mirror-3 down",
+				Method: "GET",
+				Path:   "/v2/mirror-3/project/manifests/tag-get",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusBadGateway,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "mirror-4 down",
+				Method: "GET",
+				Path:   "/v2/mirror-4/project/manifests/tag-get",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusBadGateway,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "mirror-5 down",
+				Method: "GET",
+				Path:   "/v2/mirror-5/project/manifests/tag-get",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusBadGateway,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "mirror-6 down",
+				Method: "GET",
+				Path:   "/v2/mirror-6/project/manifests/tag-get",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusBadGateway,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "mirror-7 down",
+				Method: "GET",
+				Path:   "/v2/mirror-7/project/manifests/tag-get",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusBadGateway,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
 				Name:   "short read manifest",
 				Method: "GET",
 				Path:   "/v2/project/manifests/tag-short",
@@ -743,6 +828,75 @@ func TestRegHttp(t *testing.T) {
 				"server-error." + tsHost,
 			},
 		},
+		"mirror-limit." + tsHost: {
+			Name:       "mirror-limit." + tsHost,
+			Hostname:   tsHost,
+			TLS:        config.TLSDisabled,
+			PathPrefix: "mirror-limit",
+			Priority:   20,
+			Mirrors: []string{
+				"missing." + tsHost,
+				"bad-gw." + tsHost,
+				"forbidden." + tsHost,
+				"gw-timeout." + tsHost,
+				"mirror-1." + tsHost,
+				"mirror-2." + tsHost,
+				"mirror-3." + tsHost,
+				"mirror-4." + tsHost,
+				"mirror-5." + tsHost,
+				"mirror-6." + tsHost,
+				"mirror-7." + tsHost,
+			},
+		},
+		"mirror-1." + tsHost: {
+			Name:       "mirror-1." + tsHost,
+			Hostname:   tsHost,
+			TLS:        config.TLSDisabled,
+			PathPrefix: "mirror-1",
+			Priority:   1,
+		},
+		"mirror-2." + tsHost: {
+			Name:       "mirror-2." + tsHost,
+			Hostname:   tsHost,
+			TLS:        config.TLSDisabled,
+			PathPrefix: "mirror-2",
+			Priority:   1,
+		},
+		"mirror-3." + tsHost: {
+			Name:       "mirror-3." + tsHost,
+			Hostname:   tsHost,
+			TLS:        config.TLSDisabled,
+			PathPrefix: "mirror-3",
+			Priority:   1,
+		},
+		"mirror-4." + tsHost: {
+			Name:       "mirror-4." + tsHost,
+			Hostname:   tsHost,
+			TLS:        config.TLSDisabled,
+			PathPrefix: "mirror-4",
+			Priority:   1,
+		},
+		"mirror-5." + tsHost: {
+			Name:       "mirror-5." + tsHost,
+			Hostname:   tsHost,
+			TLS:        config.TLSDisabled,
+			PathPrefix: "mirror-5",
+			Priority:   1,
+		},
+		"mirror-6." + tsHost: {
+			Name:       "mirror-6." + tsHost,
+			Hostname:   tsHost,
+			TLS:        config.TLSDisabled,
+			PathPrefix: "mirror-6",
+			Priority:   1,
+		},
+		"mirror-7." + tsHost: {
+			Name:       "mirror-7." + tsHost,
+			Hostname:   tsHost,
+			TLS:        config.TLSDisabled,
+			PathPrefix: "mirror-7",
+			Priority:   1,
+		},
 		"retry." + tsHost: {
 			Name:     "retry." + tsHost,
 			Hostname: tsHost,
@@ -765,8 +919,8 @@ func TestRegHttp(t *testing.T) {
 	}
 
 	// create http client
-	delayInit, _ := time.ParseDuration("0.05s")
-	delayMax, _ := time.ParseDuration("0.10s")
+	delayInit, _ := time.ParseDuration("0.0005s")
+	delayMax, _ := time.ParseDuration("0.0010s")
 	hc := NewClient(
 		WithConfigHostFn(func(name string) *config.Host {
 			if configHosts[name] == nil {
@@ -775,6 +929,7 @@ func TestRegHttp(t *testing.T) {
 			return configHosts[name]
 		}),
 		WithDelay(delayInit, delayMax),
+		WithRetryLimit(10),
 		WithUserAgent(useragent),
 	)
 
@@ -1267,6 +1422,24 @@ func TestRegHttp(t *testing.T) {
 			t.Errorf("error closing request: %v", err)
 		}
 	})
+	// test the retry limit on a specific request with a long list of mirrors
+	t.Run("retry-limit", func(t *testing.T) {
+		getReq := &Req{
+			Host:       "mirror-limit." + tsHost,
+			Method:     "GET",
+			Repository: "project",
+			Path:       "manifests/tag-get",
+			Headers:    headers,
+		}
+		resp, err := hc.Do(ctx, getReq)
+		if err == nil {
+			_ = resp.Close()
+			t.Fatalf("retry limit was not reached")
+		}
+		if !errors.Is(err, errs.ErrRetryLimitExceeded) {
+			t.Errorf("unexpected error: expected %v, received %v", errs.ErrRetryLimitExceeded, err)
+		}
+	})
 	// test error statuses (404, rate limit, timeout, server error)
 	t.Run("Missing", func(t *testing.T) {
 		getReq := &Req{
@@ -1512,7 +1685,8 @@ func TestRegHttp(t *testing.T) {
 			Headers:    headers,
 		}
 		start := time.Now()
-		for i := 0; i < 5; i++ {
+		count := 10
+		for i := 0; i < count; i++ {
 			resp, err := hc.Do(ctx, getReq)
 			if err != nil {
 				t.Fatalf("failed to run get: %v", err)
@@ -1532,7 +1706,7 @@ func TestRegHttp(t *testing.T) {
 			}
 		}
 		dur := time.Since(start)
-		expectMin := (time.Second / time.Duration(reqPerSec)) * 4
+		expectMin := (time.Second / time.Duration(reqPerSec)) * time.Duration(count-1)
 		if dur < expectMin {
 			t.Errorf("requests finished faster than expected time, expected %s, received %s", expectMin.String(), dur.String())
 		}
