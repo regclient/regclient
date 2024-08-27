@@ -29,6 +29,7 @@ import (
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/auth"
+	"github.com/regclient/regclient/internal/pqueue"
 	"github.com/regclient/regclient/internal/reqmeta"
 	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/warning"
@@ -60,17 +61,18 @@ type Client struct {
 }
 
 type clientHost struct {
-	config       *config.Host          // config entry
-	httpClient   *http.Client          // modified http client for registry specific settings
-	userAgent    string                // user agent to specify in http request headers
-	log          *logrus.Logger        // logging for tracing and failures
-	auth         map[string]*auth.Auth // map of auth handlers by repository
-	backoffCur   int                   // current count of backoffs for this host
-	backoffLast  time.Time             // time the last request was released, this may be in the future if there is a queue, or zero if no delay is needed
-	backoffReset int                   // count of successful requests when a backoff is experienced, once [backoffResetCount] is reached, [backoffCur] is reduced by one and this is reset to 0
-	reqFreq      time.Duration         // how long between submitting requests for this host
-	reqNext      time.Time             // time to release the next request
-	mu           sync.Mutex            // mutex to prevent data races
+	config       *config.Host                // config entry
+	httpClient   *http.Client                // modified http client for registry specific settings
+	userAgent    string                      // user agent to specify in http request headers
+	log          *logrus.Logger              // logging for tracing and failures
+	auth         map[string]*auth.Auth       // map of auth handlers by repository
+	backoffCur   int                         // current count of backoffs for this host
+	backoffLast  time.Time                   // time the last request was released, this may be in the future if there is a queue, or zero if no delay is needed
+	backoffReset int                         // count of successful requests when a backoff is experienced, once [backoffResetCount] is reached, [backoffCur] is reduced by one and this is reset to 0
+	reqFreq      time.Duration               // how long between submitting requests for this host
+	reqNext      time.Time                   // time to release the next request
+	throttle     *pqueue.Queue[reqmeta.Data] // limit concurrent requests to the host
+	mu           sync.Mutex                  // mutex to prevent data races
 }
 
 // Req is a request to send to a registry.
@@ -280,7 +282,7 @@ func (resp *Resp) next() error {
 			return ctxErr
 		}
 		// wait for other concurrent requests to this host
-		throttleDone, throttleErr := h.config.Throttle().Acquire(resp.ctx, reqmeta.Data{
+		throttleDone, throttleErr := h.throttle.Acquire(resp.ctx, reqmeta.Data{
 			Kind: req.MetaKind,
 			Size: req.BodyLen + req.ExpectLen + req.TransactLen,
 		})
@@ -539,6 +541,13 @@ func (resp *Resp) next() error {
 	}
 }
 
+// GetThrottle returns the current [pqueue.Queue] for a host used to throttle connections.
+// This can be used to acquire multiple throttles before performing a request across multiple hosts.
+func (c *Client) GetThrottle(host string) *pqueue.Queue[reqmeta.Data] {
+	ch := c.getHost(host)
+	return ch.throttle
+}
+
 // HTTPResponse returns the [http.Response] from the last request.
 func (resp *Resp) HTTPResponse() *http.Response {
 	return resp.resp
@@ -736,6 +745,9 @@ func (c *Client) getHost(host string) *clientHost {
 	}
 	if h.config.ReqPerSec > 0 {
 		h.reqFreq = time.Duration(float64(time.Second) / h.config.ReqPerSec)
+	}
+	if h.config.ReqConcurrent > 0 {
+		h.throttle = pqueue.New(pqueue.Opts[reqmeta.Data]{Max: int(h.config.ReqConcurrent), Next: reqmeta.DataNext})
 	}
 	// copy the http client and configure registry specific settings
 	hc := *c.httpClient
