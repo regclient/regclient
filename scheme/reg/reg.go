@@ -96,13 +96,13 @@ func New(opts ...Opts) *Reg {
 func (reg *Reg) Throttle(r ref.Ref, put bool) []*pqueue.Queue[reqmeta.Data] {
 	tList := []*pqueue.Queue[reqmeta.Data]{}
 	host := reg.hostGet(r.Registry)
-	t := host.Throttle()
+	t := reg.reghttp.GetThrottle(r.Registry)
 	if t != nil {
 		tList = append(tList, t)
 	}
 	if !put {
 		for _, mirror := range host.Mirrors {
-			t := reg.hostGet(mirror).Throttle()
+			t := reg.reghttp.GetThrottle(mirror)
 			if t != nil {
 				tList = append(tList, t)
 			}
