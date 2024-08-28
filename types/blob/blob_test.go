@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/opencontainers/go-digest"
@@ -324,6 +325,57 @@ func TestReader(t *testing.T) {
 		if !errors.Is(err, errs.ErrSizeLimitExceeded) {
 			t.Errorf("unexpected error on readall, expected %v, received %v", errs.ErrSizeLimitExceeded, err)
 		}
+	})
+
+	t.Run("concurrent", func(t *testing.T) {
+		// create blob
+		b := NewReader(
+			WithReader(bytes.NewReader(exBlob)),
+			WithHeader(exHeaders),
+		)
+		chunkCount := 4
+		chunkLen := exLen / int64(chunkCount)
+		chunkLast := exLen - (chunkLen * int64(chunkCount-1))
+		var wg sync.WaitGroup
+		wg.Add(2)
+		// run multiple read and seek (cur position) in goroutines
+		go func() {
+			defer wg.Done()
+			out := make([]byte, exLen)
+			for i := 0; i < chunkCount-1; i++ {
+				l, err := b.Read(out[i*int(chunkLen) : (i+1)*int(chunkLen)])
+				if l != int(chunkLen) {
+					t.Errorf("did not read enough bytes: expected %d, received %d", chunkLen, l)
+				}
+				if err != nil {
+					t.Errorf("read failed: %v", err)
+				}
+			}
+			l, err := b.Read(out[(chunkCount-1)*int(chunkLen):])
+			if l != int(chunkLast) {
+				t.Errorf("did not read enough bytes: expected %d, received %d", chunkLast, l)
+			}
+			if err != nil {
+				t.Errorf("read failed: %v", err)
+			}
+			if !bytes.Equal(out, exBlob) {
+				t.Errorf("read mismatch, expected output %s, received %s", exBlob, out)
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			for {
+				cur, err := b.Seek(0, io.SeekCurrent)
+				if err != nil {
+					t.Errorf("failed to seek blob: %v", err)
+				}
+				if cur >= exLen {
+					break
+				}
+			}
+		}()
+		// wait for both to finish
+		wg.Wait()
 	})
 
 	t.Run("ociconfig", func(t *testing.T) {
