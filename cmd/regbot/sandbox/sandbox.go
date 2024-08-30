@@ -9,7 +9,7 @@ import (
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/cmd/regbot/internal/go2lua"
-	"github.com/regclient/regclient/internal/throttle"
+	"github.com/regclient/regclient/internal/pqueue"
 )
 
 const (
@@ -24,13 +24,13 @@ const (
 
 // Sandbox defines a lua sandbox
 type Sandbox struct {
-	name      string
-	ctx       context.Context
-	log       *logrus.Logger
-	ls        *lua.LState
-	rc        *regclient.RegClient
-	throttleC *throttle.Throttle
-	dryRun    bool
+	name     string
+	ctx      context.Context
+	log      *logrus.Logger
+	ls       *lua.LState
+	rc       *regclient.RegClient
+	throttle *pqueue.Queue[struct{}]
+	dryRun   bool
 }
 
 // LuaMod defines a mod to add to Lua's sandbox
@@ -113,9 +113,9 @@ func WithRegClient(rc *regclient.RegClient) Opt {
 }
 
 // WithThrottle is used to limit various actions
-func WithThrottle(t *throttle.Throttle) Opt {
+func WithThrottle(pq *pqueue.Queue[struct{}]) Opt {
 	return func(s *Sandbox) {
-		s.throttleC = t
+		s.throttle = pq
 	}
 }
 

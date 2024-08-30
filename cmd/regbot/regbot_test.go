@@ -6,20 +6,22 @@ import (
 	"errors"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/olareg/olareg"
 	oConfig "github.com/olareg/olareg/config"
+	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/internal/throttle"
-	"github.com/regclient/regclient/scheme/reg"
+	"github.com/regclient/regclient/internal/pqueue"
 	"github.com/regclient/regclient/types/ref"
 )
 
 func TestRegbot(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	boolT := true
 	var err error
@@ -51,15 +53,12 @@ func TestRegbot(t *testing.T) {
 			TLS:      config.TLSDisabled,
 		},
 	}
-	delayInit, _ := time.ParseDuration("0.05s")
-	delayMax, _ := time.ParseDuration("0.10s")
 	// replace regclient with one configured for test hosts
-	rc = regclient.New(
+	rc := regclient.New(
 		regclient.WithConfigHost(rcHosts...),
-		regclient.WithRegOpts(reg.WithDelay(delayInit, delayMax)),
 	)
 	// setup various globals normally done by loadConf
-	throttleC = throttle.New(1)
+	pq := pqueue.New(pqueue.Opts[struct{}]{Max: 1})
 	var confBytes = `
 version: 1
 defaults:
@@ -67,7 +66,7 @@ defaults:
   timeout: 60s
 `
 	confRdr := bytes.NewReader([]byte(confBytes))
-	conf, err = ConfigLoadReader(confRdr)
+	conf, err := ConfigLoadReader(confRdr)
 	if err != nil {
 		t.Fatalf("failed parsing config: %v", err)
 	}
@@ -166,6 +165,15 @@ defaults:
 		t.Run(tt.name, func(t *testing.T) {
 			rootOpts := rootCmd{
 				dryRun: tt.dryrun,
+				conf:   conf,
+				log: &logrus.Logger{
+					Out:       os.Stderr,
+					Formatter: new(logrus.TextFormatter),
+					Hooks:     make(logrus.LevelHooks),
+					Level:     logrus.InfoLevel,
+				},
+				rc:       rc,
+				throttle: pq,
 			}
 			err = rootOpts.process(ctx, tt.script)
 			if tt.expErr != nil {

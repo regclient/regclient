@@ -77,12 +77,12 @@ func (s *Sandbox) configGet(ls *lua.LState) int {
 		ls.RaiseError("Context error: %v", err)
 	}
 	m := s.checkManifest(ls, 1, false, false)
-	if s.throttleC != nil {
-		err = s.throttleC.Acquire(s.ctx)
+	if s.throttle != nil {
+		done, err := s.throttle.Acquire(s.ctx, struct{}{})
 		if err != nil {
 			ls.RaiseError("Failed to acquire throttle: %v", err)
 		}
-		defer s.throttleC.Release(s.ctx)
+		defer done()
 	}
 	s.log.WithFields(logrus.Fields{
 		"script": s.name,
@@ -202,12 +202,12 @@ func (s *Sandbox) imageCopy(ls *lua.LState) int {
 			opts = append(opts, regclient.ImageWithPlatforms(lOpts.Platforms))
 		}
 	}
-	if s.throttleC != nil {
-		err = s.throttleC.Acquire(s.ctx)
+	if s.throttle != nil {
+		done, err := s.throttle.Acquire(s.ctx, struct{}{})
 		if err != nil {
 			ls.RaiseError("Failed to acquire throttle: %v", err)
 		}
-		defer s.throttleC.Release(s.ctx)
+		defer done()
 	}
 	s.log.WithFields(logrus.Fields{
 		"script":          s.name,
@@ -239,12 +239,12 @@ func (s *Sandbox) imageExportTar(ls *lua.LState) int {
 	}
 	src := s.checkReference(ls, 1)
 	file := ls.CheckString(2)
-	if s.throttleC != nil {
-		err = s.throttleC.Acquire(s.ctx)
+	if s.throttle != nil {
+		done, err := s.throttle.Acquire(s.ctx, struct{}{})
 		if err != nil {
 			ls.RaiseError("Failed to acquire throttle: %v", err)
 		}
-		defer s.throttleC.Release(s.ctx)
+		defer done()
 	}
 	//#nosec G304 command is run by a user accessing their own files
 	fh, err := os.Create(file)
@@ -265,12 +265,12 @@ func (s *Sandbox) imageImportTar(ls *lua.LState) int {
 	}
 	tgt := s.checkReference(ls, 1)
 	file := ls.CheckString(2)
-	if s.throttleC != nil {
-		err = s.throttleC.Acquire(s.ctx)
+	if s.throttle != nil {
+		done, err := s.throttle.Acquire(s.ctx, struct{}{})
 		if err != nil {
 			ls.RaiseError("Failed to acquire throttle: %v", err)
 		}
-		defer s.throttleC.Release(s.ctx)
+		defer done()
 	}
 	//#nosec G304 command is run by a user accessing their own files
 	rs, err := os.Open(file)
