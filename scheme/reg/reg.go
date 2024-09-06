@@ -45,6 +45,7 @@ type Reg struct {
 	reghttpOpts     []reghttp.Opts
 	log             *logrus.Logger
 	hosts           map[string]*config.Host
+	hostDefault     *config.Host
 	features        map[featureKey]*featureVal
 	blobChunkSize   int64
 	blobChunkLimit  int64
@@ -115,7 +116,7 @@ func (reg *Reg) hostGet(hostname string) *config.Host {
 	reg.muHost.Lock()
 	defer reg.muHost.Unlock()
 	if _, ok := reg.hosts[hostname]; !ok {
-		newHost := config.HostNewName(hostname)
+		newHost := config.HostNewDefName(reg.hostDefault, hostname)
 		// check for normalized hostname
 		if newHost.Name != hostname {
 			hostname = newHost.Name
@@ -198,6 +199,13 @@ func WithCertDirs(dirs []string) Opts {
 func WithCertFiles(files []string) Opts {
 	return func(r *Reg) {
 		r.reghttpOpts = append(r.reghttpOpts, reghttp.WithCertFiles(files))
+	}
+}
+
+// WithConfigHostDefault provides default settings for hosts.
+func WithConfigHostDefault(ch *config.Host) Opts {
+	return func(r *Reg) {
+		r.hostDefault = ch
 	}
 }
 

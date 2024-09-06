@@ -110,7 +110,7 @@ type Host struct {
 	Token         string            `json:"token,omitempty" yaml:"token"`                 // token, experimental for specific APIs
 	CredHelper    string            `json:"credHelper,omitempty" yaml:"credHelper"`       // credential helper command for requesting logins
 	CredExpire    timejson.Duration `json:"credExpire,omitempty" yaml:"credExpire"`       // time until credential expires
-	CredHost      string            `json:"credHost" yaml:"credHost"`                     // used when a helper hostname doesn't match Hostname
+	CredHost      string            `json:"credHost,omitempty" yaml:"credHost"`           // used when a helper hostname doesn't match Hostname
 	PathPrefix    string            `json:"pathPrefix,omitempty" yaml:"pathPrefix"`       // used for mirrors defined within a repository namespace
 	Mirrors       []string          `json:"mirrors,omitempty" yaml:"mirrors"`             // list of other Host Names to use as mirrors
 	Priority      uint              `json:"priority,omitempty" yaml:"priority"`           // priority when sorting mirrors, higher priority attempted first
@@ -141,16 +141,48 @@ func HostNew() *Host {
 	return &h
 }
 
-// HostNewName creates a default Host with a hostname.
-func HostNewName(name string) *Host {
-	h := HostNew()
+// HostNewDefName creates a host using provided defaults and hostname.
+func HostNewDefName(def *Host, name string) *Host {
+	var h Host
+	if def == nil {
+		h = *HostNew()
+	} else {
+		h = *def
+		// configure required defaults
+		if h.TLS == TLSUndefined {
+			h.TLS = TLSEnabled
+		}
+		if h.APIOpts == nil {
+			h.APIOpts = map[string]string{}
+		}
+		if h.ReqConcurrent == 0 {
+			h.ReqConcurrent = int64(defaultConcurrent)
+		}
+		if h.ReqPerSec == 0 {
+			h.ReqPerSec = float64(defaultReqPerSec)
+		}
+		// copy any fields that are not passed by value
+		if len(h.APIOpts) > 0 {
+			orig := h.APIOpts
+			h.APIOpts = map[string]string{}
+			for k, v := range orig {
+				h.APIOpts[k] = v
+			}
+		}
+		if h.Mirrors != nil {
+			orig := h.Mirrors
+			h.Mirrors = make([]string, len(orig))
+			copy(h.Mirrors, orig)
+		}
+	}
+	// configure host
 	origName := name
 	// Docker Hub is a special case
 	if name == DockerRegistryAuth || name == DockerRegistryDNS || name == DockerRegistry {
 		h.Name = DockerRegistry
 		h.Hostname = DockerRegistryDNS
 		h.CredHost = DockerRegistryAuth
-		return h
+		return &h
 	}
 	// handle http/https prefix
 	i := strings.Index(name, "://")
@@ -171,7 +203,12 @@ func HostNewName(name string) *Host {
 	if origName != name {
 		h.CredHost = origName
 	}
-	return h
+	return &h
+}
+
+// HostNewName creates a default Host with a hostname.
+func HostNewName(name string) *Host {
+	return HostNewDefName(nil, name)
 }
 
 // GetCred returns the credential, fetching from a credential helper if needed.
@@ -198,6 +235,35 @@ func (host *Host) refreshHelper() {
 	} else {
 		host.credRefresh = time.Now().Add(time.Duration(host.CredExpire))
 	}
+}
+
+// IsZero returns true if the struct is set to the zero value or the result of [HostNew].
+func (host Host) IsZero() bool {
+	if host.Name != "" ||
+		(host.TLS != TLSUndefined && host.TLS != TLSEnabled) ||
+		host.RegCert != "" ||
+		host.ClientCert != "" ||
+		host.ClientKey != "" ||
+		host.Hostname != "" ||
+		host.User != "" ||
+		host.Pass != "" ||
+		host.Token != "" ||
+		host.CredHelper != "" ||
+		host.CredExpire != 0 ||
+		host.CredHost != "" ||
+		host.PathPrefix != "" ||
+		len(host.Mirrors) != 0 ||
+		host.Priority != 0 ||
+		host.RepoAuth ||
+		len(host.APIOpts) != 0 ||
+		host.BlobChunk != 0 ||
+		host.BlobMax != 0 ||
+		(host.ReqPerSec != 0 && host.ReqPerSec != float64(defaultReqPerSec)) ||
+		(host.ReqConcurrent != 0 && host.ReqConcurrent != int64(defaultConcurrent)) ||
+		!host.credRefresh.IsZero() {
+		return false
+	}
+	return true
 }
 
 // Merge adds fields from a new config host entry.

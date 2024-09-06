@@ -172,6 +172,9 @@ func (rootOpts *rootCmd) newRegClient() *regclient.RegClient {
 	if conf.IncDockerCert == nil || *conf.IncDockerCert {
 		rcOpts = append(rcOpts, regclient.WithDockerCerts())
 	}
+	if conf.HostDefault != nil {
+		rcOpts = append(rcOpts, regclient.WithConfigHostDefault(*conf.HostDefault))
+	}
 
 	rcHosts := []config.Host{}
 	for name, host := range conf.Hosts {
