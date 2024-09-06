@@ -15,8 +15,8 @@ func TestConfig(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to run config get: %v", err)
 	}
-	if out != `{"hosts":{}}` {
-		t.Errorf("unexpected output from empty config, expected: %s, received: %s", `{"hosts":{}}`, out)
+	if out != `{}` {
+		t.Errorf("unexpected output from empty config, expected: %s, received: %s", `{}`, out)
 	}
 
 	// set options
@@ -52,10 +52,27 @@ func TestConfig(t *testing.T) {
 		t.Errorf("unexpected output for docker-cred, expected: false, received: %s", out)
 	}
 
-	// reset back to zero values
-	out, err = cobraTest(t, nil, "config", "set", "--blob-limit", "0", "--docker-cert", "--docker-cred")
+	// set a default credential helper
+	out, err = cobraTest(t, nil, "config", "set", "--default-cred-helper", "test-helper")
 	if err != nil {
-		t.Errorf("failed to set blob-limit: %v", err)
+		t.Errorf("failed to set credential helper: %v", err)
+	}
+	if out != "" {
+		t.Errorf("unexpected output from set: %s", out)
+	}
+
+	out, err = cobraTest(t, nil, "config", "get", "--format", "{{ .HostDefault.CredHelper }}")
+	if err != nil {
+		t.Errorf("failed to run config get on default cred helper: %v", err)
+	}
+	if out != "test-helper" {
+		t.Errorf("unexpected output for default cred helper, expected: test-helper, received: %s", out)
+	}
+
+	// reset back to zero values
+	out, err = cobraTest(t, nil, "config", "set", "--blob-limit", "0", "--docker-cert", "--docker-cred", "--default-cred-helper", "")
+	if err != nil {
+		t.Errorf("failed to set default values: %v", err)
 	}
 	if out != "" {
 		t.Errorf("unexpected output from set: %s", out)
@@ -66,8 +83,7 @@ func TestConfig(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to run config get: %v", err)
 	}
-	if out != `{"hosts":{}}` {
-		t.Errorf("unexpected output from empty config, expected: %s, received: %s", `{"hosts":{}}`, out)
+	if out != `{}` {
+		t.Errorf("unexpected output from empty config, expected: %s, received: %s", `{}`, out)
 	}
-
 }

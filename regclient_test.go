@@ -68,6 +68,7 @@ func TestNew(t *testing.T) {
 			},
 		},
 	}
+	defaultRegOptCount := 4
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			result := New(tc.opts...)
@@ -90,8 +91,8 @@ func TestNew(t *testing.T) {
 				}
 			}
 			if len(tc.expect.regOpts) > 0 {
-				if len(tc.expect.regOpts)+3 != len(result.regOpts) {
-					t.Errorf("regOpts length mismatch, expected %d, received %d", len(tc.expect.regOpts), len(result.regOpts))
+				if len(tc.expect.regOpts)+defaultRegOptCount != len(result.regOpts) {
+					t.Errorf("regOpts length mismatch, expected %d, received %d", len(tc.expect.regOpts)+defaultRegOptCount, len(result.regOpts))
 				}
 				// TODO: can content of each regOpt be compared?
 			}

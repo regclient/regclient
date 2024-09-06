@@ -21,10 +21,21 @@ func TestConfig(t *testing.T) {
 	t.Setenv("PATH", filepath.Join(cwd, "testdata")+string(os.PathListSeparator)+curPath)
 
 	// generate new/blank
-	blankHostP := HostNew()
+	newHostP := HostNew()
 
 	// generate new/hostname
-	emptyHostP := HostNewName("host.example.org")
+	newHostNameP := HostNewName("host.example.org")
+
+	defMirror := Host{
+		Mirrors: []string{"mirror.example.org"},
+	}
+	defCredHelper := Host{
+		CredHelper: "docker-credential-test",
+	}
+
+	newHostDefNil := HostNewDefName(nil, "host.example.org")
+	newHostDefMirror := HostNewDefName(&defMirror, "host.example.org")
+	newHostDefCredHelper := HostNewDefName(&defCredHelper, "host.example.org")
 
 	caCert := string(`-----BEGIN CERTIFICATE-----
 	MIIC/zCCAeegAwIBAgIUPrFPsUzINvS75tp6kIdsycXrrSQwDQYJKoZIhvcNAQEL
@@ -151,7 +162,7 @@ func TestConfig(t *testing.T) {
 	}
 
 	// merge blank with json
-	exMergeBlank := *blankHostP
+	exMergeBlank := *newHostP
 	err = (&exMergeBlank).Merge(exHost, nil)
 	if err != nil {
 		t.Errorf("failed to merge blank host with exHost: %v", err)
@@ -161,7 +172,7 @@ func TestConfig(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed to merge ex host with exHost2: %v", err)
 	}
-	exMergeCredHelper := *blankHostP
+	exMergeCredHelper := *newHostP
 	err = (&exMergeCredHelper).Merge(exHostCredHelper, nil)
 	if err != nil {
 		t.Errorf("failed to merge blank host with exHostCredHelper: %v", err)
@@ -183,25 +194,69 @@ func TestConfig(t *testing.T) {
 		host       Host
 		hostExpect Host
 		credExpect Cred
+		isZero     bool
 	}{
 		{
-			name: "blank",
-			host: *blankHostP,
+			name:       "empty",
+			host:       Host{},
+			hostExpect: Host{},
+			credExpect: Cred{},
+			isZero:     true,
+		},
+		{
+			name: "new",
+			host: *newHostP,
 			hostExpect: Host{
 				TLS:     TLSEnabled,
 				APIOpts: map[string]string{},
 			},
 			credExpect: Cred{},
+			isZero:     true,
 		},
 		{
-			name: "empty",
-			host: *emptyHostP,
+			name: "new-name",
+			host: *newHostNameP,
 			hostExpect: Host{
 				TLS:      TLSEnabled,
 				Hostname: "host.example.org",
 				APIOpts:  map[string]string{},
 			},
 			credExpect: Cred{},
+		},
+		{
+			name: "new-default-nil",
+			host: *newHostDefNil,
+			hostExpect: Host{
+				TLS:      TLSEnabled,
+				Hostname: "host.example.org",
+				APIOpts:  map[string]string{},
+			},
+			credExpect: Cred{},
+		},
+		{
+			name: "new-default-mirror",
+			host: *newHostDefMirror,
+			hostExpect: Host{
+				TLS:      TLSEnabled,
+				Hostname: "host.example.org",
+				APIOpts:  map[string]string{},
+				Mirrors:  []string{"mirror.example.org"},
+			},
+			credExpect: Cred{},
+		},
+		{
+			name: "new-default-cred-helper",
+			host: *newHostDefCredHelper,
+			hostExpect: Host{
+				TLS:        TLSEnabled,
+				Hostname:   "host.example.org",
+				APIOpts:    map[string]string{},
+				CredHelper: "docker-credential-test",
+			},
+			credExpect: Cred{
+				User:     "hello",
+				Password: "world",
+			},
 		},
 		{
 			name: "exHost",
@@ -363,6 +418,9 @@ func TestConfig(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.host.IsZero() != tc.isZero {
+				t.Errorf("IsZero did not return %t", tc.isZero)
+			}
 			// check each field
 			if tc.host.TLS != tc.hostExpect.TLS {
 				expect, _ := tc.hostExpect.TLS.MarshalText()
