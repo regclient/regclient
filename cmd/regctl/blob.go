@@ -585,6 +585,8 @@ func (blobOpts *blobCmd) blobReportLayer(tr *tar.Reader) ([]string, error) {
 			}
 			return report, err
 		}
+		// TODO: handle int overflows
+		//#nosec G115 tar header will hopefully not exceed fs.FileMode
 		line := fmt.Sprintf("%s %d/%d %8d", fs.FileMode(th.Mode).String(), th.Uid, th.Gid, th.Size)
 		if !blobOpts.diffIgnoreTime {
 			line += " " + th.ModTime.Format(time.RFC3339)
