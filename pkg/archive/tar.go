@@ -136,6 +136,8 @@ func Extract(ctx context.Context, path string, r io.Reader, opts ...TarOpts) err
 		fn := filepath.Join(path, filepath.Clean("/"+hdr.Name))
 		switch hdr.Typeflag {
 		case tar.TypeDir:
+			// TODO: handle int overflows
+			//#nosec G115 tar header will hopefully not exceed fs.FileMode
 			err = os.MkdirAll(fn, fs.FileMode(hdr.Mode))
 			if err != nil {
 				return err
