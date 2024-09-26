@@ -271,6 +271,10 @@ regctl image mod registry.example.org/repo:v1 --create v1-extended \
 regctl image mod registry.example.org/repo:v1 --create v1-extended \
   --layer-add "dir=path/to/directory"
 
+# append a layer to all platforms using the contents of a directory with a different workdir
+regctl image mod registry.example.org/repo:v1 --create v1-extended \
+  --layer-add "dir=path/to/directory,workdir=/tmp"
+
 # set the timestamp on the config and layers, ignoring the alpine base image layers
 regctl image mod registry.example.org/repo:v1 --create v1-mod \
   --time "set=2021-02-03T04:05:06Z,base-ref=alpine:3"
