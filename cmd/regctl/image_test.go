@@ -196,6 +196,11 @@ func TestImageMod(t *testing.T) {
 			expectOut: modRef,
 		},
 		{
+			name:      "layer-add-dir-workdir",
+			cmd:       []string{"image", "mod", srcRef, "--create", modRef, "--layer-add", "dir=../../cmd,workdir=/tmp"},
+			expectOut: modRef,
+		},
+		{
 			name:      "layer-add-both",
 			cmd:       []string{"image", "mod", srcRef, "--create", modRef, "--layer-add", "tar=../../testdata/layer.tar,dir=../../cmd,platform=linux/amd64"},
 			expectErr: fmt.Errorf(`invalid argument "tar=../../testdata/layer.tar,dir=../../cmd,platform=linux/amd64" for "--layer-add" flag: cannot use dir and tar options together in layer-add`),

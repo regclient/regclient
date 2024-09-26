@@ -659,7 +659,14 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 			var rdr io.Reader
 			var mt string
 			var platforms []platform.Platform
+			tarOpts := []archive.TarOpts{}
+			if workdir, ok := kvSplit["workdir"]; ok {
+				tarOpts = append(tarOpts, archive.TarWorkPath(workdir))
+			}
 			if filename, ok := kvSplit["tar"]; ok {
+				if len(tarOpts) > 0 {
+					log.Infof("ignoring workdir option with tar option in layer-add")
+				}
 				//#nosec G304 command is run by a user accessing their own files
 				fh, err := os.Open(filename)
 				if err != nil {
@@ -676,7 +683,7 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 				}
 				pr, pw := io.Pipe()
 				go func() {
-					err := archive.Tar(context.TODO(), dir, pw)
+					err := archive.Tar(context.TODO(), dir, pw, tarOpts...)
 					if err != nil {
 						_ = pw.CloseWithError(err)
 					}
