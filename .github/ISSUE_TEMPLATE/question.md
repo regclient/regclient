@@ -3,8 +3,6 @@ name: Question
 about: Ask a question
 title: '[Question] <title>'
 labels: question
-assignees:
-- sudo-bmitch
 
 ---
 
