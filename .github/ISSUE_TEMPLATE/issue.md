@@ -3,8 +3,6 @@ name: Issue
 about: Report a bug or issue
 title: '[Issue] <title>'
 labels: bug
-assignees: 
-- sudo-bmitch
 
 ---
 
