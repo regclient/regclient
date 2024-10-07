@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"testing"
 	"time"
 
@@ -1712,4 +1713,40 @@ func TestRegHttp(t *testing.T) {
 		}
 	})
 	// TODO: test various TLS configs (custom root for all hosts, custom root for one host, insecure)
+}
+
+// separate test class as these must run sequentially
+func TestProxy(t *testing.T) {
+	t.Run("empty environment", func(t *testing.T) {
+		for _, name := range []string{"HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"} {
+			os.Unsetenv(name)
+		}
+		proxy, err := proxyUrlFromEnvironment()
+		if err == nil || proxy != nil {
+			t.Errorf("Proxy returned with empty environment: %v", proxy)
+		}
+	})
+	t.Run("bad URL", func(t *testing.T) {
+		for _, name := range []string{"HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"} {
+			os.Unsetenv(name)
+		}
+		os.Setenv("http_proxy", "://servercom")
+		proxy, err := proxyUrlFromEnvironment()
+		if err == nil || proxy != nil {
+			t.Errorf("Proxy returned with invalid url: %v", proxy)
+		}
+	})
+	t.Run("valid URL", func(t *testing.T) {
+		for _, name := range []string{"HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"} {
+			os.Unsetenv(name)
+		}
+		os.Setenv("HTTPS_PROXY", "https://server.com")
+		proxy, err := proxyUrlFromEnvironment()
+		if err != nil || proxy == nil {
+			t.Errorf("Failed to set up a proxy with a valid url: %v", err)
+		}
+		if proxy.Scheme != "https" || proxy.Host != "server.com" {
+			t.Errorf("Unexpected proxy url: %v", proxy)
+		}
+	})
 }

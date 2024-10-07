@@ -719,6 +719,23 @@ func (resp *Resp) backoffReset() {
 	}
 }
 
+func proxyUrlFromEnvironment() (*url.URL, error) {
+	for _, name := range []string{"HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"} {
+		if u := os.Getenv(name); len(u) > 0 {
+			return url.Parse(u)
+		}
+	}
+	return nil, &url.Error{}
+}
+
+func proxiedTransport() *http.Transport {
+	proxy, err := proxyUrlFromEnvironment()
+	if err != nil {
+		return http.DefaultTransport.(*http.Transport).Clone()
+	}
+	return &http.Transport{Proxy: http.ProxyURL(proxy)}
+}
+
 // getHost looks up or creates a clientHost for a given registry.
 func (c *Client) getHost(host string) *clientHost {
 	c.mu.Lock()
@@ -753,7 +770,7 @@ func (c *Client) getHost(host string) *clientHost {
 	hc := *c.httpClient
 	h.httpClient = &hc
 	if h.httpClient.Transport == nil {
-		h.httpClient.Transport = http.DefaultTransport.(*http.Transport).Clone()
+		h.httpClient.Transport = proxiedTransport()
 	}
 	// configure transport for insecure requests and root certs
 	if h.config.TLS == config.TLSInsecure || len(c.rootCAPool) > 0 || len(c.rootCADirs) > 0 || h.config.RegCert != "" || (h.config.ClientCert != "" && h.config.ClientKey != "") {
