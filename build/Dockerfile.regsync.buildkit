@@ -11,13 +11,13 @@ RUN apk add --no-cache \
       ca-certificates \
       git \
       make
+WORKDIR /src
+
+FROM --platform=$BUILDPLATFORM golang AS build
 RUN addgroup -g 1000 appuser \
  && adduser -u 1000 -G appuser -D appuser \
  && mkdir -p /home/appuser/.docker \
  && chown -R appuser /home/appuser
-WORKDIR /src
-
-FROM --platform=$BUILDPLATFORM golang AS build
 COPY go.* /src/
 ARG TARGETOS
 ARG TARGETARCH
@@ -59,10 +59,16 @@ RUN --mount=type=cache,id=gomod,target=/go/pkg/mod/cache \
  && ( cp "${GOPATH}/bin/docker-credential-gcr" /usr/local/bin/docker-credential-gcr \
    || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-gcr" /usr/local/bin/docker-credential-gcr )
 
+FROM --platform=$BUILDPLATFORM build AS release-base
+USER root
+RUN mkdir -p /output/etc/ssl/certs/ /output/home /output/tmp /output/usr/local/bin \
+ && cp -a /etc/passwd /etc/group /output/etc/ \
+ && cp -a /etc/ssl/certs/ca-certificates.crt /output/etc/ssl/certs/ \
+ && cp -a /home/appuser /output/home/ \
+ && chmod 1777 /output/tmp
+
 FROM ${REGISTRY}/library/alpine:${ALPINE_VER} AS release-alpine
-COPY --from=build /etc/passwd /etc/group /etc/
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=build --chown=1000:1000 /home/appuser/ /home/appuser/
+COPY --from=release-base /output /
 COPY --from=docker-cred-ecr-login /usr/local/bin/docker-credential-* /usr/local/bin/
 COPY --from=docker-cred-gcr /usr/local/bin/docker-credential-* /usr/local/bin/
 COPY --from=build /src/bin/regsync /usr/local/bin/regsync
@@ -86,10 +92,7 @@ LABEL maintainer="" \
       org.opencontainers.image.description="regclient/regsync utility for mirroring registry content (alpine)"
 
 FROM scratch AS release-scratch
-ADD  build/root.tgz /
-COPY --from=build /etc/passwd /etc/group /etc/
-COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=build --chown=1000:1000 /home/appuser/ /home/appuser/
+COPY --from=release-base /output /
 COPY --from=build /src/bin/regsync /regsync
 USER appuser
 ENTRYPOINT [ "/regsync" ]
