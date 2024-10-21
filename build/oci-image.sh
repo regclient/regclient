@@ -114,23 +114,27 @@ else
 fi
 
 # attach sboms to each platform
-for digest in $(regctl manifest get ocidir://output/${image}:${release} --format '{{range .Manifests}}{{printf "%s\n" .Digest}}{{end}}'); do
-  echo "Attaching SBOMs for ${image}:${release}@${digest}"
-  regctl image copy ocidir://output/${image}@${digest} ocidir://output/${image}-sbom -v warn >/dev/null
-  syft scan -q "oci-dir:output/${image}-sbom" --source-name "docker:docker.io/regclient/${image}@${digest}" -o cyclonedx-json \
-    | regctl artifact put --subject "ocidir://output/${image}@${digest}" \
-        --artifact-type application/vnd.cyclonedx+json \
-        -m application/vnd.cyclonedx+json \
-        --annotation "org.opencontainers.image.created=${now_date}" \
-        --annotation "org.opencontainers.image.description=CycloneDX JSON SBOM"
-  syft scan -q "oci-dir:output/${image}-sbom" --source-name "docker:docker.io/regclient/${image}@${digest}" -o spdx-json \
-    | regctl artifact put --subject "ocidir://output/${image}@${digest}" \
-        --artifact-type application/spdx+json \
-        -m application/spdx+json \
-        --annotation "org.opencontainers.image.created=${now_date}" \
-        --annotation "org.opencontainers.image.description=SPDX JSON SBOM"
-  rm -r output/${image}-sbom
-done
+if command -v syft >/dev/null; then
+  for digest in $(regctl manifest get ocidir://output/${image}:${release} --format '{{range .Manifests}}{{printf "%s\n" .Digest}}{{end}}'); do
+    echo "Attaching SBOMs for ${image}:${release}@${digest}"
+    regctl image copy ocidir://output/${image}@${digest} ocidir://output/${image}-sbom -v warn >/dev/null
+    syft scan -q "oci-dir:output/${image}-sbom" --source-name "docker:docker.io/regclient/${image}@${digest}" -o cyclonedx-json \
+      | regctl artifact put --subject "ocidir://output/${image}@${digest}" \
+          --artifact-type application/vnd.cyclonedx+json \
+          -m application/vnd.cyclonedx+json \
+          --annotation "org.opencontainers.image.created=${now_date}" \
+          --annotation "org.opencontainers.image.description=CycloneDX JSON SBOM"
+    syft scan -q "oci-dir:output/${image}-sbom" --source-name "docker:docker.io/regclient/${image}@${digest}" -o spdx-json \
+      | regctl artifact put --subject "ocidir://output/${image}@${digest}" \
+          --artifact-type application/spdx+json \
+          -m application/spdx+json \
+          --annotation "org.opencontainers.image.created=${now_date}" \
+          --annotation "org.opencontainers.image.description=SPDX JSON SBOM"
+    rm -r output/${image}-sbom
+  done
+else
+  echo "\033[31mWARNING:\033[0m Skipping SBOM generation because syft is not installed." >&2
+fi
 
 # manually prune old digest tags from previous builds and before the mod
 for tag in $(regctl tag ls ocidir://output/${image}); do
