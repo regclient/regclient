@@ -298,10 +298,10 @@ func TestMulti(t *testing.T) {
 			if err != nil {
 				t.Errorf("failed to AcquireMulti for group %d: %v", i, err)
 			}
-			finished <- i
 			if done != nil {
 				done()
 			}
+			finished <- i
 		}(i, list)
 	}
 	sleepMS(5)
@@ -350,7 +350,9 @@ func TestMulti(t *testing.T) {
 		t.Errorf("AcquireMulti on a canceled context did not return a nil done function")
 		doneAll()
 	}
-	done()
+	if done != nil {
+		done()
+	}
 	for i := range qList {
 		done, err = qList[i].TryAcquire(ctxMulti, e)
 		if err != nil {
