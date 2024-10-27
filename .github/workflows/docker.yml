@@ -33,7 +33,7 @@ jobs:
 
     steps:
     - name: Check out code
-      uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4.2.1
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
     - name: Prepare
       id: prep
@@ -125,10 +125,10 @@ jobs:
     
     - name: Install syft
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
-      uses: anchore/sbom-action/download-syft@8d0a6505bf28ced3e85154d13dc6af83299e13f1 # v0.17.4
+      uses: anchore/sbom-action/download-syft@1ca97d9028b51809cf6d3c934c3e160716e1b605 # v0.17.5
       id: syft
       with:
-        syft-version: "v1.14.1"
+        syft-version: "v1.14.2"
     
     # Dogfooding, use regctl to modify regclient images to improve reproducibility
     - name: Install regctl
