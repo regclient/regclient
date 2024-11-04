@@ -18,55 +18,55 @@ func TestParseAuthHeader(t *testing.T) {
 	t.Parallel()
 	var tests = []struct {
 		name, in string
-		wantC    []Challenge
+		wantC    []challenge
 		wantE    error
 	}{
 		{
 			name:  "Bearer to auth.docker.io",
 			in:    `Bearer realm="https://auth.docker.io/token",service="registry.docker.io",scope="repository:docker/docker:pull"`,
-			wantC: []Challenge{{authType: "bearer", params: map[string]string{"realm": "https://auth.docker.io/token", "service": "registry.docker.io", "scope": "repository:docker/docker:pull"}}},
+			wantC: []challenge{{authType: "bearer", params: map[string]string{"realm": "https://auth.docker.io/token", "service": "registry.docker.io", "scope": "repository:docker/docker:pull"}}},
 			wantE: nil,
 		},
 		{
 			name:  "Basic to GitHub",
 			in:    `Basic realm="GitHub Package Registry"`,
-			wantC: []Challenge{{authType: "basic", params: map[string]string{"realm": "GitHub Package Registry"}}},
+			wantC: []challenge{{authType: "basic", params: map[string]string{"realm": "GitHub Package Registry"}}},
 			wantE: nil,
 		},
 		{
 			name:  "Basic case insensitive type and key",
 			in:    `BaSiC ReAlM="Case insensitive key"`,
-			wantC: []Challenge{{authType: "basic", params: map[string]string{"realm": "Case insensitive key"}}},
+			wantC: []challenge{{authType: "basic", params: map[string]string{"realm": "Case insensitive key"}}},
 			wantE: nil,
 		},
 		{
 			name:  "Basic unquoted realm",
 			in:    `Basic realm=unquoted`,
-			wantC: []Challenge{{authType: "basic", params: map[string]string{"realm": "unquoted"}}},
+			wantC: []challenge{{authType: "basic", params: map[string]string{"realm": "unquoted"}}},
 			wantE: nil,
 		},
 		{
 			name:  "Basic unquoted token",
 			in:    `Basic realm=/`,
-			wantC: []Challenge{{authType: "basic", params: map[string]string{"realm": "/"}}},
+			wantC: []challenge{{authType: "basic", params: map[string]string{"realm": "/"}}},
 			wantE: nil,
 		},
 		{
 			name:  "Missing close quote",
 			in:    `Basic realm="GitHub Package Registry`,
-			wantC: []Challenge{},
+			wantC: []challenge{},
 			wantE: ErrParseFailure,
 		},
 		{
 			name:  "Missing value after escape",
 			in:    `Basic realm="GitHub Package Registry\\`,
-			wantC: []Challenge{},
+			wantC: []challenge{},
 			wantE: ErrParseFailure,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c, err := ParseAuthHeader(tt.in)
+			c, err := parseAuthHeader(tt.in)
 			if err != tt.wantE {
 				t.Errorf("got error %v, want %v", err, tt.wantE)
 			}
@@ -94,13 +94,13 @@ func TestParseAuthHeader(t *testing.T) {
 func TestAuth(t *testing.T) {
 	t.Parallel()
 	clientID := "testClient"
-	token1Resp, _ := json.Marshal(BearerToken{
+	token1Resp, _ := json.Marshal(bearerToken{
 		Token:     "token1",
 		ExpiresIn: 900,
 		IssuedAt:  time.Now(),
 		Scope:     "repository:reponame:pull",
 	})
-	token2Resp, _ := json.Marshal(BearerToken{
+	token2Resp, _ := json.Marshal(bearerToken{
 		Token:     "token2",
 		ExpiresIn: 900,
 		IssuedAt:  time.Now(),
@@ -160,7 +160,7 @@ func TestAuth(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		auth           Auth
+		auth           *Auth
 		addScopeHost   string
 		addScopeScope  string
 		handleResponse *http.Response
@@ -314,7 +314,7 @@ func TestBearer(t *testing.T) {
 	useragent := "regclient/test"
 	user := "user"
 	pass := "testpass"
-	token1Resp, _ := json.Marshal(BearerToken{
+	token1Resp, _ := json.Marshal(bearerToken{
 		Token:        "token1",
 		ExpiresIn:    900,
 		IssuedAt:     time.Now().Add(-900 * time.Second), // testing time skew handling
@@ -336,7 +336,7 @@ func TestBearer(t *testing.T) {
 	tokenRefreshForm.Set("grant_type", "refresh_token")
 	tokenRefreshForm.Set("refresh_token", "refresh-token-value")
 	tokenRefreshBody := tokenRefreshForm.Encode()
-	token2Resp, _ := json.Marshal(BearerToken{
+	token2Resp, _ := json.Marshal(bearerToken{
 		Token:        "token2",
 		ExpiresIn:    10,                                // testing short expiration
 		IssuedAt:     time.Now().Add(900 * time.Second), // testing time skew handling
@@ -396,14 +396,14 @@ func TestBearer(t *testing.T) {
 	bearer := NewBearerHandler(&http.Client{}, useragent, tsHost,
 		func(h string) Cred { return Cred{User: user, Password: pass} },
 		&logrus.Logger{},
-	).(*BearerHandler)
+	).(*bearerHandler)
 
 	// handle token1, verify expired token gets current time and isn't expired
 	err := bearer.AddScope("repository:reponame:pull")
 	if err != nil {
 		t.Errorf("failed adding scope: %v", err)
 	}
-	c, err := ParseAuthHeader(
+	c, err := parseAuthHeader(
 		`Bearer realm="` + tsURL.String() +
 			`/tokens",service="test"` +
 			`,scope="repository:reponame:pull"`)

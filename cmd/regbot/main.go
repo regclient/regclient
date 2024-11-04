@@ -14,6 +14,12 @@ import (
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
+	log := &logrus.Logger{
+		Out:       os.Stderr,
+		Formatter: new(logrus.TextFormatter),
+		Hooks:     make(logrus.LevelHooks),
+		Level:     logrus.InfoLevel,
+	}
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	go func() {
@@ -24,7 +30,7 @@ func main() {
 	}()
 	godbg.SignalTrace()
 
-	rootTopCmd := NewRootCmd()
+	rootTopCmd := NewRootCmd(log)
 	if err := rootTopCmd.ExecuteContext(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)

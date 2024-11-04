@@ -19,10 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        gover: ["1.20", "1.21", "1.22"]
+        gover: ["1.21", "1.22", "1.23"]
 
     env:
-      RELEASE_GO_VER: "1.22"
+      RELEASE_GO_VER: "1.23"
       # do not automatically upgrade go to a different version: https://go.dev/doc/toolchain
       GOTOOLCHAIN: "local"
 
@@ -32,10 +32,10 @@ jobs:
 
     steps:
     - name: Check out code
-      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
     - name: "Set up Go ${{ matrix.gover }}"
-      uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+      uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5.1.0
       with:
         go-version: "${{ matrix.gover }}"
         check-latest: true
@@ -60,10 +60,10 @@ jobs:
 
     - name: Install syft
       if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main'
-      uses: anchore/sbom-action/download-syft@d94f46e13c6c62f59525ac9a1e147a99dc0b9bf5 # v0.17.0
+      uses: anchore/sbom-action/download-syft@251a468eed47e5082b105c3ba6ee500c0e65a764 # v0.17.6
       id: syft
       with:
-        syft-version: "v1.10.0"
+        syft-version: "v1.15.0"
 
     - name: Build artifacts
       if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main'
@@ -71,9 +71,9 @@ jobs:
 
     - name: Install cosign
       if: ( startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main' ) && matrix.gover == env.RELEASE_GO_VER
-      uses: sigstore/cosign-installer@59acb6260d9c0ba8f4a2f9d9b48431a222b68e20 # v3.5.0
+      uses: sigstore/cosign-installer@dc72c7d5c4d10cd6bcb8cf6e3fd625a9e5e537da # v3.7.0
       with:
-        cosign-release: "v2.3.0"
+        cosign-release: "v2.4.1"
 
     - name: Package artifacts
       if: ( startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main' ) && matrix.gover == env.RELEASE_GO_VER
@@ -120,14 +120,14 @@ jobs:
         RELEASE_NOTES="${RELEASE_NOTES//'%'/'%25'}"
         RELEASE_NOTES="${RELEASE_NOTES//$'\n'/'%0A'}"
         RELEASE_NOTES="${RELEASE_NOTES//$'\r'/'%0D'}"
-        echo ::set-output name=version::${VERSION}
-        echo ::set-output name=valid::${VALID_RELEASE}
-        echo ::set-output name=release_notes::${RELEASE_NOTES}
+        echo "valid=${VALID_RELEASE}" >>$GITHUB_OUTPUT
+        echo "version=${VERSION}" >>$GITHUB_OUTPUT
+        echo "release_notes=${RELEASE_NOTES}" >>$GITHUB_OUTPUT
 
     - name: Create release
       if: steps.release_details.outputs.valid == 'true' && matrix.gover == env.RELEASE_GO_VER
       id: release_create
-      uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
+      uses: softprops/action-gh-release@e7a8f85e1c67a31e6ed99a94b41bd0b71bbee6b8 # v2.0.9
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
@@ -161,7 +161,7 @@ jobs:
 
     - name: Save artifacts
       if: github.ref == 'refs/heads/main' && matrix.gover == env.RELEASE_GO_VER
-      uses: actions/upload-artifact@89ef406dd8d7e03cfd12d9e0a4a378f454709029 # v4.3.5
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
       with:
         name: binaries
         path: ./artifacts/

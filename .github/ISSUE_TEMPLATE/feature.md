@@ -3,8 +3,6 @@ name: Feature request
 about: Request a new feature
 title: '[Feature] <title>'
 labels: enhancement
-assignees:
-- sudo-bmitch
 
 ---
 

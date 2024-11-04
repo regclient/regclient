@@ -28,18 +28,20 @@ var (
 type Config struct {
 	Filename      string                  `json:"-"`                 // filename that was loaded
 	Version       int                     `json:"version,omitempty"` // version the file in case the config file syntax changes in the future
-	Hosts         map[string]*config.Host `json:"hosts"`
+	Hosts         map[string]*config.Host `json:"hosts,omitempty"`
+	HostDefault   *config.Host            `json:"hostDefault,omitempty"`
 	BlobLimit     int64                   `json:"blobLimit,omitempty"`
 	IncDockerCert *bool                   `json:"incDockerCert,omitempty"`
 	IncDockerCred *bool                   `json:"incDockerCred,omitempty"`
 }
 
 type configCmd struct {
-	rootOpts   *rootCmd
-	blobLimit  int64
-	dockerCert bool
-	dockerCred bool
-	format     string
+	rootOpts      *rootCmd
+	blobLimit     int64
+	defCredHelper string
+	dockerCert    bool
+	dockerCred    bool
+	format        string
 }
 
 func NewConfigCmd(rootOpts *rootCmd) *cobra.Command {
@@ -82,6 +84,7 @@ regctl config set --docker-cred`,
 	configSetCmd.Flags().Int64Var(&configOpts.blobLimit, "blob-limit", 0, "limit for blob chunks, this is stored in memory")
 	configSetCmd.Flags().BoolVar(&configOpts.dockerCert, "docker-cert", false, "load certificates from docker")
 	configSetCmd.Flags().BoolVar(&configOpts.dockerCred, "docker-cred", false, "load credentials from docker")
+	configSetCmd.Flags().StringVar(&configOpts.defCredHelper, "default-cred-helper", "", "default credential helper")
 
 	configTopCmd.AddCommand(configGetCmd)
 	configTopCmd.AddCommand(configSetCmd)
@@ -110,6 +113,16 @@ func (configOpts *configCmd) runConfigSet(cmd *cobra.Command, args []string) err
 	if flagChanged(cmd, "blob-limit") {
 		c.BlobLimit = configOpts.blobLimit
 	}
+	if flagChanged(cmd, "default-cred-helper") {
+		if c.HostDefault != nil {
+			c.HostDefault.CredHelper = configOpts.defCredHelper
+		}
+		if c.HostDefault == nil && configOpts.defCredHelper != "" {
+			c.HostDefault = &config.Host{
+				CredHelper: configOpts.defCredHelper,
+			}
+		}
+	}
 	if flagChanged(cmd, "docker-cert") {
 		if !configOpts.dockerCert {
 			c.IncDockerCert = &configOpts.dockerCert
@@ -123,6 +136,10 @@ func (configOpts *configCmd) runConfigSet(cmd *cobra.Command, args []string) err
 		} else {
 			c.IncDockerCred = nil
 		}
+	}
+
+	if c.HostDefault != nil && c.HostDefault.IsZero() {
+		c.HostDefault = nil
 	}
 
 	err = c.ConfigSave()

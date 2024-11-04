@@ -18,6 +18,7 @@ import (
 	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/mediatype"
 	"github.com/regclient/regclient/types/ref"
+	"github.com/regclient/regclient/types/warning"
 )
 
 // Opts defines options for Apply
@@ -51,12 +52,10 @@ var (
 
 // Apply applies a set of modifications to an image (manifest, configs, and layers).
 func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...Opts) (ref.Ref, error) {
-	// check for the various types of mods (manifest, config, layer)
-	// some may span like copying layers from config to manifest
-	// run changes in order (deleting layers before pulling and changing a layer)
-	// to span steps, some changes will output other mods to apply
-	// e.g. layer hash changing in config, or a deleted layer from the config deleting from the manifest
-	// do I need to store a DAG in memory with pointers back to parents and modified bool, so change to digest can be rippled up and modified objects are pushed?
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
+	}
 
 	// pull the image metadata into a DAG
 	dm, err := dagGet(ctx, rc, rSrc, descriptor.Descriptor{})
@@ -99,6 +98,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 			return rTgt, err
 		}
 	}
+	// perform config changes
 	if len(dc.stepsOCIConfig) > 0 {
 		err = dagWalkOCIConfig(dm, func(doc *dagOCIConfig) (*dagOCIConfig, error) {
 			for _, fn := range dc.stepsOCIConfig {
@@ -113,6 +113,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 			return rTgt, err
 		}
 	}
+	// perform layer changes and copy layers to target repository
 	if len(dc.stepsLayer) > 0 || len(dc.stepsLayerFile) > 0 || !ref.EqualRepository(rSrc, rTgt) || dc.forceLayerWalk {
 		err = dagWalkLayers(dm, func(dl *dagLayer) (*dagLayer, error) {
 			var rdr io.ReadCloser
@@ -130,6 +131,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 				// skip deleted and external layers
 				return dl, nil
 			}
+			// changes for the entire layer
 			if len(dc.stepsLayer) > 0 {
 				bRdr, err := rc.BlobGet(ctx, rSrc, dl.desc)
 				if err != nil {
@@ -144,6 +146,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 					rdr = rdrNext
 				}
 			}
+			// changes for files within layers require extracting the tar and then repackaging it
 			if len(dc.stepsLayerFile) > 0 && inListStr(dl.desc.MediaType, mtKnownTar) {
 				if dl.mod == deleted {
 					return dl, nil
@@ -321,6 +324,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 					return nil, fmt.Errorf("layer size mismatch, pushed %d, expected %d", dNew.Size, dl.newDesc.Size)
 				}
 			}
+			// for unchanged layers, if the repository is different, copy the blob
 			if dl.mod == unchanged && !ref.EqualRepository(rSrc, rTgt) {
 				err = rc.BlobCopy(ctx, rSrc, rTgt, dl.desc)
 				if err != nil {
@@ -334,6 +338,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 		}
 	}
 
+	// push the resulting changed content, both manifests and configs
 	err = dagPut(ctx, rc, dc, rSrc, rTgt, dm)
 	if err != nil {
 		return rTgt, err

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -22,6 +23,7 @@ import (
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/ref"
+	"github.com/regclient/regclient/types/warning"
 )
 
 type blobCmd struct {
@@ -236,6 +238,10 @@ func (blobOpts *blobCmd) runBlobDiffConfig(cmd *cobra.Command, args []string) er
 		diffOpts = append(diffOpts, diff.WithFullContext())
 	}
 	ctx := cmd.Context()
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
+	}
 	r1, err := ref.New(args[0])
 	if err != nil {
 		return err
@@ -290,6 +296,10 @@ func (blobOpts *blobCmd) runBlobDiffLayer(cmd *cobra.Command, args []string) err
 		diffOpts = append(diffOpts, diff.WithFullContext())
 	}
 	ctx := cmd.Context()
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
+	}
 	r1, err := ref.New(args[0])
 	if err != nil {
 		return err
@@ -575,6 +585,9 @@ func (blobOpts *blobCmd) blobReportLayer(tr *tar.Reader) ([]string, error) {
 				break
 			}
 			return report, err
+		}
+		if th.Mode < 0 || th.Mode > math.MaxUint32 {
+			return report, fmt.Errorf("integer conversion overflow/underflow (file mode = %d)", th.Mode)
 		}
 		line := fmt.Sprintf("%s %d/%d %8d", fs.FileMode(th.Mode).String(), th.Uid, th.Gid, th.Size)
 		if !blobOpts.diffIgnoreTime {

@@ -8,17 +8,19 @@ import (
 	"io/fs"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/olareg/olareg"
 	oConfig "github.com/olareg/olareg/config"
 	"github.com/opencontainers/go-digest"
+	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/copyfs"
-	"github.com/regclient/regclient/internal/throttle"
+	"github.com/regclient/regclient/internal/pqueue"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/scheme/reg"
 	"github.com/regclient/regclient/types/descriptor"
@@ -29,6 +31,7 @@ import (
 )
 
 func TestProcess(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	boolT := true
 	var err error
@@ -52,33 +55,31 @@ func TestProcess(t *testing.T) {
 	})
 	rcHosts := []config.Host{
 		{
-			Name:      tsHost,
-			Hostname:  tsHost,
-			TLS:       config.TLSDisabled,
-			ReqPerSec: 1000,
+			Name:     tsHost,
+			Hostname: tsHost,
+			TLS:      config.TLSDisabled,
 		},
 		{
-			Name:      "registry.example.org",
-			Hostname:  tsHost,
-			TLS:       config.TLSDisabled,
-			ReqPerSec: 1000,
+			Name:     "registry.example.org",
+			Hostname: tsHost,
+			TLS:      config.TLSDisabled,
 		},
 	}
 	delayInit, _ := time.ParseDuration("0.05s")
 	delayMax, _ := time.ParseDuration("0.10s")
 	// replace regclient with one configured for test hosts
-	rc = regclient.New(
+	rc := regclient.New(
 		regclient.WithConfigHost(rcHosts...),
 		regclient.WithRegOpts(reg.WithDelay(delayInit, delayMax)),
 	)
-	throttleC = throttle.New(1)
+	pq := pqueue.New(pqueue.Opts[throttle]{Max: 1})
 	var confBytes = `
 version: 1
 defaults:
   parallel: 1
 `
 	confRdr := bytes.NewReader([]byte(confBytes))
-	conf, err = ConfigLoadReader(confRdr)
+	conf, err := ConfigLoadReader(confRdr)
 	if err != nil {
 		t.Fatalf("failed parsing config: %v", err)
 	}
@@ -615,7 +616,17 @@ defaults:
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			// run each test
-			rootOpts := rootCmd{}
+			rootOpts := rootCmd{
+				conf:     conf,
+				rc:       rc,
+				throttle: pq,
+				log: &logrus.Logger{
+					Out:       os.Stderr,
+					Formatter: new(logrus.TextFormatter),
+					Hooks:     make(logrus.LevelHooks),
+					Level:     logrus.InfoLevel,
+				},
+			}
 			syncSetDefaults(&tc.sync, conf.Defaults)
 			err = rootOpts.process(ctx, tc.sync, tc.action)
 			// validate err
@@ -668,6 +679,7 @@ defaults:
 }
 
 func TestProcessRef(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	// setup tempDir
 	tempDir := t.TempDir()
@@ -676,13 +688,13 @@ func TestProcessRef(t *testing.T) {
 		t.Fatalf("failed to copyfs to tempdir: %v", err)
 	}
 	// setup various globals normally done by loadConf
-	rc = regclient.New()
+	rc := regclient.New()
 	cs := ConfigSync{
 		Source: "ocidir://" + tempDir + "/testrepo",
 		Target: "ocidir://" + tempDir + "/testdest",
 		Type:   "repository",
 	}
-	syncSetDefaults(&cs, conf.Defaults)
+	syncSetDefaults(&cs, ConfigDefaults{})
 
 	tt := []struct {
 		name         string
@@ -722,7 +734,18 @@ func TestProcessRef(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			rootOpts := rootCmd{}
+			rootOpts := rootCmd{
+				rc: rc,
+				conf: &Config{
+					Sync: []ConfigSync{cs},
+				},
+				log: &logrus.Logger{
+					Out:       os.Stderr,
+					Formatter: new(logrus.TextFormatter),
+					Hooks:     make(logrus.LevelHooks),
+					Level:     logrus.InfoLevel,
+				},
+			}
 			src, err := ref.New(cs.Source)
 			if err != nil {
 				t.Fatalf("failed to create src ref: %v", err)
@@ -771,6 +794,7 @@ func TestProcessRef(t *testing.T) {
 }
 
 func TestConfigRead(t *testing.T) {
+	t.Parallel()
 	// CAUTION: the below yaml is space indented and will not parse with tabs
 	cRead := bytes.NewReader([]byte(`
     version: 1

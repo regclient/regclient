@@ -18,6 +18,7 @@ import (
 	v1 "github.com/regclient/regclient/types/oci/v1"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
+	"github.com/regclient/regclient/types/warning"
 )
 
 var indexKnownTypes = []string{
@@ -143,6 +144,10 @@ regctl index delete registry.example.org/repo:v1 \
 
 func (indexOpts *indexCmd) runIndexAdd(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
+	}
 
 	// parse ref
 	r, err := ref.New(args[0])
@@ -205,6 +210,10 @@ func (indexOpts *indexCmd) runIndexAdd(cmd *cobra.Command, args []string) error 
 
 func (indexOpts *indexCmd) runIndexCreate(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
+	}
 
 	// validate media type
 	if indexOpts.mediaType != mediatype.OCI1ManifestList && indexOpts.mediaType != mediatype.Docker2ManifestList {
@@ -311,6 +320,10 @@ func (indexOpts *indexCmd) runIndexCreate(cmd *cobra.Command, args []string) err
 
 func (indexOpts *indexCmd) runIndexDelete(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
+	// dedup warnings
+	if w := warning.FromContext(ctx); w == nil {
+		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
+	}
 
 	// parse ref
 	r, err := ref.New(args[0])

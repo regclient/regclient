@@ -56,16 +56,14 @@ func TestTag(t *testing.T) {
 	})
 	rcHosts := []config.Host{
 		{
-			Name:      tsRWHost,
-			Hostname:  tsRWHost,
-			TLS:       config.TLSDisabled,
-			ReqPerSec: 1000,
+			Name:     tsRWHost,
+			Hostname: tsRWHost,
+			TLS:      config.TLSDisabled,
 		},
 		{
-			Name:      tsROHost,
-			Hostname:  tsROHost,
-			TLS:       config.TLSDisabled,
-			ReqPerSec: 1000,
+			Name:     tsROHost,
+			Hostname: tsROHost,
+			TLS:      config.TLSDisabled,
 		},
 	}
 	log := &logrus.Logger{
