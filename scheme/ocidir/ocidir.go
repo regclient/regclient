@@ -334,25 +334,51 @@ func indexCreate() v1.Index {
 }
 
 func indexGet(index v1.Index, r ref.Ref) (descriptor.Descriptor, error) {
-	if r.Digest == "" && r.Tag == "" {
-		r.Tag = "latest"
-	}
 	if r.Digest != "" {
 		for _, im := range index.Manifests {
 			if im.Digest.String() == r.Digest {
 				return im, nil
 			}
 		}
-	} else if r.Tag != "" {
-		for _, im := range index.Manifests {
-			if name, ok := im.Annotations[aOCIRefName]; ok && name == r.Tag {
-				return im, nil
+	} else {
+		if r.Tag == "" {
+			r.Tag = "latest"
+		}
+		if r.Registry != "" && r.Repository != "" {
+			rName := r.Registry + "/" + r.Repository + ":" + r.Tag
+			for _, im := range index.Manifests {
+				if name, ok := im.Annotations[aCtrdImageName]; ok && name == rName {
+					return im, nil
+				}
 			}
 		}
-		// fall back to support full image name in annotation
-		for _, im := range index.Manifests {
-			if name, ok := im.Annotations[aOCIRefName]; ok && strings.HasSuffix(name, ":"+r.Tag) {
-				return im, nil
+		if r.Tag != "" {
+			for _, im := range index.Manifests {
+				if _, hasCtrldImageName := im.Annotations[aCtrdImageName]; !hasCtrldImageName {
+					if tag, ok := im.Annotations[aOCIRefName]; ok && tag == r.Tag {
+						return im, nil
+					}
+				}
+			}
+			// fall back to support full image name in annotation
+			for _, im := range index.Manifests {
+				if name, ok := im.Annotations[aOCIRefName]; ok && strings.HasSuffix(name, ":"+r.Tag) {
+					return im, nil
+				}
+			}
+			// fall back to searching full image names in annotation failing if ambiguous
+			var ret *descriptor.Descriptor
+			for _, im := range index.Manifests {
+				if name, ok := im.Annotations[aCtrdImageName]; ok && strings.HasSuffix(name, ":"+r.Tag) {
+					if ret == nil {
+						ret = &im
+					} else {
+						return *ret, errs.ErrAmbiguous
+					}
+				}
+			}
+			if ret != nil {
+				return *ret, nil
 			}
 		}
 	}
@@ -363,38 +389,59 @@ func indexSet(index *v1.Index, r ref.Ref, d descriptor.Descriptor) error {
 	if index == nil {
 		return fmt.Errorf("index is nil")
 	}
+	var rName string
 	if r.Tag != "" {
 		if d.Annotations == nil {
 			d.Annotations = map[string]string{}
 		}
-		d.Annotations[aOCIRefName] = r.Tag
+		if d.Annotations[aOCIRefName] == "" {
+			d.Annotations[aOCIRefName] = r.Tag
+		}
+		if r.Registry != "" && r.Repository != "" {
+			rName = r.Registry + "/" + r.Repository + ":" + r.Tag
+			if d.Annotations[aCtrdImageName] == "" {
+				d.Annotations[aCtrdImageName] = r.Registry + "/" + r.Repository + ":" + r.Tag
+			}
+		}
 	}
 	if index.Manifests == nil {
 		index.Manifests = []descriptor.Descriptor{}
 	}
 	pos := -1
 	// search for existing
-	for i := range index.Manifests {
-		var name string
-		if index.Manifests[i].Annotations != nil {
-			name = index.Manifests[i].Annotations[aOCIRefName]
+	if rName != "" {
+		for i := range index.Manifests {
+			if index.Manifests[i].Annotations != nil && index.Manifests[i].Annotations[aCtrdImageName] == rName {
+				pos = i
+				break
+			}
 		}
-		if (name == "" && index.Manifests[i].Digest == d.Digest) || (r.Tag != "" && name == r.Tag) {
-			index.Manifests[i] = d
-			pos = i
-			break
+	}
+	if pos == -1 {
+		for i := range index.Manifests {
+			var tag string
+			if index.Manifests[i].Annotations != nil {
+				tag = index.Manifests[i].Annotations[aOCIRefName]
+			}
+			if (tag == "" && index.Manifests[i].Digest == d.Digest) || (r.Tag != "" && tag == r.Tag) {
+				pos = i
+				break
+			}
 		}
 	}
 	if pos >= 0 {
+		index.Manifests[pos] = d
 		// existing entry was replaced, remove any dup entries
 		for i := len(index.Manifests) - 1; i > pos; i-- {
 			var name string
+			var tag string
 			if index.Manifests[i].Annotations != nil {
-				name = index.Manifests[i].Annotations[aOCIRefName]
+				name = index.Manifests[i].Annotations[aCtrdImageName]
+				tag = index.Manifests[i].Annotations[aOCIRefName]
 			}
 			// prune entries without any tag and a matching digest
 			// or entries with a matching tag
-			if (name == "" && index.Manifests[i].Digest == d.Digest) || (r.Tag != "" && name == r.Tag) {
+			if (tag == "" && index.Manifests[i].Digest == d.Digest) || (name == "" && r.Tag != "" && tag == r.Tag) {
 				index.Manifests = append(index.Manifests[:i], index.Manifests[i+1:]...)
 			}
 		}

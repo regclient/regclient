@@ -32,13 +32,15 @@ var (
 	pathS       = `[/a-zA-Z0-9_\-. ~\+]+`
 	tagS        = `[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}`
 	digestS     = `[A-Za-z][A-Za-z0-9]*(?:[-_+.][A-Za-z][A-Za-z0-9]*)*[:][[:xdigit:]]{32,}`
-	schemeRE    = regexp.MustCompile(`^([a-z]+)://(.+)$`)
-	registryRE  = regexp.MustCompile(`^(` + registryS + `)$`)
-	refRE       = regexp.MustCompile(`^(?:(` + registryS + `)` + regexp.QuoteMeta(`/`) + `)?` +
-		`(` + repoPartS + `(?:` + regexp.QuoteMeta(`/`) + repoPartS + `)*)` +
-		`(?:` + regexp.QuoteMeta(`:`) + `(` + tagS + `))?` +
-		`(?:` + regexp.QuoteMeta(`@`) + `(` + digestS + `))?$`)
-	ocidirRE = regexp.MustCompile(`^(` + pathS + `)` +
+	repoS       = `(?:(` + registryS + `)` + regexp.QuoteMeta(`/`) + `)?` +
+		`(` + repoPartS + `(?:` + regexp.QuoteMeta(`/`) + repoPartS + `)*)`
+	refS = repoS + `(?:` + regexp.QuoteMeta(`:`) + `(` + tagS + `))?` +
+		`(?:` + regexp.QuoteMeta(`@`) + `(` + digestS + `))?`
+	schemeRE   = regexp.MustCompile(`^([a-z]+)://(.+)$`)
+	registryRE = regexp.MustCompile(`^(` + registryS + `)$`)
+	refRE      = regexp.MustCompile(`^` + refS + `$`)
+	ocidirRE   = regexp.MustCompile(`^(` + pathS + `)` +
+		`(?:` + regexp.QuoteMeta(`#`) + repoS + `)?` +
 		`(?:` + regexp.QuoteMeta(`:`) + `(` + tagS + `))?` +
 		`(?:` + regexp.QuoteMeta(`@`) + `(` + digestS + `))?$`)
 )
@@ -53,6 +55,22 @@ type Ref struct {
 	Tag        string // Tag is a mutable tag for a reference.
 	Digest     string // Digest is an immutable hash for a reference.
 	Path       string // Path is the directory of the OCI Layout for "ocidir".
+}
+
+func fixupRegistry(ret *Ref) {
+	// handle localhost use case since it matches the regex for a repo path entry
+	repoPath := strings.Split(ret.Repository, "/")
+	if ret.Registry == "" && repoPath[0] == "localhost" {
+		ret.Registry = repoPath[0]
+		ret.Repository = strings.Join(repoPath[1:], "/")
+	}
+	switch ret.Registry {
+	case "", dockerRegistryDNS, dockerRegistryLegacy:
+		ret.Registry = dockerRegistry
+	}
+	if ret.Registry == dockerRegistry && !strings.Contains(ret.Repository, "/") {
+		ret.Repository = dockerLibrary + "/" + ret.Repository
+	}
 }
 
 // New returns a reference based on the scheme (defaulting to "reg").
@@ -83,19 +101,7 @@ func New(parse string) (Ref, error) {
 		ret.Tag = matchRef[3]
 		ret.Digest = matchRef[4]
 
-		// handle localhost use case since it matches the regex for a repo path entry
-		repoPath := strings.Split(ret.Repository, "/")
-		if ret.Registry == "" && repoPath[0] == "localhost" {
-			ret.Registry = repoPath[0]
-			ret.Repository = strings.Join(repoPath[1:], "/")
-		}
-		switch ret.Registry {
-		case "", dockerRegistryDNS, dockerRegistryLegacy:
-			ret.Registry = dockerRegistry
-		}
-		if ret.Registry == dockerRegistry && !strings.Contains(ret.Repository, "/") {
-			ret.Repository = dockerLibrary + "/" + ret.Repository
-		}
+		fixupRegistry(&ret)
 		if ret.Tag == "" && ret.Digest == "" {
 			ret.Tag = "latest"
 		}
@@ -110,10 +116,17 @@ func New(parse string) (Ref, error) {
 		}
 		ret.Path = matchPath[1]
 		if len(matchPath) > 2 && matchPath[2] != "" {
-			ret.Tag = matchPath[2]
+			ret.Registry = matchPath[2]
 		}
 		if len(matchPath) > 3 && matchPath[3] != "" {
-			ret.Digest = matchPath[3]
+			ret.Repository = matchPath[3]
+			fixupRegistry(&ret)
+		}
+		if len(matchPath) > 4 && matchPath[4] != "" {
+			ret.Tag = matchPath[4]
+		}
+		if len(matchPath) > 5 && matchPath[5] != "" {
+			ret.Digest = matchPath[5]
 		}
 
 	default:
@@ -181,6 +194,9 @@ func (r Ref) CommonName() string {
 		}
 	case "ocidir":
 		cn = fmt.Sprintf("ocidir://%s", r.Path)
+		if r.Repository != "" {
+			cn = cn + "#" + r.Registry + "/" + r.Repository
+		}
 		if r.Tag != "" {
 			cn = cn + ":" + r.Tag
 		}
@@ -249,13 +265,15 @@ func (r Ref) ToReg() Ref {
 	switch r.Scheme {
 	case "ocidir":
 		r.Scheme = "reg"
-		r.Registry = "localhost"
-		// clean the path to strip leading ".."
-		r.Repository = path.Clean("/" + r.Path)[1:]
-		r.Repository = strings.ToLower(r.Repository)
-		// convert any unsupported characters to "-" in the path
-		re := regexp.MustCompile(`[^/a-z0-9]+`)
-		r.Repository = string(re.ReplaceAll([]byte(r.Repository), []byte("-")))
+		if r.Registry == "" {
+			r.Registry = "localhost"
+			// clean the path to strip leading ".."
+			r.Repository = path.Clean("/" + r.Path)[1:]
+			r.Repository = strings.ToLower(r.Repository)
+			// convert any unsupported characters to "-" in the path
+			re := regexp.MustCompile(`[^/a-z0-9]+`)
+			r.Repository = string(re.ReplaceAll([]byte(r.Repository), []byte("-")))
+		}
 	}
 	return r
 }
