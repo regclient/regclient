@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path"
 
@@ -15,7 +16,6 @@ import (
 	_ "crypto/sha512"
 
 	"github.com/opencontainers/go-digest"
-	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types/errs"
@@ -134,10 +134,9 @@ func (o *OCIDir) manifestGet(_ context.Context, r ref.Ref) (manifest.Manifest, e
 	if desc.Size == 0 {
 		desc.Size = int64(len(mb))
 	}
-	o.log.WithFields(logrus.Fields{
-		"ref":  r.CommonName(),
-		"file": file,
-	}).Debug("retrieved manifest")
+	o.slog.Debug("retrieved manifest",
+		slog.String("ref", r.CommonName()),
+		slog.String("file", file))
 	return manifest.New(
 		manifest.WithRef(r),
 		manifest.WithDesc(desc),
@@ -279,10 +278,9 @@ func (o *OCIDir) manifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 		return err
 	}
 	o.refMod(r)
-	o.log.WithFields(logrus.Fields{
-		"ref":  r.CommonName(),
-		"file": file,
-	}).Debug("pushed manifest")
+	o.slog.Debug("pushed manifest",
+		slog.String("ref", r.CommonName()),
+		slog.String("file", file))
 
 	// update referrers if defined on this manifest
 	if ms, ok := m.(manifest.Subjecter); ok {

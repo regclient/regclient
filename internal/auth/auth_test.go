@@ -3,13 +3,13 @@ package auth
 import (
 	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 	"time"
-
-	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient/internal/reqresp"
 )
@@ -395,7 +395,7 @@ func TestBearer(t *testing.T) {
 	tsHost := tsURL.Host
 	bearer := NewBearerHandler(&http.Client{}, useragent, tsHost,
 		func(h string) Cred { return Cred{User: user, Password: pass} },
-		&logrus.Logger{},
+		slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
 	).(*bearerHandler)
 
 	// handle token1, verify expired token gets current time and isn't expired

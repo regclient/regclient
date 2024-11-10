@@ -2,6 +2,7 @@
 package reg
 
 import (
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/regclient/regclient/internal/pqueue"
 	"github.com/regclient/regclient/internal/reghttp"
 	"github.com/regclient/regclient/internal/reqmeta"
+	"github.com/regclient/regclient/internal/sloghandle"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/regclient/regclient/types/referrer"
@@ -43,7 +45,7 @@ const (
 type Reg struct {
 	reghttp         *reghttp.Client
 	reghttpOpts     []reghttp.Opts
-	log             *logrus.Logger
+	slog            *slog.Logger
 	hosts           map[string]*config.Host
 	hostDefault     *config.Host
 	features        map[featureKey]*featureVal
@@ -238,8 +240,8 @@ func WithHTTPClient(hc *http.Client) Opts {
 // WithLog injects a logrus Logger configuration
 func WithLog(log *logrus.Logger) Opts {
 	return func(r *Reg) {
-		r.log = log
-		r.reghttpOpts = append(r.reghttpOpts, reghttp.WithLog(log))
+		r.slog = slog.New(sloghandle.Logrus(log))
+		r.reghttpOpts = append(r.reghttpOpts, reghttp.WithLog(r.slog))
 	}
 }
 
@@ -255,6 +257,14 @@ func WithManifestMax(push, pull int64) Opts {
 func WithRetryLimit(l int) Opts {
 	return func(r *Reg) {
 		r.reghttpOpts = append(r.reghttpOpts, reghttp.WithRetryLimit(l))
+	}
+}
+
+// WithSlog injects a slog Logger configuration
+func WithSlog(slog *slog.Logger) Opts {
+	return func(r *Reg) {
+		r.slog = slog
+		r.reghttpOpts = append(r.reghttpOpts, reghttp.WithLog(slog))
 	}
 }
 
