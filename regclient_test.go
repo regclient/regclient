@@ -1,16 +1,16 @@
 package regclient
 
 import (
+	"log/slog"
+	"os"
 	"testing"
-
-	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient/scheme/reg"
 )
 
 func TestNew(t *testing.T) {
 	t.Parallel()
-	logPtr := logrus.New()
+	logPtr := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	tt := []struct {
 		name   string
 		opts   []Opt
@@ -52,10 +52,10 @@ func TestNew(t *testing.T) {
 		{
 			name: "log",
 			opts: []Opt{
-				WithLog(logPtr),
+				WithSlog(logPtr),
 			},
 			expect: RegClient{
-				log: logPtr,
+				slog: logPtr,
 			},
 		},
 		{
@@ -83,11 +83,11 @@ func TestNew(t *testing.T) {
 					}
 				}
 			}
-			if tc.expect.log != nil {
-				if result.log == nil {
-					t.Errorf("log is nil")
-				} else if result.log != tc.expect.log {
-					t.Errorf("log pointer mismatch")
+			if tc.expect.slog != nil {
+				if result.slog == nil {
+					t.Errorf("slog is nil")
+				} else if result.slog != tc.expect.slog {
+					t.Errorf("slog pointer mismatch")
 				}
 			}
 			if len(tc.expect.regOpts) > 0 {

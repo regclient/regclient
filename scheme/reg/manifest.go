@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
 
 	"github.com/opencontainers/go-digest"
-	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient/internal/limitread"
 	"github.com/regclient/regclient/internal/reghttp"
@@ -214,9 +214,8 @@ func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest,
 	} else if r.Tag != "" {
 		tagOrDigest = r.Tag
 	} else {
-		reg.log.WithFields(logrus.Fields{
-			"ref": r.Reference,
-		}).Warn("Manifest put requires a tag")
+		reg.slog.Warn("Manifest put requires a tag",
+			slog.String("ref", r.Reference))
 		return errs.ErrMissingTag
 	}
 	// dedup warnings
@@ -227,10 +226,9 @@ func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest,
 	// create the request body
 	mj, err := m.MarshalJSON()
 	if err != nil {
-		reg.log.WithFields(logrus.Fields{
-			"ref": r.Reference,
-			"err": err,
-		}).Warn("Error marshaling manifest")
+		reg.slog.Warn("Error marshaling manifest",
+			slog.String("ref", r.Reference),
+			slog.String("err", err.Error()))
 		return fmt.Errorf("error marshalling manifest for %s: %w", r.CommonName(), err)
 	}
 

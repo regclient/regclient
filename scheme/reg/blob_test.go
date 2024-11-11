@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -15,7 +16,6 @@ import (
 	"time"
 
 	"github.com/opencontainers/go-digest"
-	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/reqresp"
@@ -224,17 +224,12 @@ func TestBlobGet(t *testing.T) {
 			TLS:      config.TLSDisabled,
 		},
 	}
-	log := &logrus.Logger{
-		Out:       os.Stderr,
-		Formatter: new(logrus.TextFormatter),
-		Hooks:     make(logrus.LevelHooks),
-		Level:     logrus.WarnLevel,
-	}
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	delayInit, _ := time.ParseDuration("0.05s")
 	delayMax, _ := time.ParseDuration("0.10s")
 	reg := New(
 		WithConfigHosts(rcHosts),
-		WithLog(log),
+		WithSlog(log),
 		WithDelay(delayInit, delayMax),
 	)
 
@@ -1377,18 +1372,13 @@ func TestBlobPut(t *testing.T) {
 			BlobMax:   int64(-1),
 		},
 	}
-	log := &logrus.Logger{
-		Out:       os.Stderr,
-		Formatter: new(logrus.TextFormatter),
-		Hooks:     make(logrus.LevelHooks),
-		Level:     logrus.WarnLevel,
-	}
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	// use short delays for fast tests
 	delayInit, _ := time.ParseDuration("0.05s")
 	delayMax, _ := time.ParseDuration("0.10s")
 	reg := New(
 		WithConfigHosts(rcHosts),
-		WithLog(log),
+		WithSlog(log),
 		WithDelay(delayInit, delayMax),
 	)
 
