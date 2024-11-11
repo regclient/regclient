@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
-	"os"
+	"log/slog"
+	"strings"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/regclient/regclient"
@@ -14,6 +14,7 @@ import (
 	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/scheme/reg"
+	"github.com/regclient/regclient/types"
 )
 
 const (
@@ -22,21 +23,17 @@ const (
 	UserAgent = "regclient/regctl"
 )
 
-// TODO: remove global, configure tests with t.Parallel
-var (
-	log *logrus.Logger
-)
-
 type rootCmd struct {
 	name      string
 	verbosity string
 	logopts   []string
+	log       *slog.Logger
 	format    string // for Go template formatting of various commands
 	hosts     []string
 	userAgent string
 }
 
-func NewRootCmd() *cobra.Command {
+func NewRootCmd() (*cobra.Command, *rootCmd) {
 	rootOpts := rootCmd{}
 	var rootTopCmd = &cobra.Command{
 		Use:   "regctl <cmd>",
@@ -79,14 +76,9 @@ regctl version --format '{{.VCSTag}}'`,
 		RunE: rootOpts.runVersion,
 	}
 
-	log = &logrus.Logger{
-		Out:       os.Stderr,
-		Formatter: new(logrus.TextFormatter),
-		Hooks:     make(logrus.LevelHooks),
-		Level:     logrus.WarnLevel,
-	}
+	rootOpts.log = slog.New(slog.NewTextHandler(rootTopCmd.ErrOrStderr(), &slog.HandlerOptions{Level: slog.LevelWarn}))
 
-	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.WarnLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
+	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", slog.LevelWarn.String(), "Log level (debug, info, warn, error, fatal, panic)")
 	rootTopCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
 	rootTopCmd.PersistentFlags().StringArrayVar(&rootOpts.hosts, "host", []string{}, "Registry hosts to add (reg=registry,user=username,pass=password,tls=enabled)")
 	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.userAgent, "user-agent", "", "", "Override user agent")
@@ -116,19 +108,30 @@ regctl version --format '{{.VCSTag}}'`,
 		NewRepoCmd(&rootOpts),
 		NewTagCmd(&rootOpts),
 	)
-	return rootTopCmd
+	return rootTopCmd, &rootOpts
 }
 
 func (rootOpts *rootCmd) rootPreRun(cmd *cobra.Command, args []string) error {
-	lvl, err := logrus.ParseLevel(rootOpts.verbosity)
+	var lvl slog.Level
+	err := lvl.UnmarshalText([]byte(rootOpts.verbosity))
 	if err != nil {
-		return err
+		// handle custom levels
+		if rootOpts.verbosity == strings.ToLower("trace") {
+			lvl = types.LevelTrace
+		} else {
+			return fmt.Errorf("unable to parse verbosity %s: %v", rootOpts.verbosity, err)
+		}
 	}
-	log.SetLevel(lvl)
+	formatJSON := false
 	for _, opt := range rootOpts.logopts {
 		if opt == "json" {
-			log.Formatter = new(logrus.JSONFormatter)
+			formatJSON = true
 		}
+	}
+	if formatJSON {
+		rootOpts.log = slog.New(slog.NewJSONHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: lvl}))
+	} else {
+		rootOpts.log = slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: lvl}))
 	}
 	return nil
 }
@@ -141,16 +144,15 @@ func (rootOpts *rootCmd) runVersion(cmd *cobra.Command, args []string) error {
 func (rootOpts *rootCmd) newRegClient() *regclient.RegClient {
 	conf, err := ConfigLoadDefault()
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"err": err,
-		}).Warn("Failed to load default config")
+		rootOpts.log.Warn("Failed to load default config",
+			slog.String("err", err.Error()))
 		if conf == nil {
 			conf = ConfigNew()
 		}
 	}
 
 	rcOpts := []regclient.Opt{
-		regclient.WithLog(log),
+		regclient.WithSlog(rootOpts.log),
 		regclient.WithRegOpts(reg.WithCache(time.Minute*5, 500)),
 	}
 	if rootOpts.userAgent != "" {
@@ -184,10 +186,9 @@ func (rootOpts *rootCmd) newRegClient() *regclient.RegClient {
 	for _, h := range rootOpts.hosts {
 		hKV, err := strparse.SplitCSKV(h)
 		if err != nil {
-			log.WithFields(logrus.Fields{
-				"host": h,
-				"err":  err,
-			}).Warn("unable to parse host string")
+			rootOpts.log.Warn("unable to parse host string",
+				slog.String("host", h),
+				slog.String("err", err.Error()))
 		}
 		host := config.Host{
 			Name: hKV["reg"],
@@ -198,11 +199,10 @@ func (rootOpts *rootCmd) newRegClient() *regclient.RegClient {
 			var hostTLS config.TLSConf
 			err := hostTLS.UnmarshalText([]byte(hKV["tls"]))
 			if err != nil {
-				log.WithFields(logrus.Fields{
-					"host": h,
-					"tls":  hKV["tls"],
-					"err":  err,
-				}).Warn("unable to parse tls setting")
+				rootOpts.log.Warn("unable to parse tls setting",
+					slog.String("host", h),
+					slog.String("tls", hKV["tls"]),
+					slog.String("err", err.Error()))
 			} else {
 				host.TLS = hostTLS
 			}

@@ -184,9 +184,11 @@ func TestArtifactPut(t *testing.T) {
 			expectErr: errs.ErrInvalidReference,
 		},
 		{
-			name: "Put artifact",
-			args: []string{"artifact", "put", "ocidir://" + testDir + ":put"},
-			in:   testData,
+			name:        "Put artifact",
+			args:        []string{"artifact", "put", "ocidir://" + testDir + ":put"},
+			in:          testData,
+			expectOut:   "using default value for artifact-type is not recommended",
+			outContains: true,
 		},
 		{
 			name: "Put artifact example AT",

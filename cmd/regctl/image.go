@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"regexp"
 	"sort"
@@ -17,7 +18,6 @@ import (
 	"time"
 
 	"github.com/opencontainers/go-digest"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/regclient/regclient"
@@ -1017,12 +1017,11 @@ func (imageOpts *imageCmd) runImageCheckBase(cmd *cobra.Command, args []string) 
 
 	err = rc.ImageCheckBase(ctx, r, opts...)
 	if err == nil {
-		log.Info("base image matches")
+		imageOpts.rootOpts.log.Info("base image matches")
 		return nil
 	} else if errors.Is(err, errs.ErrMismatch) {
-		log.WithFields(logrus.Fields{
-			"err": err,
-		}).Info("base image mismatch")
+		imageOpts.rootOpts.log.Info("base image mismatch",
+			slog.String("err", err.Error()))
 		// return empty error message
 		return fmt.Errorf("%.0w", err)
 	} else {
@@ -1054,12 +1053,11 @@ func (imageOpts *imageCmd) runImageCopy(cmd *cobra.Command, args []string) error
 		}
 		rSrc = rSrc.SetDigest(m.GetDescriptor().Digest.String())
 	}
-	log.WithFields(logrus.Fields{
-		"source":      rSrc.CommonName(),
-		"target":      rTgt.CommonName(),
-		"recursive":   imageOpts.forceRecursive,
-		"digest-tags": imageOpts.digestTags,
-	}).Debug("Image copy")
+	imageOpts.rootOpts.log.Debug("Image copy",
+		slog.String("source", rSrc.CommonName()),
+		slog.String("target", rTgt.CommonName()),
+		slog.Bool("recursive", imageOpts.forceRecursive),
+		slog.Bool("digest-tags", imageOpts.digestTags))
 	opts := []regclient.ImageOpts{}
 	if imageOpts.fastCheck {
 		opts = append(opts, regclient.ImageWithFastCheck())
@@ -1427,9 +1425,8 @@ func (imageOpts *imageCmd) runImageExport(cmd *cobra.Command, args []string) err
 		}
 		opts = append(opts, regclient.ImageWithExportRef(eRef))
 	}
-	log.WithFields(logrus.Fields{
-		"ref": r.CommonName(),
-	}).Debug("Image export")
+	imageOpts.rootOpts.log.Debug("Image export",
+		slog.String("ref", r.CommonName()))
 	return rc.ImageExport(ctx, r, w, opts...)
 }
 
@@ -1448,20 +1445,18 @@ func (imageOpts *imageCmd) runImageGetFile(cmd *cobra.Command, args []string) er
 	rc := imageOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
-	log.WithFields(logrus.Fields{
-		"ref":      r.CommonName(),
-		"filename": filename,
-	}).Debug("Get file")
+	imageOpts.rootOpts.log.Debug("Get file",
+		slog.String("ref", r.CommonName()),
+		slog.String("filename", filename))
 
 	if imageOpts.platform == "" {
 		imageOpts.platform = "local"
 	}
 	p, err := platform.Parse(imageOpts.platform)
 	if err != nil {
-		log.WithFields(logrus.Fields{
-			"platform": imageOpts.platform,
-			"err":      err,
-		}).Warn("Could not parse platform")
+		imageOpts.rootOpts.log.Warn("Could not parse platform",
+			slog.String("platform", imageOpts.platform),
+			slog.String("err", err.Error()))
 	}
 	m, err := rc.ManifestGet(ctx, r, regclient.WithManifestPlatform(p))
 	if err != nil {
@@ -1551,10 +1546,9 @@ func (imageOpts *imageCmd) runImageImport(cmd *cobra.Command, args []string) err
 	defer rs.Close()
 	rc := imageOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
-	log.WithFields(logrus.Fields{
-		"ref":  r.CommonName(),
-		"file": args[1],
-	}).Debug("Image import")
+	imageOpts.rootOpts.log.Debug("Image import",
+		slog.String("ref", r.CommonName()),
+		slog.String("file", args[1]))
 
 	return rc.ImageImport(ctx, r, rs, opts...)
 }
@@ -1568,12 +1562,11 @@ func (imageOpts *imageCmd) runImageInspect(cmd *cobra.Command, args []string) er
 	rc := imageOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
-	log.WithFields(logrus.Fields{
-		"host":     r.Registry,
-		"repo":     r.Repository,
-		"tag":      r.Tag,
-		"platform": imageOpts.platform,
-	}).Debug("Image inspect")
+	imageOpts.rootOpts.log.Debug("Image inspect",
+		slog.String("host", r.Registry),
+		slog.String("repo", r.Repository),
+		slog.String("tag", r.Tag),
+		slog.String("platform", imageOpts.platform))
 
 	opts := []regclient.ImageOpts{}
 	if imageOpts.platform != "" {
@@ -1626,9 +1619,8 @@ func (imageOpts *imageCmd) runImageMod(cmd *cobra.Command, args []string) error 
 	imageOpts.modOpts = append(imageOpts.modOpts, mod.WithRefTgt(rTgt))
 	rc := imageOpts.rootOpts.newRegClient()
 
-	log.WithFields(logrus.Fields{
-		"ref": rSrc.CommonName(),
-	}).Debug("Modifying image")
+	imageOpts.rootOpts.log.Debug("Modifying image",
+		slog.String("ref", rSrc.CommonName()))
 
 	defer rc.Close(ctx, rSrc)
 	rOut, err := mod.Apply(ctx, rc, rSrc, imageOpts.modOpts...)
@@ -1651,11 +1643,10 @@ func (imageOpts *imageCmd) runImageRateLimit(cmd *cobra.Command, args []string) 
 	}
 	rc := imageOpts.rootOpts.newRegClient()
 
-	log.WithFields(logrus.Fields{
-		"host": r.Registry,
-		"repo": r.Repository,
-		"tag":  r.Tag,
-	}).Debug("Image rate limit")
+	imageOpts.rootOpts.log.Debug("Image rate limit",
+		slog.String("host", r.Registry),
+		slog.String("repo", r.Repository),
+		slog.String("tag", r.Tag))
 
 	// request only the headers, avoids adding to Docker Hub rate limits
 	m, err := rc.ManifestHead(ctx, r)

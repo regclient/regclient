@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"regexp"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/regclient/regclient/pkg/template"
@@ -86,11 +86,10 @@ func (tagOpts *tagCmd) runTagDelete(cmd *cobra.Command, args []string) error {
 	}
 	rc := tagOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
-	log.WithFields(logrus.Fields{
-		"host":       r.Registry,
-		"repository": r.Repository,
-		"tag":        r.Tag,
-	}).Debug("Delete tag")
+	tagOpts.rootOpts.log.Debug("Delete tag",
+		slog.String("host", r.Registry),
+		slog.String("repository", r.Repository),
+		slog.String("tag", r.Tag))
 	err = rc.TagDelete(ctx, r)
 	if err != nil {
 		return err
@@ -122,10 +121,9 @@ func (tagOpts *tagCmd) runTagLs(cmd *cobra.Command, args []string) error {
 	}
 	rc := tagOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
-	log.WithFields(logrus.Fields{
-		"host":       r.Registry,
-		"repository": r.Repository,
-	}).Debug("Listing tags")
+	tagOpts.rootOpts.log.Debug("Listing tags",
+		slog.String("host", r.Registry),
+		slog.String("repository", r.Repository))
 	opts := []scheme.TagOpts{}
 	if tagOpts.limit != 0 {
 		opts = append(opts, scheme.WithTagLimit(tagOpts.limit))

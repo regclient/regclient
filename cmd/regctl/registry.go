@@ -4,12 +4,12 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
@@ -204,9 +204,8 @@ func (registryOpts *registryCmd) runRegistryConfig(cmd *cobra.Command, args []st
 	if len(args) > 0 {
 		h, ok := c.Hosts[args[0]]
 		if !ok {
-			log.WithFields(logrus.Fields{
-				"registry": args[0],
-			}).Warn("No configuration found for registry")
+			registryOpts.rootOpts.log.Warn("No configuration found for registry",
+				slog.String("registry", args[0]))
 			return nil
 		}
 		return template.Writer(cmd.OutOrStdout(), registryOpts.formatConf, h)
@@ -249,7 +248,8 @@ func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []str
 		if user != "" {
 			h.User = user
 		} else if h.User == "" {
-			log.Error("Username is required")
+			registryOpts.rootOpts.log.Error("Username is required")
+
 			return ErrMissingInput
 		}
 	}
@@ -264,7 +264,8 @@ func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []str
 		if passwd != "" {
 			h.Pass = passwd
 		} else {
-			log.Error("Password is required")
+			registryOpts.rootOpts.log.Error("Password is required")
+
 			return ErrMissingInput
 		}
 	} else {
@@ -285,7 +286,8 @@ func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []str
 		if passwd != "" {
 			h.Pass = passwd
 		} else {
-			log.Error("Password is required")
+			registryOpts.rootOpts.log.Error("Password is required")
+
 			return ErrMissingInput
 		}
 	}
@@ -309,13 +311,13 @@ func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []str
 		rc := registryOpts.rootOpts.newRegClient()
 		_, err = rc.Ping(ctx, r)
 		if err != nil {
-			log.Warn("Failed to ping registry, credentials were still stored")
+			registryOpts.rootOpts.log.Warn("Failed to ping registry, credentials were still stored")
+
 			return err
 		}
 	}
-	log.WithFields(logrus.Fields{
-		"registry": args[0],
-	}).Info("Credentials set")
+	registryOpts.rootOpts.log.Info("Credentials set",
+		slog.String("registry", args[0]))
 	return nil
 }
 
@@ -331,9 +333,8 @@ func (registryOpts *registryCmd) runRegistryLogout(cmd *cobra.Command, args []st
 	if curH, ok := c.Hosts[h.Name]; ok {
 		h = curH
 	} else {
-		log.WithFields(logrus.Fields{
-			"registry": h.Name,
-		}).Warn("No configuration/credentials found")
+		registryOpts.rootOpts.log.Warn("No configuration/credentials found",
+			slog.String("registry", h.Name))
 		return nil
 	}
 	h.User = ""
@@ -345,9 +346,8 @@ func (registryOpts *registryCmd) runRegistryLogout(cmd *cobra.Command, args []st
 		return err
 	}
 
-	log.WithFields(logrus.Fields{
-		"registry": args[0],
-	}).Debug("Credentials unset")
+	registryOpts.rootOpts.log.Debug("Credentials unset",
+		slog.String("registry", args[0]))
 	return nil
 }
 
@@ -367,16 +367,14 @@ func (registryOpts *registryCmd) runRegistrySet(cmd *cobra.Command, args []strin
 		c.Hosts[h.Name] = h
 	}
 	if flagChanged(cmd, "scheme") {
-		log.WithFields(logrus.Fields{
-			"name":   h.Name,
-			"scheme": registryOpts.scheme,
-		}).Warn("Scheme flag is deprecated, for http set tls to disabled")
+		registryOpts.rootOpts.log.Warn("Scheme flag is deprecated, for http set tls to disabled",
+			slog.String("name", h.Name),
+			slog.String("scheme", registryOpts.scheme))
 	}
 	if flagChanged(cmd, "dns") {
-		log.WithFields(logrus.Fields{
-			"name": h.Name,
-			"dns":  registryOpts.dns,
-		}).Warn("DNS flag is deprecated, use hostname and mirrors instead")
+		registryOpts.rootOpts.log.Warn("DNS flag is deprecated, use hostname and mirrors instead",
+			slog.String("name", h.Name),
+			slog.Any("dns", registryOpts.dns))
 	}
 	if flagChanged(cmd, "cred-helper") {
 		h.CredHelper = registryOpts.credHelper
@@ -451,13 +449,13 @@ func (registryOpts *registryCmd) runRegistrySet(cmd *cobra.Command, args []strin
 		rc := registryOpts.rootOpts.newRegClient()
 		_, err = rc.Ping(ctx, r)
 		if err != nil {
-			log.Warn("Failed to ping registry, configuration still updated")
+			registryOpts.rootOpts.log.Warn("Failed to ping registry, configuration still updated")
+
 			return err
 		}
 	}
 
-	log.WithFields(logrus.Fields{
-		"name": h.Name,
-	}).Info("Registry configuration updated/set")
+	registryOpts.rootOpts.log.Info("Registry configuration updated/set",
+		slog.String("name", h.Name))
 	return nil
 }

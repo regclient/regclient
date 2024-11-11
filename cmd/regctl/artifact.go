@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
@@ -252,7 +253,7 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 
 	// validate inputs
 	if artifactOpts.refers != "" {
-		log.Warnf("--refers is deprecated, use --subject instead")
+		artifactOpts.rootOpts.log.Warn("--refers is deprecated, use --subject instead")
 		if artifactOpts.subject == "" {
 			artifactOpts.subject = artifactOpts.refers
 		}
@@ -325,7 +326,9 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 		if len(rl.Descriptors) == 0 {
 			return fmt.Errorf("no matching referrers to %s", artifactOpts.subject)
 		} else if len(rl.Descriptors) > 1 && artifactOpts.sortAnnot == "" && !artifactOpts.latest {
-			log.Warnf("found %d matching referrers to %s, using first match, use --sort-annotation", len(rl.Descriptors), artifactOpts.subject)
+			artifactOpts.rootOpts.log.Warn("multiple referrers match, using first match",
+				slog.Int("match count", len(rl.Descriptors)),
+				slog.String("subject", artifactOpts.subject))
 		}
 		r = rSubject.SetDigest(rl.Descriptors[0].Digest.String())
 	} else if len(args) > 0 {
@@ -644,7 +647,7 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 
 	switch artifactOpts.artifactMT {
 	case mediatype.OCI1Artifact:
-		log.Warnf("changing media-type is experimental and non-portable")
+		artifactOpts.rootOpts.log.Warn("changing media-type is experimental and non-portable")
 		hasConfig = false
 	case "", mediatype.OCI1Manifest:
 		hasConfig = true
@@ -659,7 +662,7 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 
 	// validate inputs
 	if artifactOpts.refers != "" {
-		log.Warnf("--refers is deprecated, use --subject instead")
+		artifactOpts.rootOpts.log.Warn("--refers is deprecated, use --subject instead")
 		if artifactOpts.subject == "" {
 			artifactOpts.subject = artifactOpts.refers
 		}
@@ -705,7 +708,7 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 		} else {
 			if artifactOpts.artifactType != "" {
 				artifactOpts.artifactConfigMT = artifactOpts.artifactType
-				log.Warnf("setting config-type using artifact-type")
+				artifactOpts.rootOpts.log.Warn("setting config-type using artifact-type")
 			} else {
 				return fmt.Errorf("config-type is required for config-file")
 			}
@@ -716,7 +719,7 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 	}
 	if artifactOpts.artifactType == "" {
 		if !hasConfig || artifactOpts.artifactConfigMT == mediatype.OCI1Empty {
-			log.Warnf("using default value for artifact-type is not recommended")
+			artifactOpts.rootOpts.log.Warn("using default value for artifact-type is not recommended")
 			artifactOpts.artifactType = defaultMTArtifact
 		}
 	}
