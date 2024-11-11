@@ -3,8 +3,9 @@ package sandbox
 
 import (
 	"context"
+	"log/slog"
+	"os"
 
-	"github.com/sirupsen/logrus"
 	lua "github.com/yuin/gopher-lua"
 
 	"github.com/regclient/regclient"
@@ -26,7 +27,7 @@ const (
 type Sandbox struct {
 	name     string
 	ctx      context.Context
-	log      *logrus.Logger
+	log      *slog.Logger
 	ls       *lua.LState
 	rc       *regclient.RegClient
 	throttle *pqueue.Queue[struct{}]
@@ -66,7 +67,7 @@ func New(name string, opts ...Opt) *Sandbox {
 		s.ctx = context.Background()
 	}
 	if s.log == nil {
-		s.log = &logrus.Logger{}
+		s.log = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	}
 	if s.rc == nil {
 		s.rc = regclient.New()
@@ -98,8 +99,8 @@ func WithDryRun() Opt {
 	}
 }
 
-// WithLog specifies a logrus logger
-func WithLog(log *logrus.Logger) Opt {
+// WithSlog specifies a slog logger
+func WithSlog(log *slog.Logger) Opt {
 	return func(s *Sandbox) {
 		s.log = log
 	}
@@ -134,10 +135,9 @@ func (s *Sandbox) setupMod(name string, funcs map[string]lua.LGFunction, tables 
 func (s *Sandbox) RunScript(script string) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			s.log.WithFields(logrus.Fields{
-				"script": s.name,
-				"error":  r,
-			}).Error("Runtime error from script")
+			s.log.Error("Runtime error from script",
+				slog.String("script", s.name),
+				slog.Any("error", r))
 			err = ErrScriptFailed
 		}
 	}()
@@ -151,10 +151,9 @@ func (s *Sandbox) Close() {
 
 func (s *Sandbox) sandboxLog(ls *lua.LState) int {
 	msg := ls.CheckString(1)
-	s.log.WithFields(logrus.Fields{
-		"script":  s.name,
-		"message": msg,
-	}).Info("User script message")
+	s.log.Info("User script message",
+		slog.String("script", s.name),
+		slog.String("message", msg))
 	return 0
 }
 

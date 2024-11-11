@@ -2,8 +2,8 @@ package sandbox
 
 import (
 	"fmt"
+	"log/slog"
 
-	"github.com/sirupsen/logrus"
 	lua "github.com/yuin/gopher-lua"
 
 	"github.com/regclient/regclient/cmd/regbot/internal/go2lua"
@@ -49,11 +49,10 @@ func (s *Sandbox) repoLs(ls *lua.LState) int {
 			optsArgs = append(optsArgs, scheme.WithRepoLast(opts.Last))
 		}
 	}
-	s.log.WithFields(logrus.Fields{
-		"script": s.name,
-		"host":   host,
-		"opts":   opts,
-	}).Debug("Listing repositories")
+	s.log.Debug("Listing repositories",
+		slog.String("script", s.name),
+		slog.String("host", host),
+		slog.Any("opts", opts))
 	repoList, err := s.rc.RepoList(s.ctx, host, optsArgs...)
 	if err != nil {
 		ls.RaiseError("Failed retrieving repo list: %v", err)

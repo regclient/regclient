@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/regclient/regclient/types"
 )
 
 func TestLogrus(t *testing.T) {
@@ -20,7 +22,7 @@ func TestLogrus(t *testing.T) {
 		{
 			name:        "trace",
 			logrusLevel: logrus.TraceLevel,
-			slogLevel:   slog.LevelDebug - 4,
+			slogLevel:   types.LevelTrace,
 		},
 		{
 			name:        "debug",
@@ -70,15 +72,15 @@ func TestLogrus(t *testing.T) {
 			slogLogger.Warn("test warn with formatted attributes",
 				slog.Group("child2", slog.String("attr-c1", "c1"), slog.Int("attr-c2", 2)),
 				slog.String("attr7", "value7"), slog.Int("attr8", 8))
-			slogLogger.Log(ctx, slog.LevelDebug-4, "test trace message", "attr9", "value9")
+			slogLogger.Log(ctx, types.LevelTrace, "test trace message", "attr9", "value9")
 			// check output for logs and check if enabled based on logging level
 			logs := out.String()
 			t.Logf("all logs:\n%s", logs)
 			if strings.Contains(logs, "test trace message") {
-				if tc.slogLevel > slog.LevelDebug-4 {
+				if tc.slogLevel > types.LevelTrace {
 					t.Errorf("trace message seen")
 				}
-			} else if tc.slogLevel <= slog.LevelDebug-4 {
+			} else if tc.slogLevel <= types.LevelTrace {
 				t.Errorf("trace message not seen")
 			}
 			if strings.Contains(logs, "test debug message") {

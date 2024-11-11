@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/regclient/regclient/types"
 )
 
 func Logrus(logger *logrus.Logger) *logrusHandler {
@@ -93,7 +95,7 @@ func (h *logrusHandler) clone() *logrusHandler {
 }
 
 var logrusToSlog = map[logrus.Level]slog.Level{
-	logrus.TraceLevel: slog.LevelDebug - 4,
+	logrus.TraceLevel: types.LevelTrace,
 	logrus.DebugLevel: slog.LevelDebug,
 	logrus.InfoLevel:  slog.LevelInfo,
 	logrus.WarnLevel:  slog.LevelWarn,
@@ -103,7 +105,7 @@ var logrusToSlog = map[logrus.Level]slog.Level{
 }
 
 func slogToLogrus(level slog.Level) logrus.Level {
-	if level <= slog.LevelDebug-4 {
+	if level <= types.LevelTrace {
 		return logrus.TraceLevel
 	} else if level <= slog.LevelDebug {
 		return logrus.DebugLevel
