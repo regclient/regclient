@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/olareg/olareg"
 	oConfig "github.com/olareg/olareg/config"
-	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
@@ -164,14 +164,9 @@ defaults:
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rootOpts := rootCmd{
-				dryRun: tt.dryrun,
-				conf:   conf,
-				log: &logrus.Logger{
-					Out:       os.Stderr,
-					Formatter: new(logrus.TextFormatter),
-					Hooks:     make(logrus.LevelHooks),
-					Level:     logrus.InfoLevel,
-				},
+				dryRun:   tt.dryrun,
+				conf:     conf,
+				log:      slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})),
 				rc:       rc,
 				throttle: pq,
 			}

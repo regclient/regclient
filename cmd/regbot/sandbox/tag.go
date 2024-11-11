@@ -1,7 +1,8 @@
 package sandbox
 
 import (
-	"github.com/sirupsen/logrus"
+	"log/slog"
+
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -26,11 +27,10 @@ func (s *Sandbox) tagDelete(ls *lua.LState) int {
 		ls.RaiseError("Context error: %v", err)
 	}
 	r := s.checkReference(ls, 1)
-	s.log.WithFields(logrus.Fields{
-		"script":  s.name,
-		"image":   r.r.CommonName(),
-		"dry-run": s.dryRun,
-	}).Info("Delete tag")
+	s.log.Info("Delete tag",
+		slog.String("script", s.name),
+		slog.String("image", r.r.CommonName()),
+		slog.Bool("dry-run", s.dryRun))
 	if s.dryRun {
 		return 0
 	}
@@ -51,10 +51,9 @@ func (s *Sandbox) tagLs(ls *lua.LState) int {
 		ls.RaiseError("Context error: %v", err)
 	}
 	r := s.checkReference(ls, 1)
-	s.log.WithFields(logrus.Fields{
-		"script": s.name,
-		"repo":   r.r.CommonName(),
-	}).Debug("Listing tags")
+	s.log.Debug("Listing tags",
+		slog.String("script", s.name),
+		slog.String("repo", r.r.CommonName()))
 	tl, err := s.rc.TagList(s.ctx, r.r)
 	if err != nil {
 		ls.RaiseError("Failed retrieving tag list: %v", err)

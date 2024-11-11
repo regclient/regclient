@@ -30,6 +30,7 @@ import (
 	"github.com/regclient/regclient/internal/auth"
 	"github.com/regclient/regclient/internal/pqueue"
 	"github.com/regclient/regclient/internal/reqmeta"
+	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/warning"
 )
@@ -875,7 +876,7 @@ func (wt *wrapTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 				warning.Handle(req.Context(), wt.c.slog, match[1])
 			}
 		}
-		wt.c.slog.Log(req.Context(), slog.LevelDebug-4, "reg http request",
+		wt.c.slog.Log(req.Context(), types.LevelTrace, "reg http request",
 			slog.String("req-method", req.Method),
 			slog.String("req-url", req.URL.String()),
 			slog.Any("req-headers", reqHead),

@@ -2,9 +2,9 @@ package sandbox
 
 import (
 	"encoding/json"
+	"log/slog"
 	"reflect"
 
-	"github.com/sirupsen/logrus"
 	lua "github.com/yuin/gopher-lua"
 
 	"github.com/regclient/regclient/cmd/regbot/internal/go2lua"
@@ -107,11 +107,10 @@ func (s *Sandbox) manifestDelete(ls *lua.LState) int {
 		d := m.m.GetDescriptor()
 		r.Digest = d.Digest.String()
 	}
-	s.log.WithFields(logrus.Fields{
-		"script":  s.name,
-		"image":   r.CommonName(),
-		"dry-run": s.dryRun,
-	}).Info("Delete manifest")
+	s.log.Info("Delete manifest",
+		slog.String("script", s.name),
+		slog.String("image", r.CommonName()),
+		slog.Bool("dry-run", s.dryRun))
 	if s.dryRun {
 		return 0
 	}
@@ -192,12 +191,11 @@ func (s *Sandbox) manifestGetWithOpts(ls *lua.LState, list bool) int {
 	if !list && ls.GetTop() == 2 {
 		plat = ls.CheckString(2)
 	}
-	s.log.WithFields(logrus.Fields{
-		"script":   s.name,
-		"image":    r.r.CommonName(),
-		"list":     list,
-		"platform": plat,
-	}).Debug("Retrieve manifest")
+	s.log.Debug("Retrieve manifest",
+		slog.String("script", s.name),
+		slog.String("image", r.r.CommonName()),
+		slog.Any("list", list),
+		slog.String("platform", plat))
 	m, err := s.rcManifestGet(r.r, list, plat)
 	if err != nil {
 		ls.RaiseError("Failed retrieving \"%s\" manifest: %v", r.r.CommonName(), err)
@@ -218,10 +216,9 @@ func (s *Sandbox) manifestHead(ls *lua.LState) int {
 	}
 	r := s.checkReference(ls, 1)
 
-	s.log.WithFields(logrus.Fields{
-		"script": s.name,
-		"image":  r.r.CommonName(),
-	}).Debug("Retrieve manifest with head")
+	s.log.Debug("Retrieve manifest with head",
+		slog.String("script", s.name),
+		slog.String("image", r.r.CommonName()))
 
 	m, err := s.rc.ManifestHead(s.ctx, r.r)
 	if err != nil {
@@ -249,10 +246,9 @@ func (s *Sandbox) manifestJSON(ls *lua.LState) int {
 func (s *Sandbox) manifestPut(ls *lua.LState) int {
 	sbm := s.checkManifest(ls, 1, true, false)
 	r := s.checkReference(ls, 2)
-	s.log.WithFields(logrus.Fields{
-		"script": s.name,
-		"image":  r.r.CommonName(),
-	}).Debug("Put manifest")
+	s.log.Debug("Put manifest",
+		slog.String("script", s.name),
+		slog.String("image", r.r.CommonName()))
 
 	m, err := manifest.New(manifest.WithOrig(sbm.m.GetOrig()))
 	if err != nil {
@@ -282,10 +278,9 @@ func (s *Sandbox) rcManifestGet(r ref.Ref, list bool, pStr string) (manifest.Man
 		if pStr != "" {
 			plat, err = platform.Parse(pStr)
 			if err != nil {
-				s.log.WithFields(logrus.Fields{
-					"platform": pStr,
-					"err":      err,
-				}).Warn("Could not parse platform")
+				s.log.Warn("Could not parse platform",
+					slog.String("platform", pStr),
+					slog.String("err", err.Error()))
 			}
 		}
 		if plat.OS == "" {

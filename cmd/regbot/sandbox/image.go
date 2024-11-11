@@ -3,10 +3,10 @@ package sandbox
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"os"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	lua "github.com/yuin/gopher-lua"
 
 	"github.com/regclient/regclient"
@@ -84,10 +84,9 @@ func (s *Sandbox) configGet(ls *lua.LState) int {
 		}
 		defer done()
 	}
-	s.log.WithFields(logrus.Fields{
-		"script": s.name,
-		"image":  m.r.CommonName(),
-	}).Debug("Retrieve image config")
+	s.log.Debug("Retrieve image config",
+		slog.String("script", s.name),
+		slog.String("image", m.r.CommonName()))
 	mi, ok := m.m.(manifest.Imager)
 	if !ok {
 		ls.RaiseError("Image methods are not available for manifest")
@@ -209,15 +208,15 @@ func (s *Sandbox) imageCopy(ls *lua.LState) int {
 		}
 		defer done()
 	}
-	s.log.WithFields(logrus.Fields{
-		"script":          s.name,
-		"source":          src.r.CommonName(),
-		"target":          tgt.r.CommonName(),
-		"digestTags":      lOpts.DigestTags,
-		"forceRecursive":  lOpts.ForceRecursive,
-		"includeExternal": lOpts.IncludeExternal,
-		"dry-run":         s.dryRun,
-	}).Info("Copy image")
+	s.log.Info("Copy image",
+		slog.String("script", s.name),
+		slog.String("source", src.r.CommonName()),
+		slog.String("target", tgt.r.CommonName()),
+		slog.Bool("digestTags", lOpts.DigestTags),
+		slog.Bool("forceRecursive", lOpts.ForceRecursive),
+		slog.Bool("includeExternal", lOpts.IncludeExternal),
+		slog.Bool("dry-run", s.dryRun),
+	)
 	if s.dryRun {
 		return 0
 	}
@@ -341,13 +340,12 @@ func (s *Sandbox) imageRateLimitWait(ls *lua.LState) int {
 			return 1
 		}
 		// delay for freq (until timeout reached), and then retry
-		s.log.WithFields(logrus.Fields{
-			"script":  s.name,
-			"image":   r.r.CommonName(),
-			"current": rl.Remain,
-			"target":  limit,
-			"delay":   freq.String(),
-		}).Info("Delaying for ratelimit")
+		s.log.Info("Delaying for ratelimit",
+			slog.String("script", s.name),
+			slog.String("image", r.r.CommonName()),
+			slog.Int("current", rl.Remain),
+			slog.Int("target", limit),
+			slog.String("delay", freq.String()))
 		select {
 		case <-ctx.Done():
 			ls.Push(lua.LBool(false))

@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/robfig/cron/v3"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/regclient/regclient"
@@ -16,6 +18,7 @@ import (
 	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/scheme/reg"
+	"github.com/regclient/regclient/types"
 )
 
 const (
@@ -31,15 +34,15 @@ type rootCmd struct {
 	verbosity string
 	logopts   []string
 	format    string // for Go template formatting of various commands
-	log       *logrus.Logger
+	log       *slog.Logger
 	conf      *Config
 	rc        *regclient.RegClient
 	throttle  *pqueue.Queue[struct{}]
 }
 
-func NewRootCmd(log *logrus.Logger) *cobra.Command {
+func NewRootCmd() (*cobra.Command, *rootCmd) {
 	rootOpts := rootCmd{
-		log: log,
+		log: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})),
 	}
 	var rootTopCmd = &cobra.Command{
 		Use:           "regbot <cmd>",
@@ -74,7 +77,7 @@ returns after the last script completes.`,
 
 	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.confFile, "config", "c", "", "Config file")
 	rootTopCmd.PersistentFlags().BoolVarP(&rootOpts.dryRun, "dry-run", "", false, "Dry Run, skip all external actions")
-	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", logrus.InfoLevel.String(), "Log level (debug, info, warn, error, fatal, panic)")
+	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", slog.LevelInfo.String(), "Log level (debug, info, warn, error, fatal, panic)")
 	rootTopCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
 	versionCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 
@@ -87,20 +90,30 @@ returns after the last script completes.`,
 	rootTopCmd.AddCommand(versionCmd)
 
 	rootTopCmd.PersistentPreRunE = rootOpts.rootPreRun
-	return rootTopCmd
+	return rootTopCmd, &rootOpts
 }
 
 func (rootOpts *rootCmd) rootPreRun(cmd *cobra.Command, args []string) error {
-	lvl, err := logrus.ParseLevel(rootOpts.verbosity)
+	var lvl slog.Level
+	err := lvl.UnmarshalText([]byte(rootOpts.verbosity))
 	if err != nil {
-		return err
+		// handle custom levels
+		if rootOpts.verbosity == strings.ToLower("trace") {
+			lvl = types.LevelTrace
+		} else {
+			return fmt.Errorf("unable to parse verbosity %s: %v", rootOpts.verbosity, err)
+		}
 	}
-	rootOpts.log.SetLevel(lvl)
-	rootOpts.log.Formatter = &logrus.TextFormatter{FullTimestamp: true}
+	formatJSON := false
 	for _, opt := range rootOpts.logopts {
 		if opt == "json" {
-			rootOpts.log.Formatter = new(logrus.JSONFormatter)
+			formatJSON = true
 		}
+	}
+	if formatJSON {
+		rootOpts.log = slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: lvl}))
+	} else {
+		rootOpts.log = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: lvl}))
 	}
 	return nil
 }
@@ -165,14 +178,12 @@ func (rootOpts *rootCmd) runServer(cmd *cobra.Command, args []string) error {
 			sched = "@every " + s.Interval.String()
 		}
 		if sched != "" {
-			rootOpts.log.WithFields(logrus.Fields{
-				"name":  s.Name,
-				"sched": sched,
-			}).Debug("Scheduled task")
+			rootOpts.log.Debug("Scheduled task",
+				slog.String("name", s.Name),
+				slog.String("sched", sched))
 			_, errCron := c.AddFunc(sched, func() {
-				rootOpts.log.WithFields(logrus.Fields{
-					"name": s.Name,
-				}).Debug("Running task")
+				rootOpts.log.Debug("Running task",
+					slog.String("name", s.Name))
 				wg.Add(1)
 				defer wg.Done()
 				err := rootOpts.process(ctx, s)
@@ -181,19 +192,17 @@ func (rootOpts *rootCmd) runServer(cmd *cobra.Command, args []string) error {
 				}
 			})
 			if errCron != nil {
-				rootOpts.log.WithFields(logrus.Fields{
-					"name":  s.Name,
-					"sched": sched,
-					"err":   errCron,
-				}).Error("Failed to schedule cron")
+				rootOpts.log.Error("Failed to schedule cron",
+					slog.String("name", s.Name),
+					slog.String("sched", sched),
+					slog.String("err", errCron.Error()))
 				if mainErr != nil {
 					mainErr = errCron
 				}
 			}
 		} else {
-			rootOpts.log.WithFields(logrus.Fields{
-				"name": s.Name,
-			}).Error("No schedule or interval found, ignoring")
+			rootOpts.log.Error("No schedule or interval found, ignoring",
+				slog.String("name", s.Name))
 		}
 	}
 	c.Start()
@@ -202,10 +211,10 @@ func (rootOpts *rootCmd) runServer(cmd *cobra.Command, args []string) error {
 	if done != nil {
 		<-done
 	}
-	rootOpts.log.WithFields(logrus.Fields{}).Info("Stopping server")
+	rootOpts.log.Info("Stopping server")
 	// clean shutdown
 	c.Stop()
-	rootOpts.log.WithFields(logrus.Fields{}).Debug("Waiting on running tasks")
+	rootOpts.log.Debug("Waiting on running tasks")
 	wg.Wait()
 	return mainErr
 }
@@ -235,13 +244,12 @@ func (rootOpts *rootCmd) loadConf() error {
 	if concurrent <= 0 {
 		concurrent = 1
 	}
-	rootOpts.log.WithFields(logrus.Fields{
-		"concurrent": concurrent,
-	}).Debug("Configuring parallel settings")
+	rootOpts.log.Debug("Configuring parallel settings",
+		slog.Int("concurrent", concurrent))
 	rootOpts.throttle = pqueue.New(pqueue.Opts[struct{}]{Max: concurrent})
 	// set the regclient, loading docker creds unless disabled, and inject logins from config file
 	rcOpts := []regclient.Opt{
-		regclient.WithLog(rootOpts.log),
+		regclient.WithSlog(rootOpts.log),
 	}
 	if rootOpts.conf.Defaults.BlobLimit != 0 {
 		rcOpts = append(rcOpts, regclient.WithRegOpts(reg.WithBlobLimit(rootOpts.conf.Defaults.BlobLimit)))
@@ -262,9 +270,8 @@ func (rootOpts *rootCmd) loadConf() error {
 	rcHosts := []config.Host{}
 	for _, host := range rootOpts.conf.Creds {
 		if host.Scheme != "" {
-			rootOpts.log.WithFields(logrus.Fields{
-				"name": host.Name,
-			}).Warn("Scheme is deprecated, for http set TLS to disabled")
+			rootOpts.log.Warn("Scheme is deprecated, for http set TLS to disabled",
+				slog.String("name", host.Name))
 		}
 		rcHosts = append(rcHosts, host)
 	}
@@ -277,9 +284,8 @@ func (rootOpts *rootCmd) loadConf() error {
 
 // process a sync step
 func (rootOpts *rootCmd) process(ctx context.Context, s ConfigScript) error {
-	rootOpts.log.WithFields(logrus.Fields{
-		"script": s.Name,
-	}).Debug("Starting script")
+	rootOpts.log.Debug("Starting script",
+		slog.String("script", s.Name))
 	// add a timeout to the context
 	if s.Timeout > 0 {
 		ctxTimeout, cancel := context.WithTimeout(ctx, s.Timeout)
@@ -289,7 +295,7 @@ func (rootOpts *rootCmd) process(ctx context.Context, s ConfigScript) error {
 	sbOpts := []sandbox.Opt{
 		sandbox.WithContext(ctx),
 		sandbox.WithRegClient(rootOpts.rc),
-		sandbox.WithLog(rootOpts.log),
+		sandbox.WithSlog(rootOpts.log),
 		sandbox.WithThrottle(rootOpts.throttle),
 	}
 	if rootOpts.dryRun {
@@ -299,15 +305,12 @@ func (rootOpts *rootCmd) process(ctx context.Context, s ConfigScript) error {
 	defer sb.Close()
 	err := sb.RunScript(s.Script)
 	if err != nil {
-		rootOpts.log.WithFields(logrus.Fields{
-			"script": s.Name,
-			"error":  err,
-		}).Warn("Error running script")
+		rootOpts.log.Warn("Error running script",
+			slog.String("script", s.Name),
+			slog.String("error", err.Error()))
 		return ErrScriptFailed
 	}
-	rootOpts.log.WithFields(logrus.Fields{
-		"script": s.Name,
-	}).Debug("Finished script")
-
+	rootOpts.log.Debug("Finished script",
+		slog.String("script", s.Name))
 	return nil
 }
