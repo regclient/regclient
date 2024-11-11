@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -15,7 +16,6 @@ import (
 	"github.com/olareg/olareg"
 	oConfig "github.com/olareg/olareg/config"
 	"github.com/opencontainers/go-digest"
-	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
@@ -620,12 +620,7 @@ defaults:
 				conf:     conf,
 				rc:       rc,
 				throttle: pq,
-				log: &logrus.Logger{
-					Out:       os.Stderr,
-					Formatter: new(logrus.TextFormatter),
-					Hooks:     make(logrus.LevelHooks),
-					Level:     logrus.InfoLevel,
-				},
+				log:      slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})),
 			}
 			syncSetDefaults(&tc.sync, conf.Defaults)
 			err = rootOpts.process(ctx, tc.sync, tc.action)
@@ -739,12 +734,7 @@ func TestProcessRef(t *testing.T) {
 				conf: &Config{
 					Sync: []ConfigSync{cs},
 				},
-				log: &logrus.Logger{
-					Out:       os.Stderr,
-					Formatter: new(logrus.TextFormatter),
-					Hooks:     make(logrus.LevelHooks),
-					Level:     logrus.InfoLevel,
-				},
+				log: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})),
 			}
 			src, err := ref.New(cs.Source)
 			if err != nil {
