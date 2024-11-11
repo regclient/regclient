@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"math"
 	"os"
 	"strings"
@@ -16,7 +17,6 @@ import (
 	_ "crypto/sha512"
 
 	"github.com/opencontainers/go-digest"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/regclient/regclient/internal/diff"
@@ -221,11 +221,10 @@ func (blobOpts *blobCmd) runBlobDelete(cmd *cobra.Command, args []string) error 
 	rc := blobOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
-	log.WithFields(logrus.Fields{
-		"host":       r.Registry,
-		"repository": r.Repository,
-		"digest":     args[1],
-	}).Debug("Deleting blob")
+	blobOpts.rootOpts.log.Debug("Deleting blob",
+		slog.String("host", r.Registry),
+		slog.String("repository", r.Repository),
+		slog.String("digest", args[1]))
 	return rc.BlobDelete(ctx, r, descriptor.Descriptor{Digest: d})
 }
 
@@ -382,16 +381,14 @@ func (blobOpts *blobCmd) runBlobGet(cmd *cobra.Command, args []string) error {
 	rc := blobOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 	if blobOpts.mt != "" {
-		log.WithFields(logrus.Fields{
-			"mt": blobOpts.mt,
-		}).Info("Specifying the blob media type is deprecated")
+		blobOpts.rootOpts.log.Info("Specifying the blob media type is deprecated",
+			slog.String("mt", blobOpts.mt))
 	}
 
-	log.WithFields(logrus.Fields{
-		"host":       r.Registry,
-		"repository": r.Repository,
-		"digest":     args[1],
-	}).Debug("Pulling blob")
+	blobOpts.rootOpts.log.Debug("Pulling blob",
+		slog.String("host", r.Registry),
+		slog.String("repository", r.Repository),
+		slog.String("digest", args[1]))
 	blob, err := rc.BlobGet(ctx, r, descriptor.Descriptor{Digest: d})
 	if err != nil {
 		return err
@@ -428,12 +425,11 @@ func (blobOpts *blobCmd) runBlobGetFile(cmd *cobra.Command, args []string) error
 	rc := blobOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
-	log.WithFields(logrus.Fields{
-		"host":       r.Registry,
-		"repository": r.Repository,
-		"digest":     args[1],
-		"filename":   filename,
-	}).Debug("Get file")
+	blobOpts.rootOpts.log.Debug("Get file",
+		slog.String("host", r.Registry),
+		slog.String("repository", r.Repository),
+		slog.String("digest", args[1]),
+		slog.String("filename", filename))
 	blob, err := rc.BlobGet(ctx, r, descriptor.Descriptor{Digest: d})
 	if err != nil {
 		return err
@@ -491,11 +487,10 @@ func (blobOpts *blobCmd) runBlobHead(cmd *cobra.Command, args []string) error {
 	rc := blobOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
-	log.WithFields(logrus.Fields{
-		"host":       r.Registry,
-		"repository": r.Repository,
-		"digest":     args[1],
-	}).Debug("Blob head")
+	blobOpts.rootOpts.log.Debug("Blob head",
+		slog.String("host", r.Registry),
+		slog.String("repository", r.Repository),
+		slog.String("digest", args[1]))
 	blob, err := rc.BlobHead(ctx, r, descriptor.Descriptor{Digest: d})
 	if err != nil {
 		return err
@@ -518,16 +513,14 @@ func (blobOpts *blobCmd) runBlobPut(cmd *cobra.Command, args []string) error {
 	rc := blobOpts.rootOpts.newRegClient()
 
 	if blobOpts.mt != "" {
-		log.WithFields(logrus.Fields{
-			"mt": blobOpts.mt,
-		}).Info("Specifying the blob media type is deprecated")
+		blobOpts.rootOpts.log.Info("Specifying the blob media type is deprecated",
+			slog.String("mt", blobOpts.mt))
 	}
 
-	log.WithFields(logrus.Fields{
-		"host":       r.Registry,
-		"repository": r.Repository,
-		"digest":     blobOpts.digest,
-	}).Debug("Pushing blob")
+	blobOpts.rootOpts.log.Debug("Pushing blob",
+		slog.String("host", r.Registry),
+		slog.String("repository", r.Repository),
+		slog.String("digest", blobOpts.digest))
 	dOut, err := rc.BlobPut(ctx, r, descriptor.Descriptor{Digest: digest.Digest(blobOpts.digest)}, cmd.InOrStdin())
 	if err != nil {
 		return err
@@ -561,11 +554,10 @@ func (blobOpts *blobCmd) runBlobCopy(cmd *cobra.Command, args []string) error {
 	rc := blobOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, rSrc)
 
-	log.WithFields(logrus.Fields{
-		"source": rSrc.CommonName(),
-		"target": rTgt.CommonName(),
-		"digest": args[2],
-	}).Debug("Blob copy")
+	blobOpts.rootOpts.log.Debug("Blob copy",
+		slog.String("source", rSrc.CommonName()),
+		slog.String("target", rTgt.CommonName()),
+		slog.String("digest", args[2]))
 	err = rc.BlobCopy(ctx, rSrc, rTgt, descriptor.Descriptor{Digest: d})
 	if err != nil {
 		return err

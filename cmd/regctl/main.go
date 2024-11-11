@@ -8,24 +8,23 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/regclient/regclient/internal/godbg"
 )
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
+	rootTopCmd, rootOpts := NewRootCmd()
+
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-sig
-		log.WithFields(logrus.Fields{}).Debug("Interrupt received, stopping")
+		rootOpts.log.Debug("Interrupt received, stopping")
 		// clean shutdown
 		cancel()
 	}()
 	godbg.SignalTrace()
 
-	rootTopCmd := NewRootCmd()
 	if err := rootTopCmd.ExecuteContext(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		// provide tips for common error messages
