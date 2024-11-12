@@ -115,14 +115,8 @@ jobs:
         if [ -f "release.md" ] && grep -q "Release $VERSION" release.md; then
           VALID_RELEASE=true
         fi
-        RELEASE_NOTES=$(cat release.md || echo release notes unavailable)
-        # escape % and linefeeds
-        RELEASE_NOTES="${RELEASE_NOTES//'%'/'%25'}"
-        RELEASE_NOTES="${RELEASE_NOTES//$'\n'/'%0A'}"
-        RELEASE_NOTES="${RELEASE_NOTES//$'\r'/'%0D'}"
         echo "valid=${VALID_RELEASE}" >>$GITHUB_OUTPUT
         echo "version=${VERSION}" >>$GITHUB_OUTPUT
-        echo "release_notes=${RELEASE_NOTES}" >>$GITHUB_OUTPUT
 
     - name: Create release
       if: steps.release_details.outputs.valid == 'true' && matrix.gover == env.RELEASE_GO_VER
@@ -132,7 +126,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: ${{ steps.release_details.outputs.version }}
-        body: ${{ steps.release_details.outputs.release_notes }}
+        body_path: release.md
         draft: false
         prerelease: false
         files: |
