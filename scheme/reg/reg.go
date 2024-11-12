@@ -7,14 +7,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/cache"
 	"github.com/regclient/regclient/internal/pqueue"
 	"github.com/regclient/regclient/internal/reghttp"
 	"github.com/regclient/regclient/internal/reqmeta"
-	"github.com/regclient/regclient/internal/sloghandle"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/regclient/regclient/types/referrer"
@@ -234,14 +231,6 @@ func WithDelay(delayInit time.Duration, delayMax time.Duration) Opts {
 func WithHTTPClient(hc *http.Client) Opts {
 	return func(r *Reg) {
 		r.reghttpOpts = append(r.reghttpOpts, reghttp.WithHTTPClient(hc))
-	}
-}
-
-// WithLog injects a logrus Logger configuration
-func WithLog(log *logrus.Logger) Opts {
-	return func(r *Reg) {
-		r.slog = slog.New(sloghandle.Logrus(log))
-		r.reghttpOpts = append(r.reghttpOpts, reghttp.WithLog(r.slog))
 	}
 }
 

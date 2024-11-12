@@ -13,11 +13,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/regclient/regclient/internal/pqueue"
 	"github.com/regclient/regclient/internal/reqmeta"
-	"github.com/regclient/regclient/internal/sloghandle"
 	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/mediatype"
@@ -80,14 +77,6 @@ func New(opts ...Opts) *OCIDir {
 func WithGC(gc bool) Opts {
 	return func(c *ociConf) {
 		c.gc = gc
-	}
-}
-
-// WithLog provides a logrus logger.
-// By default logging is disabled.
-func WithLog(log *logrus.Logger) Opts {
-	return func(c *ociConf) {
-		c.slog = slog.New(sloghandle.Logrus(log))
 	}
 }
 
