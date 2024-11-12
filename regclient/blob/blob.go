@@ -1,5 +1,5 @@
-//go:build !nolegacy
-// +build !nolegacy
+//go:build legacy
+// +build legacy
 
 // Package blob is a legacy package, this has been moved to the types/blob package
 package blob

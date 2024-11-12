@@ -1,5 +1,5 @@
-//go:build !nolegacy
-// +build !nolegacy
+//go:build legacy
+// +build legacy
 
 // Package retryable is a legacy package, functionality has been moved to reghttp
 package retryable
