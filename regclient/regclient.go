@@ -1,5 +1,5 @@
-//go:build !nolegacy
-// +build !nolegacy
+//go:build legacy
+// +build legacy
 
 //lint:file-ignore SA1019 Ignore deprecations since this entire package is deprecated
 

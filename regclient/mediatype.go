@@ -1,5 +1,5 @@
-//go:build !nolegacy
-// +build !nolegacy
+//go:build legacy
+// +build legacy
 
 // Legacy package, this has been moved to the top level types/mediatype.go package
 
