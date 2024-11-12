@@ -8,10 +8,7 @@ import (
 
 	"fmt"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/internal/sloghandle"
 	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/scheme/ocidir"
@@ -171,14 +168,6 @@ func WithDockerCredsFile(fname string) Opt {
 			return
 		}
 		rc.hostLoad("docker-file", configHosts)
-	}
-}
-
-// WithLog configuring logging with a logrus Logger.
-// Note that regclient has switched to log/slog for logging and my eventually deprecate logrus support.
-func WithLog(log *logrus.Logger) Opt {
-	return func(rc *RegClient) {
-		rc.slog = slog.New(sloghandle.Logrus(log))
 	}
 }
 
