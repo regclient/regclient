@@ -305,13 +305,13 @@ func TestNew(t *testing.T) {
 		},
 		{
 			name:       "OCI dir with tilde",
-			ref:        "ocidir://path/2/~dir~/rules_oci~/examples:latest",
+			ref:        "ocidir://path/2/~dir~/+rules_oci+/examples:latest",
 			scheme:     "ocidir",
 			registry:   "",
 			repository: "",
 			tag:        "latest",
 			digest:     "",
-			path:       "path/2/~dir~/rules_oci~/examples",
+			path:       "path/2/~dir~/+rules_oci+/examples",
 			wantE:      nil,
 		},
 		{
