@@ -447,7 +447,7 @@ func TestExportImport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create output tar: %v", err)
 	}
-	err = rc.ImageExport(ctx, rIn1, fileOut1)
+	err = rc.ImageExport(ctx, []ref.Ref{rIn1}, fileOut1)
 	fileOut1.Close()
 	if err != nil {
 		t.Errorf("failed to export: %v", err)
@@ -456,7 +456,7 @@ func TestExportImport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create output tar: %v", err)
 	}
-	err = rc.ImageExport(ctx, rIn3, fileOut3, ImageWithExportCompress())
+	err = rc.ImageExport(ctx, []ref.Ref{rIn3}, fileOut3, ImageWithExportCompress())
 	fileOut3.Close()
 	if err != nil {
 		t.Errorf("failed to export: %v", err)

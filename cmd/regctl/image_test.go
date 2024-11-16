@@ -97,7 +97,9 @@ func TestImageCreate(t *testing.T) {
 
 func TestImageExportImport(t *testing.T) {
 	tmpDir := t.TempDir()
-	srcRef := "ocidir://../../testdata/testrepo:v2"
+	testRepo := "ocidir://../../testdata/testrepo"
+	srcRef := testRepo + ":v2"
+	srcRef2 := testRepo + ":v3"
 	exportFile := tmpDir + "/export.tar"
 	exportName := "registry.example.com/repo:v2"
 	importRefA := fmt.Sprintf("ocidir://%s/repo:v2", tmpDir)
@@ -119,6 +121,14 @@ func TestImageExportImport(t *testing.T) {
 	}
 
 	out, err = cobraTest(t, nil, "image", "export", "--name", exportName, "--platform", "linux/amd64", srcRef, exportFile)
+	if err != nil {
+		t.Fatalf("failed to run image export: %v", err)
+	}
+	if out != "" {
+		t.Errorf("unexpected output: %v", out)
+	}
+
+	out, err = cobraTest(t, nil, "image", "export", "--platform", "linux/amd64", "-o", exportFile, srcRef, srcRef2)
 	if err != nil {
 		t.Fatalf("failed to run image export: %v", err)
 	}

@@ -19,6 +19,7 @@ import (
 
 	"github.com/opencontainers/go-digest"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/internal/ascii"
@@ -62,6 +63,7 @@ type imageCmd struct {
 	labels          []string
 	mediaType       string
 	modOpts         []mod.Opts
+	output          string
 	platform        string
 	platforms       []string
 	referrers       bool
@@ -93,7 +95,7 @@ func NewImageCmd(rootOpts *rootCmd) *cobra.Command {
 If the base name is not provided, annotations will be checked in the image.
 If the digest is available, this checks if that matches the base name.
 If the digest is not available, layers of each manifest are compared.
-If the layers match, the config (history and roots) are optionally compared.	
+If the layers match, the config (history and roots) are optionally compared.
 If the base image does not match, the command exits with a non-zero status.
 Use "-v info" to see more details.`,
 		Example: `
@@ -156,7 +158,7 @@ regctl image create ocidir://new-image:scratch
 		Aliases: []string{"del", "rm", "remove"},
 		Short:   "delete image, same as \"manifest delete\"",
 		Long: `Delete a manifest. This will delete the manifest, and all tags pointing to that
-manifest. You must specify a digest, not a tag on this command (e.g. 
+manifest. You must specify a digest, not a tag on this command (e.g.
 image_name@sha256:1234abc...). It is up to the registry whether the delete
 API is supported. Additionally, registries may garbage collect the filesystem
 layers (blobs) separately or not at all. See also the "tag delete" command.`,
@@ -182,7 +184,7 @@ regctl image digest ghcr.io/regclient/regctl`,
 		RunE:              manifestOpts.runManifestHead,
 	}
 	var imageExportCmd = &cobra.Command{
-		Use:   "export <image_ref> [filename]",
+		Use:   "export <image_ref> [filename|image_ref...]",
 		Short: "export image",
 		Long: `Exports an image into a tar file that can be later loaded into a docker
 engine with "docker load". The tar file is output to stdout by default.
@@ -190,7 +192,7 @@ Compression is typically not useful since layers are already compressed.`,
 		Example: `
 # export an image
 regctl image export registry.example.org/repo:v1 >image-v1.tar`,
-		Args:              cobra.RangeArgs(1, 2),
+		Args:              cobra.MinimumNArgs(1),
 		ValidArgsFunction: rootOpts.completeArgTag,
 		RunE:              imageOpts.runImageExport,
 	}
@@ -348,6 +350,7 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 	imageExportCmd.Flags().BoolVar(&imageOpts.exportCompress, "compress", false, "Compress output with gzip")
 	imageExportCmd.Flags().StringVar(&imageOpts.exportRef, "name", "", "Name of image to embed for docker load")
 	imageExportCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
+	imageExportCmd.Flags().StringVarP(&imageOpts.output, "output", "o", "", "Output file or '-' for stdout (default is second of two arguments or stdout)")
 
 	imageImportCmd.Flags().StringVar(&imageOpts.importName, "name", "", "Name of image or tag to import when multiple images are packaged in the tar")
 
@@ -1383,51 +1386,78 @@ func (imageOpts *imageCmd) runImageCreate(cmd *cobra.Command, args []string) err
 }
 
 func (imageOpts *imageCmd) runImageExport(cmd *cobra.Command, args []string) error {
+	var output string
+	// Legacy behavior: if no output is specified, use the second argument as the output
+	if imageOpts.output == "" && len(args) == 2 {
+		output = args[1]
+		args = args[:1]
+	} else if imageOpts.output == "" || imageOpts.output == "-" {
+		if out, ok := cmd.OutOrStdout().(interface{ Fd() uintptr }); ok {
+			if term.IsTerminal(int(out.Fd())) {
+				return fmt.Errorf("--output must be specified when writing to a terminal")
+			}
+		}
+	} else {
+		output = imageOpts.output
+	}
 	ctx := cmd.Context()
 	// dedup warnings
 	if w := warning.FromContext(ctx); w == nil {
 		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
 	}
-	r, err := ref.New(args[0])
-	if err != nil {
-		return err
-	}
+	var err error
 	var w io.Writer
-	if len(args) == 2 {
-		w, err = os.Create(args[1])
+	if output != "" {
+		w, err = os.Create(output)
 		if err != nil {
 			return err
 		}
 	} else {
 		w = cmd.OutOrStdout()
 	}
-	rc := imageOpts.rootOpts.newRegClient()
-	defer rc.Close(ctx, r)
-	opts := []regclient.ImageOpts{}
-	if imageOpts.platform != "" {
-		p, err := platform.Parse(imageOpts.platform)
+	refs := make([]ref.Ref, len(args))
+	for i, arg := range args {
+		refs[i], err = ref.New(arg)
 		if err != nil {
 			return err
 		}
-		m, err := rc.ManifestGet(ctx, r, regclient.WithManifestPlatform(p))
-		if err != nil {
-			return err
-		}
-		r = r.SetDigest(m.GetDescriptor().Digest.String())
 	}
+	rc := imageOpts.rootOpts.newRegClient()
+	for i, r := range refs {
+		defer rc.Close(ctx, r)
+		if imageOpts.platform != "" {
+			p, err := platform.Parse(imageOpts.platform)
+			if err != nil {
+				return err
+			}
+			m, err := rc.ManifestGet(ctx, r, regclient.WithManifestPlatform(p))
+			if err != nil {
+				return err
+			}
+			refs[i].Digest = m.GetDescriptor().Digest.String()
+		}
+	}
+	opts := []regclient.ImageOpts{}
 	if imageOpts.exportCompress {
 		opts = append(opts, regclient.ImageWithExportCompress())
 	}
 	if imageOpts.exportRef != "" {
+		if len(refs) > 1 {
+			return fmt.Errorf("cannot specify both --name and multiple images")
+		}
 		eRef, err := ref.New(imageOpts.exportRef)
 		if err != nil {
 			return fmt.Errorf("cannot parse %s: %w", imageOpts.exportRef, err)
 		}
 		opts = append(opts, regclient.ImageWithExportRef(eRef))
 	}
+	imageRefs := make([]string, len(refs))
+	for i, r := range refs {
+		imageRefs[i] = r.CommonName()
+	}
 	imageOpts.rootOpts.log.Debug("Image export",
-		slog.String("ref", r.CommonName()))
-	return rc.ImageExport(ctx, r, w, opts...)
+		slog.Any("refs", imageRefs))
+	return rc.ImageExport(ctx, refs, w, opts...)
 }
 
 func (imageOpts *imageCmd) runImageGetFile(cmd *cobra.Command, args []string) error {

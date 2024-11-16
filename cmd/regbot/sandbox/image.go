@@ -250,7 +250,7 @@ func (s *Sandbox) imageExportTar(ls *lua.LState) int {
 	if err != nil {
 		ls.RaiseError("Failed to open \"%s\": %v", file, err)
 	}
-	err = s.rc.ImageExport(s.ctx, src.r, fh)
+	err = s.rc.ImageExport(s.ctx, []ref.Ref{src.r}, fh)
 	if err != nil {
 		ls.RaiseError("Failed to export image \"%s\" to \"%s\": %v", src.r.CommonName(), file, err)
 	}
