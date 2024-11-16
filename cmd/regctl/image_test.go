@@ -227,3 +227,19 @@ func TestImageMod(t *testing.T) {
 		})
 	}
 }
+
+func TestImageSave(t *testing.T) {
+	tmpDir := t.TempDir()
+	testRepo := "ocidir://../../testdata/testrepo"
+	srcRef := testRepo + ":v2"
+	srcRef2 := testRepo + ":v3"
+	exportFile := tmpDir + "/export.tar"
+
+	out, err := cobraTest(t, nil, "image", "save", "--platform", "linux/amd64", "-o", exportFile, srcRef, srcRef2)
+	if err != nil {
+		t.Fatalf("failed to run image export: %v", err)
+	}
+	if out != "" {
+		t.Errorf("unexpected output: %v", out)
+	}
+}
