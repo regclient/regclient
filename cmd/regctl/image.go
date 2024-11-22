@@ -1574,6 +1574,9 @@ func (imageOpts *imageCmd) runImageInspect(cmd *cobra.Command, args []string) er
 	}
 	blobConfig, err := rc.ImageConfig(ctx, r, opts...)
 	if err != nil {
+		if errors.Is(err, errs.ErrUnsupportedMediaType) {
+			err = fmt.Errorf("artifacts are not supported with \"regctl image inspect\", use \"regctl artifact get --config\" instead: %w", err)
+		}
 		return err
 	}
 	result := struct {
