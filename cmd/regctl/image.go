@@ -271,6 +271,10 @@ regctl image mod registry.example.org/repo:v1 --create v1-extended \
 regctl image mod registry.example.org/repo:v1 --create v1-extended \
   --layer-add "dir=path/to/directory"
 
+# append a layer to all platforms using the contents of a directory with a different workdir
+regctl image mod registry.example.org/repo:v1 --create v1-extended \
+  --layer-add "dir=path/to/directory,workdir=/tmp"
+
 # set the timestamp on the config and layers, ignoring the alpine base image layers
 regctl image mod registry.example.org/repo:v1 --create v1-mod \
   --time "set=2021-02-03T04:05:06Z,base-ref=alpine:3"
@@ -659,7 +663,14 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 			var rdr io.Reader
 			var mt string
 			var platforms []platform.Platform
+			tarOpts := []archive.TarOpts{}
+			if workdir, ok := kvSplit["workdir"]; ok {
+				tarOpts = append(tarOpts, archive.TarWorkPath(workdir))
+			}
 			if filename, ok := kvSplit["tar"]; ok {
+				if len(tarOpts) > 0 {
+					log.Infof("ignoring workdir option with tar option in layer-add")
+				}
 				//#nosec G304 command is run by a user accessing their own files
 				fh, err := os.Open(filename)
 				if err != nil {
@@ -676,7 +687,7 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 				}
 				pr, pw := io.Pipe()
 				go func() {
-					err := archive.Tar(context.TODO(), dir, pw)
+					err := archive.Tar(context.TODO(), dir, pw, tarOpts...)
 					if err != nil {
 						_ = pw.CloseWithError(err)
 					}
