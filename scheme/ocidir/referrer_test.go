@@ -133,7 +133,7 @@ func TestReferrer(t *testing.T) {
 
 	// list empty
 	t.Run("List empty", func(t *testing.T) {
-		r := mRef
+		r := mRef.SetDigest(mDesc.Digest.String())
 		rl, err := o.ReferrerList(ctx, r)
 		if err != nil {
 			t.Fatalf("Failed running ReferrerList: %v", err)
@@ -166,12 +166,9 @@ func TestReferrer(t *testing.T) {
 		}
 	})
 
-	// list referrers to v1
+	// list referrers after attaching
 	t.Run("List", func(t *testing.T) {
-		r, err := ref.New(repo + ":" + tagName)
-		if err != nil {
-			t.Fatalf("Failed creating getRef: %v", err)
-		}
+		r := mRef.SetDigest(mDesc.Digest.String())
 		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{SortAnnotation: timeAnnot}))
 		if err != nil {
 			t.Fatalf("Failed running ReferrerList: %v", err)
@@ -212,10 +209,7 @@ func TestReferrer(t *testing.T) {
 		}
 	})
 	t.Run("List with artifact filter", func(t *testing.T) {
-		r, err := ref.New(repo + ":" + tagName)
-		if err != nil {
-			t.Fatalf("Failed creating getRef: %v", err)
-		}
+		r := mRef.SetDigest(mDesc.Digest.String())
 		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{ArtifactType: aType}))
 		if err != nil {
 			t.Fatalf("Failed running ReferrerList: %v", err)
@@ -232,7 +226,7 @@ func TestReferrer(t *testing.T) {
 		}
 	})
 	t.Run("List with annotation filter", func(t *testing.T) {
-		r, err := ref.New(repo + ":" + tagName)
+		r, err := ref.New(repo + "@" + mDigest.String())
 		if err != nil {
 			t.Fatalf("Failed creating getRef: %v", err)
 		}
@@ -259,12 +253,12 @@ func TestReferrer(t *testing.T) {
 		}
 	})
 	// list platform=linux/amd64
-	t.Run("List Annotation for Platform", func(t *testing.T) {
-		r, err := ref.New(repo + ":" + tagName)
+	t.Run("List Annotation for AMD", func(t *testing.T) {
+		r, err := ref.New(repo + "@" + mAMDDesc.Digest.String())
 		if err != nil {
 			t.Fatalf("Failed creating getRef: %v", err)
 		}
-		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerPlatform(pAMDStr))
+		rl, err := o.ReferrerList(ctx, r)
 		if err != nil {
 			t.Fatalf("Failed running ReferrerList: %v", err)
 		}
@@ -289,7 +283,7 @@ func TestReferrer(t *testing.T) {
 
 	// list after delete, verify 0 entries
 	t.Run("List empty after delete", func(t *testing.T) {
-		r := mRef
+		r := mRef.SetDigest(mDesc.Digest.String())
 		rl, err := o.ReferrerList(ctx, r)
 		if err != nil {
 			t.Fatalf("Failed running ReferrerList: %v", err)

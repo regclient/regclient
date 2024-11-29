@@ -22,7 +22,6 @@ import (
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/mediatype"
 	v1 "github.com/regclient/regclient/types/oci/v1"
-	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -31,9 +30,6 @@ func TestReferrer(t *testing.T) {
 	// setup http server with and without API support
 	ctx := context.Background()
 	repoPath := "/proj"
-	tagV1 := "v1"
-	tagV1List := "v1-list"
-	tagV1NoHead := "v1-no-head"
 	extraAnnot := "org.example.sbom.format"
 	extraValue := "json"
 	extraValue2 := "x509"
@@ -41,7 +37,6 @@ func TestReferrer(t *testing.T) {
 	digest2 := digest.FromString("example2")
 	configMTA := "application/vnd.example.sbom"
 	configMTB := "application/vnd.example.sig"
-	platStr := "linux/amd64"
 	// manifest being referenced
 	m := schema2.Manifest{
 		Versioned: schema2.ManifestSchemaVersion,
@@ -64,36 +59,6 @@ func TestReferrer(t *testing.T) {
 	}
 	mDigest := digest.FromBytes(mBody)
 	mLen := len(mBody)
-	// manifest list
-	mList := schema2.ManifestList{
-		Versioned: schema2.ManifestListSchemaVersion,
-		Manifests: []descriptor.Descriptor{
-			{
-				MediaType: mediatype.Docker2Manifest,
-				Digest:    mDigest,
-				Size:      int64(mLen),
-				Platform: &platform.Platform{
-					OS:           "linux",
-					Architecture: "amd64",
-				},
-			},
-			{
-				MediaType: mediatype.Docker2Manifest,
-				Digest:    digest.FromString("missing"),
-				Size:      int64(1234),
-				Platform: &platform.Platform{
-					OS:           "linux",
-					Architecture: "arm64",
-				},
-			},
-		},
-	}
-	mlBody, err := json.Marshal(mList)
-	if err != nil {
-		t.Fatalf("Failed to marshal manifest list: %v", err)
-	}
-	mlDigest := digest.FromBytes(mlBody)
-	mlLen := len(mlBody)
 	// artifact being attached
 	artifactAnnot := map[string]string{
 		extraAnnot: extraValue,
@@ -241,97 +206,6 @@ func TestReferrer(t *testing.T) {
 	t.Logf("NoAPI tag: %s\n", tagNoAPI)
 
 	rrs := []reqresp.ReqResp{
-		{
-			ReqEntry: reqresp.ReqEntry{
-				Name:   "Head",
-				Method: "HEAD",
-				Path:   "/v2" + repoPath + "/manifests/" + tagV1,
-			},
-			RespEntry: reqresp.RespEntry{
-				Status: http.StatusOK,
-				Headers: http.Header{
-					"Content-Length":        {fmt.Sprintf("%d", mLen)},
-					"Content-Type":          []string{mediatype.Docker2Manifest},
-					"Docker-Content-Digest": []string{mDigest.String()},
-				},
-			},
-		},
-		{
-			ReqEntry: reqresp.ReqEntry{
-				Name:   "Get",
-				Method: "GET",
-				Path:   "/v2" + repoPath + "/manifests/" + tagV1,
-			},
-			RespEntry: reqresp.RespEntry{
-				Status: http.StatusOK,
-				Headers: http.Header{
-					"Content-Length":        {fmt.Sprintf("%d", mLen)},
-					"Content-Type":          []string{mediatype.Docker2Manifest},
-					"Docker-Content-Digest": []string{mDigest.String()},
-				},
-				Body: mBody,
-			},
-		},
-		{
-			ReqEntry: reqresp.ReqEntry{
-				Name:   "Head",
-				Method: "HEAD",
-				Path:   "/v2" + repoPath + "/manifests/" + tagV1NoHead,
-			},
-			RespEntry: reqresp.RespEntry{
-				Status: http.StatusOK,
-				Headers: http.Header{
-					"Content-Length": {fmt.Sprintf("%d", mLen)},
-					"Content-Type":   []string{mediatype.Docker2Manifest},
-				},
-			},
-		},
-		{
-			ReqEntry: reqresp.ReqEntry{
-				Name:   "Get",
-				Method: "GET",
-				Path:   "/v2" + repoPath + "/manifests/" + tagV1NoHead,
-			},
-			RespEntry: reqresp.RespEntry{
-				Status: http.StatusOK,
-				Headers: http.Header{
-					"Content-Length": {fmt.Sprintf("%d", mLen)},
-					"Content-Type":   []string{mediatype.Docker2Manifest},
-				},
-				Body: mBody,
-			},
-		},
-		{
-			ReqEntry: reqresp.ReqEntry{
-				Name:   "Head",
-				Method: "HEAD",
-				Path:   "/v2" + repoPath + "/manifests/" + tagV1List,
-			},
-			RespEntry: reqresp.RespEntry{
-				Status: http.StatusOK,
-				Headers: http.Header{
-					"Content-Length":        {fmt.Sprintf("%d", mlLen)},
-					"Content-Type":          []string{mediatype.Docker2ManifestList},
-					"Docker-Content-Digest": []string{mlDigest.String()},
-				},
-			},
-		},
-		{
-			ReqEntry: reqresp.ReqEntry{
-				Name:   "Get",
-				Method: "GET",
-				Path:   "/v2" + repoPath + "/manifests/" + tagV1List,
-			},
-			RespEntry: reqresp.RespEntry{
-				Status: http.StatusOK,
-				Headers: http.Header{
-					"Content-Length":        {fmt.Sprintf("%d", mlLen)},
-					"Content-Type":          []string{mediatype.Docker2ManifestList},
-					"Docker-Content-Digest": []string{mlDigest.String()},
-				},
-				Body: mlBody,
-			},
-		},
 		{
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "Head manifest",
@@ -821,7 +695,7 @@ func TestReferrer(t *testing.T) {
 
 	// list empty
 	t.Run("List empty NoAPI", func(t *testing.T) {
-		r, err := ref.New(tsURLNoAPI.Host + repoPath + ":" + tagV1)
+		r, err := ref.New(tsURLNoAPI.Host + repoPath + "@" + mDigest.String())
 		if err != nil {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
@@ -834,7 +708,7 @@ func TestReferrer(t *testing.T) {
 		}
 	})
 	t.Run("List empty NoAPIAuth", func(t *testing.T) {
-		r, err := ref.New(tsURLNoAPIAuth.Host + repoPath + ":" + tagV1)
+		r, err := ref.New(tsURLNoAPIAuth.Host + repoPath + "@" + mDigest.String())
 		if err != nil {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
@@ -847,7 +721,7 @@ func TestReferrer(t *testing.T) {
 		}
 	})
 	t.Run("List empty API", func(t *testing.T) {
-		r, err := ref.New(tsURLAPI.Host + repoPath + ":" + tagV1)
+		r, err := ref.New(tsURLAPI.Host + repoPath + "@" + mDigest.String())
 		if err != nil {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
@@ -894,7 +768,7 @@ func TestReferrer(t *testing.T) {
 
 	// list referrers to v1
 	t.Run("List A NoAPI", func(t *testing.T) {
-		r, err := ref.New(tsURLNoAPI.Host + repoPath + ":" + tagV1)
+		r, err := ref.New(tsURLNoAPI.Host + repoPath + "@" + mDigest.String())
 		if err != nil {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
@@ -916,7 +790,7 @@ func TestReferrer(t *testing.T) {
 		}
 	})
 	t.Run("List A NoAPIAuth", func(t *testing.T) {
-		r, err := ref.New(tsURLNoAPIAuth.Host + repoPath + ":" + tagV1)
+		r, err := ref.New(tsURLNoAPIAuth.Host + repoPath + "@" + mDigest.String())
 		if err != nil {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
@@ -938,7 +812,7 @@ func TestReferrer(t *testing.T) {
 		}
 	})
 	t.Run("List A API", func(t *testing.T) {
-		r, err := ref.New(tsURLAPI.Host + repoPath + ":" + tagV1)
+		r, err := ref.New(tsURLAPI.Host + repoPath + "@" + mDigest.String())
 		if err != nil {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
@@ -960,71 +834,15 @@ func TestReferrer(t *testing.T) {
 		}
 	})
 
-	// list referrers to v1 without digest on head request
-	t.Run("List A NoAPI", func(t *testing.T) {
-		r, err := ref.New(tsURLNoAPI.Host + repoPath + ":" + tagV1NoHead)
+	// list referrers to v1 without digest
+	t.Run("List A No Digest", func(t *testing.T) {
+		r, err := ref.New(tsURLNoAPI.Host + repoPath + ":v1")
 		if err != nil {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
-		rl, err := reg.ReferrerList(ctx, r)
-		if err != nil {
-			t.Fatalf("Failed running ReferrerList: %v", err)
-		}
-		if len(rl.Descriptors) < 1 {
-			t.Fatalf("descriptor list missing")
-		}
-		if rl.Descriptors[0].MediaType != mediatype.OCI1Manifest ||
-			rl.Descriptors[0].Size != int64(len(artifactBody)) ||
-			rl.Descriptors[0].Digest != artifactM.GetDescriptor().Digest ||
-			!mapStringStringEq(rl.Descriptors[0].Annotations, artifactAnnot) {
-			t.Errorf("returned descriptor mismatch: %v", rl.Descriptors[0])
-		}
-		if len(rl.Tags) != 1 || rl.Tags[0] != tagNoAPI {
-			t.Errorf("tag list missing entries, received: %v", rl.Tags)
-		}
-	})
-	t.Run("List A NoAPIAuth", func(t *testing.T) {
-		r, err := ref.New(tsURLNoAPIAuth.Host + repoPath + ":" + tagV1NoHead)
-		if err != nil {
-			t.Fatalf("Failed creating ref: %v", err)
-		}
-		rl, err := reg.ReferrerList(ctx, r)
-		if err != nil {
-			t.Fatalf("Failed running ReferrerList: %v", err)
-		}
-		if len(rl.Descriptors) < 1 {
-			t.Fatalf("descriptor list missing")
-		}
-		if rl.Descriptors[0].MediaType != mediatype.OCI1Manifest ||
-			rl.Descriptors[0].Size != int64(len(artifactBody)) ||
-			rl.Descriptors[0].Digest != artifactM.GetDescriptor().Digest ||
-			!mapStringStringEq(rl.Descriptors[0].Annotations, artifactAnnot) {
-			t.Errorf("returned descriptor mismatch: %v", rl.Descriptors[0])
-		}
-		if len(rl.Tags) != 1 || rl.Tags[0] != tagNoAPI {
-			t.Errorf("tag list missing entries, received: %v", rl.Tags)
-		}
-	})
-	t.Run("List A API", func(t *testing.T) {
-		r, err := ref.New(tsURLAPI.Host + repoPath + ":" + tagV1NoHead)
-		if err != nil {
-			t.Fatalf("Failed creating ref: %v", err)
-		}
-		rl, err := reg.ReferrerList(ctx, r)
-		if err != nil {
-			t.Fatalf("Failed running ReferrerList: %v", err)
-		}
-		if len(rl.Descriptors) < 1 {
-			t.Fatalf("descriptor list missing")
-		}
-		if rl.Descriptors[0].MediaType != mediatype.OCI1Manifest ||
-			rl.Descriptors[0].Size != int64(len(artifactBody)) ||
-			rl.Descriptors[0].Digest != artifactM.GetDescriptor().Digest ||
-			!mapStringStringEq(rl.Descriptors[0].Annotations, artifactAnnot) {
-			t.Errorf("returned descriptor mismatch: %v", rl.Descriptors[0])
-		}
-		if len(rl.Tags) != 0 {
-			t.Errorf("tag list unexpected entries, received: %v", rl.Tags)
+		_, err = reg.ReferrerList(ctx, r)
+		if err == nil {
+			t.Errorf("did not fail when given a tag")
 		}
 	})
 
@@ -1052,7 +870,7 @@ func TestReferrer(t *testing.T) {
 
 	// list referrers to v1
 	t.Run("List Both NoAPI", func(t *testing.T) {
-		r, err := ref.New(tsURLNoAPI.Host + repoPath + ":" + tagV1)
+		r, err := ref.New(tsURLNoAPI.Host + repoPath + "@" + mDigest.String())
 		if err != nil {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
@@ -1082,7 +900,7 @@ func TestReferrer(t *testing.T) {
 		}
 	})
 	t.Run("List Both API", func(t *testing.T) {
-		r, err := ref.New(tsURLAPI.Host + repoPath + ":" + tagV1)
+		r, err := ref.New(tsURLAPI.Host + repoPath + "@" + mDigest.String())
 		if err != nil {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
@@ -1113,7 +931,7 @@ func TestReferrer(t *testing.T) {
 	})
 
 	t.Run("List with artifact filter API", func(t *testing.T) {
-		r, err := ref.New(tsURLAPI.Host + repoPath + ":" + tagV1)
+		r, err := ref.New(tsURLAPI.Host + repoPath + "@" + mDigest.String())
 		if err != nil {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
@@ -1133,7 +951,7 @@ func TestReferrer(t *testing.T) {
 		}
 	})
 	t.Run("List with annotation filter", func(t *testing.T) {
-		r, err := ref.New(tsURLAPI.Host + repoPath + ":" + tagV1)
+		r, err := ref.New(tsURLAPI.Host + repoPath + "@" + mDigest.String())
 		if err != nil {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
@@ -1157,20 +975,6 @@ func TestReferrer(t *testing.T) {
 		}
 		if len(rl.Descriptors) != 2 {
 			t.Fatalf("descriptor list mismatch: %v", rl.Descriptors)
-		}
-	})
-
-	t.Run("List for platform", func(t *testing.T) {
-		r, err := ref.New(tsURLAPI.Host + repoPath + ":" + tagV1List)
-		if err != nil {
-			t.Fatalf("Failed creating ref: %v", err)
-		}
-		rl, err := reg.ReferrerList(ctx, r, scheme.WithReferrerPlatform(platStr))
-		if err != nil {
-			t.Fatalf("Failed running ReferrerList: %v", err)
-		}
-		if len(rl.Descriptors) != 2 {
-			t.Fatalf("descriptor list expected 2, received %d", len(rl.Descriptors))
 		}
 	})
 
@@ -1219,7 +1023,7 @@ func TestReferrer(t *testing.T) {
 
 	// list empty after delete
 	t.Run("List empty after delete NoAPI", func(t *testing.T) {
-		r, err := ref.New(tsURLNoAPI.Host + repoPath + ":" + tagV1)
+		r, err := ref.New(tsURLNoAPI.Host + repoPath + "@" + mDigest.String())
 		if err != nil {
 			t.Fatalf("Failed creating ref: %v", err)
 		}
@@ -1232,7 +1036,7 @@ func TestReferrer(t *testing.T) {
 		}
 	})
 	t.Run("List empty after delete API", func(t *testing.T) {
-		r, err := ref.New(tsURLAPI.Host + repoPath + ":" + tagV1)
+		r, err := ref.New(tsURLAPI.Host + repoPath + "@" + mDigest.String())
 		if err != nil {
 			t.Fatalf("Failed creating ref: %v", err)
 		}

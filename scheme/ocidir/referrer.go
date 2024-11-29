@@ -10,12 +10,12 @@ import (
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/mediatype"
 	v1 "github.com/regclient/regclient/types/oci/v1"
-	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/regclient/regclient/types/referrer"
 )
 
-// ReferrerList returns a list of referrers to a given reference
+// ReferrerList returns a list of referrers to a given reference.
+// The reference must include the digest. Use [regclient.ReferrerList] to resolve the platform or tag.
 func (o *OCIDir) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.ReferrerOpts) (referrer.ReferrerList, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
@@ -30,35 +30,8 @@ func (o *OCIDir) referrerList(ctx context.Context, r ref.Ref, opts ...scheme.Ref
 	rl := referrer.ReferrerList{
 		Tags: []string{},
 	}
-	// select a platform from a manifest list
-	if config.Platform != "" {
-		p, err := platform.Parse(config.Platform)
-		if err != nil {
-			return rl, err
-		}
-		m, err := o.manifestGet(ctx, r)
-		if err != nil {
-			return rl, err
-		}
-		for m.IsList() {
-			d, err := manifest.GetPlatformDesc(m, &p)
-			if err != nil {
-				return rl, err
-			}
-			m, err = o.manifestGet(ctx, r.SetDigest(d.Digest.String()))
-			if err != nil {
-				return rl, err
-			}
-		}
-		r = r.SetDigest(m.GetDescriptor().Digest.String())
-	}
-	// if ref is a tag, run a head request for the digest
 	if r.Digest == "" {
-		m, err := o.manifestGet(ctx, r)
-		if err != nil {
-			return rl, err
-		}
-		r = r.SetDigest(m.GetDescriptor().Digest.String())
+		return rl, fmt.Errorf("digest required to query referrers %s", r.CommonName())
 	}
 	rl.Subject = r
 
