@@ -3,8 +3,8 @@
 set -e
 cd "$(dirname $0)"
 
-# recreate testrepo
-rm -r testrepo
+# recreate testrepo and external
+rm -r testrepo external
 
 # build base images
 for i in 1 2 3; do
@@ -104,6 +104,16 @@ echo 7 arms | regctl artifact put \
 echo 64 arms | regctl artifact put \
   --artifact-type application/example.arms -m application/example.arms \
   --subject ocidir://testrepo:v2 --platform linux/arm64
+
+# include a external artifacts
+echo "bacon" | regctl artifact put \
+  --artifact-type application/example.sbom -m application/example.sbom.breakfast \
+  --annotation preference=1 \
+  --subject ocidir://testrepo:v2 ocidir://external:a3
+echo "ham" | regctl artifact put \
+  --artifact-type application/example.sbom -m application/example.sbom.breakfast \
+  --annotation preference=2 \
+  --subject ocidir://testrepo:v2 ocidir://external:a4
 
 # create an index of artifacts
 regctl index create \

@@ -68,6 +68,7 @@ type artifactCmd struct {
 	artifactTitle    bool
 	byDigest         bool
 	digestTags       bool
+	externalRepo     string
 	filterAT         string
 	filterAnnot      []string
 	formatList       string
@@ -180,6 +181,7 @@ regctl artifact tree --digest-tags ghcr.io/regclient/regsync:latest`,
 	}
 
 	artifactGetCmd.Flags().StringVar(&artifactOpts.subject, "subject", "", "Get a referrer to the subject reference")
+	artifactGetCmd.Flags().StringVar(&artifactOpts.externalRepo, "external", "", "Query referrers from a separate source")
 	artifactGetCmd.Flags().StringVarP(&artifactOpts.platform, "platform", "p", "", "Specify platform of a subject (e.g. linux/amd64 or local)")
 	artifactGetCmd.Flags().StringVar(&artifactOpts.filterAT, "filter-artifact-type", "", "Filter referrers by artifactType")
 	artifactGetCmd.Flags().StringArrayVar(&artifactOpts.filterAnnot, "filter-annotation", []string{}, "Filter referrers by annotation (key=value)")
@@ -199,6 +201,7 @@ regctl artifact tree --digest-tags ghcr.io/regclient/regsync:latest`,
 	artifactGetCmd.Flags().BoolVar(&artifactOpts.sortDesc, "sort-desc", false, "Sort in descending order")
 
 	artifactListCmd.Flags().BoolVar(&artifactOpts.digestTags, "digest-tags", false, "Include digest tags")
+	artifactListCmd.Flags().StringVar(&artifactOpts.externalRepo, "external", "", "Query referrers from a separate source")
 	artifactListCmd.Flags().StringVar(&artifactOpts.filterAT, "filter-artifact-type", "", "Filter descriptors by artifactType")
 	artifactListCmd.Flags().StringArrayVar(&artifactOpts.filterAnnot, "filter-annotation", []string{}, "Filter descriptors by annotation (key=value)")
 	artifactListCmd.Flags().StringVar(&artifactOpts.formatList, "format", "{{printPretty .}}", "Format output with go template syntax")
@@ -236,6 +239,7 @@ regctl artifact tree --digest-tags ghcr.io/regclient/regsync:latest`,
 	_ = artifactPutCmd.Flags().MarkHidden("refers")
 
 	artifactTreeCmd.Flags().BoolVar(&artifactOpts.digestTags, "digest-tags", false, "Include digest tags")
+	artifactTreeCmd.Flags().StringVar(&artifactOpts.externalRepo, "external", "", "Query referrers from a separate source")
 	artifactTreeCmd.Flags().StringVar(&artifactOpts.filterAT, "filter-artifact-type", "", "Filter descriptors by artifactType")
 	artifactTreeCmd.Flags().StringArrayVar(&artifactOpts.filterAnnot, "filter-annotation", []string{}, "Filter descriptors by annotation (key=value)")
 	artifactTreeCmd.Flags().StringVar(&artifactOpts.formatTree, "format", "{{printPretty .}}", "Format output with go template syntax")
@@ -257,6 +261,9 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 		if artifactOpts.subject == "" {
 			artifactOpts.subject = artifactOpts.refers
 		}
+	}
+	if artifactOpts.externalRepo != "" && artifactOpts.subject == "" {
+		artifactOpts.rootOpts.log.Warn("--external option depends on --subject")
 	}
 	if artifactOpts.latest && artifactOpts.sortAnnot != "" {
 		return fmt.Errorf("--latest cannot be used with --sort-annotation")
@@ -319,6 +326,16 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 		if artifactOpts.platform != "" {
 			referrerOpts = append(referrerOpts, scheme.WithReferrerPlatform(artifactOpts.platform))
 		}
+		if artifactOpts.externalRepo != "" {
+			rExt, err := ref.New(artifactOpts.externalRepo)
+			if err != nil {
+				return fmt.Errorf("failed to parse external ref: %w", err)
+			}
+			referrerOpts = append(referrerOpts, scheme.WithReferrerSource(rExt))
+			r = rExt
+		} else {
+			r = rSubject
+		}
 		rl, err := rc.ReferrerList(ctx, rSubject, referrerOpts...)
 		if err != nil {
 			return err
@@ -330,7 +347,7 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 				slog.Int("match count", len(rl.Descriptors)),
 				slog.String("subject", artifactOpts.subject))
 		}
-		r = rSubject.SetDigest(rl.Descriptors[0].Digest.String())
+		r = r.SetDigest(rl.Descriptors[0].Digest.String())
 	} else if len(args) > 0 {
 		var err error
 		r, err = ref.New(args[0])
@@ -587,6 +604,13 @@ func (artifactOpts *artifactCmd) runArtifactList(cmd *cobra.Command, args []stri
 	if artifactOpts.platform != "" {
 		referrerOpts = append(referrerOpts, scheme.WithReferrerPlatform(artifactOpts.platform))
 	}
+	if artifactOpts.externalRepo != "" {
+		rExternal, err := ref.New(artifactOpts.externalRepo)
+		if err != nil {
+			return fmt.Errorf("failed to parse external ref: %w", err)
+		}
+		referrerOpts = append(referrerOpts, scheme.WithReferrerSource(rExternal))
+	}
 
 	rl, err := rc.ReferrerList(ctx, rSubject, referrerOpts...)
 	if err != nil {
@@ -686,8 +710,6 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 	}
 	if !rArt.IsSet() && !rSubject.IsSet() {
 		return fmt.Errorf("either a reference or subject must be provided")
-	} else if rArt.IsSet() && rSubject.IsSet() && !ref.EqualRepository(rArt, rSubject) {
-		return fmt.Errorf("reference and subject must be in the same repository")
 	}
 
 	// validate/set artifactType and config.mediaType
@@ -1040,6 +1062,14 @@ func (artifactOpts *artifactCmd) runArtifactTree(cmd *cobra.Command, args []stri
 		}
 		referrerOpts = append(referrerOpts, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{Annotations: af}))
 	}
+	rRefSrc := r
+	if artifactOpts.externalRepo != "" {
+		rRefSrc, err = ref.New(artifactOpts.externalRepo)
+		if err != nil {
+			return fmt.Errorf("failed to parse external ref: %w", err)
+		}
+		referrerOpts = append(referrerOpts, scheme.WithReferrerSource(rRefSrc))
+	}
 
 	// include digest tags if requested
 	tags := []string{}
@@ -1052,7 +1082,7 @@ func (artifactOpts *artifactCmd) runArtifactTree(cmd *cobra.Command, args []stri
 	}
 
 	seen := []string{}
-	tr, err := artifactOpts.treeAddResult(ctx, rc, r, seen, referrerOpts, tags)
+	tr, err := artifactOpts.treeAddResult(ctx, rc, r, rRefSrc, seen, referrerOpts, tags)
 	var twErr error
 	if tr != nil {
 		twErr = template.Writer(cmd.OutOrStdout(), artifactOpts.formatTree, tr)
@@ -1063,7 +1093,7 @@ func (artifactOpts *artifactCmd) runArtifactTree(cmd *cobra.Command, args []stri
 	return twErr
 }
 
-func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclient.RegClient, r ref.Ref, seen []string, rOpts []scheme.ReferrerOpts, tags []string) (*treeResult, error) {
+func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclient.RegClient, r, rRefSrc ref.Ref, seen []string, rOpts []scheme.ReferrerOpts, tags []string) (*treeResult, error) {
 	tr := treeResult{
 		Ref: r,
 	}
@@ -1098,7 +1128,7 @@ func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclien
 		}
 		for _, d := range dl {
 			rChild := r.SetDigest(d.Digest.String())
-			tChild, err := artifactOpts.treeAddResult(ctx, rc, rChild, seen, rOpts, tags)
+			tChild, err := artifactOpts.treeAddResult(ctx, rc, rChild, rRefSrc, seen, rOpts, tags)
 			if tChild != nil {
 				tChild.ArtifactType = d.ArtifactType
 				if d.Platform != nil {
@@ -1121,8 +1151,8 @@ func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclien
 	if len(rl.Descriptors) > 0 {
 		tr.Referrer = []*treeResult{}
 		for _, d := range rl.Descriptors {
-			rReferrer := r.SetDigest(d.Digest.String())
-			tReferrer, err := artifactOpts.treeAddResult(ctx, rc, rReferrer, seen, rOpts, tags)
+			rReferrer := rRefSrc.SetDigest(d.Digest.String())
+			tReferrer, err := artifactOpts.treeAddResult(ctx, rc, rReferrer, rRefSrc, seen, rOpts, tags)
 			if tReferrer != nil {
 				tReferrer.ArtifactType = d.ArtifactType
 				if d.Platform != nil {
@@ -1146,7 +1176,7 @@ func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclien
 		for _, t := range tags {
 			if strings.HasPrefix(t, prefix.Tag) && !sliceHasStr(rl.Tags, t) {
 				rTag := r.SetTag(t)
-				tReferrer, err := artifactOpts.treeAddResult(ctx, rc, rTag, seen, rOpts, tags)
+				tReferrer, err := artifactOpts.treeAddResult(ctx, rc, rTag, rRefSrc, seen, rOpts, tags)
 				if tReferrer != nil {
 					tReferrer.Ref = tReferrer.Ref.SetTag(t)
 					tr.Referrer = append(tr.Referrer, tReferrer)

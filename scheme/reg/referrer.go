@@ -15,7 +15,6 @@ import (
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/mediatype"
 	v1 "github.com/regclient/regclient/types/oci/v1"
-	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 	"github.com/regclient/regclient/types/referrer"
 	"github.com/regclient/regclient/types/warning"
@@ -23,7 +22,8 @@ import (
 
 const OCISubjectHeader = "OCI-Subject"
 
-// ReferrerList returns a list of referrers to a given reference
+// ReferrerList returns a list of referrers to a given reference.
+// The reference must include the digest. Use [regclient.ReferrerList] to resolve the platform or tag.
 func (reg *Reg) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.ReferrerOpts) (referrer.ReferrerList, error) {
 	config := scheme.ReferrerConfig{}
 	for _, opt := range opts {
@@ -32,64 +32,12 @@ func (reg *Reg) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Refe
 	rl := referrer.ReferrerList{
 		Tags: []string{},
 	}
+	if r.Digest == "" {
+		return rl, fmt.Errorf("digest required to query referrers %s", r.CommonName())
+	}
 	// dedup warnings
 	if w := warning.FromContext(ctx); w == nil {
 		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
-	}
-	// select a platform from a manifest list
-	if config.Platform != "" {
-		p, err := platform.Parse(config.Platform)
-		if err != nil {
-			return rl, err
-		}
-		m, err := reg.ManifestHead(ctx, r)
-		if err != nil {
-			return rl, err
-		}
-		if m.GetDescriptor().Digest.String() == "" {
-			m, err = reg.ManifestGet(ctx, r)
-			if err != nil {
-				return rl, err
-			}
-		}
-		for m.IsList() {
-			m, err = reg.ManifestGet(ctx, r)
-			if err != nil {
-				return rl, err
-			}
-			d, err := manifest.GetPlatformDesc(m, &p)
-			if err != nil {
-				return rl, err
-			}
-			m, err = reg.ManifestHead(ctx, r.SetDigest(d.Digest.String()))
-			if err != nil {
-				return rl, err
-			}
-			if m.GetDescriptor().Digest.String() == "" {
-				m, err = reg.ManifestGet(ctx, r.SetDigest(d.Digest.String()))
-				if err != nil {
-					return rl, err
-				}
-			}
-		}
-		r = r.SetDigest(m.GetDescriptor().Digest.String())
-	}
-	// if ref is a tag, run a head request for the digest
-	if r.Digest == "" {
-		m, err := reg.ManifestHead(ctx, r)
-		if err != nil {
-			return rl, err
-		}
-		if m.GetDescriptor().Digest == "" {
-			m, err = reg.ManifestGet(ctx, r)
-			if err != nil {
-				return rl, err
-			}
-		}
-		if m.GetDescriptor().Digest == "" {
-			return rl, fmt.Errorf("unable to resolve digest for ref %s", r.CommonName())
-		}
-		r = r.SetDigest(m.GetDescriptor().Digest.String())
 	}
 	rl.Subject = r
 
