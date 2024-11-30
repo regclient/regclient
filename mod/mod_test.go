@@ -329,6 +329,73 @@ func TestMod(t *testing.T) {
 			ref: tTgtHost + "/testrepo:v1",
 		},
 		{
+			name: "Add Env",
+			opts: []Opts{
+				WithEnv("test", "hello"),
+			},
+			ref: tTgtHost + "/testrepo:v1",
+		},
+		{
+			name: "Add Env to All",
+			opts: []Opts{
+				WithEnv("[*]test", "hello"),
+			},
+			ref: tTgtHost + "/testrepo:v1",
+		},
+		{
+			name: "Add Env AMD64/ARM64",
+			opts: []Opts{
+				WithEnv("[linux/amd64,linux/arm64]test", "hello"),
+			},
+			ref: tTgtHost + "/testrepo:v1",
+		},
+		{
+			name: "Add Env Missing",
+			opts: []Opts{
+				WithEnv("[linux/i386,linux/s390x]test", "hello"),
+			},
+			ref:      tTgtHost + "/testrepo:v1",
+			wantSame: true,
+		},
+		{
+			name: "Add Env Platform Parse Error",
+			opts: []Opts{
+				WithEnv("[linux/invalid.arch!]test", "hello"),
+			},
+			ref:     tTgtHost + "/testrepo:v1",
+			wantErr: fmt.Errorf("failed to parse env platform linux/invalid.arch!: invalid platform component invalid.arch! in linux/invalid.arch!"),
+		},
+		{
+			name: "Change Env",
+			opts: []Opts{
+				WithEnv("PATH", "/usr/sbin:/usr/bin:/sbin:/bin"),
+			},
+			ref: tTgtHost + "/testrepo:v1",
+		},
+		{
+			name: "Delete Env",
+			opts: []Opts{
+				WithEnv("PATH", ""),
+			},
+			ref: tTgtHost + "/testrepo:v1",
+		},
+		{
+			name: "Delete Missing Label",
+			opts: []Opts{
+				WithLabel("[*]missing", ""),
+			},
+			ref:      tTgtHost + "/testrepo:v1",
+			wantSame: true,
+		},
+		{
+			name: "Unchanged Env",
+			opts: []Opts{
+				WithEnv("[linux/amd64]PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"),
+			},
+			ref:      tTgtHost + "/testrepo:v1",
+			wantSame: true,
+		},
+		{
 			name: "Time",
 			opts: []Opts{
 				WithConfigTimestampFromLabel("org.opencontainers.image.created"),

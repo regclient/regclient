@@ -248,7 +248,8 @@ regctl image manifest golang`,
 		Short: "modify an image",
 		// TODO: remove EXPERIMENTAL when stable
 		Long: `EXPERIMENTAL: Applies requested modifications to an image
-For time options, the value is a comma separated list of key/value pairs:
+
+  For time options, the value is a comma separated list of key/value pairs:
   set=${time}: time to set in rfc3339 format, e.g. 2006-01-02T15:04:05Z
   from-label=${label}: label used to extract time in rfc3339 format
   after=${time_in_rfc3339}: adjust any time after this
@@ -258,7 +259,7 @@ For time options, the value is a comma separated list of key/value pairs:
 		Example: `
 # add an annotation to all images, replacing the v1 tag with the new image
 regctl image mod registry.example.org/repo:v1 \
-  --replace --annotation '[*]org.opencontainers.image.created=2021-02-03T05:06:07Z
+  --replace --annotation "[*]org.opencontainers.image.created=2021-02-03T05:06:07Z"
 
 # convert an image to the OCI media types, copying to local registry
 regctl image mod alpine:3.5 --to-oci --create registry.example.org/alpine:3.5
@@ -272,12 +273,16 @@ regctl image mod registry.example.org/repo:v1 --create v1-extended \
   --layer-add "dir=path/to/directory"
 
 # set the timestamp on the config and layers, ignoring the alpine base image layers
-regctl image mod registry.example.org/repo:v1 --create v1-mod \
+regctl image mod registry.example.org/repo:v1 --create v1-time \
   --time "set=2021-02-03T04:05:06Z,base-ref=alpine:3"
 
 # set the entrypoint to be bash and unset the default command
 regctl image mod registry.example.org/repo:v1 --create v1-bash \
   --config-entrypoint '["bash"]' --config-cmd ""
+
+# delete an environment variable from only the linux/arm64 image
+regctl image mod registry.example.org/repo:v1 --create v1-env \
+  --env "[linux/arm64]LD_PRELOAD="
 
 # Rebase an older regctl image, copying to the local registry.
 # This uses annotations that were included in the original image build.
@@ -551,6 +556,20 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 			return nil
 		},
 	}, "digest-algo", "", `change the digest algorithm (sha256, sha512)`)
+	imageModCmd.Flags().VarP(&modFlagFunc{
+		t: "stringArray",
+		f: func(val string) error {
+			vs := strings.SplitN(val, "=", 2)
+			if len(vs) == 2 {
+				imageOpts.modOpts = append(imageOpts.modOpts, mod.WithEnv(vs[0], vs[1]))
+			} else if len(vs) == 1 {
+				imageOpts.modOpts = append(imageOpts.modOpts, mod.WithEnv(vs[0], ""))
+			} else {
+				return fmt.Errorf("invalid env")
+			}
+			return nil
+		},
+	}, "env", "", `set an environment variable (name=value, omit value to delete, prefix with platform list [p1,p2] for subset of images)`)
 	imageModCmd.Flags().VarP(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
