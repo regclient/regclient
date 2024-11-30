@@ -272,6 +272,83 @@ func WithConfigTimestampMax(t time.Time) Opts {
 	})
 }
 
+// WithEnv sets or deletes an environment variable from the image config.
+func WithEnv(name, value string) Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		// extract the list for platforms to update from the name
+		name = strings.TrimSpace(name)
+		platforms := []platform.Platform{}
+		if name[0] == '[' && strings.Index(name, "]") > 0 {
+			end := strings.Index(name, "]")
+			list := strings.Split(name[1:end], ",")
+			for _, entry := range list {
+				entry = strings.TrimSpace(entry)
+				if entry == "*" {
+					continue
+				}
+				p, err := platform.Parse(entry)
+				if err != nil {
+					return fmt.Errorf("failed to parse env platform %s: %w", entry, err)
+				}
+				platforms = append(platforms, p)
+			}
+			name = name[end+1:]
+		}
+		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
+			// if platforms are listed, skip non-matching platforms
+			if len(platforms) > 0 {
+				p := doc.oc.GetConfig().Platform
+				found := false
+				for _, pe := range platforms {
+					if platform.Match(p, pe) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					return nil
+				}
+			}
+			changed := false
+			found := false
+			oc := doc.oc.GetConfig()
+			for i, kv := range oc.Config.Env {
+				kvSplit := strings.SplitN(kv, "=", 2)
+				if kvSplit[0] != name {
+					continue
+				}
+				found = true
+				if value == "" {
+					// delete an entry
+					if i < len(oc.Config.Env)-1 {
+						oc.Config.Env = append(oc.Config.Env[:i], oc.Config.Env[i+1:]...)
+					} else {
+						oc.Config.Env = oc.Config.Env[:i]
+					}
+					changed = true
+				} else if len(kvSplit) < 2 || value != kvSplit[1] {
+					// change an entry
+					oc.Config.Env[i] = name + "=" + value
+					changed = true
+				}
+				break
+			}
+			if !found && value != "" {
+				// add a new entry
+				oc.Config.Env = append(oc.Config.Env, name+"="+value)
+				changed = true
+			}
+			if changed {
+				doc.oc.SetConfig(oc)
+				doc.modified = true
+				doc.newDesc = doc.oc.GetDescriptor()
+			}
+			return nil
+		})
+		return nil
+	}
+}
+
 // WithExposeAdd defines an exposed port in the image config.
 func WithExposeAdd(port string) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
