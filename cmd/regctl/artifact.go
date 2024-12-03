@@ -1082,7 +1082,7 @@ func (artifactOpts *artifactCmd) runArtifactTree(cmd *cobra.Command, args []stri
 	}
 
 	seen := []string{}
-	tr, err := artifactOpts.treeAddResult(ctx, rc, r, rRefSrc, seen, referrerOpts, tags)
+	tr, err := artifactOpts.treeAddResult(ctx, rc, r, seen, referrerOpts, tags)
 	var twErr error
 	if tr != nil {
 		twErr = template.Writer(cmd.OutOrStdout(), artifactOpts.formatTree, tr)
@@ -1093,7 +1093,7 @@ func (artifactOpts *artifactCmd) runArtifactTree(cmd *cobra.Command, args []stri
 	return twErr
 }
 
-func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclient.RegClient, r, rRefSrc ref.Ref, seen []string, rOpts []scheme.ReferrerOpts, tags []string) (*treeResult, error) {
+func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclient.RegClient, r ref.Ref, seen []string, rOpts []scheme.ReferrerOpts, tags []string) (*treeResult, error) {
 	tr := treeResult{
 		Ref: r,
 	}
@@ -1128,7 +1128,7 @@ func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclien
 		}
 		for _, d := range dl {
 			rChild := r.SetDigest(d.Digest.String())
-			tChild, err := artifactOpts.treeAddResult(ctx, rc, rChild, rRefSrc, seen, rOpts, tags)
+			tChild, err := artifactOpts.treeAddResult(ctx, rc, rChild, seen, rOpts, tags)
 			if tChild != nil {
 				tChild.ArtifactType = d.ArtifactType
 				if d.Platform != nil {
@@ -1149,10 +1149,16 @@ func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclien
 		return &tr, fmt.Errorf("failed to check referrers for %s: %w", r.CommonName(), err)
 	}
 	if len(rl.Descriptors) > 0 {
+		var rReferrer ref.Ref
+		if rl.Source.IsSet() {
+			rReferrer = rl.Source
+		} else {
+			rReferrer = rl.Subject
+		}
 		tr.Referrer = []*treeResult{}
 		for _, d := range rl.Descriptors {
-			rReferrer := rRefSrc.SetDigest(d.Digest.String())
-			tReferrer, err := artifactOpts.treeAddResult(ctx, rc, rReferrer, rRefSrc, seen, rOpts, tags)
+			rReferrer = rReferrer.SetDigest(d.Digest.String())
+			tReferrer, err := artifactOpts.treeAddResult(ctx, rc, rReferrer, seen, rOpts, tags)
 			if tReferrer != nil {
 				tReferrer.ArtifactType = d.ArtifactType
 				if d.Platform != nil {
@@ -1176,7 +1182,7 @@ func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclien
 		for _, t := range tags {
 			if strings.HasPrefix(t, prefix.Tag) && !sliceHasStr(rl.Tags, t) {
 				rTag := r.SetTag(t)
-				tReferrer, err := artifactOpts.treeAddResult(ctx, rc, rTag, rRefSrc, seen, rOpts, tags)
+				tReferrer, err := artifactOpts.treeAddResult(ctx, rc, rTag, seen, rOpts, tags)
 				if tReferrer != nil {
 					tReferrer.Ref = tReferrer.Ref.SetTag(t)
 					tr.Referrer = append(tr.Referrer, tReferrer)
@@ -1207,6 +1213,7 @@ type treeResult struct {
 	ArtifactType string             `json:"artifactType,omitempty"`
 	Child        []*treeResult      `json:"child,omitempty"`
 	Referrer     []*treeResult      `json:"referrer,omitempty"`
+	ReferrerSrc  ref.Ref            `json:"referrerSource"`
 }
 
 func (tr *treeResult) MarshalPretty() ([]byte, error) {
