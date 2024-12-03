@@ -124,12 +124,13 @@ func TestReferrerList(t *testing.T) {
 				t.Fatalf("failed to generate refExt: %v", err)
 			}
 			tt := []struct {
-				name      string
-				ref       ref.Ref
-				opts      []scheme.ReferrerOpts
-				count     int
-				firstAT   string
-				expectErr error
+				name         string
+				ref          ref.Ref
+				opts         []scheme.ReferrerOpts
+				count        int
+				firstAT      string
+				expectSource ref.Ref
+				expectErr    error
 			}{
 				{
 					name:  "resolve-tag",
@@ -161,8 +162,9 @@ func TestReferrerList(t *testing.T) {
 						scheme.WithReferrerSource(refExt),
 						scheme.WithReferrerMatchOpt(descriptor.MatchOpt{SortAnnotation: "preference"}),
 					},
-					count:   2,
-					firstAT: "application/example.sbom",
+					count:        2,
+					firstAT:      "application/example.sbom",
+					expectSource: refExt,
 				},
 			}
 			for _, tc := range tt {
@@ -181,6 +183,15 @@ func TestReferrerList(t *testing.T) {
 					}
 					if err != nil {
 						t.Fatalf("unexpected error: %v", err)
+					}
+					if !ref.EqualRepository(rl.Subject, tc.ref) {
+						t.Errorf("unexpected subject: expected %s, received %s", tc.ref.CommonName(), rl.Subject.CommonName())
+					}
+					if tc.expectSource.IsSet() && !ref.EqualRepository(rl.Source, tc.expectSource) {
+						t.Errorf("unexpected source: expected %s, received %s", tc.expectSource.CommonName(), rl.Source.CommonName())
+					}
+					if tc.expectSource.IsZero() && !rl.Source.IsZero() {
+						t.Errorf("source should not be set: received %s", rl.Source.CommonName())
 					}
 					if tc.count != len(rl.Descriptors) {
 						t.Errorf("unexpected number of responses, expected %d, received response %v", tc.count, rl.Descriptors)

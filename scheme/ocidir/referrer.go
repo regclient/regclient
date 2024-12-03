@@ -22,18 +22,23 @@ func (o *OCIDir) ReferrerList(ctx context.Context, r ref.Ref, opts ...scheme.Ref
 	return o.referrerList(ctx, r, opts...)
 }
 
-func (o *OCIDir) referrerList(ctx context.Context, r ref.Ref, opts ...scheme.ReferrerOpts) (referrer.ReferrerList, error) {
+func (o *OCIDir) referrerList(ctx context.Context, rSubject ref.Ref, opts ...scheme.ReferrerOpts) (referrer.ReferrerList, error) {
 	config := scheme.ReferrerConfig{}
 	for _, opt := range opts {
 		opt(&config)
 	}
+	var r ref.Ref
+	if config.SrcRepo.IsSet() {
+		r = config.SrcRepo.SetDigest(rSubject.Digest)
+	} else {
+		r = rSubject.SetDigest(rSubject.Digest)
+	}
 	rl := referrer.ReferrerList{
 		Tags: []string{},
 	}
-	if r.Digest == "" {
-		return rl, fmt.Errorf("digest required to query referrers %s", r.CommonName())
+	if rSubject.Digest == "" {
+		return rl, fmt.Errorf("digest required to query referrers %s", rSubject.CommonName())
 	}
-	rl.Subject = r
 
 	// pull referrer list by tag
 	rlTag, err := referrer.FallbackTag(r)
@@ -60,6 +65,10 @@ func (o *OCIDir) referrerList(ctx context.Context, r ref.Ref, opts ...scheme.Ref
 		return rl, fmt.Errorf("manifest is not an OCI index: %s", rlTag.CommonName())
 	}
 	// update referrer list
+	rl.Subject = rSubject
+	if config.SrcRepo.IsSet() {
+		rl.Source = config.SrcRepo
+	}
 	rl.Manifest = m
 	rl.Descriptors = ociML.Manifests
 	rl.Annotations = ociML.Annotations

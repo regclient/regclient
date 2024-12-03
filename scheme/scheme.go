@@ -175,6 +175,7 @@ func WithReferrerSort(annotation string, desc bool) ReferrerOpts {
 func ReferrerFilter(config ReferrerConfig, rlIn referrer.ReferrerList) referrer.ReferrerList {
 	return referrer.ReferrerList{
 		Subject:     rlIn.Subject,
+		Source:      rlIn.Source,
 		Manifest:    rlIn.Manifest,
 		Annotations: rlIn.Annotations,
 		Tags:        rlIn.Tags,
