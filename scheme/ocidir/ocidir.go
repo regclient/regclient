@@ -351,7 +351,7 @@ func indexGet(index v1.Index, r ref.Ref) (descriptor.Descriptor, error) {
 		}
 		// fall back to support full image name in annotation
 		for _, im := range index.Manifests {
-			if name, ok := im.Annotations[aOCIRefName]; ok && strings.HasSuffix(name, ":"+r.Tag) {
+			if name, ok := im.Annotations[aCtrdImageName]; ok && strings.HasSuffix(name, ":"+r.Tag) {
 				return im, nil
 			}
 		}
