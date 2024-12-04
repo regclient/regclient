@@ -1000,7 +1000,7 @@ func imageSeenOrWait(ctx context.Context, opt *imageOpt, tag string, dig digest.
 }
 
 // ImageExport exports an image to an output stream.
-// The format is compatible with "docker load" if a single image is selected and not a manifest list.
+// The format is compatible with "docker load".
 // The ref must include a tag for exporting to docker (defaults to latest), and may also include a digest.
 // The export is also formatted according to [OCI Layout] which supports multi-platform images.
 // A tar file will be sent to outStream.
@@ -1008,13 +1008,34 @@ func imageSeenOrWait(ctx context.Context, opt *imageOpt, tag string, dig digest.
 // Resulting filesystem:
 //   - oci-layout: created at top level, can be done at the start
 //   - index.json: created at top level, single descriptor with org.opencontainers.image.ref.name annotation pointing to the tag
-//   - manifest.json: created at top level, based on every layer added, only works for a single arch image
+//     and io.containerd.image.name annotation pointing to the image name
+//   - manifest.json: created at top level, based on every layer added, only present for a single arch image
 //   - blobs/$algo/$hash: each content addressable object (manifest, config, or layer), created recursively
 //
 // [OCI Layout]: https://github.com/opencontainers/image-spec/blob/master/image-layout.md
 func (rc *RegClient) ImageExport(ctx context.Context, r ref.Ref, outStream io.Writer, opts ...ImageOpts) error {
-	if !r.IsSet() {
-		return fmt.Errorf("ref is not set: %s%.0w", r.CommonName(), errs.ErrInvalidReference)
+	return rc.ImageSave(ctx, []ref.Ref{r}, outStream, opts...)
+}
+
+// ImageSave exports many images to an output stream.
+// The format is compatible with "docker load".
+// The ref must include a tag for exporting to docker (defaults to latest), and may also include a digest.
+// The export is also formatted according to [OCI Layout] which supports multi-platform images.
+// A tar file will be sent to outStream.
+//
+// Resulting filesystem:
+//   - oci-layout: created at top level, can be done at the start
+//   - index.json: created at top level, single descriptor with org.opencontainers.image.ref.name annotation pointing to the tag
+//     and io.containerd.image.name annotation pointing to the image name
+//   - manifest.json: created at top level, based on every layer added, only present for a single arch image
+//   - blobs/$algo/$hash: each content addressable object (manifest, config, or layer), created recursively
+//
+// [OCI Layout]: https://github.com/opencontainers/image-spec/blob/master/image-layout.md
+func (rc *RegClient) ImageSave(ctx context.Context, refs []ref.Ref, outStream io.Writer, opts ...ImageOpts) error {
+	for _, r := range refs {
+		if !r.IsSet() {
+			return fmt.Errorf("ref is not set: %s%.0w", r.CommonName(), errs.ErrInvalidReference)
+		}
 	}
 	var ociIndex v1.Index
 
@@ -1022,8 +1043,8 @@ func (rc *RegClient) ImageExport(ctx context.Context, r ref.Ref, outStream io.Wr
 	for _, optFn := range opts {
 		optFn(&opt)
 	}
-	if opt.exportRef.IsZero() {
-		opt.exportRef = r
+	if !opt.exportRef.IsZero() && len(refs) > 1 {
+		return fmt.Errorf("multiple refs are not supported with export ref: %s", opt.exportRef.CommonName())
 	}
 
 	// dedup warnings
@@ -1046,83 +1067,101 @@ func (rc *RegClient) ImageExport(ctx context.Context, r ref.Ref, outStream io.Wr
 		mode:  0644,
 	}
 
-	// retrieve image manifest
-	m, err := rc.ManifestGet(ctx, r)
-	if err != nil {
-		rc.slog.Warn("Failed to get manifest",
-			slog.String("ref", r.CommonName()),
-			slog.String("err", err.Error()))
-		return err
-	}
-
 	// build/write oci-layout
 	ociLayout := v1.ImageLayout{Version: ociLayoutVersion}
-	err = twd.tarWriteFileJSON(ociLayoutFilename, ociLayout)
+	err := twd.tarWriteFileJSON(ociLayoutFilename, ociLayout)
 	if err != nil {
 		return err
 	}
 
-	// create a manifest descriptor
-	mDesc := m.GetDescriptor()
-	if mDesc.Annotations == nil {
-		mDesc.Annotations = map[string]string{}
-	}
-	mDesc.Annotations[annotationImageName] = opt.exportRef.CommonName()
-	mDesc.Annotations[annotationRefName] = opt.exportRef.Tag
-
-	// generate/write an OCI index
+	// generate an OCI index
 	ociIndex.Versioned = v1.IndexSchemaVersion
-	ociIndex.Manifests = []descriptor.Descriptor{mDesc} // initialize with the descriptor to the manifest list
+	ociIndex.Manifests = []descriptor.Descriptor{} // initialize with the descriptor to the manifest list
+
+	// generate legacy docker manifests
+	dockerManifests := []dockerTarManifest{}
+
+	for _, r := range refs {
+		// retrieve image manifest
+		m, err := rc.ManifestGet(ctx, r)
+		if err != nil {
+			rc.slog.Warn("Failed to get manifest",
+				slog.String("ref", r.CommonName()),
+				slog.String("err", err.Error()))
+			return err
+		}
+
+		var er ref.Ref
+		if opt.exportRef.IsZero() {
+			// Clear the Digest
+			er = r.SetTag(r.Tag)
+		} else {
+			er = opt.exportRef
+		}
+		// create a manifest descriptor
+		mDesc := m.GetDescriptor()
+		if mDesc.Annotations == nil {
+			mDesc.Annotations = map[string]string{}
+		}
+		mDesc.Annotations[annotationImageName] = er.CommonName()
+		mDesc.Annotations[annotationRefName] = er.Tag
+		ociIndex.Manifests = append(ociIndex.Manifests, mDesc)
+
+		// append to docker manifest with tag, config filename, each layer filename, and layer descriptors
+		if mi, ok := m.(manifest.Imager); ok {
+			conf, err := mi.GetConfig()
+			if err != nil {
+				return err
+			}
+			if err = conf.Digest.Validate(); err != nil {
+				return err
+			}
+			refTag := er.ToReg()
+			if refTag.Digest != "" {
+				refTag.Digest = ""
+			}
+			if refTag.Tag == "" {
+				refTag.Tag = "latest"
+			}
+			dockerManifest := dockerTarManifest{
+				RepoTags:     []string{refTag.CommonName()},
+				Config:       tarOCILayoutDescPath(conf),
+				Layers:       []string{},
+				LayerSources: map[digest.Digest]descriptor.Descriptor{},
+			}
+			dl, err := mi.GetLayers()
+			if err != nil {
+				return err
+			}
+			for _, d := range dl {
+				if err = d.Digest.Validate(); err != nil {
+					return err
+				}
+				dockerManifest.Layers = append(dockerManifest.Layers, tarOCILayoutDescPath(d))
+				dockerManifest.LayerSources[d.Digest] = d
+			}
+			dockerManifests = append(dockerManifests, dockerManifest)
+		}
+
+		// recursively include manifests and nested blobs
+		err = rc.imageExportDescriptor(ctx, r, mDesc, twd)
+		if err != nil {
+			return err
+		}
+	}
+
+	// write an OCI index
 	err = twd.tarWriteFileJSON(ociIndexFilename, ociIndex)
 	if err != nil {
 		return err
 	}
 
-	// append to docker manifest with tag, config filename, each layer filename, and layer descriptors
-	if mi, ok := m.(manifest.Imager); ok {
-		conf, err := mi.GetConfig()
+	// marshal manifest and write manifest.json
+	if len(dockerManifests) > 1 {
+		err = twd.tarWriteFileJSON(dockerManifestFilename, dockerManifests)
 		if err != nil {
 			return err
 		}
-		if err = conf.Digest.Validate(); err != nil {
-			return err
-		}
-		refTag := opt.exportRef.ToReg()
-		if refTag.Digest != "" {
-			refTag.Digest = ""
-		}
-		if refTag.Tag == "" {
-			refTag.Tag = "latest"
-		}
-		dockerManifest := dockerTarManifest{
-			RepoTags:     []string{refTag.CommonName()},
-			Config:       tarOCILayoutDescPath(conf),
-			Layers:       []string{},
-			LayerSources: map[digest.Digest]descriptor.Descriptor{},
-		}
-		dl, err := mi.GetLayers()
-		if err != nil {
-			return err
-		}
-		for _, d := range dl {
-			if err = d.Digest.Validate(); err != nil {
-				return err
-			}
-			dockerManifest.Layers = append(dockerManifest.Layers, tarOCILayoutDescPath(d))
-			dockerManifest.LayerSources[d.Digest] = d
-		}
-
-		// marshal manifest and write manifest.json
-		err = twd.tarWriteFileJSON(dockerManifestFilename, []dockerTarManifest{dockerManifest})
-		if err != nil {
-			return err
-		}
-	}
-
-	// recursively include manifests and nested blobs
-	err = rc.imageExportDescriptor(ctx, r, mDesc, twd)
-	if err != nil {
-		return err
 	}
 
 	return nil
