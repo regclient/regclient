@@ -65,6 +65,8 @@ type imageCmd struct {
 	platform        string
 	platforms       []string
 	referrers       bool
+	referrerSrc     string
+	referrerTgt     string
 	replace         bool
 }
 
@@ -325,8 +327,10 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 	imageCopyCmd.Flags().StringArrayVarP(&imageOpts.platforms, "platforms", "", []string{}, "Copy only specific platforms, registry validation must be disabled")
 	// platforms should be treated as experimental since it will break many registries
 	_ = imageCopyCmd.Flags().MarkHidden("platforms")
-	imageCopyCmd.Flags().BoolVarP(&imageOpts.digestTags, "digest-tags", "", false, "Include digest tags (\"sha256-<digest>.*\") when copying manifests")
-	imageCopyCmd.Flags().BoolVarP(&imageOpts.referrers, "referrers", "", false, "Include referrers")
+	imageCopyCmd.Flags().BoolVar(&imageOpts.digestTags, "digest-tags", false, "Include digest tags (\"sha256-<digest>.*\") when copying manifests")
+	imageCopyCmd.Flags().BoolVar(&imageOpts.referrers, "referrers", false, "Include referrers")
+	imageCopyCmd.Flags().StringVar(&imageOpts.referrerSrc, "referrers-src", "", "External source for referrers")
+	imageCopyCmd.Flags().StringVar(&imageOpts.referrerTgt, "referrers-tgt", "", "External target for referrers")
 
 	imageCreateCmd.Flags().StringArrayVar(&imageOpts.annotations, "annotation", []string{}, "Annotation to set on manifest")
 	imageCreateCmd.Flags().BoolVar(&imageOpts.byDigest, "by-digest", false, "Push manifest by digest instead of tag")
@@ -1058,6 +1062,9 @@ func (imageOpts *imageCmd) runImageCopy(cmd *cobra.Command, args []string) error
 	if err != nil {
 		return err
 	}
+	if (imageOpts.referrerSrc != "" || imageOpts.referrerTgt != "") && !imageOpts.referrers {
+		return fmt.Errorf("referrers must be enabled to specify an external referrers source or target%.0w", errs.ErrUnsupported)
+	}
 	rc := imageOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, rSrc)
 	defer rc.Close(ctx, rTgt)
@@ -1092,6 +1099,20 @@ func (imageOpts *imageCmd) runImageCopy(cmd *cobra.Command, args []string) error
 	}
 	if imageOpts.referrers {
 		opts = append(opts, regclient.ImageWithReferrers())
+	}
+	if imageOpts.referrerSrc != "" {
+		referrerSrc, err := ref.New(imageOpts.referrerSrc)
+		if err != nil {
+			return fmt.Errorf("failed parsing referrer external source: %w", err)
+		}
+		opts = append(opts, regclient.ImageWithReferrerSrc(referrerSrc))
+	}
+	if imageOpts.referrerTgt != "" {
+		referrerTgt, err := ref.New(imageOpts.referrerTgt)
+		if err != nil {
+			return fmt.Errorf("failed parsing referrer external target: %w", err)
+		}
+		opts = append(opts, regclient.ImageWithReferrerTgt(referrerTgt))
 	}
 	if len(imageOpts.platforms) > 0 {
 		opts = append(opts, regclient.ImageWithPlatforms(imageOpts.platforms))
