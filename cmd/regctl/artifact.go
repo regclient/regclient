@@ -222,6 +222,7 @@ regctl artifact tree --digest-tags ghcr.io/regclient/regsync:latest`,
 	_ = artifactPutCmd.RegisterFlagCompletionFunc("config-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return configKnownTypes, cobra.ShellCompDirectiveNoFileComp
 	})
+	artifactPutCmd.Flags().StringVar(&artifactOpts.externalRepo, "external", "", "Push referrers to a separate repository")
 	artifactPutCmd.Flags().StringArrayVarP(&artifactOpts.artifactFile, "file", "f", []string{}, "Artifact filename")
 	artifactPutCmd.Flags().StringArrayVarP(&artifactOpts.artifactFileMT, "file-media-type", "m", []string{}, "Set the mediaType for the individual files")
 	_ = artifactPutCmd.RegisterFlagCompletionFunc("file-media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -707,6 +708,21 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 			return err
 		}
 		r = rArt
+	}
+	if artifactOpts.externalRepo != "" {
+		if rSubject.IsZero() {
+			return fmt.Errorf("pushing a referrer to an external repository requires a subject%.0w", errs.ErrUnsupported)
+		}
+		rExt, err := ref.New(artifactOpts.externalRepo)
+		if err != nil {
+			return err
+		}
+		if rArt.IsSet() && !ref.EqualRepository(rExt, rArt) {
+			return fmt.Errorf("push by reference and external to separate repositories is not supported%.0w", errs.ErrUnsupported)
+		}
+		if !rArt.IsSet() {
+			r = rExt
+		}
 	}
 	if !rArt.IsSet() && !rSubject.IsSet() {
 		return fmt.Errorf("either a reference or subject must be provided")
