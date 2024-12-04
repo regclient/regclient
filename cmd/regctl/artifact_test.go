@@ -232,9 +232,31 @@ func TestArtifactPut(t *testing.T) {
 			in:   testData,
 		},
 		{
-			name: "Put external subject",
+			name: "Put subject to external repo",
+			args: []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--subject", "ocidir://" + testDir + ":put-example-at", "--external", "ocidir://" + testDir + "/external"},
+			in:   testData,
+		},
+		{
+			name: "Put subject to external name",
 			args: []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--subject", "ocidir://" + testDir + ":put-example-at", "ocidir://" + testDir + "/external:external-subj"},
 			in:   testData,
+		},
+		{
+			name: "Put subject to external repo and name",
+			args: []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--subject", "ocidir://" + testDir + ":put-example-at", "--external", "ocidir://" + testDir + "/external", "ocidir://" + testDir + "/external:external-subj"},
+			in:   testData,
+		},
+		{
+			name:      "Put external name without subject",
+			args:      []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--external", "ocidir://" + testDir + "/external", "ocidir://" + testDir + "/external:external-subj"},
+			in:        testData,
+			expectErr: errs.ErrUnsupported,
+		},
+		{
+			name:      "Put subject to external repo and different name",
+			args:      []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--subject", "ocidir://" + testDir + ":put-example-at", "--external", "ocidir://" + testDir + "/external", "ocidir://" + testDir + "/copy:copy-subj"},
+			in:        testData,
+			expectErr: errs.ErrUnsupported,
 		},
 		{
 			name: "Put create index",
