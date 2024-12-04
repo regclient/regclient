@@ -62,6 +62,11 @@ func TestImageCopy(t *testing.T) {
 			args:      []string{"image", "copy", "--platform", "linux/amd64", tsHost + "/testrepo:v3", tsHost + "/newrepo:v3"},
 			expectOut: tsHost + "/newrepo:v3",
 		},
+		{
+			name:      "ocidir-to-reg-external-referrers",
+			args:      []string{"image", "copy", srcRef, tsHost + "/newrepo:v4", "--referrers", "--referrers-src", "ocidir://../../testdata/external", "--referrers-tgt", tsHost + "/external"},
+			expectOut: tsHost + "/newrepo:v4",
+		},
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {

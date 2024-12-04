@@ -290,6 +290,14 @@ func TestCopy(t *testing.T) {
 			TLS:      config.TLSDisabled,
 		},
 	}
+	rReferrerSrc, err := ref.New("ocidir://./testdata/external")
+	if err != nil {
+		t.Fatalf("failed to parse referrer src repo: %v", err)
+	}
+	rReferrerTgt, err := ref.New(tsHost + "/dest-external")
+	if err != nil {
+		t.Fatalf("failed to parse referrer tgt repo: %v", err)
+	}
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	delayInit, _ := time.ParseDuration("0.05s")
 	delayMax, _ := time.ParseDuration("0.10s")
@@ -348,6 +356,12 @@ func TestCopy(t *testing.T) {
 			src:  tsHost + "/testrepo:v2",
 			tgt:  tsHost + "/dest-reg:v2",
 			opts: []ImageOpts{ImageWithReferrers(), ImageWithDigestTags()},
+		},
+		{
+			name: "ocidir to registry with external referrers and digest tags",
+			src:  "ocidir://./testdata/testrepo:v2",
+			tgt:  tsHost + "/dest-ocidir:v2",
+			opts: []ImageOpts{ImageWithReferrers(), ImageWithDigestTags(), ImageWithReferrerSrc(rReferrerSrc), ImageWithReferrerTgt(rReferrerTgt)},
 		},
 		{
 			name: "ocidir to registry with fast check",

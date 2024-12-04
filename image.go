@@ -96,6 +96,8 @@ type imageOpt struct {
 	platform        string
 	platforms       []string
 	referrerConfs   []scheme.ReferrerConfig
+	referrerSrc     ref.Ref
+	referrerTgt     ref.Ref
 	tagList         []string
 	mu              sync.Mutex
 	seen            map[string]*imageSeen
@@ -222,6 +224,20 @@ func ImageWithReferrers(rOpts ...scheme.ReferrerOpts) ImageOpts {
 			rOpt(&rConf)
 		}
 		opts.referrerConfs = append(opts.referrerConfs, rConf)
+	}
+}
+
+// ImageWithReferrerSrc specifies an alternate repository to pull referrers from.
+func ImageWithReferrerSrc(src ref.Ref) ImageOpts {
+	return func(opts *imageOpt) {
+		opts.referrerSrc = src
+	}
+}
+
+// ImageWithReferrerTgt specifies an alternate repository to pull referrers from.
+func ImageWithReferrerTgt(tgt ref.Ref) ImageOpts {
+	return func(opts *imageOpt) {
+		opts.referrerTgt = tgt
 	}
 }
 
@@ -774,11 +790,27 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 	// copy referrers
 	referrerTags := []string{}
 	if opt.referrerConfs != nil {
-		rl, err := rc.ReferrerList(ctx, refSrc)
+		referrerOpts := []scheme.ReferrerOpts{}
+		rSubject := refSrc
+		referrerSrc := refSrc
+		referrerTgt := refTgt
+		if opt.referrerSrc.IsSet() {
+			referrerOpts = append(referrerOpts, scheme.WithReferrerSource(opt.referrerSrc))
+			referrerSrc = opt.referrerSrc
+		}
+		if opt.referrerTgt.IsSet() {
+			referrerTgt = opt.referrerTgt
+		}
+		if sDig != "" {
+			rSubject = rSubject.SetDigest(sDig.String())
+		}
+		rl, err := rc.ReferrerList(ctx, rSubject, referrerOpts...)
 		if err != nil {
 			return err
 		}
-		referrerTags = append(referrerTags, rl.Tags...)
+		if !rl.Source.IsSet() || ref.EqualRepository(refSrc, rl.Source) {
+			referrerTags = append(referrerTags, rl.Tags...)
+		}
 		descList := []descriptor.Descriptor{}
 		if len(opt.referrerConfs) == 0 {
 			descList = rl.Descriptors
@@ -795,8 +827,8 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 			if seen != nil {
 				continue // skip referrers that have been seen
 			}
-			referrerSrc := refSrc.SetDigest(rDesc.Digest.String())
-			referrerTgt := refTgt.SetDigest(rDesc.Digest.String())
+			referrerSrc := referrerSrc.SetDigest(rDesc.Digest.String())
+			referrerTgt := referrerTgt.SetDigest(rDesc.Digest.String())
 			rDesc := rDesc
 			waitCount++
 			go func() {
