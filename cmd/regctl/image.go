@@ -314,17 +314,17 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 
 	imageOpts.modOpts = []mod.Opts{}
 
-	imageCheckBaseCmd.Flags().StringVarP(&imageOpts.checkBaseRef, "base", "", "", "Base image reference (including tag)")
-	imageCheckBaseCmd.Flags().StringVarP(&imageOpts.checkBaseDigest, "digest", "", "", "Base image digest (checks if digest matches base)")
-	imageCheckBaseCmd.Flags().BoolVarP(&imageOpts.checkSkipConfig, "no-config", "", false, "Skip check of config history")
+	imageCheckBaseCmd.Flags().StringVar(&imageOpts.checkBaseRef, "base", "", "Base image reference (including tag)")
+	imageCheckBaseCmd.Flags().StringVar(&imageOpts.checkBaseDigest, "digest", "", "Base image digest (checks if digest matches base)")
+	imageCheckBaseCmd.Flags().BoolVar(&imageOpts.checkSkipConfig, "no-config", false, "Skip check of config history")
 	imageCheckBaseCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 
-	imageCopyCmd.Flags().BoolVarP(&imageOpts.fastCheck, "fast", "", false, "Fast check, skip referrers and digest tag checks when image exists, overrides force-recursive")
-	imageCopyCmd.Flags().BoolVarP(&imageOpts.forceRecursive, "force-recursive", "", false, "Force recursive copy of image, repairs missing nested blobs and manifests")
-	imageCopyCmd.Flags().StringVarP(&imageOpts.format, "format", "", "", "Format output with go template syntax")
-	imageCopyCmd.Flags().BoolVarP(&imageOpts.includeExternal, "include-external", "", false, "Include external layers")
+	imageCopyCmd.Flags().BoolVar(&imageOpts.fastCheck, "fast", false, "Fast check, skip referrers and digest tag checks when image exists, overrides force-recursive")
+	imageCopyCmd.Flags().BoolVar(&imageOpts.forceRecursive, "force-recursive", false, "Force recursive copy of image, repairs missing nested blobs and manifests")
+	imageCopyCmd.Flags().StringVar(&imageOpts.format, "format", "", "Format output with go template syntax")
+	imageCopyCmd.Flags().BoolVar(&imageOpts.includeExternal, "include-external", false, "Include external layers")
 	imageCopyCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
-	imageCopyCmd.Flags().StringArrayVarP(&imageOpts.platforms, "platforms", "", []string{}, "Copy only specific platforms, registry validation must be disabled")
+	imageCopyCmd.Flags().StringArrayVar(&imageOpts.platforms, "platforms", []string{}, "Copy only specific platforms, registry validation must be disabled")
 	// platforms should be treated as experimental since it will break many registries
 	_ = imageCopyCmd.Flags().MarkHidden("platforms")
 	imageCopyCmd.Flags().BoolVar(&imageOpts.digestTags, "digest-tags", false, "Include digest tags (\"sha256-<digest>.*\") when copying manifests")
@@ -343,15 +343,15 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 		return imageKnownTypes, cobra.ShellCompDirectiveNoFileComp
 	})
 
-	imageDeleteCmd.Flags().BoolVarP(&manifestOpts.forceTagDeref, "force-tag-dereference", "", false, "Dereference the a tag to a digest, this is unsafe")
+	imageDeleteCmd.Flags().BoolVar(&manifestOpts.forceTagDeref, "force-tag-dereference", false, "Dereference the a tag to a digest, this is unsafe")
 
-	imageDigestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Do not resolve platform from manifest list (enabled by default)")
+	imageDigestCmd.Flags().BoolVar(&manifestOpts.list, "list", true, "Do not resolve platform from manifest list (enabled by default)")
 	imageDigestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local, requires a get request)")
-	imageDigestCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
+	imageDigestCmd.Flags().BoolVar(&manifestOpts.requireList, "require-list", false, "Fail if manifest list is not received")
 	_ = imageDigestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	_ = imageDigestCmd.Flags().MarkHidden("list")
 
-	imageGetFileCmd.Flags().StringVarP(&imageOpts.formatFile, "format", "", "", "Format output with go template syntax")
+	imageGetFileCmd.Flags().StringVar(&imageOpts.formatFile, "format", "", "Format output with go template syntax")
 	imageGetFileCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 
 	imageExportCmd.Flags().BoolVar(&imageOpts.exportCompress, "compress", false, "Compress output with gzip")
@@ -361,22 +361,22 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 	imageImportCmd.Flags().StringVar(&imageOpts.importName, "name", "", "Name of image or tag to import when multiple images are packaged in the tar")
 
 	imageInspectCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
-	imageInspectCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+	imageInspectCmd.Flags().StringVar(&imageOpts.format, "format", "{{printPretty .}}", "Format output with go template syntax")
 	_ = imageInspectCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	_ = imageInspectCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
-	imageManifestCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Output manifest list if available (enabled by default)")
+	imageManifestCmd.Flags().BoolVar(&manifestOpts.list, "list", true, "Output manifest list if available (enabled by default)")
 	imageManifestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	imageManifestCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
-	imageManifestCmd.Flags().StringVarP(&manifestOpts.formatGet, "format", "", "{{printPretty .}}", "Format output with go template syntax (use \"raw-body\" for the original manifest)")
+	imageManifestCmd.Flags().StringVar(&manifestOpts.formatGet, "format", "{{printPretty .}}", "Format output with go template syntax (use \"raw-body\" for the original manifest)")
 	_ = imageManifestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	_ = imageManifestCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 	_ = imageManifestCmd.Flags().MarkHidden("list")
 
-	imageModCmd.Flags().StringVarP(&imageOpts.create, "create", "", "", "Create image or tag")
-	imageModCmd.Flags().BoolVarP(&imageOpts.replace, "replace", "", false, "Replace tag (ignored when \"create\" is used)")
+	imageModCmd.Flags().StringVar(&imageOpts.create, "create", "", "Create image or tag")
+	imageModCmd.Flags().BoolVar(&imageOpts.replace, "replace", false, "Replace tag (ignored when \"create\" is used)")
 	// most image mod flags are order dependent, so they are added using VarP/VarPF to append to modOpts
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
 			vs := strings.SplitN(val, "=", 2)
@@ -389,8 +389,8 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 			}
 			return nil
 		},
-	}, "annotation", "", `set an annotation (name=value, omit value to delete, prefix with platform list [p1,p2] or [*] for all images)`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	}, "annotation", `set an annotation (name=value, omit value to delete, prefix with platform list [p1,p2] or [*] for all images)`)
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
 			vs := strings.SplitN(val, ",", 2)
@@ -422,7 +422,7 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithAnnotationOCIBase(r, d))
 			return nil
 		},
-	}, "annotation-base", "", `set base image annotations (image/name:tag,sha256:digest)`)
+	}, "annotation-base", `set base image annotations (image/name:tag,sha256:digest)`)
 	flagAnnotationPromote := imageModCmd.Flags().VarPF(&modFlagFunc{
 		t: "bool",
 		f: func(val string) error {
@@ -437,7 +437,7 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 		},
 	}, "annotation-promote", "", `promote common annotations from child images to index`)
 	flagAnnotationPromote.NoOptDefVal = "true"
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
 			vs := strings.SplitN(val, "=", 2)
@@ -448,8 +448,8 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 				mod.WithBuildArgRm(vs[0], regexp.MustCompile(regexp.QuoteMeta(vs[1]))))
 			return nil
 		},
-	}, "buildarg-rm", "", `delete a build arg`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	}, "buildarg-rm", `delete a build arg`)
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
 			vs := strings.SplitN(val, "=", 2)
@@ -464,8 +464,8 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 				mod.WithBuildArgRm(vs[0], value))
 			return nil
 		},
-	}, "buildarg-rm-regex", "", `delete a build arg with a regex value`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	}, "buildarg-rm-regex", `delete a build arg with a regex value`)
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
 			vSlice := []string{}
@@ -478,8 +478,8 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 			)
 			return nil
 		},
-	}, "config-cmd", "", `set command in the config (json array or string, empty string to delete)`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	}, "config-cmd", `set command in the config (json array or string, empty string to delete)`)
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
 			vSlice := []string{}
@@ -492,8 +492,8 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 			)
 			return nil
 		},
-	}, "config-entrypoint", "", `set entrypoint in the config (json array or string, empty string to delete)`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	}, "config-entrypoint", `set entrypoint in the config (json array or string, empty string to delete)`)
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
 			p, err := platform.Parse(val)
@@ -505,8 +505,8 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 			)
 			return nil
 		},
-	}, "config-platform", "", `set platform on the config (not recommended for an index of multiple images)`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	}, "config-platform", `set platform on the config (not recommended for an index of multiple images)`)
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
 			ot, otherFields, err := imageParseOptTime(val)
@@ -525,8 +525,8 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 			)
 			return nil
 		},
-	}, "config-time", "", `set timestamp for the config`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	}, "config-time", `set timestamp for the config`)
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
 			t, err := time.Parse(time.RFC3339, val)
@@ -540,9 +540,9 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 				}))
 			return nil
 		},
-	}, "config-time-max", "", `max timestamp for a config`)
+	}, "config-time-max", `max timestamp for a config`)
 	_ = imageModCmd.Flags().MarkHidden("config-time-max") // TODO: deprecate config-time-max in favor of config-time
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
 			size, err := strconv.ParseInt(val, 10, 64)
@@ -552,15 +552,15 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithData(size))
 			return nil
 		},
-	}, "data-max", "", `sets or removes descriptor data field (size in bytes)`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	}, "data-max", `sets or removes descriptor data field (size in bytes)`)
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
 			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithDigestAlgo(digest.Algorithm(val)))
 			return nil
 		},
-	}, "digest-algo", "", `change the digest algorithm (sha256, sha512)`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	}, "digest-algo", `change the digest algorithm (sha256, sha512)`)
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
 			vs := strings.SplitN(val, "=", 2)
@@ -573,21 +573,21 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 			}
 			return nil
 		},
-	}, "env", "", `set an environment variable (name=value, omit value to delete, prefix with platform list [p1,p2] for subset of images)`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	}, "env", `set an environment variable (name=value, omit value to delete, prefix with platform list [p1,p2] for subset of images)`)
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
 			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithExposeAdd(val))
 			return nil
 		},
-	}, "expose-add", "", `add an exposed port`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	}, "expose-add", `add an exposed port`)
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
 			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithExposeRm(val))
 			return nil
 		},
-	}, "expose-rm", "", `delete an exposed port`)
+	}, "expose-rm", `delete an exposed port`)
 	flagExtURLsRm := imageModCmd.Flags().VarPF(&modFlagFunc{
 		t: "bool",
 		f: func(val string) error {
@@ -602,7 +602,7 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 		},
 	}, "external-urls-rm", "", `remove external url references from layers (first copy image with "--include-external")`)
 	flagExtURLsRm.NoOptDefVal = "true"
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
 			ot, otherFields, err := imageParseOptTime(val)
@@ -624,8 +624,8 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithFileTarTime(otherFields["filename"], ot))
 			return nil
 		},
-	}, "file-tar-time", "", `timestamp for contents of a tar file within a layer, set filename=${name} with time options`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	}, "file-tar-time", `timestamp for contents of a tar file within a layer, set filename=${name} with time options`)
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
 			vs := strings.SplitN(val, ",", 2)
@@ -642,9 +642,9 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 			}))
 			return nil
 		},
-	}, "file-tar-time-max", "", `max timestamp for contents of a tar file within a layer`)
+	}, "file-tar-time-max", `max timestamp for contents of a tar file within a layer`)
 	_ = imageModCmd.Flags().MarkHidden("file-tar-time-max") // TODO: deprecate in favor of file-tar-time
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
 			vs := strings.SplitN(val, "=", 2)
@@ -657,7 +657,7 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 			}
 			return nil
 		},
-	}, "label", "", `set an label (name=value, omit value to delete, prefix with platform list [p1,p2] for subset of images)`)
+	}, "label", `set an label (name=value, omit value to delete, prefix with platform list [p1,p2] for subset of images)`)
 	flagLabelAnnot := imageModCmd.Flags().VarPF(&modFlagFunc{
 		t: "bool",
 		f: func(val string) error {
@@ -672,7 +672,7 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 		},
 	}, "label-to-annotation", "", `set annotations from labels`)
 	flagLabelAnnot.NoOptDefVal = "true"
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
 			kvSplit, err := strparse.SplitCSKV(val)
@@ -727,8 +727,8 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 				mod.WithLayerAddTar(rdr, mt, platforms))
 			return nil
 		},
-	}, "layer-add", "", `add a new layer (tar=file,dir=directory,platform=val)`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	}, "layer-add", `add a new layer (tar=file,dir=directory,platform=val)`)
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
 			var algo archive.CompressType
@@ -740,8 +740,8 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 				mod.WithLayerCompression(algo))
 			return nil
 		},
-	}, "layer-compress", "", `change layer compression (gzip, none, zstd)`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	}, "layer-compress", `change layer compression (gzip, none, zstd)`)
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
 			re, err := regexp.Compile(val)
@@ -752,8 +752,8 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 				mod.WithLayerRmCreatedBy(*re))
 			return nil
 		},
-	}, "layer-rm-created-by", "", `delete a layer based on history (created by string is a regex)`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	}, "layer-rm-created-by", `delete a layer based on history (created by string is a regex)`)
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "uint",
 		f: func(val string) error {
 			i, err := strconv.Atoi(val)
@@ -763,15 +763,15 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithLayerRmIndex(i))
 			return nil
 		},
-	}, "layer-rm-index", "", `delete a layer from an image (index begins at 0)`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	}, "layer-rm-index", `delete a layer from an image (index begins at 0)`)
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
 			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithLayerStripFile(val))
 			return nil
 		},
-	}, "layer-strip-file", "", `delete a file or directory from all layers`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	}, "layer-strip-file", `delete a file or directory from all layers`)
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
 			ot, otherFields, err := imageParseOptTime(val)
@@ -790,8 +790,8 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 			)
 			return nil
 		},
-	}, "layer-time", "", `set timestamp for the layer contents`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	}, "layer-time", `set timestamp for the layer contents`)
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
 			t, err := time.Parse(time.RFC3339, val)
@@ -805,7 +805,7 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 				}))
 			return nil
 		},
-	}, "layer-time-max", "", `max timestamp for a layer`)
+	}, "layer-time-max", `max timestamp for a layer`)
 	_ = imageModCmd.Flags().MarkHidden("layer-time-max") // TODO: deprecate in favor of layer-time
 	flagRebase := imageModCmd.Flags().VarPF(&modFlagFunc{
 		t: "bool",
@@ -823,7 +823,7 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 		},
 	}, "rebase", "", `rebase an image using OCI annotations`)
 	flagRebase.NoOptDefVal = "true"
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
 			vs := strings.SplitN(val, ",", 2)
@@ -842,7 +842,7 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithRebaseRefs(rOld, rNew))
 			return nil
 		},
-	}, "rebase-ref", "", `rebase an image with base references (base:old,base:new)`)
+	}, "rebase-ref", `rebase an image with base references (base:old,base:new)`)
 	flagReproducible := imageModCmd.Flags().VarPF(&modFlagFunc{
 		t: "bool",
 		f: func(val string) error {
@@ -857,7 +857,7 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 		},
 	}, "reproducible", "", `fix tar headers for reproducibility`)
 	flagReproducible.NoOptDefVal = "true"
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
 			ot, otherFields, err := imageParseOptTime(val)
@@ -877,8 +877,8 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 			)
 			return nil
 		},
-	}, "time", "", `set timestamp for both the config and layers`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	}, "time", `set timestamp for both the config and layers`)
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
 			t, err := time.Parse(time.RFC3339, val)
@@ -896,7 +896,7 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 				}))
 			return nil
 		},
-	}, "time-max", "", `max timestamp for both the config and layers`)
+	}, "time-max", `max timestamp for both the config and layers`)
 	_ = imageModCmd.Flags().MarkHidden("time-max") // TODO: deprecate
 	flagDocker := imageModCmd.Flags().VarPF(&modFlagFunc{
 		t: "bool",
@@ -940,22 +940,22 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 		},
 	}, "to-oci-referrers", "", `convert to OCI referrers`)
 	flagOCIReferrers.NoOptDefVal = "true"
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
 			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithVolumeAdd(val))
 			return nil
 		},
-	}, "volume-add", "", `add a volume definition`)
-	imageModCmd.Flags().VarP(&modFlagFunc{
+	}, "volume-add", `add a volume definition`)
+	imageModCmd.Flags().Var(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
 			imageOpts.modOpts = append(imageOpts.modOpts, mod.WithVolumeRm(val))
 			return nil
 		},
-	}, "volume-rm", "", `delete a volume definition`)
+	}, "volume-rm", `delete a volume definition`)
 
-	imageRateLimitCmd.Flags().StringVarP(&imageOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+	imageRateLimitCmd.Flags().StringVar(&imageOpts.format, "format", "{{printPretty .}}", "Format output with go template syntax")
 	_ = imageRateLimitCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
 	imageTopCmd.AddCommand(imageCheckBaseCmd)
