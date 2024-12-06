@@ -20,20 +20,11 @@ func TestPlatformParse(t *testing.T) {
 		winGoal.Variant = platLocal.Variant
 		winGoal.OSVersion = platLocal.OSVersion
 	}
-	linuxAMD64Goal := Platform{OS: "linux", Architecture: "amd64"}
-	if Compatible(Platform{OS: platLocal.OS, Architecture: platLocal.Architecture}, linuxAMD64Goal) {
-		linuxAMD64Goal.Variant = platLocal.Variant
-		linuxAMD64Goal.OSVersion = platLocal.OSVersion
-	}
-	darwinAMD64Goal := Platform{OS: "darwin", Architecture: "amd64"}
-	if Compatible(Platform{OS: platLocal.OS, Architecture: platLocal.Architecture}, darwinAMD64Goal) {
-		darwinAMD64Goal.Variant = platLocal.Variant
-		darwinAMD64Goal.OSVersion = platLocal.OSVersion
-	}
-	darwinARM64Goal := Platform{OS: "darwin", Architecture: "arm64"}
-	if Compatible(Platform{OS: platLocal.OS, Architecture: platLocal.Architecture}, darwinARM64Goal) {
-		darwinARM64Goal.Variant = platLocal.Variant
-		darwinARM64Goal.OSVersion = platLocal.OSVersion
+	darwinGoal := Platform{OS: "darwin"}
+	if Compatible(Platform{OS: platLocal.OS}, darwinGoal) {
+		darwinGoal.Architecture = platLocal.Architecture
+		darwinGoal.Variant = platLocal.Variant
+		darwinGoal.OSVersion = platLocal.OSVersion
 	}
 	windowsAMD64Goal := Platform{OS: "windows", Architecture: "amd64"}
 	if Compatible(Platform{OS: platLocal.OS, Architecture: platLocal.Architecture}, windowsAMD64Goal) {
@@ -41,8 +32,8 @@ func TestPlatformParse(t *testing.T) {
 		windowsAMD64Goal.OSVersion = platLocal.OSVersion
 	}
 	windowsAMD64v2Goal := Platform{OS: "windows", Architecture: "amd64", Variant: "v2"}
-	if Compatible(Platform{OS: platLocal.OS, Architecture: platLocal.Architecture}, windowsAMD64Goal) {
-		windowsAMD64Goal.OSVersion = platLocal.OSVersion
+	if Compatible(Platform{OS: platLocal.OS, Architecture: platLocal.Architecture}, windowsAMD64v2Goal) {
+		windowsAMD64v2Goal.OSVersion = platLocal.OSVersion
 	}
 	localAMD64Goal := Platform{OS: platLocal.OS, Architecture: "amd64"}
 	if Compatible(Platform{OS: platLocal.OS, Architecture: platLocal.Architecture}, localAMD64Goal) {
@@ -136,14 +127,19 @@ func TestPlatformParse(t *testing.T) {
 			goal:  linuxGoal,
 		},
 		{
+			name:  "darwin",
+			parse: "darwin",
+			goal:  darwinGoal,
+		},
+		{
 			name:  "macos amd64",
 			parse: "macos/amd64",
-			goal:  darwinAMD64Goal,
+			goal:  Platform{OS: "darwin", Architecture: "amd64"},
 		},
 		{
 			name:  "darwin arm64",
 			parse: "darwin/arm64",
-			goal:  darwinARM64Goal,
+			goal:  Platform{OS: "darwin", Architecture: "arm64"},
 		},
 		{
 			name:  "windows amd64 with version",
