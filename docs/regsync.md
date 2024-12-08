@@ -43,7 +43,7 @@ The `version` command will show details about the git commit and tag if availabl
 
 ## Configuration File
 
-The `regsync` configuration file is yaml formatted with the following layout:
+The `regsync` configuration file is yaml formatted with the following example layout:
 
 ```yaml
 x-sched-a: &sched-a "15 01 * * *"
@@ -198,6 +198,8 @@ sync:
   - `referrerFilters`: (array) list of filters for referrers to include, by default all referrers are included.
     - `artifactType`: (string) artifact types to include.
     - `annotations`: (map) mapping of annotations for referrers.
+  - `referrerSource`: (string) source repo for pulling referrers (defaults to sync source).
+  - `referrerTarget`: (string) target repo for pushing referrers (defaults to sync target).
   - `fastCopy`: (bool) skip referrers and digest tag checks when image exists, overrides `forceRecursive`.
   - `forceRecursive`: (bool) forces a copy of all manifests and blobs even when the target parent manifest already exists.
   - `mediaTypes`:
@@ -242,7 +244,7 @@ sync:
     By default all platforms are copied along with the original upstream manifest list.
     Note that looking up the platform from a multi-platform image counts against the Docker Hub rate limit, and that rate limits are not checked prior to resolving the platform.
     When run with "server", the platform is only resolved once for each multi-platform digest seen.
-  - `backup`, `interval`, `schedule`, `ratelimit`, `digestTags`, `referrers`, `referrerFilters`, `fastCopy`, `forceRecursive`, and `mediaTypes`:
+  - `backup`, `interval`, `schedule`, `ratelimit`, `digestTags`, `referrers`, `referrerFilters`, `referrerSource`, `referrerTarget`, `fastCopy`, `forceRecursive`, and `mediaTypes`:
     See description under `defaults`.
 
 - `x-*`:
@@ -251,11 +253,11 @@ sync:
 
 ## Templates
 
-[Go templates](https://golang.org/pkg/text/template/) are used to expand values in `registry`, `user`, `pass`, `regcert`, `clientCert`, `clientKey`, `source`, `target`, and `backup`.
+[Go templates](https://golang.org/pkg/text/template/) are used to expand values in `registry`, `user`, `pass`, `regcert`, `clientCert`, `clientKey`, `source`, `target`, `referrerSource`, `referrerTarget`, and `backup`.
 
-The `source` and `target` templates support the following objects:
+The `source`, `target`, `referrerSource`, `referrerTarget`, `backup` templates support the following objects:
 
-- `.Sync`: Values from the current sync step
+- `.Sync`: Values from the current sync step, including
   - `.Sync.Source`: Source
   - `.Sync.Target`: Target
   - `.Sync.Type`: Type
@@ -263,7 +265,7 @@ The `source` and `target` templates support the following objects:
   - `.Sync.Interval`: Interval
   - `.Sync.Schedule`: Schedule
 
-Note that `source` is expanded before `target`, and both are expanded before `backup`.
+Note that templates are expanded in the order `source`, `referrerSource`, `target`, `referrerTarget`, and then `backup`.
 
 The `backup` template supports the following objects:
 

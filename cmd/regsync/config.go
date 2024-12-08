@@ -40,6 +40,8 @@ type ConfigDefaults struct {
 	DigestTags      *bool                  `yaml:"digestTags" json:"digestTags"`
 	Referrers       *bool                  `yaml:"referrers" json:"referrers"`
 	ReferrerFilters []ConfigReferrerFilter `yaml:"referrerFilters" json:"referrerFilters"`
+	ReferrerSrc     string                 `yaml:"referrerSource" json:"referrerSource"`
+	ReferrerTgt     string                 `yaml:"referrerTarget" json:"referrerTarget"`
 	FastCheck       *bool                  `yaml:"fastCheck" json:"fastCheck"`
 	ForceRecursive  *bool                  `yaml:"forceRecursive" json:"forceRecursive"`
 	IncludeExternal *bool                  `yaml:"includeExternal" json:"includeExternal"`
@@ -69,6 +71,8 @@ type ConfigSync struct {
 	DigestTags      *bool                  `yaml:"digestTags" json:"digestTags"`
 	Referrers       *bool                  `yaml:"referrers" json:"referrers"`
 	ReferrerFilters []ConfigReferrerFilter `yaml:"referrerFilters" json:"referrerFilters"`
+	ReferrerSrc     string                 `yaml:"referrerSource" json:"referrerSource"`
+	ReferrerTgt     string                 `yaml:"referrerTarget" json:"referrerTarget"`
 	Platform        string                 `yaml:"platform" json:"platform"`
 	Platforms       []string               `yaml:"platforms" json:"platforms"`
 	FastCheck       *bool                  `yaml:"fastCheck" json:"fastCheck"`
@@ -209,11 +213,24 @@ func configExpandTemplates(c *Config) error {
 		}
 		c.Sync[i].Source = val
 		dataSync.Sync.Source = val
+		val, err = template.String(c.Sync[i].ReferrerSrc, dataSync)
+		if err != nil {
+			return err
+		}
+		c.Sync[i].ReferrerSrc = val
+		dataSync.Sync.ReferrerSrc = val
 		val, err = template.String(c.Sync[i].Target, dataSync)
 		if err != nil {
 			return err
 		}
 		c.Sync[i].Target = val
+		val, err = template.String(c.Sync[i].ReferrerTgt, dataSync)
+		if err != nil {
+			return err
+		}
+		c.Sync[i].ReferrerTgt = val
+		dataSync.Sync.ReferrerTgt = val
+		// templates for Backup are expanded in each sync step
 	}
 	return nil
 }
@@ -254,6 +271,12 @@ func syncSetDefaults(s *ConfigSync, d ConfigDefaults) {
 	}
 	if s.ReferrerFilters == nil {
 		s.ReferrerFilters = d.ReferrerFilters
+	}
+	if s.ReferrerSrc == "" && d.ReferrerSrc != "" {
+		s.ReferrerSrc = d.ReferrerSrc
+	}
+	if s.ReferrerTgt == "" && d.ReferrerTgt != "" {
+		s.ReferrerTgt = d.ReferrerTgt
 	}
 	if s.FastCheck == nil {
 		b := (d.FastCheck != nil && *d.FastCheck)

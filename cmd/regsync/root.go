@@ -802,6 +802,24 @@ func (rootOpts *rootCmd) processRef(ctx context.Context, s ConfigSync, src, tgt 
 				opts = append(opts, regclient.ImageWithReferrers(rOpts...))
 			}
 		}
+		if s.ReferrerSrc != "" {
+			referrerSrc, err := ref.New(s.ReferrerSrc)
+			if err != nil {
+				rootOpts.log.Error("failed to parse referrer source reference",
+					slog.String("referrerSource", s.ReferrerSrc),
+					slog.String("error", err.Error()))
+			}
+			opts = append(opts, regclient.ImageWithReferrerSrc(referrerSrc))
+		}
+		if s.ReferrerTgt != "" {
+			referrerTgt, err := ref.New(s.ReferrerTgt)
+			if err != nil {
+				rootOpts.log.Error("failed to parse referrer target reference",
+					slog.String("referrerTarget", s.ReferrerTgt),
+					slog.String("error", err.Error()))
+			}
+			opts = append(opts, regclient.ImageWithReferrerTgt(referrerTgt))
+		}
 	}
 	if s.FastCheck != nil && *s.FastCheck {
 		opts = append(opts, regclient.ImageWithFastCheck())
