@@ -550,6 +550,7 @@ func (rc *RegClient) ImageCopy(ctx context.Context, refSrc ref.Ref, refTgt ref.R
 func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d descriptor.Descriptor, child bool, parents []digest.Digest, opt *imageOpt) (err error) {
 	var mSrc, mTgt manifest.Manifest
 	var sDig digest.Digest
+	refTgtRepo := refTgt.SetTag("").CommonName()
 	seenCB := func(error) {}
 	defer func() {
 		if seenCB != nil {
@@ -563,7 +564,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 		sDig = digest.Digest(refSrc.Digest)
 	}
 	if sDig != "" {
-		if seenCB, err = imageSeenOrWait(ctx, opt, refTgt.Tag, sDig, parents); seenCB == nil {
+		if seenCB, err = imageSeenOrWait(ctx, opt, refTgtRepo, refTgt.Tag, sDig, parents); seenCB == nil {
 			return err
 		}
 	}
@@ -581,7 +582,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 				return fmt.Errorf("copy failed, error getting source: %w", err)
 			}
 			sDig = mSrc.GetDescriptor().Digest
-			if seenCB, err = imageSeenOrWait(ctx, opt, refTgt.Tag, sDig, parents); seenCB == nil {
+			if seenCB, err = imageSeenOrWait(ctx, opt, refTgtRepo, refTgt.Tag, sDig, parents); seenCB == nil {
 				return err
 			}
 		}
@@ -599,7 +600,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 			return fmt.Errorf("copy failed, error getting source: %w", err)
 		}
 		sDig = mSrc.GetDescriptor().Digest
-		if seenCB, err = imageSeenOrWait(ctx, opt, refTgt.Tag, sDig, parents); seenCB == nil {
+		if seenCB, err = imageSeenOrWait(ctx, opt, refTgtRepo, refTgt.Tag, sDig, parents); seenCB == nil {
 			return err
 		}
 	}
@@ -611,7 +612,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 		}
 		if sDig == "" {
 			sDig = mSrc.GetDescriptor().Digest
-			if seenCB, err = imageSeenOrWait(ctx, opt, refTgt.Tag, sDig, parents); seenCB == nil {
+			if seenCB, err = imageSeenOrWait(ctx, opt, refTgtRepo, refTgt.Tag, sDig, parents); seenCB == nil {
 				return err
 			}
 		}
@@ -973,7 +974,7 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 }
 
 func (rc *RegClient) imageCopyBlob(ctx context.Context, refSrc ref.Ref, refTgt ref.Ref, d descriptor.Descriptor, opt *imageOpt, bOpt ...BlobOpts) error {
-	seenCB, err := imageSeenOrWait(ctx, opt, "", d.Digest, []digest.Digest{})
+	seenCB, err := imageSeenOrWait(ctx, opt, refTgt.SetTag("").CommonName(), "", d.Digest, []digest.Digest{})
 	if seenCB == nil {
 		return err
 	}
@@ -984,9 +985,9 @@ func (rc *RegClient) imageCopyBlob(ctx context.Context, refSrc ref.Ref, refTgt r
 
 // imageSeenOrWait returns either a callback to report the error when the digest hasn't been seen before
 // or it will wait for the previous copy to run and return the error from that copy
-func imageSeenOrWait(ctx context.Context, opt *imageOpt, tag string, dig digest.Digest, parents []digest.Digest) (func(error), error) {
+func imageSeenOrWait(ctx context.Context, opt *imageOpt, repo, tag string, dig digest.Digest, parents []digest.Digest) (func(error), error) {
 	var seenNew *imageSeen
-	key := tag + ":" + dig.String()
+	key := repo + "/" + tag + ":" + dig.String()
 	opt.mu.Lock()
 	seen := opt.seen[key]
 	if seen == nil {
@@ -1005,7 +1006,7 @@ func imageSeenOrWait(ctx context.Context, opt *imageOpt, tag string, dig digest.
 		}
 		// look for loops in parents
 		for _, p := range parents {
-			if key == tag+":"+p.String() {
+			if key == repo+"/"+tag+":"+p.String() {
 				return nil, errs.ErrLoopDetected
 			}
 		}
