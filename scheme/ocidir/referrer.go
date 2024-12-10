@@ -90,7 +90,7 @@ func (o *OCIDir) referrerDelete(ctx context.Context, r ref.Ref, m manifest.Manif
 		return err
 	}
 	// validate/set subject descriptor
-	if subject == nil || subject.MediaType == "" || subject.Digest == "" || subject.Size <= 0 {
+	if subject == nil || subject.Digest == "" {
 		return fmt.Errorf("subject is not set%.0w", errs.ErrNotFound)
 	}
 
@@ -134,7 +134,7 @@ func (o *OCIDir) referrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 		return err
 	}
 	// validate/set subject descriptor
-	if subject == nil || subject.MediaType == "" || subject.Digest == "" || subject.Size <= 0 {
+	if subject == nil || subject.Digest == "" {
 		return fmt.Errorf("subject is not set%.0w", errs.ErrNotFound)
 	}
 

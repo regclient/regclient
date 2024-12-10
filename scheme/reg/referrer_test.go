@@ -109,9 +109,8 @@ func TestReferrer(t *testing.T) {
 		},
 		Annotations: artifact2Annot,
 		Subject: &descriptor.Descriptor{
-			MediaType: mediatype.Docker2Manifest,
-			Size:      int64(mLen),
-			Digest:    mDigest,
+			// handle spec violations (images without a media type and size on the subject)
+			Digest: mDigest,
 		},
 	}
 	artifact2M, err := manifest.New(manifest.WithOrig(artifact2))

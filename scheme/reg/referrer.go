@@ -246,7 +246,7 @@ func (reg *Reg) referrerDelete(ctx context.Context, r ref.Ref, m manifest.Manife
 		return err
 	}
 	// validate/set subject descriptor
-	if subject == nil || subject.MediaType == "" || subject.Digest == "" || subject.Size <= 0 {
+	if subject == nil || subject.Digest == "" {
 		return fmt.Errorf("refers is not set%.0w", errs.ErrNotFound)
 	}
 
@@ -299,7 +299,7 @@ func (reg *Reg) referrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest)
 		return err
 	}
 	// validate/set subject descriptor
-	if subject == nil || subject.MediaType == "" || subject.Digest == "" || subject.Size <= 0 {
+	if subject == nil || subject.Digest == "" {
 		return fmt.Errorf("subject is not set%.0w", errs.ErrNotFound)
 	}
 
@@ -322,7 +322,7 @@ func (reg *Reg) referrerPut(ctx context.Context, r ref.Ref, m manifest.Manifest)
 		if err != nil {
 			return err
 		}
-		if mDesc != nil && mDesc.MediaType != "" && mDesc.Size > 0 {
+		if mDesc != nil && mDesc.Digest != "" {
 			return fmt.Errorf("fallback referrers manifest should not have a subject: %s", rSubject.CommonName())
 		}
 	}
