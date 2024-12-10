@@ -49,7 +49,7 @@ func (reg *Reg) ManifestDelete(ctx context.Context, r ref.Ref, opts ...scheme.Ma
 	if mc.Manifest != nil {
 		if mr, ok := mc.Manifest.(manifest.Subjecter); ok {
 			sDesc, err := mr.GetSubject()
-			if err == nil && sDesc != nil && sDesc.MediaType != "" && sDesc.Size > 0 {
+			if err == nil && sDesc != nil && sDesc.Digest != "" {
 				// attempt to delete the referrer, but ignore if the referrer entry wasn't found
 				err = reg.referrerDelete(ctx, r, mc.Manifest)
 				if err != nil && !errors.Is(err, errs.ErrNotFound) {
@@ -279,7 +279,7 @@ func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest,
 		if err != nil {
 			return err
 		}
-		if mDesc != nil && mDesc.MediaType != "" && mDesc.Size > 0 && mDesc.Digest.String() != "" {
+		if mDesc != nil && mDesc.Digest.String() != "" {
 			rSubj := r.SetDigest(mDesc.Digest.String())
 			reg.cacheRL.Delete(rSubj)
 			if mDesc.Digest.String() != resp.HTTPResponse().Header.Get(OCISubjectHeader) {

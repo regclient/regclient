@@ -93,6 +93,10 @@ func TestReferrer(t *testing.T) {
 		extraAnnot: extraValueB,
 		timeAnnot:  "2021-02-03T04:05:06Z",
 	}
+	// test with a partial subject descriptor containing only the digest
+	mDescPartial := descriptor.Descriptor{
+		Digest: mDesc.Digest,
+	}
 	artifactB := v1.ArtifactManifest{
 		MediaType:    mediatype.OCI1Artifact,
 		ArtifactType: bType,
@@ -104,7 +108,7 @@ func TestReferrer(t *testing.T) {
 			},
 		},
 		Annotations: artifactBAnnot,
-		Subject:     &mDesc,
+		Subject:     &mDescPartial,
 	}
 	artifactBM, err := manifest.New(manifest.WithOrig(artifactB))
 	if err != nil {
