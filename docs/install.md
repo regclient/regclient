@@ -6,6 +6,10 @@
 - [GitHub Actions](#github-actions)
 - [Verifying Signatures](#verifying-signatures)
 - [Reproducible Builds](#reproducible-builds)
+- [Community Maintained Packages](#community-maintained-packages)
+  - [Brew](#brew)
+  - [Snap](#snap)
+  - [Wolfi](#wolfi)
 
 ## Building From Source
 
@@ -174,4 +178,32 @@ regctl image digest ocidir://output/regbot:scratch
 regctl image digest ghcr.io/regclient/regbot:edge
 regctl image digest ocidir://output/regbot:alpine
 regctl image digest ghcr.io/regclient/regbot:edge-alpine
+```
+
+## Community Maintained Packages
+
+The following methods to install regclient are maintained by community contributors.
+
+### Brew
+
+<https://formulae.brew.sh/formula/regclient>
+
+```shell
+brew install regclient
+```
+
+### Snap
+
+<https://snapcraft.io/regclient>
+
+```shell
+snap install regclient
+```
+
+### Wolfi
+
+<https://github.com/wolfi-dev/os/blob/main/regclient.yaml>
+
+```shell
+apk add regclient
 ```

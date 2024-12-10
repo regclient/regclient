@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -16,7 +17,6 @@ import (
 	"github.com/olareg/olareg"
 	oConfig "github.com/olareg/olareg/config"
 	"github.com/opencontainers/go-digest"
-	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/reqresp"
@@ -205,17 +205,12 @@ func TestManifest(t *testing.T) {
 			},
 		},
 	}
-	log := &logrus.Logger{
-		Out:       os.Stderr,
-		Formatter: new(logrus.TextFormatter),
-		Hooks:     make(logrus.LevelHooks),
-		Level:     logrus.WarnLevel,
-	}
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	delayInit, _ := time.ParseDuration("0.05s")
 	delayMax, _ := time.ParseDuration("0.10s")
 	rc := New(
 		WithConfigHost(rcHosts...),
-		WithLog(log),
+		WithSlog(log),
 		WithRetryDelay(delayInit, delayMax),
 	)
 	t.Run("Get", func(t *testing.T) {

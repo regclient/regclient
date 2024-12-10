@@ -3,27 +3,21 @@ package regclient
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"testing"
 	"time"
-
-	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient/types/errs"
 )
 
 func TestRepoList(t *testing.T) {
 	ctx := context.Background()
-	log := &logrus.Logger{
-		Out:       os.Stderr,
-		Formatter: new(logrus.TextFormatter),
-		Hooks:     make(logrus.LevelHooks),
-		Level:     logrus.WarnLevel,
-	}
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	delayInit, _ := time.ParseDuration("0.05s")
 	delayMax, _ := time.ParseDuration("0.10s")
 	rc := New(
-		WithLog(log),
+		WithSlog(log),
 		WithRetryDelay(delayInit, delayMax),
 	)
 	_, err := rc.RepoList(ctx, "registry.example.com/path")

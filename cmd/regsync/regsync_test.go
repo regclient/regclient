@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -15,7 +16,6 @@ import (
 	"github.com/olareg/olareg"
 	oConfig "github.com/olareg/olareg/config"
 	"github.com/opencontainers/go-digest"
-	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
@@ -39,6 +39,10 @@ func TestProcess(t *testing.T) {
 	err = copyfs.Copy(tempDir+"/testrepo", "../../testdata/testrepo")
 	if err != nil {
 		t.Fatalf("failed to copy testrepo to tempdir: %v", err)
+	}
+	err = copyfs.Copy(tempDir+"/external", "../../testdata/external")
+	if err != nil {
+		t.Fatalf("failed to copy external to tempdir: %v", err)
 	}
 	regHandler := olareg.New(oConfig.Config{
 		Storage: oConfig.ConfigStorage{
@@ -115,6 +119,10 @@ defaults:
 	if err != nil {
 		t.Fatalf("failed to parse loop reference: %v", err)
 	}
+	rExt, err := ref.New(tsHost + "/external")
+	if err != nil {
+		t.Fatalf("failed to parse external reference: %v", err)
+	}
 	m1, err := rc.ManifestGet(ctx, r1)
 	if err != nil {
 		t.Fatalf("failed to get manifest v1: %v", err)
@@ -150,6 +158,12 @@ defaults:
 		t.Fatalf("failed to get signature for v2: %v", err)
 	}
 	d2Sig := desc2Sig.Descriptors[0].Digest
+	desc2Ext, err := rc.ReferrerList(ctx, r2, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{ArtifactType: "application/example.sbom"}), scheme.WithReferrerSource(rExt))
+	if err != nil || len(desc2Ext.Descriptors) < 2 {
+		t.Fatalf("failed to get external artifacts for v2: %v", err)
+	}
+	d2Ext1 := desc2Ext.Descriptors[0].Digest
+	d2Ext2 := desc2Ext.Descriptors[1].Digest
 	m3, err := rc.ManifestGet(ctx, r3)
 	if err != nil {
 		t.Fatalf("failed to get manifest v3: %v", err)
@@ -481,6 +495,72 @@ defaults:
 			expErr: nil,
 		},
 		{
+			name: "ImageReferrersExtSrc",
+			sync: ConfigSync{
+				Source:    tsHost + "/testrepo:v2",
+				Target:    tsHost + "/test-referrer-ext1:v2",
+				Type:      "image",
+				Referrers: &boolT,
+				ReferrerFilters: []ConfigReferrerFilter{
+					{
+						ArtifactType: "application/example.sbom",
+					},
+				},
+				ReferrerSrc: tsHost + "/external",
+			},
+			action: actionCopy,
+			expect: map[string]digest.Digest{
+				tsHost + "/test-referrer-ext1:v2": d2,
+			},
+			exists: []string{
+				tsHost + "/test-referrer-ext1@" + d2AMD.String(),
+				tsHost + "/test-referrer-ext1@" + d2Ext1.String(),
+				tsHost + "/test-referrer-ext1@" + d2Ext2.String(),
+			},
+			missing: []string{
+				tsHost + "/test-referrer-ext1@" + d2SBOM.String(),
+				tsHost + "/test-referrer-ext1@" + d2Sig.String(),
+				tsHost + "/test-referrer-ext1@" + d1.String(),
+				tsHost + "/test-referrer-ext1@" + d3.String(),
+			},
+			expErr: nil,
+		},
+		{
+			name: "ImageReferrersExtBoth",
+			sync: ConfigSync{
+				Source:    tsHost + "/testrepo:v2",
+				Target:    tsHost + "/test-referrer-ext2:v2",
+				Type:      "image",
+				Referrers: &boolT,
+				ReferrerFilters: []ConfigReferrerFilter{
+					{
+						ArtifactType: "application/example.sbom",
+					},
+				},
+				ReferrerSrc: tsHost + "/external",
+				ReferrerTgt: tsHost + "/test-referrer-ext2-tgt",
+			},
+			action: actionCopy,
+			expect: map[string]digest.Digest{
+				tsHost + "/test-referrer-ext2:v2": d2,
+			},
+			exists: []string{
+				tsHost + "/test-referrer-ext2@" + d2AMD.String(),
+				tsHost + "/test-referrer-ext2-tgt@" + d2Ext1.String(),
+				tsHost + "/test-referrer-ext2-tgt@" + d2Ext2.String(),
+			},
+			missing: []string{
+				tsHost + "/test-referrer-ext2@" + d2SBOM.String(),
+				tsHost + "/test-referrer-ext2@" + d2Sig.String(),
+				tsHost + "/test-referrer-ext2@" + d1.String(),
+				tsHost + "/test-referrer-ext2@" + d3.String(),
+				tsHost + "/test-referrer-ext2@" + d2Ext1.String(),
+				tsHost + "/test-referrer-ext2@" + d2Ext2.String(),
+			},
+			expErr: nil,
+		},
+
+		{
 			name: "Backup",
 			sync: ConfigSync{
 				Source: tsHost + "/testrepo:v3",
@@ -620,12 +700,7 @@ defaults:
 				conf:     conf,
 				rc:       rc,
 				throttle: pq,
-				log: &logrus.Logger{
-					Out:       os.Stderr,
-					Formatter: new(logrus.TextFormatter),
-					Hooks:     make(logrus.LevelHooks),
-					Level:     logrus.InfoLevel,
-				},
+				log:      slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})),
 			}
 			syncSetDefaults(&tc.sync, conf.Defaults)
 			err = rootOpts.process(ctx, tc.sync, tc.action)
@@ -739,12 +814,7 @@ func TestProcessRef(t *testing.T) {
 				conf: &Config{
 					Sync: []ConfigSync{cs},
 				},
-				log: &logrus.Logger{
-					Out:       os.Stderr,
-					Formatter: new(logrus.TextFormatter),
-					Hooks:     make(logrus.LevelHooks),
-					Level:     logrus.InfoLevel,
-				},
+				log: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})),
 			}
 			src, err := ref.New(cs.Source)
 			if err != nil {

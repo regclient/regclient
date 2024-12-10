@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"strings"
 
 	// crypto libraries included for go-digest
@@ -11,7 +12,6 @@ import (
 	_ "crypto/sha512"
 
 	"github.com/opencontainers/go-digest"
-	"github.com/sirupsen/logrus"
 	lua "github.com/yuin/gopher-lua"
 
 	"github.com/regclient/regclient/types/blob"
@@ -108,11 +108,10 @@ func (s *Sandbox) blobGet(ls *lua.LState) int {
 	if ls.GetTop() >= 2 {
 		d = ls.CheckString(2)
 	}
-	s.log.WithFields(logrus.Fields{
-		"script": s.name,
-		"ref":    r.r.CommonName(),
-		"digest": d,
-	}).Debug("Retrieve blob")
+	s.log.Debug("Retrieve blob",
+		slog.String("script", s.name),
+		slog.String("ref", r.r.CommonName()),
+		slog.String("digest", d))
 	b, err := s.rc.BlobGet(s.ctx, r.r, descriptor.Descriptor{Digest: digest.Digest(d)})
 	if err != nil {
 		ls.RaiseError("Failed retrieving \"%s\" blob \"%s\": %v", r.r.CommonName(), d, err)
@@ -136,11 +135,10 @@ func (s *Sandbox) blobHead(ls *lua.LState) int {
 	if ls.GetTop() >= 2 {
 		d = ls.CheckString(2)
 	}
-	s.log.WithFields(logrus.Fields{
-		"script": s.name,
-		"ref":    r.r.CommonName(),
-		"digest": d,
-	}).Debug("Retrieve blob")
+	s.log.Debug("Retrieve blob",
+		slog.String("script", s.name),
+		slog.String("ref", r.r.CommonName()),
+		slog.String("digest", d))
 	b, err := s.rc.BlobHead(s.ctx, r.r, descriptor.Descriptor{Digest: digest.Digest(d)})
 	if err != nil {
 		ls.RaiseError("Failed retrieving \"%s\" blob \"%s\": %v", r.r.CommonName(), d, err)
@@ -161,10 +159,9 @@ func (s *Sandbox) blobPut(ls *lua.LState) int {
 	}
 	r := s.checkReference(ls, 1)
 	var d digest.Digest
-	s.log.WithFields(logrus.Fields{
-		"script": s.name,
-		"ref":    r.r.CommonName(),
-	}).Debug("Put blob")
+	s.log.Debug("Put blob",
+		slog.String("script", s.name),
+		slog.String("ref", r.r.CommonName()))
 
 	if ls.GetTop() < 2 {
 		ls.ArgError(2, "blob content expected")

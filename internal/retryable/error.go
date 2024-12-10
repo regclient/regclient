@@ -1,5 +1,5 @@
-//go:build !nolegacy
-// +build !nolegacy
+//go:build legacy
+// +build legacy
 
 package retryable
 

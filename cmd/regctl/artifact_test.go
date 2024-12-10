@@ -55,6 +55,11 @@ func TestArtifactGet(t *testing.T) {
 			args:      []string{"artifact", "get", "ocidir://../../testdata/testrepo:ai", "--filter-annotation", "type=sbom", "--config"},
 			expectOut: "{}",
 		},
+		{
+			name:      "External",
+			args:      []string{"artifact", "get", "--subject", "ocidir://../../testdata/testrepo:v2", "--filter-artifact-type", "application/example.sbom", "--sort-annotation", "preference", "--external", "ocidir://../../testdata/external"},
+			expectOut: "bacon",
+		},
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
@@ -129,6 +134,12 @@ func TestArtifactList(t *testing.T) {
 			args:      []string{"artifact", "list", "ocidir://../../testdata/testrepo:v2", "--filter-artifact-type", "application/example.sbom", "--format", "{{ ( index .Descriptors 0 ).ArtifactType }}"},
 			expectOut: "application/example.sbom",
 		},
+		{
+			name:        "External referrers",
+			args:        []string{"artifact", "list", "ocidir://../../testdata/testrepo:v2", "--external", "ocidir://../../testdata/external"},
+			expectOut:   "Referrers:",
+			outContains: true,
+		},
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
@@ -184,9 +195,11 @@ func TestArtifactPut(t *testing.T) {
 			expectErr: errs.ErrInvalidReference,
 		},
 		{
-			name: "Put artifact",
-			args: []string{"artifact", "put", "ocidir://" + testDir + ":put"},
-			in:   testData,
+			name:        "Put artifact",
+			args:        []string{"artifact", "put", "ocidir://" + testDir + ":put"},
+			in:          testData,
+			expectOut:   "using default value for artifact-type is not recommended",
+			outContains: true,
 		},
 		{
 			name: "Put artifact example AT",
@@ -217,6 +230,33 @@ func TestArtifactPut(t *testing.T) {
 			name: "Put subject",
 			args: []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--subject", "ocidir://" + testDir + ":put-example-at"},
 			in:   testData,
+		},
+		{
+			name: "Put subject to external repo",
+			args: []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--subject", "ocidir://" + testDir + ":put-example-at", "--external", "ocidir://" + testDir + "/external"},
+			in:   testData,
+		},
+		{
+			name: "Put subject to external name",
+			args: []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--subject", "ocidir://" + testDir + ":put-example-at", "ocidir://" + testDir + "/external:external-subj"},
+			in:   testData,
+		},
+		{
+			name: "Put subject to external repo and name",
+			args: []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--subject", "ocidir://" + testDir + ":put-example-at", "--external", "ocidir://" + testDir + "/external", "ocidir://" + testDir + "/external:external-subj"},
+			in:   testData,
+		},
+		{
+			name:      "Put external name without subject",
+			args:      []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--external", "ocidir://" + testDir + "/external", "ocidir://" + testDir + "/external:external-subj"},
+			in:        testData,
+			expectErr: errs.ErrUnsupported,
+		},
+		{
+			name:      "Put subject to external repo and different name",
+			args:      []string{"artifact", "put", "--artifact-type", "application/vnd.example", "--subject", "ocidir://" + testDir + ":put-example-at", "--external", "ocidir://" + testDir + "/external", "ocidir://" + testDir + "/copy:copy-subj"},
+			in:        testData,
+			expectErr: errs.ErrUnsupported,
 		},
 		{
 			name: "Put create index",
@@ -329,7 +369,12 @@ func TestArtifactTree(t *testing.T) {
 			args:      []string{"artifact", "tree", "ocidir://../../testdata/testrepo:v2", "--filter-artifact-type", "application/example.sbom", "--format", "{{ ( index .Referrer 0 ).ArtifactType }}"},
 			expectOut: "application/example.sbom",
 		},
-	}
+		{
+			name:        "External referrers",
+			args:        []string{"artifact", "tree", "ocidir://../../testdata/testrepo:v2", "--external", "ocidir://../../testdata/external"},
+			expectOut:   "Referrers",
+			outContains: true,
+		}}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			out, err := cobraTest(t, nil, tc.args...)

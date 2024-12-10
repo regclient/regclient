@@ -1,5 +1,5 @@
-//go:build !nolegacy
-// +build !nolegacy
+//go:build legacy
+// +build legacy
 
 // Package manifest is a legacy package, this has been moved to the types/manifest package
 package manifest

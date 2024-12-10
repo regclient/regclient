@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -14,7 +15,6 @@ import (
 
 	"github.com/olareg/olareg"
 	oConfig "github.com/olareg/olareg/config"
-	"github.com/sirupsen/logrus"
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/copyfs"
@@ -51,17 +51,12 @@ func TestImageCheckBase(t *testing.T) {
 			TLS:      config.TLSDisabled,
 		},
 	}
-	log := &logrus.Logger{
-		Out:       os.Stderr,
-		Formatter: new(logrus.TextFormatter),
-		Hooks:     make(logrus.LevelHooks),
-		Level:     logrus.WarnLevel,
-	}
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	delayInit, _ := time.ParseDuration("0.05s")
 	delayMax, _ := time.ParseDuration("0.10s")
 	rc := New(
 		WithConfigHost(rcHosts...),
-		WithLog(log),
+		WithSlog(log),
 		WithRegOpts(reg.WithDelay(delayInit, delayMax)),
 	)
 	rb1, err := ref.New(tsHost + "/testrepo:b1")
@@ -185,17 +180,12 @@ func TestImageConfig(t *testing.T) {
 			TLS:      config.TLSDisabled,
 		},
 	}
-	log := &logrus.Logger{
-		Out:       os.Stderr,
-		Formatter: new(logrus.TextFormatter),
-		Hooks:     make(logrus.LevelHooks),
-		Level:     logrus.WarnLevel,
-	}
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	delayInit, _ := time.ParseDuration("0.05s")
 	delayMax, _ := time.ParseDuration("0.10s")
 	rc := New(
 		WithConfigHost(rcHosts...),
-		WithLog(log),
+		WithSlog(log),
 		WithRetryDelay(delayInit, delayMax),
 	)
 	tt := []struct {
@@ -300,17 +290,20 @@ func TestCopy(t *testing.T) {
 			TLS:      config.TLSDisabled,
 		},
 	}
-	log := &logrus.Logger{
-		Out:       os.Stderr,
-		Formatter: new(logrus.TextFormatter),
-		Hooks:     make(logrus.LevelHooks),
-		Level:     logrus.WarnLevel,
+	rReferrerSrc, err := ref.New("ocidir://./testdata/external")
+	if err != nil {
+		t.Fatalf("failed to parse referrer src repo: %v", err)
 	}
+	rReferrerTgt, err := ref.New(tsHost + "/dest-external")
+	if err != nil {
+		t.Fatalf("failed to parse referrer tgt repo: %v", err)
+	}
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	delayInit, _ := time.ParseDuration("0.05s")
 	delayMax, _ := time.ParseDuration("0.10s")
 	rc := New(
 		WithConfigHost(rcHosts...),
-		WithLog(log),
+		WithSlog(log),
 		WithRetryDelay(delayInit, delayMax),
 	)
 	tempDir := t.TempDir()
@@ -363,6 +356,12 @@ func TestCopy(t *testing.T) {
 			src:  tsHost + "/testrepo:v2",
 			tgt:  tsHost + "/dest-reg:v2",
 			opts: []ImageOpts{ImageWithReferrers(), ImageWithDigestTags()},
+		},
+		{
+			name: "ocidir to registry with external referrers and digest tags",
+			src:  "ocidir://./testdata/testrepo:v2",
+			tgt:  tsHost + "/dest-ocidir:v2",
+			opts: []ImageOpts{ImageWithReferrers(), ImageWithDigestTags(), ImageWithReferrerSrc(rReferrerSrc), ImageWithReferrerTgt(rReferrerTgt)},
 		},
 		{
 			name: "ocidir to registry with fast check",

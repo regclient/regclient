@@ -1,9 +1,9 @@
 package main
 
 import (
+	"log/slog"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/regclient/regclient/pkg/template"
@@ -59,17 +59,15 @@ func (repoOpts *repoCmd) runRepoLs(cmd *cobra.Command, args []string) error {
 	// TODO: use regex to validate hostname + port
 	i := strings.IndexRune(host, '/')
 	if i >= 0 {
-		log.WithFields(logrus.Fields{
-			"host": host,
-		}).Error("Hostname invalid")
+		repoOpts.rootOpts.log.Error("Hostname invalid",
+			slog.String("host", host))
 		return ErrInvalidInput
 	}
 	rc := repoOpts.rootOpts.newRegClient()
-	log.WithFields(logrus.Fields{
-		"host":  host,
-		"last":  repoOpts.last,
-		"limit": repoOpts.limit,
-	}).Debug("Listing repositories")
+	repoOpts.rootOpts.log.Debug("Listing repositories",
+		slog.String("host", host),
+		slog.String("last", repoOpts.last),
+		slog.Int("limit", repoOpts.limit))
 	opts := []scheme.RepoOpts{}
 	if repoOpts.last != "" {
 		opts = append(opts, scheme.WithRepoLast(repoOpts.last))

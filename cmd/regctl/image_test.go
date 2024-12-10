@@ -11,6 +11,8 @@ import (
 
 	"github.com/olareg/olareg"
 	oConfig "github.com/olareg/olareg/config"
+
+	"github.com/regclient/regclient/types/errs"
 )
 
 func TestImageCopy(t *testing.T) {
@@ -59,6 +61,11 @@ func TestImageCopy(t *testing.T) {
 			name:      "reg-to-reg-platform",
 			args:      []string{"image", "copy", "--platform", "linux/amd64", tsHost + "/testrepo:v3", tsHost + "/newrepo:v3"},
 			expectOut: tsHost + "/newrepo:v3",
+		},
+		{
+			name:      "ocidir-to-reg-external-referrers",
+			args:      []string{"image", "copy", srcRef, tsHost + "/newrepo:v4", "--referrers", "--referrers-src", "ocidir://../../testdata/external", "--referrers-tgt", tsHost + "/external"},
+			expectOut: tsHost + "/newrepo:v4",
 		},
 	}
 	for _, tc := range tt {
@@ -133,6 +140,7 @@ func TestImageInspect(t *testing.T) {
 		name        string
 		cmd         []string
 		expectOut   string
+		expectErr   error
 		outContains bool
 	}{
 		{
@@ -148,21 +156,51 @@ func TestImageInspect(t *testing.T) {
 			outContains: true,
 		},
 		{
+			name:        "format raw",
+			cmd:         []string{"image", "inspect", srcRef, "--format", `raw`},
+			expectOut:   "created",
+			outContains: true,
+		},
+		{
+			name:        "format headers",
+			cmd:         []string{"image", "inspect", srcRef, "--format", `headers`},
+			expectOut:   "",
+			outContains: false,
+		},
+		{
 			name:        "format config",
-			cmd:         []string{"image", "inspect", srcRef, "--format", `{{ index .Config.Labels "version" }}`},
+			cmd:         []string{"image", "inspect", srcRef, "--platform", "linux/amd64", "--format", `{{ index .Config.Labels "version" }}`},
 			expectOut:   "3",
 			outContains: false,
 		},
 		{
 			name:        "format getconfig",
-			cmd:         []string{"image", "inspect", srcRef, "--format", `{{ .GetConfig.OS}}`},
+			cmd:         []string{"image", "inspect", srcRef, "--platform", "linux/arm64", "--format", `{{ .GetConfig.OS}}`},
 			expectOut:   "linux",
 			outContains: false,
+		},
+		{
+			name:      "invalid ref",
+			cmd:       []string{"image", "inspect", "invalid://ref*format"},
+			expectErr: errs.ErrInvalidReference,
+		},
+		{
+			name:      "unsupported artifact",
+			cmd:       []string{"image", "inspect", "ocidir://../../testdata/testrepo:a1"},
+			expectErr: errs.ErrUnsupportedMediaType,
 		},
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			out, err := cobraTest(t, nil, tc.cmd...)
+			if tc.expectErr != nil {
+				if err == nil {
+					t.Errorf("command did not fail")
+				} else if !errors.Is(err, tc.expectErr) && err.Error() != tc.expectErr.Error() {
+					t.Errorf("unexpected error, expected %v, received %v", tc.expectErr, err)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatalf("error: %v", err)
 			}

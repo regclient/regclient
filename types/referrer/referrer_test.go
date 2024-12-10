@@ -2,6 +2,7 @@ package referrer
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/opencontainers/go-digest"
@@ -11,6 +12,7 @@ import (
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/mediatype"
 	v1 "github.com/regclient/regclient/types/oci/v1"
+	"github.com/regclient/regclient/types/ref"
 )
 
 const bOCIImg = `
@@ -358,4 +360,63 @@ func TestDelete(t *testing.T) {
 	if len(rl.Descriptors) != 0 {
 		t.Errorf("number of descriptors, expected 0, received %d", len(rl.Descriptors))
 	}
+}
+
+func TestMarshal(t *testing.T) {
+	t.Parallel()
+	rl := &ReferrerList{
+		Descriptors: []descriptor.Descriptor{},
+		Annotations: map[string]string{},
+		Tags:        []string{},
+	}
+	outB, err := rl.MarshalPretty()
+	if err != nil {
+		t.Fatalf("failed to marshal empty referrer list: %v", err)
+	}
+	out := string(outB)
+	if strings.Contains(out, "Subject:") {
+		t.Errorf("empty response contains a subject line: %s", out)
+	}
+	if strings.Contains(out, "Source:") {
+		t.Errorf("empty response contains a source line: %s", out)
+	}
+	if strings.Contains(out, "Annotations:") {
+		t.Errorf("empty response contains an annotations line: %s", out)
+	}
+
+	rSubj, err := ref.New("registry.example.org/test/subject:latest")
+	if err != nil {
+		t.Fatalf("failed to parse subject ref: %v", err)
+	}
+	rSource, err := ref.New("registry.example.com/test/external")
+	if err != nil {
+		t.Fatalf("failed to parse source ref: %v", err)
+	}
+	rl = &ReferrerList{
+		Subject: rSubj,
+		Source:  rSource,
+		Descriptors: []descriptor.Descriptor{
+			dOCIImg,
+			dOCIImgAT,
+		},
+		Annotations: map[string]string{
+			"com.example.test": "test annotation",
+		},
+		Tags: []string{},
+	}
+	outB, err = rl.MarshalPretty()
+	if err != nil {
+		t.Fatalf("failed to marshal empty referrer list: %v", err)
+	}
+	out = string(outB)
+	if !strings.Contains(out, "Subject:") {
+		t.Errorf("empty response is missing a subject line: %s", out)
+	}
+	if !strings.Contains(out, "Source:") {
+		t.Errorf("empty response is missing a source line: %s", out)
+	}
+	if !strings.Contains(out, "Annotations:") {
+		t.Errorf("empty response is missing an annotations line: %s", out)
+	}
+
 }

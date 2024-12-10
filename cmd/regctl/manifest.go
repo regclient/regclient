@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/regclient/regclient"
@@ -195,17 +195,15 @@ func (manifestOpts *manifestCmd) runManifestDelete(cmd *cobra.Command, args []st
 			return err
 		}
 		r.Digest = manifest.GetDigest(m).String()
-		log.WithFields(logrus.Fields{
-			"tag":    r.Tag,
-			"digest": r.Digest,
-		}).Debug("Forced dereference of tag")
+		manifestOpts.rootOpts.log.Debug("Forced dereference of tag",
+			slog.String("tag", r.Tag),
+			slog.String("digest", r.Digest))
 	}
 
-	log.WithFields(logrus.Fields{
-		"host":   r.Registry,
-		"repo":   r.Repository,
-		"digest": r.Digest,
-	}).Debug("Manifest delete")
+	manifestOpts.rootOpts.log.Debug("Manifest delete",
+		slog.String("host", r.Registry),
+		slog.String("repo", r.Repository),
+		slog.String("digest", r.Digest))
 	mOpts := []regclient.ManifestOpts{}
 	if manifestOpts.referrers {
 		mOpts = append(mOpts, regclient.WithManifestCheckReferrers())
@@ -242,10 +240,9 @@ func (manifestOpts *manifestCmd) runManifestDiff(cmd *cobra.Command, args []stri
 
 	rc := manifestOpts.rootOpts.newRegClient()
 
-	log.WithFields(logrus.Fields{
-		"ref1": r1.CommonName(),
-		"ref2": r2.CommonName(),
-	}).Debug("Manifest diff")
+	manifestOpts.rootOpts.log.Debug("Manifest diff",
+		slog.String("ref1", r1.CommonName()),
+		slog.String("ref2", r2.CommonName()))
 
 	m1, err := rc.ManifestGet(ctx, r1)
 	if err != nil {
@@ -276,7 +273,7 @@ func (manifestOpts *manifestCmd) runManifestDiff(cmd *cobra.Command, args []stri
 func (manifestOpts *manifestCmd) runManifestHead(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	if flagChanged(cmd, "list") {
-		log.Info("list option has been deprecated, manifest list is output by default until a platform is specified")
+		manifestOpts.rootOpts.log.Info("list option has been deprecated, manifest list is output by default until a platform is specified")
 	}
 	if manifestOpts.platform != "" && manifestOpts.requireList {
 		return fmt.Errorf("cannot request a platform and require-list simultaneously")
@@ -289,11 +286,10 @@ func (manifestOpts *manifestCmd) runManifestHead(cmd *cobra.Command, args []stri
 	rc := manifestOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
-	log.WithFields(logrus.Fields{
-		"host": r.Registry,
-		"repo": r.Repository,
-		"tag":  r.Tag,
-	}).Debug("Manifest head")
+	manifestOpts.rootOpts.log.Debug("Manifest head",
+		slog.String("host", r.Registry),
+		slog.String("repo", r.Repository),
+		slog.String("tag", r.Tag))
 
 	mOpts := []regclient.ManifestOpts{}
 	if manifestOpts.requireDigest || (!flagChanged(cmd, "require-digest") && !flagChanged(cmd, "format")) {
@@ -324,7 +320,7 @@ func (manifestOpts *manifestCmd) runManifestHead(cmd *cobra.Command, args []stri
 func (manifestOpts *manifestCmd) runManifestGet(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	if flagChanged(cmd, "list") {
-		log.Info("list option has been deprecated, manifest list is output by default until a platform is specified")
+		manifestOpts.rootOpts.log.Info("list option has been deprecated, manifest list is output by default until a platform is specified")
 	}
 	if manifestOpts.platform != "" && manifestOpts.requireList {
 		return fmt.Errorf("cannot request a platform and require-list simultaneously")
@@ -337,11 +333,10 @@ func (manifestOpts *manifestCmd) runManifestGet(cmd *cobra.Command, args []strin
 	rc := manifestOpts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
-	log.WithFields(logrus.Fields{
-		"host": r.Registry,
-		"repo": r.Repository,
-		"tag":  r.Tag,
-	}).Debug("Manifest get")
+	manifestOpts.rootOpts.log.Debug("Manifest get",
+		slog.String("host", r.Registry),
+		slog.String("repo", r.Repository),
+		slog.String("tag", r.Tag))
 
 	mOpts := []regclient.ManifestOpts{}
 	if manifestOpts.platform != "" {

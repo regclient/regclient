@@ -15,7 +15,7 @@ func cobraTest(t *testing.T, opts *cobraTestOpts, args ...string) (string, error
 	t.Helper()
 
 	buf := new(bytes.Buffer)
-	rootTopCmd := NewRootCmd()
+	rootTopCmd, _ := NewRootCmd()
 	if opts != nil && opts.stdin != nil {
 		rootTopCmd.SetIn(opts.stdin)
 	}

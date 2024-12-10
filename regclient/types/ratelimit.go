@@ -1,5 +1,5 @@
-//go:build !nolegacy
-// +build !nolegacy
+//go:build legacy
+// +build legacy
 
 // Legacy package, this has been moved to top level types package
 

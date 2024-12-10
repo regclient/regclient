@@ -3,10 +3,9 @@ package warning
 import (
 	"bytes"
 	"context"
+	"log/slog"
 	"strings"
 	"testing"
-
-	"github.com/sirupsen/logrus"
 )
 
 func TestWarning(t *testing.T) {
@@ -15,19 +14,13 @@ func TestWarning(t *testing.T) {
 	msg2 := "test 2"
 	ctxBase := context.Background()
 	bufBase := &bytes.Buffer{}
-	logBase := logrus.New()
-	logBase.SetOutput(bufBase)
-	logBase.SetLevel(logrus.InfoLevel)
+	logBase := slog.New(slog.NewTextHandler(bufBase, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	bufWarn := &bytes.Buffer{}
-	logWarn := logrus.New()
-	logWarn.SetOutput(bufWarn)
-	logWarn.SetLevel(logrus.InfoLevel)
+	logWarn := slog.New(slog.NewTextHandler(bufWarn, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	wWarn := &Warning{Hook: NewHook(logWarn)}
 	ctxWarn := NewContext(ctxBase, wWarn)
 	bufEmpty := &bytes.Buffer{}
-	logEmpty := logrus.New()
-	logEmpty.SetOutput(bufEmpty)
-	logEmpty.SetLevel(logrus.InfoLevel)
+	logEmpty := slog.New(slog.NewTextHandler(bufEmpty, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 	// run without context
 	Handle(ctxBase, logBase, msg1)
