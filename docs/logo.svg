@@ -1,0 +1,6 @@
+<svg width="200" height="200" viewBox="-100 -100 175 175" xmlns="http://www.w3.org/2000/svg">
+<title>regclient Logo</title>
+<rect width="175" height="175" x="-100" y="-100" fill="white"/>
+<path d="M -80 -80 L -80 50 M -80 0 A 80 80 0 0 1 57 -57 M 35 -35 A 50 50 0 1 0 35 35" 
+      stroke="black" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>
