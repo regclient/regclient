@@ -1,6 +1,6 @@
 {"name":"docker-arg-alpine-digest","key":"docker.io/library/alpine:3.21.0","version":"sha256:21dc6063fd678b478f57c0e13f47560d0ea4eeba26dfc947b2a4f81f686b9f45"}
 {"name":"docker-arg-alpine-tag","key":"docker.io/library/alpine","version":"3.21.0"}
-{"name":"docker-arg-ecr","key":"https://github.com/awslabs/amazon-ecr-credential-helper.git:main","version":"08549e0fd0019172f53b9ba5e0822a549d85c778"}
+{"name":"docker-arg-ecr","key":"https://github.com/awslabs/amazon-ecr-credential-helper.git:main","version":"c97b94eac15918f48e57fb9121c6bdfb8b1e1523"}
 {"name":"docker-arg-gcr","key":"https://github.com/GoogleCloudPlatform/docker-credential-gcr.git","version":"v2.1.26"}
 {"name":"docker-arg-go-digest","key":"docker.io/library/golang:1.23.4-alpine","version":"sha256:6c5c9590f169f77c8046e45c611d3b28fe477789acd8d3762d23d4744de69812"}
 {"name":"docker-arg-go-tag","key":"docker.io/library/golang","version":"1.23.4"}
@@ -40,7 +40,7 @@
 {"name":"makefile-go-vulncheck","key":"https://go.googlesource.com/vuln.git","version":"v1.1.3"}
 {"name":"makefile-gomajor","key":"https://github.com/icholy/gomajor.git","version":"v0.14.0"}
 {"name":"makefile-gosec","key":"https://github.com/securego/gosec.git","version":"v2.21.4"}
-{"name":"makefile-markdown-lint","key":"docker.io/davidanson/markdownlint-cli2","version":"v0.16.0"}
+{"name":"makefile-markdown-lint","key":"docker.io/davidanson/markdownlint-cli2","version":"v0.17.0"}
 {"name":"makefile-osv-scanner","key":"https://github.com/google/osv-scanner.git","version":"v1.9.2"}
 {"name":"makefile-staticcheck","key":"https://github.com/dominikh/go-tools.git","version":"v0.5.1"}
 {"name":"makefile-syft-container-digest","key":"anchore/syft:v1.18.1","version":"sha256:b8c170b8e51bfc4779ec3ef4399942c57290f5ce76a9c3af564c9d00d4946a6b"}
