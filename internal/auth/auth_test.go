@@ -355,6 +355,48 @@ func TestBearer(t *testing.T) {
 	token2RefreshForm.Set("grant_type", "refresh_token")
 	token2RefreshForm.Set("refresh_token", "refresh-token-value")
 	token2RefreshBody := token2RefreshForm.Encode()
+	token3Resp, _ := json.Marshal(bearerToken{
+		Token:        "token3",
+		ExpiresIn:    900,
+		IssuedAt:     time.Now().Add(900 * time.Second),
+		Scope:        "repository:reponame:pull,push repository:newrepo:delete",
+		RefreshToken: "refresh-token-value",
+	})
+	token3RefreshForm := url.Values{}
+	token3RefreshForm.Set("scope", "repository:reponame:pull,push repository:newrepo:delete")
+	token3RefreshForm.Set("service", "test")
+	token3RefreshForm.Set("client_id", useragent)
+	token3RefreshForm.Set("grant_type", "refresh_token")
+	token3RefreshForm.Set("refresh_token", "refresh-token-value")
+	token3RefreshBody := token3RefreshForm.Encode()
+	token4Resp, _ := json.Marshal(bearerToken{
+		Token:        "token4",
+		ExpiresIn:    900,
+		IssuedAt:     time.Now().Add(900 * time.Second),
+		Scope:        "repository:reponame:pull,push repository:newrepo:delete,custom",
+		RefreshToken: "refresh-token-value",
+	})
+	token4RefreshForm := url.Values{}
+	token4RefreshForm.Set("scope", "repository:reponame:pull,push repository:newrepo:delete repository:newrepo:custom")
+	token4RefreshForm.Set("service", "test")
+	token4RefreshForm.Set("client_id", useragent)
+	token4RefreshForm.Set("grant_type", "refresh_token")
+	token4RefreshForm.Set("refresh_token", "refresh-token-value")
+	token4RefreshBody := token4RefreshForm.Encode()
+	token5Resp, _ := json.Marshal(bearerToken{
+		Token:        "token5",
+		ExpiresIn:    900,
+		IssuedAt:     time.Now().Add(900 * time.Second),
+		Scope:        "repository:reponame:pull,push repository:newrepo:delete,push,pull,custom",
+		RefreshToken: "refresh-token-value",
+	})
+	token5RefreshForm := url.Values{}
+	token5RefreshForm.Set("scope", "repository:reponame:pull,push repository:newrepo:delete,push,pull repository:newrepo:custom")
+	token5RefreshForm.Set("service", "test")
+	token5RefreshForm.Set("client_id", useragent)
+	token5RefreshForm.Set("grant_type", "refresh_token")
+	token5RefreshForm.Set("refresh_token", "refresh-token-value")
+	token5RefreshBody := token5RefreshForm.Encode()
 	rrs := []reqresp.ReqResp{
 		{
 			ReqEntry: reqresp.ReqEntry{
@@ -395,6 +437,42 @@ func TestBearer(t *testing.T) {
 			RespEntry: reqresp.RespEntry{
 				Status: 200,
 				Body:   token2Resp,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "req token3",
+				Method: "POST",
+				Path:   "/tokens",
+				Body:   []byte(token3RefreshBody),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: 200,
+				Body:   token3Resp,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "req token4",
+				Method: "POST",
+				Path:   "/tokens",
+				Body:   []byte(token4RefreshBody),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: 200,
+				Body:   token4Resp,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "req token5",
+				Method: "POST",
+				Path:   "/tokens",
+				Body:   []byte(token5RefreshBody),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: 200,
+				Body:   token5Resp,
 			},
 		},
 	}
@@ -491,5 +569,87 @@ func TestBearer(t *testing.T) {
 	}
 	if bearer.token.ExpiresIn < minTokenLife {
 		t.Errorf("token2 (push) expires early, expected %d, received %d", minTokenLife, bearer.token.ExpiresIn)
+	}
+
+	// send a request for a new scope with new repo
+	err = bearer.AddScope("repository:newrepo:delete")
+	if err != nil {
+		t.Errorf("failed adding scope: %v", err)
+	}
+	resp3, err := bearer.GenerateAuth()
+	if err != nil {
+		t.Errorf("failed to generate auth response3 (delete): %v", err)
+	}
+	if resp3 != "Bearer token3" {
+		t.Errorf("token3 (delete) is invalid, expected %s, received %s", "Bearer token3", resp3)
+	}
+	if bearer.isExpired() {
+		t.Errorf("token3 (delete) is already expired")
+	}
+	if bearer.token.IssuedAt.After(time.Now().UTC()) {
+		t.Errorf("token3 (delete) is after current time")
+	}
+	if bearer.token.ExpiresIn < minTokenLife {
+		t.Errorf("token3 (delete) expires early, expected %d, received %d", minTokenLife, bearer.token.ExpiresIn)
+	}
+
+	// send a request for a new scope with an unknown action
+	err = bearer.AddScope("repository:newrepo:custom")
+	if err != nil {
+		t.Errorf("failed adding scope: %v", err)
+	}
+	resp4, err := bearer.GenerateAuth()
+	if err != nil {
+		t.Errorf("failed to generate auth response4 (custom): %v", err)
+	}
+	if resp4 != "Bearer token4" {
+		t.Errorf("token4 (custom) is invalid, expected %s, received %s", "Bearer token4", resp4)
+	}
+	if bearer.isExpired() {
+		t.Errorf("token4 (custom) is already expired")
+	}
+	if bearer.token.IssuedAt.After(time.Now().UTC()) {
+		t.Errorf("token4 (custom) is after current time")
+	}
+	if bearer.token.ExpiresIn < minTokenLife {
+		t.Errorf("token4 (custom) expires early, expected %d, received %d", minTokenLife, bearer.token.ExpiresIn)
+	}
+
+	// send a request for a new known action having multiple scopes
+	err = bearer.AddScope("repository:newrepo:push,pull")
+	if err != nil {
+		t.Errorf("failed adding scope: %v", err)
+	}
+	resp5, err := bearer.GenerateAuth()
+	if err != nil {
+		t.Errorf("failed to generate auth response5 (push,pull): %v", err)
+	}
+	if resp5 != "Bearer token5" {
+		t.Errorf("token5 (push,pull) is invalid, expected %s, received %s", "Bearer token5", resp5)
+	}
+	if bearer.isExpired() {
+		t.Errorf("token5 (push,pull) is already expired")
+	}
+	if bearer.token.IssuedAt.After(time.Now().UTC()) {
+		t.Errorf("token5 (push,pull) is after current time")
+	}
+	if bearer.token.ExpiresIn < minTokenLife {
+		t.Errorf("token5 (push,pull) expires early, expected %d, received %d", minTokenLife, bearer.token.ExpiresIn)
+	}
+
+	// send new request without another challenge
+	err = bearer.AddScope("repository:newrepo:pull")
+	if !errors.Is(err, ErrNoNewChallenge) {
+		t.Errorf("unexpected error when adding scope: expected err: %v, received: %v", ErrNoNewChallenge, err)
+	}
+	resp5a, err := bearer.GenerateAuth()
+	if err != nil {
+		t.Errorf("failed to generate auth response5 (rerun): %v", err)
+	}
+	if resp5a != "Bearer token5" {
+		t.Errorf("token5 (rerun) is invalid, expected %s, received %s", "Bearer token5", resp5a)
+	}
+	if bearer.isExpired() {
+		t.Errorf("token5 (rerun) is already expired")
 	}
 }
