@@ -538,9 +538,8 @@ func (b *bearerHandler) addScope(scope string) error {
 	if !replaced {
 		b.scopes = append(b.scopes, scope)
 	}
-	// delete any scope specific or invalid tokens
+	// delete old token
 	b.token.Token = ""
-	b.token.RefreshToken = ""
 	return nil
 }
 
@@ -586,11 +585,13 @@ func (b *bearerHandler) GenerateAuth() (string, error) {
 		return fmt.Sprintf("Bearer %s", b.token.Token), nil
 	}
 
-	// attempt to post with oauth form, this also uses refresh tokens
-	if err := b.tryPost(); err == nil {
-		return fmt.Sprintf("Bearer %s", b.token.Token), nil
-	} else if err != ErrUnauthorized {
-		return "", fmt.Errorf("failed to request auth token (post): %w%.0w", err, errs.ErrHTTPUnauthorized)
+	// attempt to post if a refresh token is available
+	if b.token.RefreshToken != "" {
+		if err := b.tryPost(); err == nil {
+			return fmt.Sprintf("Bearer %s", b.token.Token), nil
+		} else if err != ErrUnauthorized {
+			return "", fmt.Errorf("failed to request auth token (post): %w%.0w", err, errs.ErrHTTPUnauthorized)
+		}
 	}
 
 	// attempt a get (with basic auth if user/pass available)
@@ -624,7 +625,7 @@ func (b *bearerHandler) tryGet() error {
 
 	reqParams := req.URL.Query()
 	reqParams.Add("client_id", b.clientID)
-	reqParams.Add("offline_token", "true")
+	// Note, an offline_token should not be requested by default due to broken OAuth2 implementations returning an invalid token
 	if b.service != "" {
 		reqParams.Add("service", b.service)
 	}

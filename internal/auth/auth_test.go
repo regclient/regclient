@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -93,6 +94,12 @@ func TestParseAuthHeader(t *testing.T) {
 // TestAuth checks the auth interface using a mock http server
 func TestAuth(t *testing.T) {
 	t.Parallel()
+	user := "user"
+	pass := "pass"
+	userPassEnc := base64.StdEncoding.EncodeToString([]byte(user + ":" + pass))
+	credsFn := func(s string) Cred {
+		return Cred{User: user, Password: pass}
+	}
 	clientID := "testClient"
 	token1Resp, _ := json.Marshal(bearerToken{
 		Token:     "token1",
@@ -109,11 +116,35 @@ func TestAuth(t *testing.T) {
 	rrs := []reqresp.ReqResp{
 		{
 			ReqEntry: reqresp.ReqEntry{
-				Name:   "req token1",
+				Name:   "req token1 POST",
 				Method: "POST",
 				Path:   "/token1",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusNotFound,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "req token2 POST",
+				Method: "POST",
+				Path:   "/token2",
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusNotFound,
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "req token1 GET",
+				Method: "GET",
+				Path:   "/token1",
 				Headers: http.Header{
-					"User-Agent": []string{clientID},
+					"Authorization": {"Basic " + userPassEnc},
+					"User-Agent":    []string{clientID},
+				},
+				Query: map[string][]string{
+					"scope": {"repository:reponame:pull"},
 				},
 			},
 			RespEntry: reqresp.RespEntry{
@@ -123,24 +154,11 @@ func TestAuth(t *testing.T) {
 		},
 		{
 			ReqEntry: reqresp.ReqEntry{
-				Name:   "req token2 POST",
-				Method: "POST",
-				Path:   "/token2",
-				Headers: http.Header{
-					"User-Agent": []string{clientID},
-				},
-			},
-			RespEntry: reqresp.RespEntry{
-				Status: http.StatusNotFound,
-			},
-		},
-		{
-			ReqEntry: reqresp.ReqEntry{
 				Name:   "req token2 GET",
 				Method: "GET",
 				Path:   "/token2",
 				Headers: http.Header{
-					"Authorization": {"Basic dXNlcjpwYXNz"},
+					"Authorization": {"Basic " + userPassEnc},
 					"User-Agent":    []string{clientID},
 				},
 				Query: map[string][]string{
@@ -187,9 +205,7 @@ func TestAuth(t *testing.T) {
 		{
 			name: "basic",
 			auth: NewAuth(
-				WithCreds(func(s string) Cred {
-					return Cred{User: "user", Password: "pass"}
-				}),
+				WithCreds(credsFn),
 			),
 			handleResponse: &http.Response{
 				Request: &http.Request{
@@ -204,15 +220,13 @@ func TestAuth(t *testing.T) {
 				URL:    tsURL,
 				Header: http.Header{},
 			},
-			wantAuthHeader: "Basic dXNlcjpwYXNz",
+			wantAuthHeader: "Basic " + userPassEnc,
 		},
 		{
 			name: "bearer1",
 			auth: NewAuth(
 				WithClientID(clientID),
-				WithCreds(func(s string) Cred {
-					return Cred{User: "user", Password: "pass"}
-				}),
+				WithCreds(credsFn),
 			),
 			handleResponse: &http.Response{
 				Request: &http.Request{
@@ -235,9 +249,7 @@ func TestAuth(t *testing.T) {
 			name: "bearer2",
 			auth: NewAuth(
 				WithClientID(clientID),
-				WithCreds(func(s string) Cred {
-					return Cred{User: "user", Password: "pass"}
-				}),
+				WithCreds(credsFn),
 			),
 			handleResponse: &http.Response{
 				Request: &http.Request{
@@ -321,14 +333,7 @@ func TestBearer(t *testing.T) {
 		Scope:        "repository:reponame:pull",
 		RefreshToken: "refresh-token-value",
 	})
-	tokenPassForm := url.Values{}
-	tokenPassForm.Set("scope", "repository:reponame:pull")
-	tokenPassForm.Set("service", "test")
-	tokenPassForm.Set("client_id", useragent)
-	tokenPassForm.Set("grant_type", "password")
-	tokenPassForm.Set("username", user)
-	tokenPassForm.Set("password", pass)
-	tokenPassBody := tokenPassForm.Encode()
+	userPassEnc := base64.StdEncoding.EncodeToString([]byte(user + ":" + pass))
 	tokenRefreshForm := url.Values{}
 	tokenRefreshForm.Set("scope", "repository:reponame:pull")
 	tokenRefreshForm.Set("service", "test")
@@ -343,21 +348,25 @@ func TestBearer(t *testing.T) {
 		Scope:        "repository:reponame:pull,push",
 		RefreshToken: "refresh-token-value",
 	})
-	token2PassForm := url.Values{}
-	token2PassForm.Set("scope", "repository:reponame:pull,push")
-	token2PassForm.Set("service", "test")
-	token2PassForm.Set("client_id", useragent)
-	token2PassForm.Set("grant_type", "password")
-	token2PassForm.Set("username", user)
-	token2PassForm.Set("password", pass)
-	token2PassBody := token2PassForm.Encode()
+	token2RefreshForm := url.Values{}
+	token2RefreshForm.Set("scope", "repository:reponame:pull,push")
+	token2RefreshForm.Set("service", "test")
+	token2RefreshForm.Set("client_id", useragent)
+	token2RefreshForm.Set("grant_type", "refresh_token")
+	token2RefreshForm.Set("refresh_token", "refresh-token-value")
+	token2RefreshBody := token2RefreshForm.Encode()
 	rrs := []reqresp.ReqResp{
 		{
 			ReqEntry: reqresp.ReqEntry{
 				Name:   "req token1",
-				Method: "POST",
+				Method: "GET",
 				Path:   "/tokens",
-				Body:   []byte(tokenPassBody),
+				Headers: http.Header{
+					"Authorization": {"Basic " + userPassEnc},
+				},
+				Query: map[string][]string{
+					"scope": {"repository:reponame:pull"},
+				},
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: 200,
@@ -381,7 +390,7 @@ func TestBearer(t *testing.T) {
 				Name:   "req token2",
 				Method: "POST",
 				Path:   "/tokens",
-				Body:   []byte(token2PassBody),
+				Body:   []byte(token2RefreshBody),
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: 200,
