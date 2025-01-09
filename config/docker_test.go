@@ -26,7 +26,7 @@ func TestDocker(t *testing.T) {
 		h := h // shadow h for unique var/pointer
 		hostMap[h.Name] = &h
 	}
-	tests := []struct {
+	tt := []struct {
 		name             string
 		hostname         string
 		expectUser       string
@@ -35,6 +35,7 @@ func TestDocker(t *testing.T) {
 		expectTLS        TLSConf
 		expectHostname   string
 		expectCredHost   string
+		expectMissing    bool
 	}{
 		{
 			name:             "testhost",
@@ -84,29 +85,40 @@ func TestDocker(t *testing.T) {
 			expectTLS:        TLSDisabled,
 			expectCredHost:   "http://storehttp.example.com/",
 		},
+		{
+			name:          "missing-from-repo.example.com", // entries with a repository are ignored
+			expectMissing: true,
+		},
+		{
+			name:          "index.docker.io", // verify access-token and refresh-token entries are ignored
+			expectMissing: true,
+		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			h, ok := hostMap[tt.hostname]
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			h, ok := hostMap[tc.hostname]
 			if !ok {
-				t.Fatalf("host not found: %s", tt.hostname)
+				if !tc.expectMissing {
+					t.Fatalf("host not found: %s", tc.hostname)
+				}
+				return
 			}
-			if tt.expectUser != h.User {
-				t.Errorf("user mismatch, expect %s, received %s", tt.expectUser, h.User)
+			if tc.expectUser != h.User {
+				t.Errorf("user mismatch, expect %s, received %s", tc.expectUser, h.User)
 			}
-			if tt.expectPass != h.Pass {
-				t.Errorf("pass mismatch, expect %s, received %s", tt.expectPass, h.Pass)
+			if tc.expectPass != h.Pass {
+				t.Errorf("pass mismatch, expect %s, received %s", tc.expectPass, h.Pass)
 			}
-			if tt.expectTLS != h.TLS {
-				eTLS, _ := tt.expectTLS.MarshalText()
+			if tc.expectTLS != h.TLS {
+				eTLS, _ := tc.expectTLS.MarshalText()
 				hTLS, _ := h.TLS.MarshalText()
 				t.Errorf("tls mismatch, expect %s, received %s", eTLS, hTLS)
 			}
-			if tt.expectCredHelper != h.CredHelper {
-				t.Errorf("cred helper mismatch, expect %s, received %s", tt.expectCredHelper, h.CredHelper)
+			if tc.expectCredHelper != h.CredHelper {
+				t.Errorf("cred helper mismatch, expect %s, received %s", tc.expectCredHelper, h.CredHelper)
 			}
-			if tt.expectCredHost != h.CredHost {
-				t.Errorf("cred host mismatch, expect %s, received %s", tt.expectCredHost, h.CredHost)
+			if tc.expectCredHost != h.CredHost {
+				t.Errorf("cred host mismatch, expect %s, received %s", tc.expectCredHost, h.CredHost)
 			}
 		})
 	}
