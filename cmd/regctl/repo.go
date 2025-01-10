@@ -43,10 +43,10 @@ regctl repo ls --last repo1 --limit 5 registry.example.org`,
 	}
 
 	repoLsCmd.Flags().StringVarP(&repoOpts.last, "last", "", "", "Specify the last repo from a previous request for pagination")
-	repoLsCmd.Flags().IntVarP(&repoOpts.limit, "limit", "", 0, "Specify the number of repos to retrieve")
-	repoLsCmd.Flags().StringVarP(&repoOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	_ = repoLsCmd.RegisterFlagCompletionFunc("last", completeArgNone)
+	repoLsCmd.Flags().IntVarP(&repoOpts.limit, "limit", "", 0, "Specify the number of repos to retrieve")
 	_ = repoLsCmd.RegisterFlagCompletionFunc("limit", completeArgNone)
+	repoLsCmd.Flags().StringVarP(&repoOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	_ = repoLsCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
 	repoTopCmd.AddCommand(repoLsCmd)

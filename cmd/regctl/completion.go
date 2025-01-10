@@ -98,10 +98,11 @@ func completeArgDefault(cmd *cobra.Command, args []string, toComplete string) ([
 
 func completeArgPlatform(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	return []string{
+		"local", "linux", "windows",
 		"linux/amd64", "linux/386",
-		"linux/arm/v6", "linux/arm/v7", "linux/arm64/v8",
-		"linux/mips64le", "linux/ppc64le", "linux/s390x",
-		"windows/amd64/10.0.17763.1577", "windows/amd64/10.0.14393.4046",
+		"linux/arm/v5", "linux/arm/v6", "linux/arm/v7", "linux/arm64",
+		"linux/mips64le", "linux/ppc64le", "linux/riscv64", "linux/s390x",
+		"windows/amd64",
 	}, cobra.ShellCompDirectiveNoFileComp
 }
 

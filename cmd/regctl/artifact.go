@@ -183,6 +183,7 @@ regctl artifact tree --digest-tags ghcr.io/regclient/regsync:latest`,
 	artifactGetCmd.Flags().StringVar(&artifactOpts.subject, "subject", "", "Get a referrer to the subject reference")
 	artifactGetCmd.Flags().StringVar(&artifactOpts.externalRepo, "external", "", "Query referrers from a separate source")
 	artifactGetCmd.Flags().StringVarP(&artifactOpts.platform, "platform", "p", "", "Specify platform of a subject (e.g. linux/amd64 or local)")
+	_ = artifactGetCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	artifactGetCmd.Flags().StringVar(&artifactOpts.filterAT, "filter-artifact-type", "", "Filter referrers by artifactType")
 	artifactGetCmd.Flags().StringArrayVar(&artifactOpts.filterAnnot, "filter-annotation", []string{}, "Filter referrers by annotation (key=value)")
 	artifactGetCmd.Flags().BoolVar(&artifactOpts.getConfig, "config", false, "Show the config, overrides file options")
@@ -207,6 +208,7 @@ regctl artifact tree --digest-tags ghcr.io/regclient/regsync:latest`,
 	artifactListCmd.Flags().StringVar(&artifactOpts.formatList, "format", "{{printPretty .}}", "Format output with go template syntax")
 	artifactListCmd.Flags().BoolVar(&artifactOpts.latest, "latest", false, "Sort using the OCI created annotation")
 	artifactListCmd.Flags().StringVarP(&artifactOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
+	_ = artifactListCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	artifactListCmd.Flags().StringVar(&artifactOpts.sortAnnot, "sort-annotation", "", "Annotation used for sorting results")
 	artifactListCmd.Flags().BoolVar(&artifactOpts.sortDesc, "sort-desc", false, "Sort in descending order")
 
@@ -236,6 +238,7 @@ regctl artifact tree --digest-tags ghcr.io/regclient/regsync:latest`,
 	artifactPutCmd.Flags().StringVar(&artifactOpts.subject, "subject", "", "Set the subject to a reference (used for referrer queries)")
 	artifactPutCmd.Flags().BoolVar(&artifactOpts.stripDirs, "strip-dirs", false, "Strip directories from filenames in file-title")
 	artifactPutCmd.Flags().StringVarP(&artifactOpts.platform, "platform", "p", "", "Specify platform of a subject (e.g. linux/amd64 or local)")
+	_ = artifactPutCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	artifactPutCmd.Flags().StringVar(&artifactOpts.refers, "refers", "", "EXPERIMENTAL: Set a referrer to the reference")
 	_ = artifactPutCmd.Flags().MarkHidden("refers")
 
