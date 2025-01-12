@@ -35,7 +35,7 @@ ifeq "$(strip $(VER_BUMP))" ''
 endif
 MARKDOWN_LINT_VER?=v0.17.1
 GOMAJOR_VER?=v0.14.0
-GOSEC_VER?=v2.21.4
+GOSEC_VER?=v2.22.0
 GO_VULNCHECK_VER?=v1.1.3
 OSV_SCANNER_VER?=v1.9.2
 SYFT?=$(shell command -v syft 2>/dev/null)
