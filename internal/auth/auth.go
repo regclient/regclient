@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -522,25 +523,63 @@ func (b *bearerHandler) AddScope(scope string) error {
 		}
 		return nil
 	}
-	return b.addScope(scope)
+	b.addScope(scope)
+	return nil
 }
 
-func (b *bearerHandler) addScope(scope string) error {
-	replaced := false
-	for i, cur := range b.scopes {
-		// extend an existing scope with more actions
-		if strings.HasPrefix(scope, cur+",") {
-			b.scopes[i] = scope
-			replaced = true
-			break
-		}
-	}
-	if !replaced {
+func (b *bearerHandler) addScope(scope string) {
+	if !b.tryExtendExistingScope(scope) {
 		b.scopes = append(b.scopes, scope)
 	}
 	// delete old token
 	b.token.Token = ""
-	return nil
+}
+
+var knownActions = []string{"pull", "push", "delete"}
+
+// tryExtendExistingScope extends an existing scope if both the new scope and the current scope contain only knownActions.
+// It returns true if actions are added or are already present. Otherwise, it returns false,
+// indicating that the new scope should be appended to b.scopes instead.
+func (b *bearerHandler) tryExtendExistingScope(scope string) bool {
+	repo, actions, ok := parseScope(scope)
+	if !ok {
+		return false
+	}
+	scopePrefix := "repository:" + repo + ":"
+	for i, cur := range b.scopes {
+		if !strings.HasPrefix(cur, scopePrefix) {
+			continue
+		}
+		_, curActions, curOk := parseScope(cur)
+		if !curOk {
+			continue
+		}
+
+		for _, a := range actions {
+			if !slices.Contains(curActions, a) {
+				curActions = append(curActions, a)
+			}
+		}
+		b.scopes[i] = scopePrefix + strings.Join(curActions, ",")
+		return true
+	}
+	return false
+}
+
+// parseScope splits a scope into the repo and slice of actions.
+// Unknown actions in the scope will set bool to false.
+func parseScope(scope string) (string, []string, bool) {
+	scopeSplit := strings.SplitN(scope, ":", 3)
+	if scopeSplit[0] != "repository" || len(scopeSplit) < 3 {
+		return "", nil, false
+	}
+	actionSplit := strings.Split(scopeSplit[2], ",")
+	for _, a := range actionSplit {
+		if !slices.Contains(knownActions, a) {
+			return "", nil, false
+		}
+	}
+	return scopeSplit[1], actionSplit, true
 }
 
 // ProcessChallenge handles WWW-Authenticate header for bearer tokens
@@ -573,7 +612,7 @@ func (b *bearerHandler) ProcessChallenge(c challenge) error {
 		return ErrInvalidChallenge
 	}
 	if !existingScope {
-		return b.addScope(c.params["scope"])
+		b.addScope(c.params["scope"])
 	}
 	return nil
 }
@@ -695,11 +734,30 @@ func (b *bearerHandler) scopeExists(search string) bool {
 	if search == "" {
 		return true
 	}
+	searchRepo, searchActions, searchOk := parseScope(search)
+	if !searchOk {
+		return slices.Contains(b.scopes, search)
+	}
+	scopePrefix := "repository:" + searchRepo + ":"
 	for _, scope := range b.scopes {
-		// allow scopes with additional actions, search for pull should match pull,push
-		if scope == search || strings.HasPrefix(scope, search+",") {
+		if scope == search {
 			return true
 		}
+		if !strings.HasPrefix(scope, scopePrefix) {
+			continue
+		}
+		_, actions, ok := parseScope(scope)
+		if !ok {
+			continue
+		}
+
+		for _, sa := range searchActions {
+			if !slices.Contains(actions, sa) {
+				return false
+			}
+		}
+		return true
+
 	}
 	return false
 }
