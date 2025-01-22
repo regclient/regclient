@@ -10,6 +10,7 @@ import (
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
+	"github.com/regclient/regclient/internal/cobradoc"
 	"github.com/regclient/regclient/internal/strparse"
 	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/pkg/template"
@@ -39,7 +40,7 @@ func NewRootCmd() (*cobra.Command, *rootCmd) {
 		Use:   "regctl <cmd>",
 		Short: "Utility for accessing docker registries",
 		Long: `Utility for accessing docker registries
-More details at https://github.com/regclient/regclient`,
+More details at <https://github.com/regclient/regclient>`,
 		Example: `
 # login to ghcr.io
 regctl registry login ghcr.io
@@ -94,10 +95,10 @@ regctl version --format '{{.VCSTag}}'`,
 
 	rootTopCmd.PersistentPreRunE = rootOpts.rootPreRun
 	rootTopCmd.AddCommand(versionCmd)
+	rootTopCmd.AddCommand(cobradoc.NewCmd(rootOpts.name, "cli-doc"))
 	rootTopCmd.AddCommand(
 		NewArtifactCmd(&rootOpts),
 		NewBlobCmd(&rootOpts),
-		NewCompletionCmd(&rootOpts),
 		NewConfigCmd(&rootOpts),
 		NewDigestCmd(&rootOpts),
 		NewImageCmd(&rootOpts),

@@ -21,6 +21,7 @@ import (
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
+	"github.com/regclient/regclient/internal/cobradoc"
 	"github.com/regclient/regclient/internal/pqueue"
 	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/pkg/template"
@@ -68,7 +69,7 @@ func NewRootCmd() (*cobra.Command, *rootCmd) {
 		Use:   "regsync <cmd>",
 		Short: "Utility for mirroring docker repositories",
 		Long: `Utility for mirroring docker repositories
-More details at https://github.com/regclient/regclient`,
+More details at <https://github.com/regclient/regclient>`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
@@ -135,6 +136,7 @@ sync step is finished.`,
 	rootTopCmd.AddCommand(onceCmd)
 	rootTopCmd.AddCommand(configCmd)
 	rootTopCmd.AddCommand(versionCmd)
+	rootTopCmd.AddCommand(cobradoc.NewCmd(rootTopCmd.Name(), "cli-doc"))
 
 	rootTopCmd.PersistentPreRunE = rootOpts.rootPreRun
 	return rootTopCmd, &rootOpts
