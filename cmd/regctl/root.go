@@ -79,9 +79,9 @@ regctl version --format '{{.VCSTag}}'`,
 
 	rootOpts.log = slog.New(slog.NewTextHandler(rootTopCmd.ErrOrStderr(), &slog.HandlerOptions{Level: slog.LevelWarn}))
 
-	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", slog.LevelWarn.String(), "Log level (trace, debug, info, warn, error, fatal, panic)")
+	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", slog.LevelWarn.String(), "Log level (trace, debug, info, warn, error)")
 	_ = rootTopCmd.RegisterFlagCompletionFunc("verbosity", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"trace", "debug", "info", "warn", "error", "fatal", "panic"}, cobra.ShellCompDirectiveNoFileComp
+		return []string{"trace", "debug", "info", "warn", "error"}, cobra.ShellCompDirectiveNoFileComp
 	})
 	rootTopCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
 	_ = rootTopCmd.RegisterFlagCompletionFunc("logopt", completeArgNone)
