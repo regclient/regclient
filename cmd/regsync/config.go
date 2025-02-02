@@ -126,6 +126,9 @@ func ConfigLoadReader(r io.Reader) (*Config, error) {
 		return nil, err
 	}
 	// verify loaded version is not higher than supported version
+	if c.Version == 0 {
+		c.Version = 1
+	}
 	if c.Version > 1 {
 		return c, ErrUnsupportedConfigVersion
 	}
@@ -240,11 +243,12 @@ func syncSetDefaults(s *ConfigSync, d ConfigDefaults) {
 	if s.Backup == "" && d.Backup != "" {
 		s.Backup = d.Backup
 	}
-	if s.Schedule == "" && d.Schedule != "" {
-		s.Schedule = d.Schedule
-	}
-	if s.Interval == 0 && s.Schedule == "" && d.Interval != 0 {
-		s.Interval = d.Interval
+	if s.Schedule == "" && s.Interval == 0 {
+		if d.Schedule != "" {
+			s.Schedule = d.Schedule
+		} else if d.Interval != 0 {
+			s.Interval = d.Interval
+		}
 	}
 	if s.RateLimit.Min == 0 && d.RateLimit.Min != 0 {
 		s.RateLimit.Min = d.RateLimit.Min
