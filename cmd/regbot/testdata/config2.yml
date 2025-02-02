@@ -1,0 +1,14 @@
+creds:
+  - registry: registry:5000
+    tls: disabled
+defaults:
+  schedule: "15 3 * * *"
+scripts:
+  - name: hello world
+    timeout: 1m
+    interval: 12h
+    script: |
+      log("hello world")
+  - name: default schedule
+    script: |
+      log("test")

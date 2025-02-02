@@ -10,6 +10,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -865,56 +867,166 @@ func TestProcessRef(t *testing.T) {
 
 func TestConfigRead(t *testing.T) {
 	t.Parallel()
-	// CAUTION: the below yaml is space indented and will not parse with tabs
-	cRead := bytes.NewReader([]byte(`
-    version: 1
-    creds:
-      - registry: registry:5000
-        tls: disabled
-      - registry: docker.io
-    defaults:
-      ratelimit:
-        min: 100
-        retry: 15m
-      parallel: 2
-      interval: 60m
-      backup: "bkup-{{.Ref.Tag}}"
-      cacheCount: 500
-      cacheTime: "5m"
-    x-sync-hub: &sync-hub
-      target: registry:5000/hub/{{ .Sync.Source }}
-    x-sync-gcr: &sync-gcr
-      target: registry:5000/gcr/{{ index (split .Sync.Source "gcr.io/") 1 }}
-    sync:
-      - source: busybox:latest
-        target: registry:5000/library/busybox:latest
-        type: image
-      - <<: *sync-hub
-        source: alpine
-        type: repository
-        tags:
-          allow:
-          - 3
-          - 3.9
-          - latest
-      - <<: *sync-gcr
-        source: gcr.io/example/repo
-        type: repository
-        tags:
-          allow:
-          - 3
-          - 3.9
-          - latest
-  `))
-	c, err := ConfigLoadReader(cRead)
-	if err != nil {
-		t.Fatalf("Filed to load reader: %v", err)
+	bFalse := false
+	tt := []struct {
+		name   string
+		file   string
+		expect Config
+		expErr error
+	}{
+		{
+			name: "config1",
+			file: "config1.yml",
+			expect: Config{
+				Version: 1,
+				Creds: []config.Host{
+					{
+						Name: "registry:5000",
+						TLS:  config.TLSDisabled,
+					},
+					{
+						Name: "docker.io",
+					},
+				},
+				Defaults: ConfigDefaults{
+					RateLimit: ConfigRateLimit{
+						Min:   100,
+						Retry: 15 * time.Minute,
+					},
+					Parallel:   2,
+					Interval:   60 * time.Minute,
+					Backup:     "bkup-{{.Ref.Tag}}",
+					CacheCount: 500,
+					CacheTime:  5 * time.Minute,
+				},
+				Sync: []ConfigSync{
+					{
+						Source:   "busybox:latest",
+						Target:   "registry:5000/library/busybox:latest",
+						Type:     "image",
+						Schedule: "15 3 * * *",
+						Backup:   "bkup-{{.Ref.Tag}}",
+						RateLimit: ConfigRateLimit{
+							Min:   100,
+							Retry: 15 * time.Minute,
+						},
+						MediaTypes:      defaultMediaTypes,
+						DigestTags:      &bFalse,
+						Referrers:       &bFalse,
+						FastCheck:       &bFalse,
+						ForceRecursive:  &bFalse,
+						IncludeExternal: &bFalse,
+					},
+					{
+						Source: "alpine",
+						Target: "registry:5000/hub/alpine",
+						Type:   "repository",
+						Tags: AllowDeny{
+							Allow: []string{"3", "3.9", "latest"},
+						},
+						Interval: 60 * time.Minute,
+						Backup:   "bkup-{{.Ref.Tag}}",
+						RateLimit: ConfigRateLimit{
+							Min:   100,
+							Retry: 15 * time.Minute,
+						},
+						MediaTypes:      defaultMediaTypes,
+						DigestTags:      &bFalse,
+						Referrers:       &bFalse,
+						FastCheck:       &bFalse,
+						ForceRecursive:  &bFalse,
+						IncludeExternal: &bFalse,
+					},
+					{
+						Source: "gcr.io/example/repo",
+						Target: "registry:5000/gcr/example/repo",
+						Type:   "repository",
+						Tags: AllowDeny{
+							Allow: []string{"3", "3.9", "latest"},
+						},
+						Interval: 60 * time.Minute,
+						Backup:   "bkup-{{.Ref.Tag}}",
+						RateLimit: ConfigRateLimit{
+							Min:   100,
+							Retry: 15 * time.Minute,
+						},
+						MediaTypes:      defaultMediaTypes,
+						DigestTags:      &bFalse,
+						Referrers:       &bFalse,
+						FastCheck:       &bFalse,
+						ForceRecursive:  &bFalse,
+						IncludeExternal: &bFalse,
+					},
+				},
+			},
+		},
+		{
+			name: "config2",
+			file: "config2.yml",
+			expect: Config{
+				Version: 1,
+				Creds: []config.Host{
+					{
+						Name: "registry:5000",
+						TLS:  config.TLSDisabled,
+					},
+				},
+				Defaults: ConfigDefaults{
+					Schedule: "15 3 * * *",
+					RateLimit: ConfigRateLimit{
+						Retry: rateLimitRetryMin,
+					},
+				},
+				Sync: []ConfigSync{
+					{
+						Source:   "busybox:latest",
+						Target:   "registry:5000/library/busybox:latest",
+						Type:     "image",
+						Interval: 12 * time.Hour,
+						RateLimit: ConfigRateLimit{
+							Retry: rateLimitRetryMin,
+						},
+						MediaTypes:      defaultMediaTypes,
+						DigestTags:      &bFalse,
+						Referrers:       &bFalse,
+						FastCheck:       &bFalse,
+						ForceRecursive:  &bFalse,
+						IncludeExternal: &bFalse,
+					},
+					{
+						Source:   "alpine:latest",
+						Target:   "registry:5000/library/alpine:latest",
+						Type:     "image",
+						Schedule: "15 3 * * *",
+						RateLimit: ConfigRateLimit{
+							Retry: rateLimitRetryMin,
+						},
+						MediaTypes:      defaultMediaTypes,
+						DigestTags:      &bFalse,
+						Referrers:       &bFalse,
+						FastCheck:       &bFalse,
+						ForceRecursive:  &bFalse,
+						IncludeExternal: &bFalse,
+					},
+				},
+			},
+		},
 	}
-	if c.Sync[1].Target != "registry:5000/hub/alpine" {
-		t.Errorf("template sync-hub mismatch, expected: %s, received: %s", "registry:5000/hub/alpine", c.Sync[1].Target)
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			cRead, err := ConfigLoadFile(filepath.Join("./testdata", tc.file))
+			if tc.expErr != nil {
+				if !errors.Is(err, tc.expErr) {
+					t.Errorf("expected error %v, received %v", tc.expErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("failed to read: %v", err)
+			}
+			if !reflect.DeepEqual(tc.expect, *cRead) {
+				t.Errorf("parsing mismatch, expected:\n%#v\n  received:\n%#v", tc.expect, *cRead)
+			}
+		})
 	}
-	if c.Sync[2].Target != "registry:5000/gcr/example/repo" {
-		t.Errorf("template sync-gcr mismatch, expected: %s, received: %s", "registry:5000/gcr/example/repo", c.Sync[2].Target)
-	}
-	// TODO: test remainder of templates and parsing
 }
