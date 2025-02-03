@@ -217,9 +217,6 @@ func (o *OCIDir) manifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 	for _, opt := range opts {
 		opt(&config)
 	}
-	if !config.Child && r.Digest == "" && r.Tag == "" {
-		r.Tag = "latest"
-	}
 	err := o.initIndex(r, true)
 	if err != nil {
 		return err
@@ -232,13 +229,33 @@ func (o *OCIDir) manifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 	if err != nil {
 		return fmt.Errorf("could not serialize manifest: %w", err)
 	}
-	if r.Tag == "" {
-		// force digest to match manifest value
-		r.Digest = desc.Digest.String()
+	if config.Child {
+		if r.Tag == "" {
+			// force digest to match manifest value
+			r.Digest = desc.Digest.String()
+		}
+	} else if r.Digest == "" {
+		srcRef := m.GetRef()
+		if r.Tag == "" {
+			if srcRef.Tag != "" {
+				r.Tag = srcRef.Tag
+			} else {
+				r.Tag = "latest"
+			}
+		}
+		if r.Registry == "" {
+			r.Registry = srcRef.Registry
+		}
+		if r.Repository == "" {
+			r.Repository = srcRef.Repository
+		}
 	}
 	if r.Tag != "" {
 		desc.Annotations = map[string]string{
 			aOCIRefName: r.Tag,
+		}
+		if r.Registry != "" && r.Repository != "" {
+			desc.Annotations[aCtrdImageName] = r.Registry + "/" + r.Repository + ":" + r.Tag
 		}
 	}
 	// create manifest CAS file

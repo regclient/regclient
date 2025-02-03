@@ -10,6 +10,8 @@ import (
 var (
 	// ErrAllRequestsFailed when there are no mirrors left to try
 	ErrAllRequestsFailed = errors.New("all requests failed")
+	// ErrAmbiguous if the multiple possible values found
+	ErrAmbiguous = errors.New("ambiguous")
 	// ErrAPINotFound if an api is not available for the host
 	ErrAPINotFound = errors.New("API not found")
 	// ErrBackoffLimit maximum backoff attempts reached
