@@ -5,6 +5,15 @@
     },
     "hub-tool-token": {
       "identitytoken": "MTIzNDUK"
+    },
+    "https://index.docker.io/v1/access-token": {
+    },
+    "https://index.docker.io/v1/": {
+    },
+    "https://index.docker.io/v1/refresh-token": {
+    },
+    "http://missing-from-repo.example.com/foo": {
+      "auth": "aGVsbG86ZG9ja2Vy"
     }
   },
   "credHelpers": {

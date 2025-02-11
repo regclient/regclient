@@ -10,6 +10,7 @@ import (
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
+	"github.com/regclient/regclient/internal/cobradoc"
 	"github.com/regclient/regclient/internal/strparse"
 	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/pkg/template"
@@ -39,7 +40,7 @@ func NewRootCmd() (*cobra.Command, *rootCmd) {
 		Use:   "regctl <cmd>",
 		Short: "Utility for accessing docker registries",
 		Long: `Utility for accessing docker registries
-More details at https://github.com/regclient/regclient`,
+More details at <https://github.com/regclient/regclient>`,
 		Example: `
 # login to ghcr.io
 regctl registry login ghcr.io
@@ -78,26 +79,26 @@ regctl version --format '{{.VCSTag}}'`,
 
 	rootOpts.log = slog.New(slog.NewTextHandler(rootTopCmd.ErrOrStderr(), &slog.HandlerOptions{Level: slog.LevelWarn}))
 
-	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", slog.LevelWarn.String(), "Log level (debug, info, warn, error, fatal, panic)")
-	rootTopCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
-	rootTopCmd.PersistentFlags().StringArrayVar(&rootOpts.hosts, "host", []string{}, "Registry hosts to add (reg=registry,user=username,pass=password,tls=enabled)")
-	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.userAgent, "user-agent", "", "", "Override user agent")
-
+	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", slog.LevelWarn.String(), "Log level (trace, debug, info, warn, error)")
 	_ = rootTopCmd.RegisterFlagCompletionFunc("verbosity", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"debug", "info", "warn", "error", "fatal", "panic"}, cobra.ShellCompDirectiveNoFileComp
+		return []string{"trace", "debug", "info", "warn", "error"}, cobra.ShellCompDirectiveNoFileComp
 	})
+	rootTopCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
 	_ = rootTopCmd.RegisterFlagCompletionFunc("logopt", completeArgNone)
+	rootTopCmd.PersistentFlags().StringArrayVar(&rootOpts.hosts, "host", []string{}, "Registry hosts to add (reg=registry,user=username,pass=password,tls=enabled)")
 	_ = rootTopCmd.RegisterFlagCompletionFunc("host", completeArgNone)
+	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.userAgent, "user-agent", "", "", "Override user agent")
+	_ = rootTopCmd.RegisterFlagCompletionFunc("user-agent", completeArgNone)
 
 	versionCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	_ = versionCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
 	rootTopCmd.PersistentPreRunE = rootOpts.rootPreRun
 	rootTopCmd.AddCommand(versionCmd)
+	rootTopCmd.AddCommand(cobradoc.NewCmd(rootOpts.name, "cli-doc"))
 	rootTopCmd.AddCommand(
 		NewArtifactCmd(&rootOpts),
 		NewBlobCmd(&rootOpts),
-		NewCompletionCmd(&rootOpts),
 		NewConfigCmd(&rootOpts),
 		NewDigestCmd(&rootOpts),
 		NewImageCmd(&rootOpts),

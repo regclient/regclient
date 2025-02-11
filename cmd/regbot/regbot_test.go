@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -202,6 +204,95 @@ defaults:
 				if err == nil {
 					t.Errorf("ref exists: %s", missing)
 				}
+			}
+		})
+	}
+}
+
+func TestConfigRead(t *testing.T) {
+	t.Parallel()
+	tt := []struct {
+		name   string
+		file   string
+		expect Config
+		expErr error
+	}{
+		{
+			name: "config1",
+			file: "config1.yml",
+			expect: Config{
+				Version: 1,
+				Creds: []config.Host{
+					{
+						Name: "registry:5000",
+						TLS:  config.TLSDisabled,
+					},
+				},
+				Defaults: ConfigDefaults{
+					Parallel: 2,
+					Interval: 60 * time.Minute,
+					Timeout:  600 * time.Second,
+				},
+				Scripts: []ConfigScript{
+					{
+						Name:     "hello world",
+						Timeout:  1 * time.Minute,
+						Interval: 60 * time.Minute,
+						Script:   `log("hello world")` + "\n",
+					},
+					{
+						Name:     "top of the hour",
+						Schedule: "0 * * * *",
+						Timeout:  600 * time.Second,
+						Script:   `log("ding")` + "\n",
+					},
+				},
+			},
+		},
+		{
+			name: "config2",
+			file: "config2.yml",
+			expect: Config{
+				Version: 1,
+				Creds: []config.Host{
+					{
+						Name: "registry:5000",
+						TLS:  config.TLSDisabled,
+					},
+				},
+				Defaults: ConfigDefaults{
+					Schedule: "15 3 * * *",
+				},
+				Scripts: []ConfigScript{
+					{
+						Name:     "hello world",
+						Timeout:  1 * time.Minute,
+						Interval: 12 * time.Hour,
+						Script:   `log("hello world")` + "\n",
+					},
+					{
+						Name:     "default schedule",
+						Schedule: "15 3 * * *",
+						Script:   `log("test")` + "\n",
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			cRead, err := ConfigLoadFile(filepath.Join("./testdata", tc.file))
+			if tc.expErr != nil {
+				if !errors.Is(err, tc.expErr) {
+					t.Errorf("expected error %v, received %v", tc.expErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("failed to read: %v", err)
+			}
+			if !reflect.DeepEqual(tc.expect, *cRead) {
+				t.Errorf("parsing mismatch, expected:\n%#v\n  received:\n%#v", tc.expect, *cRead)
 			}
 		})
 	}

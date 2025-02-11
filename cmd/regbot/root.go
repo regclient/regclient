@@ -14,6 +14,7 @@ import (
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/cmd/regbot/sandbox"
 	"github.com/regclient/regclient/config"
+	"github.com/regclient/regclient/internal/cobradoc"
 	"github.com/regclient/regclient/internal/pqueue"
 	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/pkg/template"
@@ -23,7 +24,7 @@ import (
 
 const (
 	usageDesc = `Utility for automating repository actions
-More details at https://github.com/regclient/regclient`
+More details at <https://github.com/regclient/regclient>`
 	// UserAgent sets the header on http requests
 	UserAgent = "regclient/regbot"
 )
@@ -77,7 +78,7 @@ returns after the last script completes.`,
 
 	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.confFile, "config", "c", "", "Config file")
 	rootTopCmd.PersistentFlags().BoolVarP(&rootOpts.dryRun, "dry-run", "", false, "Dry Run, skip all external actions")
-	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", slog.LevelInfo.String(), "Log level (debug, info, warn, error, fatal, panic)")
+	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", slog.LevelInfo.String(), "Log level (trace, debug, info, warn, error)")
 	rootTopCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
 	versionCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 
@@ -88,6 +89,7 @@ returns after the last script completes.`,
 	rootTopCmd.AddCommand(serverCmd)
 	rootTopCmd.AddCommand(onceCmd)
 	rootTopCmd.AddCommand(versionCmd)
+	rootTopCmd.AddCommand(cobradoc.NewCmd(rootTopCmd.Name(), "cli-doc"))
 
 	rootTopCmd.PersistentPreRunE = rootOpts.rootPreRun
 	return rootTopCmd, &rootOpts

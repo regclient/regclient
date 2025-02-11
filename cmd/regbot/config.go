@@ -57,6 +57,9 @@ func ConfigLoadReader(r io.Reader) (*Config, error) {
 		return nil, err
 	}
 	// verify loaded version is not higher than supported version
+	if c.Version == 0 {
+		c.Version = 1
+	}
 	if c.Version > 1 {
 		return c, ErrUnsupportedConfigVersion
 	}
@@ -124,11 +127,12 @@ func configExpandTemplates(c *Config) error {
 
 // updates script entry with defaults
 func scriptSetDefaults(s *ConfigScript, d ConfigDefaults) {
-	if s.Schedule == "" && d.Schedule != "" {
-		s.Schedule = d.Schedule
-	}
-	if s.Interval == 0 && s.Schedule == "" && d.Interval != 0 {
-		s.Interval = d.Interval
+	if s.Schedule == "" && s.Interval == 0 {
+		if d.Schedule != "" {
+			s.Schedule = d.Schedule
+		} else if d.Interval != 0 {
+			s.Interval = d.Interval
+		}
 	}
 	if s.Timeout == 0 && d.Timeout != 0 {
 		s.Timeout = d.Timeout

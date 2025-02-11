@@ -51,79 +51,48 @@ func TestRegHttp(t *testing.T) {
 	pass := "testpass"
 	userAuth := base64.StdEncoding.EncodeToString([]byte(user + ":" + pass))
 	reqPerSec := 50.0
-	token1GForm := url.Values{}
-	token1GForm.Set("scope", "repository:project:pull")
-	token1GForm.Set("service", "test")
-	token1GForm.Set("client_id", useragent)
-	token1GForm.Set("grant_type", "password")
-	token1GForm.Set("username", user)
-	token1GForm.Set("password", pass)
-	token1GBody := token1GForm.Encode()
 	token1GValue := "token1GValue"
 	token1GResp, _ := json.Marshal(testBearerToken{
-		Token:        token1GValue,
-		ExpiresIn:    900,
-		IssuedAt:     time.Now(),
-		RefreshToken: "refresh1GValue",
-		Scope:        "repository:project:pull",
+		Token:     token1GValue,
+		ExpiresIn: 900,
+		IssuedAt:  time.Now(),
+		Scope:     "repository:project:pull",
 	})
-	token1PForm := url.Values{}
-	token1PForm.Set("scope", "repository:project:pull,push")
-	token1PForm.Set("service", "test")
-	token1PForm.Set("client_id", useragent)
-	token1PForm.Set("grant_type", "password")
-	token1PForm.Set("username", user)
-	token1PForm.Set("password", pass)
-	token1PBody := token1PForm.Encode()
 	token1PValue := "token1PValue"
 	token1PResp, _ := json.Marshal(testBearerToken{
-		Token:        token1PValue,
-		ExpiresIn:    900,
-		IssuedAt:     time.Now(),
-		RefreshToken: "refresh1PValue",
-		Scope:        "repository:project:pull,push",
+		Token:     token1PValue,
+		ExpiresIn: 900,
+		IssuedAt:  time.Now(),
+		Scope:     "repository:project:pull,push",
 	})
-	token2GForm := url.Values{}
-	token2GForm.Set("scope", "repository:project2:pull")
-	token2GForm.Set("service", "test")
-	token2GForm.Set("client_id", useragent)
-	token2GForm.Set("grant_type", "password")
-	token2GForm.Set("username", user)
-	token2GForm.Set("password", pass)
-	token2GBody := token2GForm.Encode()
 	token2GValue := "token2GValue"
 	token2GResp, _ := json.Marshal(testBearerToken{
-		Token:        token2GValue,
-		ExpiresIn:    900,
-		IssuedAt:     time.Now(),
-		RefreshToken: "refresh2GValue",
-		Scope:        "repository:project2:pull",
+		Token:     token2GValue,
+		ExpiresIn: 900,
+		IssuedAt:  time.Now(),
+		Scope:     "repository:project2:pull",
 	})
-	token2PForm := url.Values{}
-	token2PForm.Set("scope", "repository:project2:pull,push")
-	token2PForm.Set("service", "test")
-	token2PForm.Set("client_id", useragent)
-	token2PForm.Set("grant_type", "password")
-	token2PForm.Set("username", user)
-	token2PForm.Set("password", pass)
-	token2PBody := token2PForm.Encode()
 	token2PValue := "token2PValue"
 	token2PResp, _ := json.Marshal(testBearerToken{
-		Token:        token2PValue,
-		ExpiresIn:    900,
-		IssuedAt:     time.Now(),
-		RefreshToken: "refresh2PValue",
-		Scope:        "repository:project2:pull,push",
+		Token:     token2PValue,
+		ExpiresIn: 900,
+		IssuedAt:  time.Now(),
+		Scope:     "repository:project2:pull,push",
 	})
 	warnMsg1 := "test warning 1"
 	warnMsg2 := "test warning 2"
 	rrsToken := []reqresp.ReqResp{
 		{
 			ReqEntry: reqresp.ReqEntry{
-				Name:   "req token1G",
-				Method: "POST",
+				Name:   "req token1G GET",
+				Method: "GET",
 				Path:   "/token",
-				Body:   []byte(token1GBody),
+				Headers: http.Header{
+					"Authorization": {"Basic " + userAuth},
+				},
+				Query: map[string][]string{
+					"scope": {"repository:project:pull"},
+				},
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: 200,
@@ -132,10 +101,15 @@ func TestRegHttp(t *testing.T) {
 		},
 		{
 			ReqEntry: reqresp.ReqEntry{
-				Name:   "req token1P",
-				Method: "POST",
+				Name:   "req token1P GET",
+				Method: "GET",
 				Path:   "/token",
-				Body:   []byte(token1PBody),
+				Headers: http.Header{
+					"Authorization": {"Basic " + userAuth},
+				},
+				Query: map[string][]string{
+					"scope": {"repository:project:pull,push"},
+				},
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: 200,
@@ -144,10 +118,15 @@ func TestRegHttp(t *testing.T) {
 		},
 		{
 			ReqEntry: reqresp.ReqEntry{
-				Name:   "req token2G",
-				Method: "POST",
+				Name:   "req token2G GET",
+				Method: "GET",
 				Path:   "/token",
-				Body:   []byte(token2GBody),
+				Headers: http.Header{
+					"Authorization": {"Basic " + userAuth},
+				},
+				Query: map[string][]string{
+					"scope": {"repository:project2:pull"},
+				},
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: 200,
@@ -156,10 +135,15 @@ func TestRegHttp(t *testing.T) {
 		},
 		{
 			ReqEntry: reqresp.ReqEntry{
-				Name:   "req token2P",
-				Method: "POST",
+				Name:   "req token2P GET",
+				Method: "GET",
 				Path:   "/token",
-				Body:   []byte(token2PBody),
+				Headers: http.Header{
+					"Authorization": {"Basic " + userAuth},
+				},
+				Query: map[string][]string{
+					"scope": {"repository:project2:pull,push"},
+				},
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: 200,

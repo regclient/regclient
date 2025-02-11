@@ -64,13 +64,14 @@ regctl tag ls registry.example.org/repo --exclude 'sha256-.*'`,
 	}
 
 	tagLsCmd.Flags().StringVarP(&tagOpts.last, "last", "", "", "Specify the last tag from a previous request for pagination (depends on registry support)")
-	tagLsCmd.Flags().IntVarP(&tagOpts.limit, "limit", "", 0, "Specify the number of tags to retrieve (depends on registry support)")
-	tagLsCmd.Flags().StringArrayVar(&tagOpts.include, "include", []string{}, "Regexp of tags to include (expression is bound to beginning and ending of tag)")
-	tagLsCmd.Flags().StringArrayVar(&tagOpts.exclude, "exclude", []string{}, "Regexp of tags to exclude (expression is bound to beginning and ending of tag)")
-	tagLsCmd.Flags().StringVarP(&tagOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	_ = tagLsCmd.RegisterFlagCompletionFunc("last", completeArgNone)
+	tagLsCmd.Flags().IntVarP(&tagOpts.limit, "limit", "", 0, "Specify the number of tags to retrieve (depends on registry support)")
 	_ = tagLsCmd.RegisterFlagCompletionFunc("limit", completeArgNone)
-	_ = tagLsCmd.RegisterFlagCompletionFunc("filter", completeArgNone)
+	tagLsCmd.Flags().StringArrayVar(&tagOpts.include, "include", []string{}, "Regexp of tags to include (expression is bound to beginning and ending of tag)")
+	_ = tagLsCmd.RegisterFlagCompletionFunc("include", completeArgNone)
+	tagLsCmd.Flags().StringArrayVar(&tagOpts.exclude, "exclude", []string{}, "Regexp of tags to exclude (expression is bound to beginning and ending of tag)")
+	_ = tagLsCmd.RegisterFlagCompletionFunc("exclude", completeArgNone)
+	tagLsCmd.Flags().StringVarP(&tagOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
 	_ = tagLsCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
 	tagTopCmd.AddCommand(tagDeleteCmd)

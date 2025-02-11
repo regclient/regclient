@@ -1,0 +1,39 @@
+version: 1
+creds:
+  - registry: registry:5000
+    tls: disabled
+  - registry: docker.io
+defaults:
+  ratelimit:
+    min: 100
+    retry: 15m
+  parallel: 2
+  interval: 60m
+  backup: "bkup-{{.Ref.Tag}}"
+  cacheCount: 500
+  cacheTime: "5m"
+x-sync-hub: &sync-hub
+  target: registry:5000/hub/{{ .Sync.Source }}
+x-sync-gcr: &sync-gcr
+  target: registry:5000/gcr/{{ index (split .Sync.Source "gcr.io/") 1 }}
+sync:
+  - source: busybox:latest
+    target: registry:5000/library/busybox:latest
+    type: image
+    schedule: "15 3 * * *"
+  - <<: *sync-hub
+    source: alpine
+    type: repository
+    tags:
+      allow:
+      - 3
+      - 3.9
+      - latest
+  - <<: *sync-gcr
+    source: gcr.io/example/repo
+    type: repository
+    tags:
+      allow:
+      - 3
+      - 3.9
+      - latest

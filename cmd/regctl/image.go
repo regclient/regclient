@@ -324,6 +324,7 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 	imageCopyCmd.Flags().StringVar(&imageOpts.format, "format", "", "Format output with go template syntax")
 	imageCopyCmd.Flags().BoolVar(&imageOpts.includeExternal, "include-external", false, "Include external layers")
 	imageCopyCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
+	_ = imageCopyCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	imageCopyCmd.Flags().StringArrayVar(&imageOpts.platforms, "platforms", []string{}, "Copy only specific platforms, registry validation must be disabled")
 	// platforms should be treated as experimental since it will break many registries
 	_ = imageCopyCmd.Flags().MarkHidden("platforms")
@@ -338,40 +339,43 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 	imageCreateCmd.Flags().StringVar(&imageOpts.formatCreate, "format", "", "Format output with go template syntax")
 	imageCreateCmd.Flags().StringArrayVar(&imageOpts.labels, "label", []string{}, "Labels to set in the image config")
 	imageCreateCmd.Flags().StringVar(&imageOpts.mediaType, "media-type", mediatype.OCI1Manifest, "Media-type for manifest")
-	imageCreateCmd.Flags().StringVar(&imageOpts.platform, "platform", "", "Platform to set on the image")
 	_ = imageCreateCmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return imageKnownTypes, cobra.ShellCompDirectiveNoFileComp
 	})
+	imageCreateCmd.Flags().StringVar(&imageOpts.platform, "platform", "", "Platform to set on the image")
+	_ = imageCreateCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 
 	imageDeleteCmd.Flags().BoolVar(&manifestOpts.forceTagDeref, "force-tag-dereference", false, "Dereference the a tag to a digest, this is unsafe")
 
 	imageDigestCmd.Flags().BoolVar(&manifestOpts.list, "list", true, "Do not resolve platform from manifest list (enabled by default)")
-	imageDigestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local, requires a get request)")
-	imageDigestCmd.Flags().BoolVar(&manifestOpts.requireList, "require-list", false, "Fail if manifest list is not received")
-	_ = imageDigestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	_ = imageDigestCmd.Flags().MarkHidden("list")
+	imageDigestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local, requires a get request)")
+	_ = imageDigestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
+	imageDigestCmd.Flags().BoolVar(&manifestOpts.requireList, "require-list", false, "Fail if manifest list is not received")
 
 	imageGetFileCmd.Flags().StringVar(&imageOpts.formatFile, "format", "", "Format output with go template syntax")
 	imageGetFileCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
+	_ = imageGetFileCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 
 	imageExportCmd.Flags().BoolVar(&imageOpts.exportCompress, "compress", false, "Compress output with gzip")
 	imageExportCmd.Flags().StringVar(&imageOpts.exportRef, "name", "", "Name of image to embed for docker load")
 	imageExportCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
+	_ = imageExportCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 
 	imageImportCmd.Flags().StringVar(&imageOpts.importName, "name", "", "Name of image or tag to import when multiple images are packaged in the tar")
 
 	imageInspectCmd.Flags().StringVarP(&imageOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
-	imageInspectCmd.Flags().StringVar(&imageOpts.format, "format", "{{printPretty .}}", "Format output with go template syntax")
 	_ = imageInspectCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
+	imageInspectCmd.Flags().StringVar(&imageOpts.format, "format", "{{printPretty .}}", "Format output with go template syntax")
 	_ = imageInspectCmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
 	imageManifestCmd.Flags().BoolVar(&manifestOpts.list, "list", true, "Output manifest list if available (enabled by default)")
+	_ = imageManifestCmd.Flags().MarkHidden("list")
 	imageManifestCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
+	_ = imageManifestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	imageManifestCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
 	imageManifestCmd.Flags().StringVar(&manifestOpts.formatGet, "format", "{{printPretty .}}", "Format output with go template syntax (use \"raw-body\" for the original manifest)")
-	_ = imageManifestCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	_ = imageManifestCmd.RegisterFlagCompletionFunc("format", completeArgNone)
-	_ = imageManifestCmd.Flags().MarkHidden("list")
 
 	imageModCmd.Flags().StringVar(&imageOpts.create, "create", "", "Create image or tag")
 	imageModCmd.Flags().BoolVar(&imageOpts.replace, "replace", false, "Replace tag (ignored when \"create\" is used)")

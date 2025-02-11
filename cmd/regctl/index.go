@@ -115,6 +115,7 @@ regctl index delete registry.example.org/repo:v1 \
 	indexAddCmd.Flags().BoolVar(&indexOpts.incReferrers, "referrers", false, "Include referrers")
 	indexAddCmd.Flags().StringArrayVar(&indexOpts.refs, "ref", []string{}, "References to add")
 	indexAddCmd.Flags().StringArrayVar(&indexOpts.platforms, "platform", []string{}, "Platforms to include from ref")
+	_ = indexAddCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 
 	indexCreateCmd.Flags().StringArrayVar(&indexOpts.annotations, "annotation", []string{}, "Annotation to set on manifest")
 	indexCreateCmd.Flags().StringVar(&indexOpts.artifactType, "artifact-type", "", "Include an artifactType value")
@@ -126,15 +127,17 @@ regctl index delete registry.example.org/repo:v1 \
 	indexCreateCmd.Flags().BoolVar(&indexOpts.incDigestTags, "digest-tags", false, "Include digest tags")
 	indexCreateCmd.Flags().BoolVar(&indexOpts.incReferrers, "referrers", false, "Include referrers")
 	indexCreateCmd.Flags().StringVarP(&indexOpts.mediaType, "media-type", "m", mediatype.OCI1ManifestList, "Media-type for manifest list or OCI Index")
-	indexCreateCmd.Flags().StringVar(&indexOpts.subject, "subject", "", "Specify a subject tag or digest (this manifest must already exist in the repo)")
-	indexCreateCmd.Flags().StringArrayVar(&indexOpts.refs, "ref", []string{}, "References to include in new index")
-	indexCreateCmd.Flags().StringArrayVar(&indexOpts.platforms, "platform", []string{}, "Platforms to include from ref")
 	_ = indexCreateCmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return indexKnownTypes, cobra.ShellCompDirectiveNoFileComp
 	})
+	indexCreateCmd.Flags().StringVar(&indexOpts.subject, "subject", "", "Specify a subject tag or digest (this manifest must already exist in the repo)")
+	indexCreateCmd.Flags().StringArrayVar(&indexOpts.refs, "ref", []string{}, "References to include in new index")
+	indexCreateCmd.Flags().StringArrayVar(&indexOpts.platforms, "platform", []string{}, "Platforms to include from ref")
+	_ = indexCreateCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 
 	indexDeleteCmd.Flags().StringArrayVar(&indexOpts.digests, "digest", []string{}, "Digest to delete")
 	indexDeleteCmd.Flags().StringArrayVar(&indexOpts.platforms, "platform", []string{}, "Platform to delete")
+	_ = indexDeleteCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 
 	indexTopCmd.AddCommand(indexAddCmd)
 	indexTopCmd.AddCommand(indexCreateCmd)

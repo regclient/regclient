@@ -1,0 +1,17 @@
+version: 1
+creds:
+  - registry: registry:5000
+    tls: disabled
+defaults:
+  parallel: 2
+  interval: 60m
+  timeout: 600s
+scripts:
+  - name: hello world
+    timeout: 1m
+    script: |
+      log("hello world")
+  - name: top of the hour
+    schedule: "0 * * * *"
+    script: |
+      log("ding")
