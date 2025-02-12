@@ -624,9 +624,10 @@ func (b *bearerHandler) GenerateAuth() (string, error) {
 		return fmt.Sprintf("Bearer %s", b.token.Token), nil
 	}
 
-	// attempt to post if a refresh token is available
-	if b.token.RefreshToken != "" {
-		if err := b.tryPost(); err == nil {
+	// attempt to post if a refresh token is available or token auth is being used
+	cred := b.credsFn(b.host)
+	if b.token.RefreshToken != "" || cred.Token != "" {
+		if err := b.tryPost(cred); err == nil {
 			return fmt.Sprintf("Bearer %s", b.token.Token), nil
 		} else if err != ErrUnauthorized {
 			return "", fmt.Errorf("failed to request auth token (post): %w%.0w", err, errs.ErrHTTPUnauthorized)
@@ -634,7 +635,7 @@ func (b *bearerHandler) GenerateAuth() (string, error) {
 	}
 
 	// attempt a get (with basic auth if user/pass available)
-	if err := b.tryGet(); err == nil {
+	if err := b.tryGet(cred); err == nil {
 		return fmt.Sprintf("Bearer %s", b.token.Token), nil
 	} else if err != ErrUnauthorized {
 		return "", fmt.Errorf("failed to request auth token (get): %w%.0w", err, errs.ErrHTTPUnauthorized)
@@ -655,8 +656,7 @@ func (b *bearerHandler) isExpired() bool {
 }
 
 // tryGet requests a new token with a GET request
-func (b *bearerHandler) tryGet() error {
-	cred := b.credsFn(b.host)
+func (b *bearerHandler) tryGet(cred Cred) error {
 	req, err := http.NewRequest("GET", b.realm, nil)
 	if err != nil {
 		return err
@@ -691,8 +691,7 @@ func (b *bearerHandler) tryGet() error {
 }
 
 // tryPost requests a new token via a POST request
-func (b *bearerHandler) tryPost() error {
-	cred := b.credsFn(b.host)
+func (b *bearerHandler) tryPost(cred Cred) error {
 	form := url.Values{}
 	if len(b.scopes) > 0 {
 		form.Set("scope", strings.Join(b.scopes, " "))

@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -651,5 +652,77 @@ func TestBearer(t *testing.T) {
 	}
 	if bearer.isExpired() {
 		t.Errorf("token5 (rerun) is already expired")
+	}
+}
+
+// TestBearerToken verifies a login with a token in the credential with a bearer request goes to POST.
+func TestBearerToken(t *testing.T) {
+	t.Parallel()
+	useragent := "regclient/test"
+	user := "user"
+	token := "testtoken"
+	tokenResp, _ := json.Marshal(bearerToken{
+		Token:        token,
+		ExpiresIn:    900,
+		IssuedAt:     time.Now(),
+		Scope:        "repository:reponame:pull",
+		RefreshToken: token,
+	})
+	tokenForm := url.Values{}
+	tokenForm.Set("scope", "repository:reponame:pull")
+	tokenForm.Set("service", "test")
+	tokenForm.Set("client_id", useragent)
+	tokenForm.Set("grant_type", "refresh_token")
+	tokenForm.Set("refresh_token", token)
+	tokenBody := tokenForm.Encode()
+	rrs := []reqresp.ReqResp{
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "req token",
+				Method: "POST",
+				Path:   "/tokens",
+				Body:   []byte(tokenBody),
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: 200,
+				Body:   tokenResp,
+			},
+		},
+	}
+	ts := httptest.NewServer(reqresp.NewHandler(t, rrs))
+	defer ts.Close()
+	tsURL, _ := url.Parse(ts.URL)
+	tsHost := tsURL.Host
+	bearer := NewBearerHandler(&http.Client{}, useragent, tsHost,
+		func(h string) Cred { return Cred{User: user, Token: token} },
+		slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
+	).(*bearerHandler)
+
+	// handle token1, verify expired token gets current time and isn't expired
+	err := bearer.AddScope("repository:reponame:pull")
+	if err != nil {
+		t.Errorf("failed adding scope: %v", err)
+	}
+	c, err := parseAuthHeader(
+		`Bearer realm="` + tsURL.String() +
+			`/tokens",service="test"` +
+			`,scope="repository:reponame:pull"`)
+	if err != nil {
+		t.Errorf("failed on parse challenge: %v", err)
+	}
+	err = bearer.ProcessChallenge(c[0])
+	if err != nil {
+		t.Errorf("failed on response to token: %v", err)
+	}
+	resp, err := bearer.GenerateAuth()
+	if err != nil {
+		t.Errorf("failed to generate auth response: %v", err)
+	}
+	bearerResp := fmt.Sprintf("Bearer %s", token)
+	if resp != bearerResp {
+		t.Errorf("token1 is invalid, expected %s, received %s", "Bearer token1", resp)
+	}
+	if bearer.isExpired() {
+		t.Errorf("token1 is already expired")
 	}
 }
