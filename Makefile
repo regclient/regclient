@@ -35,7 +35,7 @@ ifeq "$(strip $(VER_BUMP))" ''
 endif
 MARKDOWN_LINT_VER?=v0.17.2
 GOMAJOR_VER?=v0.14.0
-GOSEC_VER?=v2.22.0
+GOSEC_VER?=v2.22.1
 GO_VULNCHECK_VER?=v1.1.4
 OSV_SCANNER_VER?=v1.9.2
 SYFT?=$(shell command -v syft 2>/dev/null)
@@ -48,7 +48,7 @@ ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 		-u "$(shell id -u):$(shell id -g)" \
 		$(SYFT_CONTAINER)
 endif
-STATICCHECK_VER?=v0.5.1
+STATICCHECK_VER?=v0.6.0
 CI_DISTRIBUTION_VER?=2.8.3
 CI_ZOT_VER?=v2.1.2
 
@@ -245,7 +245,8 @@ $(GOPATH)/bin/staticcheck: .FORCE
 	|| go install "honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VER)"
 
 $(GOPATH)/bin/govulncheck: .FORCE
-	@[ $$(go version -m $(GOPATH)/bin/govulncheck | \
+	@[ -f $(GOPATH)/bin/govulncheck ] \
+	&& [ $$(go version -m $(GOPATH)/bin/govulncheck | \
 		awk -F ' ' '{ if ($$1 == "mod" && $$2 == "golang.org/x/vuln") { printf "%s\n", $$3 } }') = "$(GO_VULNCHECK_VER)" ] \
 	|| CGO_ENABLED=0 go install "golang.org/x/vuln/cmd/govulncheck@$(GO_VULNCHECK_VER)"
 
