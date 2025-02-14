@@ -6,6 +6,7 @@ func TestCompare(t *testing.T) {
 	tests := []struct {
 		name               string
 		host, target, prev Platform
+		opts               []CompareOpts
 		expectMatch        bool
 		expectCompat       bool
 		expectBetter       bool
@@ -132,6 +133,43 @@ func TestCompare(t *testing.T) {
 			expectBetter: false,
 		},
 		{
+			name:         "prefer GPU",
+			host:         Platform{OS: "linux", Architecture: "amd64", Prefer: map[string]string{"com.example.gpu": "model-123", "org.example.runtime": "sandbox-x"}},
+			target:       Platform{OS: "linux", Architecture: "amd64", Prefer: map[string]string{"com.example.gpu": "model-123"}},
+			prev:         Platform{OS: "linux", Architecture: "amd64"},
+			expectMatch:  true,
+			expectCompat: true,
+			expectBetter: true,
+		},
+		{
+			name:         "keep unweighted",
+			host:         Platform{OS: "linux", Architecture: "amd64", Prefer: map[string]string{"com.example.gpu": "model-123", "org.example.runtime": "sandbox-x"}},
+			target:       Platform{OS: "linux", Architecture: "amd64", Prefer: map[string]string{"com.example.gpu": "model-123"}},
+			prev:         Platform{OS: "linux", Architecture: "amd64", Prefer: map[string]string{"org.example.runtime": "sandbox-x"}},
+			expectMatch:  true,
+			expectCompat: true,
+			expectBetter: false,
+		},
+		{
+			name:         "keep previous GPU",
+			host:         Platform{OS: "linux", Architecture: "amd64", Prefer: map[string]string{"com.example.gpu": "model-123", "org.example.runtime": "sandbox-x"}},
+			target:       Platform{OS: "linux", Architecture: "amd64", Prefer: map[string]string{"com.example.gpu": "model-456"}},
+			prev:         Platform{OS: "linux", Architecture: "amd64", Prefer: map[string]string{"com.example.gpu": "model-123"}},
+			expectMatch:  true,
+			expectCompat: true,
+			expectBetter: false,
+		},
+		{
+			name:         "prefer weighted sandbox",
+			host:         Platform{OS: "linux", Architecture: "amd64", Prefer: map[string]string{"com.example.gpu": "model-123", "org.example.runtime": "sandbox-x"}},
+			opts:         []CompareOpts{WithWeights(map[string]int{"org.example.runtime": 10})},
+			target:       Platform{OS: "linux", Architecture: "amd64", Prefer: map[string]string{"org.example.runtime": "sandbox-x"}},
+			prev:         Platform{OS: "linux", Architecture: "amd64", Prefer: map[string]string{"com.example.gpu": "model-123"}},
+			expectMatch:  true,
+			expectCompat: true,
+			expectBetter: true,
+		},
+		{
 			name:         "other",
 			host:         Platform{OS: "other", Architecture: "amd64", Variant: "42"},
 			target:       Platform{OS: "other", Architecture: "amd64", Variant: "42"},
@@ -158,7 +196,7 @@ func TestCompare(t *testing.T) {
 			if result != tt.expectCompat {
 				t.Errorf("unexpected compatible, result: %v, host: %v, target: %v", result, tt.host, tt.target)
 			}
-			comp := NewCompare(tt.host)
+			comp := NewCompare(tt.host, tt.opts...)
 			result = comp.Better(tt.target, tt.prev)
 			if result != tt.expectBetter {
 				t.Errorf("unexpected better, result: %v, host: %v, target: %v, prev: %v", result, tt.host, tt.target, tt.prev)
