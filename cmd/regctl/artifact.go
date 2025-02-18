@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	// crypto libraries included for go-digest
@@ -382,8 +383,7 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 		if err != nil {
 			return fmt.Errorf("no matching artifacts found in index: %w", err)
 		}
-		r.Digest = d.Digest.String()
-		m, err = rc.ManifestGet(ctx, r)
+		m, err = rc.ManifestGet(ctx, r, regclient.WithManifestDesc(d))
 		if err != nil {
 			return err
 		}
@@ -434,41 +434,23 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 	// filter by media-type if defined
 	if len(artifactOpts.artifactFileMT) > 0 {
 		for i := len(layers) - 1; i >= 0; i-- {
-			found := false
-			for _, mt := range artifactOpts.artifactFileMT {
-				if layers[i].MediaType == mt {
-					found = true
-					break
-				}
-			}
-			if !found {
-				// remove from slice
-				layers = append(layers[:i], layers[i+1:]...)
+			if !slices.Contains(artifactOpts.artifactFileMT, layers[i].MediaType) {
+				layers = slices.Delete(layers, i, i+1)
 			}
 		}
 	}
 	// filter by filename if defined
 	if len(artifactOpts.artifactFile) > 0 {
 		for i := len(layers) - 1; i >= 0; i-- {
-			found := false
 			af, ok := layers[i].Annotations[ociAnnotTitle]
-			if ok {
-				for _, f := range artifactOpts.artifactFile {
-					if af == f {
-						found = true
-						break
-					}
-				}
-			}
-			if !found {
-				// remove from slice
-				layers = append(layers[:i], layers[i+1:]...)
+			if !ok || !slices.Contains(artifactOpts.artifactFile, af) {
+				layers = slices.Delete(layers, i, i+1)
 			}
 		}
 	}
 
 	if len(layers) == 0 {
-		return fmt.Errorf("no matching layers found in the artifact, verify media-type and filename")
+		return fmt.Errorf("no matching layers found in the artifact, verify media-type and filename%.0w", errs.ErrNotFound)
 	}
 
 	if artifactOpts.outputDir != "" {
@@ -639,7 +621,7 @@ func (artifactOpts *artifactCmd) runArtifactList(cmd *cobra.Command, args []stri
 			return fmt.Errorf("failed to compute fallback tag: %w", err)
 		}
 		for _, t := range tl.Tags {
-			if strings.HasPrefix(t, prefix.Tag) && !sliceHasStr(rl.Tags, t) {
+			if strings.HasPrefix(t, prefix.Tag) && !slices.Contains(rl.Tags, t) {
 				rTag := rl.Subject.SetTag(t)
 				mh, err := rc.ManifestHead(ctx, rTag, regclient.WithManifestRequireDigest())
 				if err != nil {
@@ -973,8 +955,7 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 	}
 
 	if artifactOpts.byDigest || artifactOpts.index || rArt.IsZero() {
-		r.Tag = ""
-		r.Digest = mm.GetDescriptor().Digest.String()
+		r = r.SetDigest(mm.GetDescriptor().Digest.String())
 	}
 
 	// push manifest
@@ -1123,13 +1104,11 @@ func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclien
 		return nil, err
 	}
 	tr.Manifest = m
-	if r.Digest == "" {
-		r.Digest = m.GetDescriptor().Digest.String()
-	}
+	r = r.AddDigest(m.GetDescriptor().Digest.String())
 
 	// track already seen manifests
 	dig := m.GetDescriptor().Digest.String()
-	if sliceHasStr(seen, dig) {
+	if slices.Contains(seen, dig) {
 		return &tr, fmt.Errorf("%w, already processed %s", ErrLoopEncountered, dig)
 	}
 	seen = append(seen, dig)
@@ -1199,7 +1178,7 @@ func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclien
 			return &tr, fmt.Errorf("failed to compute fallback tag: %w", err)
 		}
 		for _, t := range tags {
-			if strings.HasPrefix(t, prefix.Tag) && !sliceHasStr(rl.Tags, t) {
+			if strings.HasPrefix(t, prefix.Tag) && !slices.Contains(rl.Tags, t) {
 				rTag := r.SetTag(t)
 				tReferrer, err := artifactOpts.treeAddResult(ctx, rc, rTag, seen, rOpts, tags)
 				if tReferrer != nil {
@@ -1214,15 +1193,6 @@ func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclien
 	}
 
 	return &tr, nil
-}
-
-func sliceHasStr(list []string, search string) bool {
-	for _, el := range list {
-		if el == search {
-			return true
-		}
-	}
-	return false
 }
 
 type treeResult struct {
@@ -1240,7 +1210,7 @@ func (tr *treeResult) MarshalPretty() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []byte(fmt.Sprintf("Ref: %s\nDigest: %s", tr.Ref.CommonName(), mp)), nil
+	return fmt.Appendf(nil, "Ref: %s\nDigest: %s", tr.Ref.CommonName(), mp), nil
 }
 
 func (tr *treeResult) marshalPretty(indent string) ([]byte, error) {

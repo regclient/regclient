@@ -69,5 +69,4 @@ func TestManifestHead(t *testing.T) {
 			}
 		})
 	}
-
 }

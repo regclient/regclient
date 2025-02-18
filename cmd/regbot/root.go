@@ -135,7 +135,6 @@ func (rootOpts *rootCmd) runOnce(cmd *cobra.Command, args []string) error {
 	var wg sync.WaitGroup
 	var mainErr error
 	for _, s := range rootOpts.conf.Scripts {
-		s := s
 		if rootOpts.conf.Defaults.Parallel > 0 {
 			wg.Add(1)
 			go func() {
@@ -174,7 +173,6 @@ func (rootOpts *rootCmd) runServer(cmd *cobra.Command, args []string) error {
 		cron.SkipIfStillRunning(cron.DefaultLogger),
 	))
 	for _, s := range rootOpts.conf.Scripts {
-		s := s
 		sched := s.Schedule
 		if sched == "" && s.Interval != 0 {
 			sched = "@every " + s.Interval.String()
@@ -310,7 +308,7 @@ func (rootOpts *rootCmd) process(ctx context.Context, s ConfigScript) error {
 		rootOpts.log.Warn("Error running script",
 			slog.String("script", s.Name),
 			slog.String("error", err.Error()))
-		return ErrScriptFailed
+		return fmt.Errorf("%w%.0w", err, ErrScriptFailed)
 	}
 	rootOpts.log.Debug("Finished script",
 		slog.String("script", s.Name))

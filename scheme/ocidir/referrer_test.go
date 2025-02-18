@@ -158,12 +158,12 @@ func TestReferrer(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed running ManifestPut on Manifest again: %v", err)
 		}
-		r.Digest = artifactBM.GetDescriptor().Digest.String()
+		r = r.AddDigest(artifactBM.GetDescriptor().Digest.String())
 		err = o.ManifestPut(ctx, r, artifactBM, scheme.WithManifestChild())
 		if err != nil {
 			t.Fatalf("Failed running ManifestPut on Artifact: %v", err)
 		}
-		r.Digest = artifactCM.GetDescriptor().Digest.String()
+		r = r.AddDigest(artifactCM.GetDescriptor().Digest.String())
 		err = o.ManifestPut(ctx, r, artifactCM, scheme.WithManifestChild())
 		if err != nil {
 			t.Fatalf("Failed running ManifestPut on Artifact: %v", err)

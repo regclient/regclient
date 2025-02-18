@@ -1644,7 +1644,7 @@ func TestRegHttp(t *testing.T) {
 			Headers:    headers,
 		}
 		chResults := make(chan error)
-		for i := 0; i < count; i++ {
+		for range count {
 			go func() {
 				resp, err := hc.Do(ctxTimeout, getReq)
 				if err == nil {
@@ -1653,7 +1653,7 @@ func TestRegHttp(t *testing.T) {
 				chResults <- err
 			}()
 		}
-		for i := 0; i < count; i++ {
+		for range count {
 			err := <-chResults
 			if err == nil {
 				t.Errorf("unexpected success on get for missing manifest")
@@ -1670,7 +1670,7 @@ func TestRegHttp(t *testing.T) {
 		}
 		start := time.Now()
 		count := 10
-		for i := 0; i < count; i++ {
+		for range count {
 			resp, err := hc.Do(ctx, getReq)
 			if err != nil {
 				t.Fatalf("failed to run get: %v", err)

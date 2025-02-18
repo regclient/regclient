@@ -401,7 +401,6 @@ func TestCopy(t *testing.T) {
 		},
 	}
 	for _, tc := range tt {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			rSrc, err := ref.New(tc.src)

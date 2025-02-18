@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/opencontainers/go-digest"
@@ -191,8 +192,8 @@ func (indexOpts *indexCmd) runIndexAdd(cmd *cobra.Command, args []string) error 
 	}
 
 	// push the index
-	if r.Tag == "" && r.Digest != "" {
-		r.Digest = m.GetDescriptor().Digest.String()
+	if r.Digest != "" {
+		r = r.AddDigest(m.GetDescriptor().Digest.String())
 	}
 	err = rc.ManifestPut(ctx, r, m)
 	if err != nil {
@@ -301,8 +302,7 @@ func (indexOpts *indexCmd) runIndexCreate(cmd *cobra.Command, args []string) err
 
 	// push the index
 	if indexOpts.byDigest {
-		r.Tag = ""
-		r.Digest = mm.GetDescriptor().Digest.String()
+		r = r.SetDigest(mm.GetDescriptor().Digest.String())
 	}
 	err = rc.ManifestPut(ctx, r, mm)
 	if err != nil {
@@ -357,11 +357,7 @@ func (indexOpts *indexCmd) runIndexDelete(cmd *cobra.Command, args []string) err
 		i := len(curDesc) - 1
 		for i >= 0 {
 			if curDesc[i].Digest.String() == dig {
-				if i < len(curDesc)-1 {
-					curDesc = append(curDesc[:i], curDesc[i+1:]...)
-				} else {
-					curDesc = curDesc[:i]
-				}
+				curDesc = slices.Delete(curDesc, i, i+1)
 			}
 			i--
 		}
@@ -374,11 +370,7 @@ func (indexOpts *indexCmd) runIndexDelete(cmd *cobra.Command, args []string) err
 		i := len(curDesc) - 1
 		for i >= 0 {
 			if curDesc[i].Platform != nil && platform.Match(plat, *curDesc[i].Platform) {
-				if i < len(curDesc)-1 {
-					curDesc = append(curDesc[:i], curDesc[i+1:]...)
-				} else {
-					curDesc = curDesc[:i]
-				}
+				curDesc = slices.Delete(curDesc, i, i+1)
 			}
 			i--
 		}
@@ -391,8 +383,8 @@ func (indexOpts *indexCmd) runIndexDelete(cmd *cobra.Command, args []string) err
 	}
 
 	// push the index
-	if r.Tag == "" && r.Digest != "" {
-		r.Digest = m.GetDescriptor().Digest.String()
+	if r.Digest != "" {
+		r = r.AddDigest(m.GetDescriptor().Digest.String())
 	}
 	err = rc.ManifestPut(ctx, r, m)
 	if err != nil {
@@ -556,11 +548,7 @@ func indexDescListRmDup(dl []descriptor.Descriptor) []descriptor.Descriptor {
 		j := len(dl) - 1
 		for j > i {
 			if dl[i].Equal(dl[j]) {
-				if j < len(dl)-1 {
-					dl = append(dl[:j], dl[j+1:]...)
-				} else {
-					dl = dl[:j]
-				}
+				dl = slices.Delete(dl, j, j+1)
 			}
 			j--
 		}

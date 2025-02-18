@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/regclient/regclient/internal/copyfs"
@@ -37,7 +38,7 @@ func TestTag(t *testing.T) {
 			t.Fatalf("failed to get tags: %v", err)
 		}
 		for _, exTag := range exTags {
-			if !inListStr(exTag, tlTags) {
+			if !slices.Contains(tlTags, exTag) {
 				t.Errorf("missing tag: %s", exTag)
 			}
 		}
@@ -67,23 +68,14 @@ func TestTag(t *testing.T) {
 			t.Errorf("failed to get tags: %v", err)
 		}
 		for _, keep := range keepTags {
-			if !inListStr(keep, tlTags) {
+			if !slices.Contains(tlTags, keep) {
 				t.Errorf("missing tag: %s", keep)
 			}
 		}
 		for _, rm := range rmTags {
-			if inListStr(rm, tlTags) {
+			if slices.Contains(tlTags, rm) {
 				t.Errorf("tag not removed: %s", rm)
 			}
 		}
 	})
-}
-
-func inListStr(str string, list []string) bool {
-	for _, s := range list {
-		if str == s {
-			return true
-		}
-	}
-	return false
 }

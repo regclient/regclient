@@ -71,7 +71,7 @@ func (rootOpts *rootCmd) completeArgTag(cmd *cobra.Command, args []string, toCom
 	}
 	for _, tag := range tags {
 		resultRef, _ := ref.New(input)
-		resultRef.Tag = tag
+		resultRef = resultRef.SetTag(tag)
 		resultCN := resultRef.CommonName()
 		if strings.HasPrefix(resultCN, toComplete) {
 			result = append(result, resultCN)

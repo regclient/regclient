@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
@@ -411,7 +412,7 @@ func (host *Host) Merge(newHost Host, log *slog.Logger) error {
 	}
 
 	if len(newHost.Mirrors) > 0 {
-		if len(host.Mirrors) > 0 && !stringSliceEq(host.Mirrors, newHost.Mirrors) {
+		if len(host.Mirrors) > 0 && !slices.Equal(host.Mirrors, newHost.Mirrors) {
 			log.Warn("Changing mirror settings for registry",
 				slog.Any("orig", host.Mirrors),
 				slog.Any("new", newHost.Mirrors),
@@ -509,16 +510,4 @@ func copyMapString(src map[string]string) map[string]string {
 		copy[k] = v
 	}
 	return copy
-}
-
-func stringSliceEq(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i, v := range a {
-		if v != b[i] {
-			return false
-		}
-	}
-	return true
 }

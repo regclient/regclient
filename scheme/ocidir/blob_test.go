@@ -156,7 +156,7 @@ func TestBlob(t *testing.T) {
 	count := 5
 	var wg sync.WaitGroup
 	wg.Add(count)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		go func() {
 			defer wg.Done()
 			bRdr := bytes.NewReader(bBytes)

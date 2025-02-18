@@ -112,7 +112,6 @@ func TestReferrerList(t *testing.T) {
 		},
 	}
 	for _, tcServer := range ttServers {
-		tcServer := tcServer
 		t.Run(tcServer.name, func(t *testing.T) {
 			t.Parallel()
 			refTag, err := ref.New(fmt.Sprintf("%s/%s:%s", tcServer.reg, testRepo, testTag))
@@ -168,7 +167,6 @@ func TestReferrerList(t *testing.T) {
 				},
 			}
 			for _, tc := range tt {
-				tc := tc
 				t.Run(tc.name, func(t *testing.T) {
 					t.Parallel()
 					rl, err := rc.ReferrerList(ctx, tc.ref, tc.opts...)

@@ -161,6 +161,14 @@ func NewHost(parse string) (Ref, error) {
 	return ret, nil
 }
 
+// AddDigest returns a ref with the requested digest set.
+// The tag will NOT be unset and the reference value will be reset.
+func (r Ref) AddDigest(digest string) Ref {
+	r.Digest = digest
+	r.Reference = r.CommonName()
+	return r
+}
+
 // CommonName outputs a parsable name from a reference.
 func (r Ref) CommonName() string {
 	cn := ""

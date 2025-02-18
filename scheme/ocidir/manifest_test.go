@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/opencontainers/go-digest"
+
 	"github.com/regclient/regclient/internal/copyfs"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/mediatype"
@@ -47,6 +49,10 @@ func TestManifest(t *testing.T) {
 	if !ml.IsList() {
 		t.Errorf("expected manifest list")
 	}
+	mlb, err := ml.RawBody()
+	if err != nil {
+		t.Fatalf("failed to get body of manifest: %v", err)
+	}
 	mli, ok := ml.(manifest.Indexer)
 	if !ok {
 		t.Fatalf("manifest doesn't support index methods")
@@ -61,10 +67,17 @@ func TestManifest(t *testing.T) {
 	if err != nil {
 		t.Errorf("manifest head failed on child digest: %v", err)
 	}
-	rMissing := r.SetDigest("sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	digMissing := digest.Canonical.FromString("missing")
+	digSHA512 := digest.SHA512.FromBytes(mlb)
+	rMissing := r.SetDigest(digMissing.String())
+	rSHA512 := r.SetDigest(digSHA512.String())
 	_, err = o.ManifestHead(ctx, rMissing)
 	if err == nil {
 		t.Errorf("manifest head succeeded on missing digest: %s", rMissing.CommonName())
+	}
+	_, err = o.ManifestHead(ctx, rSHA512)
+	if err == nil {
+		t.Errorf("manifest head succeeded on alternate algorithm: %s", rSHA512.CommonName())
 	}
 	// image manifest
 	m, err := o.ManifestGet(ctx, r)
@@ -201,6 +214,17 @@ func TestManifest(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed pushing manifest: %v", err)
 	}
+	// push invalid digest
+	err = o.manifestPut(ctx, rMissing, ml)
+	if err == nil {
+		t.Errorf("succeeded pushing with invalid digest")
+	}
+	// push with alternate digest
+	err = o.manifestPut(ctx, rSHA512, ml)
+	if err != nil {
+		t.Errorf("failed pushing with alternate digest algorithm: %v", err)
+	}
+	// close and reopen
 	err = o.Close(ctx, r)
 	if err != nil {
 		t.Errorf("failed closing: %v", err)

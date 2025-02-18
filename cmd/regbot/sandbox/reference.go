@@ -106,7 +106,7 @@ func (s *Sandbox) referenceString(ls *lua.LState) int {
 func (s *Sandbox) referenceGetSetDigest(ls *lua.LState) int {
 	r := s.checkReference(ls, 1)
 	if ls.GetTop() == 2 {
-		r.r.Digest = ls.CheckString(2)
+		r.r = r.r.SetDigest(ls.CheckString(2))
 		return 0
 	}
 	ls.Push(lua.LString(r.r.Digest))
@@ -116,7 +116,7 @@ func (s *Sandbox) referenceGetSetDigest(ls *lua.LState) int {
 func (s *Sandbox) referenceGetSetTag(ls *lua.LState) int {
 	r := s.checkReference(ls, 1)
 	if ls.GetTop() == 2 {
-		r.r.Tag = ls.CheckString(2)
+		r.r = r.r.SetTag(ls.CheckString(2))
 		return 0
 	}
 	ls.Push(lua.LString(r.r.Tag))

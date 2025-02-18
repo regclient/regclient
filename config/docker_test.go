@@ -23,7 +23,6 @@ func TestDocker(t *testing.T) {
 	}
 	hostMap := map[string]*Host{}
 	for _, h := range hosts {
-		h := h // shadow h for unique var/pointer
 		hostMap[h.Name] = &h
 	}
 	tt := []struct {

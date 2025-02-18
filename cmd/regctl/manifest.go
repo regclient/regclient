@@ -195,10 +195,10 @@ func (manifestOpts *manifestCmd) runManifestDelete(cmd *cobra.Command, args []st
 		if err != nil {
 			return err
 		}
-		r.Digest = manifest.GetDigest(m).String()
+		r = r.AddDigest(manifest.GetDigest(m).String())
 		manifestOpts.rootOpts.log.Debug("Forced dereference of tag",
-			slog.String("tag", r.Tag),
-			slog.String("digest", r.Digest))
+			slog.String("orig", args[0]),
+			slog.String("resolved", r.CommonName()))
 	}
 
 	manifestOpts.rootOpts.log.Debug("Manifest delete",
@@ -391,8 +391,7 @@ func (manifestOpts *manifestCmd) runManifestPut(cmd *cobra.Command, args []strin
 		return err
 	}
 	if manifestOpts.byDigest {
-		r.Tag = ""
-		r.Digest = rcM.GetDescriptor().Digest.String()
+		r = r.SetDigest(rcM.GetDescriptor().Digest.String())
 	}
 
 	err = rc.ManifestPut(ctx, r, rcM)

@@ -105,6 +105,14 @@ echo 64 arms | regctl artifact put \
   --artifact-type application/example.arms -m application/example.arms \
   --subject ocidir://testrepo:v2 --platform linux/arm64
 
+# another standalone artifact with multiple layers
+regctl artifact put \
+  --artifact-type application/example.layers \
+  -m application/example.layer.1 --file-title -f layer1.txt \
+  -m application/example.layer.2 --file-title -f layer2.txt \
+  -m application/example.layer.3 --file-title -f layer3.txt \
+  ocidir://testrepo:a3
+
 # include a external artifacts
 echo "bacon" | regctl artifact put \
   --artifact-type application/example.sbom -m application/example.sbom.breakfast \
