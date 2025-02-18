@@ -15,7 +15,7 @@ func TestNew(t *testing.T) {
 	t.Parallel()
 	emptyRaw := []byte("{}")
 	registryList := []string{"library/alpine", "library/debian", "library/golang"}
-	registryRaw := []byte(fmt.Sprintf(`{"repositories":["%s"]}`, strings.Join(registryList, `","`)))
+	registryRaw := fmt.Appendf(nil, `{"repositories":["%s"]}`, strings.Join(registryList, `","`))
 	registryHost := "localhost:5000"
 	registryMT := "application/json; charset=utf-8"
 	registryHeaders := http.Header{

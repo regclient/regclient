@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -196,7 +197,6 @@ func (rootOpts *rootCmd) runOnce(cmd *cobra.Command, args []string) error {
 	var wg sync.WaitGroup
 	var mainErr error
 	for _, s := range rootOpts.conf.Sync {
-		s := s
 		if rootOpts.conf.Defaults.Parallel > 0 {
 			wg.Add(1)
 			go func() {
@@ -236,7 +236,6 @@ func (rootOpts *rootCmd) runServer(cmd *cobra.Command, args []string) error {
 		cron.SkipIfStillRunning(cron.DefaultLogger),
 	))
 	for _, s := range rootOpts.conf.Sync {
-		s := s
 		sched := s.Schedule
 		if sched == "" && s.Interval != 0 {
 			sched = "@every " + s.Interval.String()
@@ -535,7 +534,7 @@ func (rootOpts *rootCmd) processRepo(ctx context.Context, s ConfigSync, src, tgt
 		for sI >= 0 && tI >= 0 {
 			switch strings.Compare(sTagList[sI], tTagList[tI]) {
 			case 0:
-				sTagList = append(sTagList[:sI], sTagList[sI+1:]...)
+				sTagList = slices.Delete(sTagList, sI, sI+1)
 				sI--
 				tI--
 			case -1:
@@ -628,14 +627,7 @@ func (rootOpts *rootCmd) processRef(ctx context.Context, s ConfigSync, src, tgt 
 
 	// skip when source manifest is an unsupported type
 	smt := manifest.GetMediaType(mSrc)
-	found := false
-	for _, mt := range s.MediaTypes {
-		if mt == smt {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !slices.Contains(s.MediaTypes, smt) {
 		rootOpts.log.Info("Skipping unsupported media type",
 			slog.String("ref", src.CommonName()),
 			slog.String("mediaType", manifest.GetMediaType(mSrc)),
@@ -767,7 +759,7 @@ func (rootOpts *rootCmd) processRef(ctx context.Context, s ConfigSync, src, tgt 
 			}
 		} else {
 			// else parse backup string as just a tag
-			backupRef.Tag = backupStr
+			backupRef = backupRef.SetTag(backupStr)
 		}
 		defer rootOpts.rc.Close(ctx, backupRef)
 		// run copy from tgt ref to backup ref

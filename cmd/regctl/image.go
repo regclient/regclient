@@ -3,6 +3,7 @@ package main
 import (
 	"archive/tar"
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,7 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -1081,7 +1082,7 @@ func (imageOpts *imageCmd) runImageCopy(cmd *cobra.Command, args []string) error
 		if err != nil {
 			return err
 		}
-		rSrc = rSrc.SetDigest(m.GetDescriptor().Digest.String())
+		rSrc = rSrc.AddDigest(m.GetDescriptor().Digest.String())
 	}
 	imageOpts.rootOpts.log.Debug("Image copy",
 		slog.String("source", rSrc.CommonName()),
@@ -1223,13 +1224,18 @@ func (ip *imageProgress) display(final bool) {
 	for k := range ip.entries {
 		keys = append(keys, k)
 	}
-	sort.Slice(keys, func(a, b int) bool {
-		if ip.entries[keys[a]].state != ip.entries[keys[b]].state {
-			return ip.entries[keys[a]].state > ip.entries[keys[b]].state
-		} else if ip.entries[keys[a]].state != types.CallbackActive {
-			return ip.entries[keys[a]].last.Before(ip.entries[keys[b]].last)
+	slices.SortFunc(keys, func(a, b string) int {
+		// show finished entries at the top, queued entries on the bottom
+		if ip.entries[a].state > ip.entries[b].state {
+			return -1
+		} else if ip.entries[a].state < ip.entries[b].state {
+			return 1
+		} else if ip.entries[a].state != types.CallbackActive {
+			// sort inactive entries by finish time
+			return ip.entries[a].last.Compare(ip.entries[b].last)
 		} else {
-			return ip.entries[keys[a]].cur > ip.entries[keys[b]].cur
+			// sort bytes sent descending
+			return cmp.Compare(ip.entries[a].cur, ip.entries[b].cur) * -1
 		}
 	})
 	startCount, startLimit := 0, 2
@@ -1276,15 +1282,14 @@ func (ip *imageProgress) display(final bool) {
 		}
 	}
 	// show stats summary
-	ip.asciiOut.Add([]byte(fmt.Sprintf("Manifests: %d/%d | Blobs: %s copied, %s skipped",
+	ip.asciiOut.Add(fmt.Appendf(nil, "Manifests: %d/%d | Blobs: %s copied, %s skipped",
 		manifestFinished, manifestTotal,
 		units.HumanSize(float64(sum)),
-		units.HumanSize(float64(skipped)))))
+		units.HumanSize(float64(skipped))))
 	if queued > 0 {
-		ip.asciiOut.Add([]byte(fmt.Sprintf(", %s queued",
-			units.HumanSize(float64(queued)))))
+		ip.asciiOut.Add(fmt.Appendf(nil, ", %s queued", units.HumanSize(float64(queued))))
 	}
-	ip.asciiOut.Add([]byte(fmt.Sprintf(" | Elapsed: %ds\n", int64(time.Since(ip.start).Seconds()))))
+	ip.asciiOut.Add(fmt.Appendf(nil, " | Elapsed: %ds\n", int64(time.Since(ip.start).Seconds())))
 	ip.asciiOut.Flush()
 	if !final {
 		ip.asciiOut.Return()
@@ -1406,8 +1411,7 @@ func (imageOpts *imageCmd) runImageCreate(cmd *cobra.Command, args []string) err
 
 	// push the image
 	if imageOpts.byDigest {
-		r.Tag = ""
-		r.Digest = mm.GetDescriptor().Digest.String()
+		r = r.SetDigest(mm.GetDescriptor().Digest.String())
 	}
 	err = rc.ManifestPut(ctx, r, mm)
 	if err != nil {
@@ -1457,7 +1461,7 @@ func (imageOpts *imageCmd) runImageExport(cmd *cobra.Command, args []string) err
 		if err != nil {
 			return err
 		}
-		r = r.SetDigest(m.GetDescriptor().Digest.String())
+		r = r.AddDigest(m.GetDescriptor().Digest.String())
 	}
 	if imageOpts.exportCompress {
 		opts = append(opts, regclient.ImageWithExportCompress())
@@ -1660,8 +1664,7 @@ func (imageOpts *imageCmd) runImageMod(cmd *cobra.Command, args []string) error 
 	} else if imageOpts.replace {
 		rTgt = rSrc
 	} else {
-		rTgt = rSrc
-		rTgt.Tag = ""
+		rTgt = rSrc.SetTag("")
 	}
 	imageOpts.modOpts = append(imageOpts.modOpts, mod.WithRefTgt(rTgt))
 	rc := imageOpts.rootOpts.newRegClient()

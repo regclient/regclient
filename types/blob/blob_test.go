@@ -342,7 +342,7 @@ func TestReader(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			out := make([]byte, exLen)
-			for i := 0; i < chunkCount-1; i++ {
+			for i := range chunkCount - 1 {
 				l, err := b.Read(out[i*int(chunkLen) : (i+1)*int(chunkLen)])
 				if l != int(chunkLen) {
 					t.Errorf("did not read enough bytes: expected %d, received %d", chunkLen, l)

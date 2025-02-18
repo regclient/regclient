@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/klauspost/compress/zstd"
@@ -65,9 +66,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 	dm.top = true
 
 	// load the options
-	rTgt := rSrc
-	rTgt.Tag = ""
-	rTgt.Digest = ""
+	rTgt := rSrc.SetTag("")
 	dc := dagConfig{
 		stepsManifest:  []func(context.Context, *regclient.RegClient, ref.Ref, ref.Ref, *dagManifest) error{},
 		stepsOCIConfig: []func(context.Context, *regclient.RegClient, ref.Ref, ref.Ref, *dagOCIConfig) error{},
@@ -147,7 +146,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 				}
 			}
 			// changes for files within layers require extracting the tar and then repackaging it
-			if len(dc.stepsLayerFile) > 0 && inListStr(dl.desc.MediaType, mtKnownTar) {
+			if len(dc.stepsLayerFile) > 0 && slices.Contains(mtKnownTar, dl.desc.MediaType) {
 				if dl.mod == deleted {
 					return dl, nil
 				}
@@ -343,8 +342,8 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 	if err != nil {
 		return rTgt, err
 	}
-	if rTgt.Tag == "" {
-		rTgt.Digest = dm.m.GetDescriptor().Digest.String()
+	if rTgt.Tag == "" || rTgt.Digest != "" {
+		rTgt = rTgt.AddDigest(dm.m.GetDescriptor().Digest.String())
 	}
 	return rTgt, nil
 }
@@ -387,25 +386,4 @@ func WithDigestAlgo(algo digest.Algorithm) Opts {
 		}
 		return nil
 	}
-}
-
-func inListStr(str string, list []string) bool {
-	for _, s := range list {
-		if str == s {
-			return true
-		}
-	}
-	return false
-}
-
-func eqStrSlice(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }

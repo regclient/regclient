@@ -3,6 +3,7 @@ package mod
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/opencontainers/go-digest"
@@ -830,17 +831,14 @@ func rebaseAddStep(dc *dagConfig, rBaseOld, rBaseNew ref.Ref) error {
 		pruneNum := len(layersOld)
 		i := 0
 		for pruneNum > 0 {
+			if i >= len(dm.layers) {
+				break
+			}
 			if dm.layers[i].mod == added {
 				i++
 				continue
 			}
-			if i == 0 {
-				dm.layers = dm.layers[1:]
-			} else if i >= len(dm.layers)-1 {
-				dm.layers = dm.layers[:i]
-			} else {
-				dm.layers = append(dm.layers[:i], dm.layers[i+1:]...)
-			}
+			dm.layers = slices.Delete(dm.layers, i, i+1)
 			pruneNum--
 		}
 		layers = layers[len(layersOld):]

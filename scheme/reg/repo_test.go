@@ -94,7 +94,7 @@ func TestRepo(t *testing.T) {
 				},
 				RespEntry: reqresp.RespEntry{
 					Status: http.StatusOK,
-					Body:   []byte(fmt.Sprintf(`{"repositories":["%s"]}`, strings.Join(listRegistry[:partialLen], `","`))),
+					Body:   fmt.Appendf(nil, `{"repositories":["%s"]}`, strings.Join(listRegistry[:partialLen], `","`)),
 					Headers: http.Header{
 						"Content-Type": {"text/plain; charset=utf-8"},
 					},
@@ -111,7 +111,7 @@ func TestRepo(t *testing.T) {
 				},
 				RespEntry: reqresp.RespEntry{
 					Status: http.StatusOK,
-					Body:   []byte(fmt.Sprintf(`{"repositories":["%s"]}`, strings.Join(listRegistry[partialLen:], `","`))),
+					Body:   fmt.Appendf(nil, `{"repositories":["%s"]}`, strings.Join(listRegistry[partialLen:], `","`)),
 					Headers: http.Header{
 						"Content-Type": {"text/plain; charset=utf-8"},
 					},
@@ -125,7 +125,7 @@ func TestRepo(t *testing.T) {
 				},
 				RespEntry: reqresp.RespEntry{
 					Status: http.StatusOK,
-					Body:   []byte(fmt.Sprintf(`{"repositories":["%s"]}`, strings.Join(listRegistry, `","`))),
+					Body:   fmt.Appendf(nil, `{"repositories":["%s"]}`, strings.Join(listRegistry, `","`)),
 					Headers: http.Header{
 						"Content-Type": {"text/plain; charset=utf-8"},
 					},

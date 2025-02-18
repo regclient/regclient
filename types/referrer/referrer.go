@@ -4,6 +4,7 @@ package referrer
 import (
 	"bytes"
 	"fmt"
+	"slices"
 	"sort"
 	"text/tabwriter"
 
@@ -79,11 +80,7 @@ func (rl *ReferrerList) Delete(m manifest.Manifest) error {
 	found := false
 	for i := len(rlM.Manifests) - 1; i >= 0; i-- {
 		if rlM.Manifests[i].Digest == mDesc.Digest {
-			if i < len(rlM.Manifests)-1 {
-				rlM.Manifests = append(rlM.Manifests[:i], rlM.Manifests[i+1:]...)
-			} else {
-				rlM.Manifests = rlM.Manifests[:i]
-			}
+			rlM.Manifests = slices.Delete(rlM.Manifests, i, i+1)
 			found = true
 		}
 	}

@@ -42,15 +42,11 @@ func (p *ProgressBar) Generate(pct float64, pre, post string) []byte {
 		pct = 1
 	}
 	curWidth := p.Width - (len(pre) + len(post) + 2)
-	if curWidth < p.Min {
-		curWidth = p.Min
-	} else if curWidth > p.Max {
-		curWidth = p.Max
-	}
+	curWidth = min(max(curWidth, p.Min), p.Max)
 	buf := make([]byte, curWidth)
 
 	doneLen := int(float64(curWidth) * pct)
-	for i := 0; i < doneLen; i++ {
+	for i := range doneLen {
 		buf[i] = p.Done
 	}
 	if doneLen < curWidth {
@@ -59,5 +55,5 @@ func (p *ProgressBar) Generate(pct float64, pre, post string) []byte {
 	for i := doneLen + 1; i < curWidth; i++ {
 		buf[i] = p.Pending
 	}
-	return []byte(fmt.Sprintf("%s%c%s%c%s\n", pre, p.Start, buf, p.End, post))
+	return fmt.Appendf(nil, "%s%c%s%c%s\n", pre, p.Start, buf, p.End, post)
 }

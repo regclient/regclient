@@ -902,11 +902,12 @@ func TestIsSet(t *testing.T) {
 	}
 }
 
-func TestSet(t *testing.T) {
+func TestSetAndAdd(t *testing.T) {
 	t.Parallel()
 	rStr := "example.com/repo:v1"
 	rDigStr := "example.com/repo@" + testDigest
 	rTagStr := "example.com/repo:v2"
+	rAddStr := "example.com/repo:v2@" + testDigest
 	r, err := New(rStr)
 	if err != nil {
 		t.Fatalf("unexpected parse failure: %v", err)
@@ -931,6 +932,17 @@ func TestSet(t *testing.T) {
 	if r.Reference != rTagStr {
 		t.Errorf("SetTag reference mismatch, expected %s, received %s", rTagStr, r.Reference)
 	}
+	r = r.AddDigest(testDigest)
+	if r.Tag != "v2" {
+		t.Errorf("AddDigest tag mismatch, expected v2, received %s", r.Tag)
+	}
+	if r.Digest != testDigest {
+		t.Errorf("AddDigest digest mismatch, expected %s, received %s", testDigest, r.Digest)
+	}
+	if r.Reference != rAddStr {
+		t.Errorf("AddDigest reference mismatch, expected %s, received %s", rAddStr, r.Reference)
+	}
+
 }
 
 func TestToReg(t *testing.T) {

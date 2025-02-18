@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"regexp"
+	"slices"
 	"sync"
 	"testing"
 
@@ -66,31 +67,12 @@ func strMapMatch(a, b map[string][]string) bool {
 			return false
 		}
 		for _, ave := range av {
-			found := false
-			for _, bve := range bv {
-				if ave == bve {
-					found = true
-					break
-				}
-			}
-			if !found {
+			if !slices.Contains(bv, ave) {
 				return false
 			}
 		}
 	}
 	return true
-}
-
-func stateMatch(state string, list []string) bool {
-	if len(list) == 0 {
-		return true
-	}
-	for _, entry := range list {
-		if entry == state {
-			return true
-		}
-	}
-	return false
 }
 
 func (r *rrHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
@@ -105,7 +87,7 @@ func (r *rrHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	defer r.mu.Unlock()
 	for i, rr := range r.rrs {
 		reqMatch := rr.ReqEntry
-		if !stateMatch(r.state, reqMatch.IfState) ||
+		if (len(reqMatch.IfState) > 0 && !slices.Contains(reqMatch.IfState, r.state)) ||
 			reqMatch.Method != req.Method ||
 			(reqMatch.PathRE != nil && !reqMatch.PathRE.MatchString(req.URL.Path)) ||
 			(reqMatch.Path != "" && reqMatch.Path != req.URL.Path) ||
@@ -129,7 +111,7 @@ func (r *rrHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 		// for single use test cases, delete this entry
 		if reqMatch.DelOnUse {
-			r.rrs = append(r.rrs[:i], r.rrs[i+1:]...)
+			r.rrs = slices.Delete(r.rrs, i, i+1)
 		}
 		// update current state
 		if reqMatch.SetState != "" {

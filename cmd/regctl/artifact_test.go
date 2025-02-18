@@ -41,6 +41,26 @@ func TestArtifactGet(t *testing.T) {
 			expectOut: "eggs",
 		},
 		{
+			name:      "By Manifest filter layer media type",
+			args:      []string{"artifact", "get", "ocidir://../../testdata/testrepo:a3", "--file-media-type", "application/example.layer.2"},
+			expectOut: "2",
+		},
+		{
+			name:      "By Manifest filter layer filename",
+			args:      []string{"artifact", "get", "ocidir://../../testdata/testrepo:a3", "--file", "layer3.txt"},
+			expectOut: "3",
+		},
+		{
+			name:      "By Manifest filter layer media type missing",
+			args:      []string{"artifact", "get", "ocidir://../../testdata/testrepo:a3", "--file-media-type", "application/example.missing"},
+			expectErr: errs.ErrNotFound,
+		},
+		{
+			name:      "By Manifest filter layer filename missing",
+			args:      []string{"artifact", "get", "ocidir://../../testdata/testrepo:a3", "--file", "missing.txt"},
+			expectErr: errs.ErrNotFound,
+		},
+		{
 			name:      "By Subject",
 			args:      []string{"artifact", "get", "--subject", "ocidir://../../testdata/testrepo:v2", "--filter-artifact-type", "application/example.sbom"},
 			expectOut: "eggs",

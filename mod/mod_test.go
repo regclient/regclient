@@ -24,7 +24,6 @@ import (
 	"github.com/regclient/regclient/scheme/reg"
 	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
-	"github.com/regclient/regclient/types/mediatype"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
 )
@@ -1089,18 +1088,4 @@ func TestMod(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestInList(t *testing.T) {
-	t.Parallel()
-	t.Run("match", func(t *testing.T) {
-		if !inListStr(mediatype.Docker2LayerGzip, mtKnownTar) {
-			t.Errorf("did not find docker layer in known tar list")
-		}
-	})
-	t.Run("mismatch", func(t *testing.T) {
-		if inListStr(mediatype.Docker2LayerGzip, mtKnownConfig) {
-			t.Errorf("found docker layer in known config list")
-		}
-	})
 }

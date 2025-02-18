@@ -42,7 +42,6 @@ func TestRoundtrip(t *testing.T) {
 		},
 	}
 	for _, algo := range []CompressType{CompressNone, CompressGzip, CompressXz, CompressZstd} {
-		algo := algo
 		t.Run(algo.String(), func(t *testing.T) {
 			for _, tc := range tt {
 				tc := tc
