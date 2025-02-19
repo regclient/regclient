@@ -225,6 +225,9 @@ func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []str
 	if len(args) < 1 {
 		args = []string{regclient.DockerRegistry}
 	}
+	if !config.HostValidate(args[0]) {
+		return fmt.Errorf("invalid registry name provided: %s", args[0])
+	}
 	h := config.HostNewName(args[0])
 	if curH, ok := c.Hosts[h.Name]; ok {
 		h = curH
@@ -329,6 +332,9 @@ func (registryOpts *registryCmd) runRegistryLogout(cmd *cobra.Command, args []st
 	if len(args) < 1 {
 		args = []string{regclient.DockerRegistry}
 	}
+	if !config.HostValidate(args[0]) {
+		return fmt.Errorf("invalid registry name provided: %s", args[0])
+	}
 	h := config.HostNewName(args[0])
 	if curH, ok := c.Hosts[h.Name]; ok {
 		h = curH
@@ -359,6 +365,9 @@ func (registryOpts *registryCmd) runRegistrySet(cmd *cobra.Command, args []strin
 	}
 	if len(args) < 1 {
 		args = []string{regclient.DockerRegistry}
+	}
+	if !config.HostValidate(args[0]) {
+		return fmt.Errorf("invalid registry name provided: %s", args[0])
 	}
 	h := config.HostNewName(args[0])
 	if curH, ok := c.Hosts[h.Name]; ok {
