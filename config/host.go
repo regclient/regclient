@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -141,6 +142,11 @@ func HostNew() *Host {
 	return &h
 }
 
+// HostNewName creates a default Host with a hostname.
+func HostNewName(name string) *Host {
+	return HostNewDefName(nil, name)
+}
+
 // HostNewDefName creates a host using provided defaults and hostname.
 func HostNewDefName(def *Host, name string) *Host {
 	var h Host
@@ -176,39 +182,29 @@ func HostNewDefName(def *Host, name string) *Host {
 		}
 	}
 	// configure host
-	origName := name
+	scheme, registry, _ := parseName(name)
+	if scheme == "http" {
+		h.TLS = TLSDisabled
+	}
 	// Docker Hub is a special case
-	if name == DockerRegistryAuth || name == DockerRegistryDNS || name == DockerRegistry {
+	if registry == DockerRegistry {
 		h.Name = DockerRegistry
 		h.Hostname = DockerRegistryDNS
 		h.CredHost = DockerRegistryAuth
 		return &h
 	}
-	// handle http/https prefix
-	i := strings.Index(name, "://")
-	if i > 0 {
-		scheme := name[:i]
-		name = name[i+3:]
-		if scheme == "http" {
-			h.TLS = TLSDisabled
-		}
-	}
-	// trim any repository path
-	i = strings.Index(name, "/")
-	if i > 0 {
-		name = name[:i]
-	}
-	h.Name = name
-	h.Hostname = name
-	if origName != name {
-		h.CredHost = origName
+	h.Name = registry
+	h.Hostname = registry
+	if name != registry {
+		h.CredHost = name
 	}
 	return &h
 }
 
-// HostNewName creates a default Host with a hostname.
-func HostNewName(name string) *Host {
-	return HostNewDefName(nil, name)
+// HostValidate returns true if the scheme is missing or a known value, and the path is not set.
+func HostValidate(name string) bool {
+	scheme, _, path := parseName(name)
+	return path == "" && (scheme == "https" || scheme == "http")
 }
 
 // GetCred returns the credential, fetching from a credential helper if needed.
@@ -444,7 +440,7 @@ func (host *Host) Merge(newHost Host, log *slog.Logger) error {
 
 	if len(newHost.APIOpts) > 0 {
 		if len(host.APIOpts) > 0 {
-			merged := copyMapString(host.APIOpts)
+			merged := maps.Clone(host.APIOpts)
 			for k, v := range newHost.APIOpts {
 				if host.APIOpts[k] != "" && host.APIOpts[k] != v {
 					log.Warn("Changing APIOpts setting for registry",
@@ -504,10 +500,25 @@ func (host *Host) Merge(newHost Host, log *slog.Logger) error {
 	return nil
 }
 
-func copyMapString(src map[string]string) map[string]string {
-	copy := map[string]string{}
-	for k, v := range src {
-		copy[k] = v
+// parseName splits a registry into the scheme, hostname, and repository/path.
+func parseName(name string) (string, string, string) {
+	scheme := "https"
+	path := ""
+	// Docker Hub is a special case
+	if name == DockerRegistryAuth || name == DockerRegistryDNS || name == DockerRegistry {
+		return scheme, DockerRegistry, ""
 	}
-	return copy
+	// handle http/https prefix
+	i := strings.Index(name, "://")
+	if i > 0 {
+		scheme = name[:i]
+		name = name[i+3:]
+	}
+	// trim any repository path
+	i = strings.Index(name, "/")
+	if i > 0 {
+		path = name[i+1:]
+		name = name[:i]
+	}
+	return scheme, name, path
 }
