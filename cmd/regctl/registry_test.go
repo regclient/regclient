@@ -52,6 +52,11 @@ func TestRegistry(t *testing.T) {
 		expectOut   string
 		outContains bool
 	}{
+		{
+			name:      "whoami to an unknown server",
+			args:      []string{"registry", "whoami", tsGoodHost},
+			expectErr: errs.ErrNoLogin,
+		},
 		// disable tls
 		{
 			name:        "set no TLS",
@@ -76,6 +81,11 @@ func TestRegistry(t *testing.T) {
 			args:        []string{"registry", "config", tsGoodHost},
 			expectOut:   `"tls": "disabled",`,
 			outContains: true,
+		},
+		{
+			name:      "whoami to an known server without logging in",
+			args:      []string{"registry", "whoami", tsGoodHost},
+			expectErr: errs.ErrNoLogin,
 		},
 		{
 			name:        "query unauth host",
@@ -114,6 +124,11 @@ func TestRegistry(t *testing.T) {
 			expectOut: `testgooduser`,
 		},
 		{
+			name:      "whoami to an known server",
+			args:      []string{"registry", "whoami", tsGoodHost},
+			expectOut: "testgooduser",
+		},
+		{
 			name:      "query unauth host",
 			args:      []string{"registry", "config", tsUnauthHost, "--format", "{{.User}}"},
 			expectOut: `testunauthuser`,
@@ -147,6 +162,11 @@ func TestRegistry(t *testing.T) {
 			name:      "check logout on good host",
 			args:      []string{"registry", "config", tsGoodHost, "--format", "{{.User}}"},
 			expectOut: ``,
+		},
+		{
+			name:      "whoami to an known server after logout",
+			args:      []string{"registry", "whoami", tsGoodHost},
+			expectErr: errs.ErrNoLogin,
 		},
 		{
 			name:      "check logout on unauth host",

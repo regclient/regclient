@@ -16,6 +16,7 @@ import (
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/pkg/template"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -122,6 +123,20 @@ regctl registry set quay.io --req-per-sec 10`,
 		ValidArgsFunction: registryArgListReg,
 		RunE:              registryOpts.runRegistrySet,
 	}
+	var registryWhoamiCmd = &cobra.Command{
+		Use:   "whoami [registry]",
+		Short: "show current login for a registry",
+		Long:  `Displays the username for a given registry.`,
+		Example: `
+# show the login on Docker Hub
+regctl registry whoami
+
+# show the login on another registry
+regctl registry whoami registry.example.org`,
+		Args:              cobra.RangeArgs(0, 1),
+		ValidArgsFunction: registryArgListReg,
+		RunE:              registryOpts.runRegistryWhoami,
+	}
 
 	registryConfigCmd.Flags().StringVar(&registryOpts.formatConf, "format", "{{jsonPretty .}}", "Format output with go template syntax")
 
@@ -173,6 +188,7 @@ regctl registry set quay.io --req-per-sec 10`,
 	registryTopCmd.AddCommand(registryLoginCmd)
 	registryTopCmd.AddCommand(registryLogoutCmd)
 	registryTopCmd.AddCommand(registrySetCmd)
+	registryTopCmd.AddCommand(registryWhoamiCmd)
 	return registryTopCmd
 }
 
@@ -195,12 +211,6 @@ func (registryOpts *registryCmd) runRegistryConfig(cmd *cobra.Command, args []st
 	if err != nil {
 		return err
 	}
-	// empty out the password fields, do not print them
-	for i := range c.Hosts {
-		c.Hosts[i].Pass = ""
-		c.Hosts[i].Token = ""
-		c.Hosts[i].ClientKey = ""
-	}
 	if len(args) > 0 {
 		h, ok := c.Hosts[args[0]]
 		if !ok {
@@ -208,8 +218,21 @@ func (registryOpts *registryCmd) runRegistryConfig(cmd *cobra.Command, args []st
 				slog.String("registry", args[0]))
 			return nil
 		}
+		// load the username from a credential helper
+		cred := h.GetCred()
+		h.User = cred.User
+		// do not output secrets
+		h.Pass = ""
+		h.Token = ""
+		h.ClientKey = ""
 		return template.Writer(cmd.OutOrStdout(), registryOpts.formatConf, h)
 	} else {
+		// do not output secrets
+		for i := range c.Hosts {
+			c.Hosts[i].Pass = ""
+			c.Hosts[i].Token = ""
+			c.Hosts[i].ClientKey = ""
+		}
 		return template.Writer(cmd.OutOrStdout(), registryOpts.formatConf, c)
 	}
 }
@@ -467,4 +490,28 @@ func (registryOpts *registryCmd) runRegistrySet(cmd *cobra.Command, args []strin
 	registryOpts.rootOpts.log.Info("Registry configuration updated/set",
 		slog.String("name", h.Name))
 	return nil
+}
+
+func (registryOpts *registryCmd) runRegistryWhoami(cmd *cobra.Command, args []string) error {
+	c, err := ConfigLoadDefault()
+	if err != nil {
+		return err
+	}
+	if len(args) == 0 {
+		args = []string{regclient.DockerRegistry}
+	}
+	h, ok := c.Hosts[args[0]]
+	if !ok {
+		return fmt.Errorf("no login found for %s%.0w", args[0], errs.ErrNoLogin)
+	}
+	cred := h.GetCred()
+	if cred.User == "" && cred.Token != "" {
+		cred.User = "<token>"
+	}
+	if cred.User == "" {
+		return fmt.Errorf("no login found for %s%.0w", args[0], errs.ErrNoLogin)
+	}
+	// output the user
+	_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s\n", cred.User)
+	return err
 }
