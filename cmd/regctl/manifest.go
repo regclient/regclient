@@ -19,16 +19,14 @@ import (
 	"github.com/regclient/regclient/types/warning"
 )
 
-type manifestCmd struct {
-	rootOpts      *rootCmd
+type manifestOpts struct {
+	rootOpts      *rootOpts
 	byDigest      bool
 	contentType   string
 	diffCtx       int
 	diffFullCtx   bool
 	forceTagDeref bool
-	formatGet     string
-	formatHead    string
-	formatPut     string
+	format        string
 	list          bool
 	platform      string
 	referrers     bool
@@ -36,16 +34,25 @@ type manifestCmd struct {
 	requireList   bool
 }
 
-func NewManifestCmd(rootOpts *rootCmd) *cobra.Command {
-	manifestOpts := manifestCmd{
-		rootOpts: rootOpts,
-	}
-	var manifestTopCmd = &cobra.Command{
+func NewManifestCmd(rOpts *rootOpts) *cobra.Command {
+	cmd := &cobra.Command{
 		Use:   "manifest <cmd>",
 		Short: "manage manifests",
 	}
 
-	var manifestDeleteCmd = &cobra.Command{
+	cmd.AddCommand(newManifestDeleteCmd(rOpts))
+	cmd.AddCommand(newManifestDiffCmd(rOpts))
+	cmd.AddCommand(newManifestHeadCmd(rOpts))
+	cmd.AddCommand(newManifestGetCmd(rOpts))
+	cmd.AddCommand(newManifestPutCmd(rOpts))
+	return cmd
+}
+
+func newManifestDeleteCmd(rOpts *rootOpts) *cobra.Command {
+	opts := manifestOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:     "delete <image_ref>",
 		Aliases: []string{"del", "rm", "remove"},
 		Short:   "delete a manifest",
@@ -66,10 +73,18 @@ regctl manifest delete --referrers \
   registry.example.org/repo@sha256:fab3c890d0480549d05d2ff3d746f42e360b7f0e3fe64bdf39fc572eab94911b`,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{}, // do not auto complete digests
-		RunE:      manifestOpts.runManifestDelete,
+		RunE:      opts.runManifestDelete,
 	}
+	cmd.Flags().BoolVarP(&opts.forceTagDeref, "force-tag-dereference", "", false, "Dereference the a tag to a digest, this is unsafe")
+	cmd.Flags().BoolVarP(&opts.referrers, "referrers", "", false, "Check for referrers, recommended when deleting artifacts")
+	return cmd
+}
 
-	var manifestDiffCmd = &cobra.Command{
+func newManifestDiffCmd(rOpts *rootOpts) *cobra.Command {
+	opts := manifestOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:   "diff <image_ref> <image_ref>",
 		Short: "compare manifests",
 		Long:  `Show the differences between two image manifests`,
@@ -84,11 +99,19 @@ regctl manifest diff --context-full \
   ghcr.io/regclient/regctl@sha256:9b7057d06ce061cefc7a0b7cb28cad626164e6629a1a4f09cee4b4d400c9aef0 \
   ghcr.io/regclient/regctl@sha256:4d113b278bd425d094848ba5d7b4d6baca13a2a9d20d265b32bc12020d501002`,
 		Args:              cobra.ExactArgs(2),
-		ValidArgsFunction: rootOpts.completeArgTag,
-		RunE:              manifestOpts.runManifestDiff,
+		ValidArgsFunction: rOpts.completeArgTag,
+		RunE:              opts.runManifestDiff,
 	}
+	cmd.Flags().IntVarP(&opts.diffCtx, "context", "", 3, "Lines of context")
+	cmd.Flags().BoolVarP(&opts.diffFullCtx, "context-full", "", false, "Show all lines of context")
+	return cmd
+}
 
-	var manifestGetCmd = &cobra.Command{
+func newManifestGetCmd(rOpts *rootOpts) *cobra.Command {
+	opts := manifestOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:     "get <image_ref>",
 		Aliases: []string{"pull"},
 		Short:   "retrieve manifest or manifest list",
@@ -103,11 +126,24 @@ regctl manifest get alpine --format raw-body --platform local
 # retrieve the manifest for a specific windows version
 regctl manifest get golang --platform windows/amd64,osver=10.0.17763.4974`,
 		Args:              cobra.ExactArgs(1),
-		ValidArgsFunction: rootOpts.completeArgTag,
-		RunE:              manifestOpts.runManifestGet,
+		ValidArgsFunction: rOpts.completeArgTag,
+		RunE:              opts.runManifestGet,
 	}
+	cmd.Flags().StringVarP(&opts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax (use \"raw-body\" for the original manifest)")
+	_ = cmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	cmd.Flags().BoolVarP(&opts.list, "list", "", true, "Deprecated: Output manifest list if available")
+	_ = cmd.Flags().MarkHidden("list")
+	cmd.Flags().StringVarP(&opts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
+	_ = cmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
+	cmd.Flags().BoolVarP(&opts.requireList, "require-list", "", false, "Deprecated: Fail if manifest list is not received")
+	return cmd
+}
 
-	var manifestHeadCmd = &cobra.Command{
+func newManifestHeadCmd(rOpts *rootOpts) *cobra.Command {
+	opts := manifestOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:     "head <image_ref>",
 		Aliases: []string{"digest"},
 		Short:   "http head request for manifest",
@@ -116,17 +152,34 @@ regctl manifest get golang --platform windows/amd64,osver=10.0.17763.4974`,
 # show the digest for an image
 regctl manifest head alpine
 
+# "regctl image digest" is an alias
+regctl image digest alpine
+
 # show the digest for a specific platform (this will perform a GET request)
 regctl manifest head alpine --platform linux/arm64
 
 # show all headers for the request
 regctl manifest head alpine --format raw-headers`,
 		Args:              cobra.ExactArgs(1),
-		ValidArgsFunction: rootOpts.completeArgTag,
-		RunE:              manifestOpts.runManifestHead,
+		ValidArgsFunction: rOpts.completeArgTag,
+		RunE:              opts.runManifestHead,
 	}
+	cmd.Flags().StringVarP(&opts.format, "format", "", "", "Format output with go template syntax (use \"raw-body\" for the original manifest)")
+	_ = cmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	cmd.Flags().BoolVarP(&opts.list, "list", "", true, "Do not resolve platform from manifest list (enabled by default)")
+	_ = cmd.Flags().MarkHidden("list")
+	cmd.Flags().StringVarP(&opts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local, requires a get request)")
+	_ = cmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
+	cmd.Flags().BoolVarP(&opts.requireDigest, "require-digest", "", false, "Fallback to a GET request if digest is not received")
+	cmd.Flags().BoolVarP(&opts.requireList, "require-list", "", false, "Fail if manifest list is not received")
+	return cmd
+}
 
-	var manifestPutCmd = &cobra.Command{
+func newManifestPutCmd(rOpts *rootOpts) *cobra.Command {
+	opts := manifestOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:     "put <image_ref>",
 		Aliases: []string{"push"},
 		Short:   "push manifest or manifest list",
@@ -137,47 +190,18 @@ regctl manifest put \
   --content-type application/vnd.oci.image.manifest.v1+json \
   registry.example.org/repo:v1 <manifest.json`,
 		Args:              cobra.ExactArgs(1),
-		ValidArgsFunction: rootOpts.completeArgTag,
-		RunE:              manifestOpts.runManifestPut,
+		ValidArgsFunction: rOpts.completeArgTag,
+		RunE:              opts.runManifestPut,
 	}
-
-	manifestDeleteCmd.Flags().BoolVarP(&manifestOpts.forceTagDeref, "force-tag-dereference", "", false, "Dereference the a tag to a digest, this is unsafe")
-	manifestDeleteCmd.Flags().BoolVarP(&manifestOpts.referrers, "referrers", "", false, "Check for referrers, recommended when deleting artifacts")
-
-	manifestDiffCmd.Flags().IntVarP(&manifestOpts.diffCtx, "context", "", 3, "Lines of context")
-	manifestDiffCmd.Flags().BoolVarP(&manifestOpts.diffFullCtx, "context-full", "", false, "Show all lines of context")
-
-	manifestHeadCmd.Flags().StringVarP(&manifestOpts.formatHead, "format", "", "", "Format output with go template syntax (use \"raw-body\" for the original manifest)")
-	manifestHeadCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Do not resolve platform from manifest list (enabled by default)")
-	_ = manifestHeadCmd.Flags().MarkHidden("list")
-	manifestHeadCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local, requires a get request)")
-	_ = manifestHeadCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
-	manifestHeadCmd.Flags().BoolVarP(&manifestOpts.requireDigest, "require-digest", "", false, "Fallback to get request if digest is not received")
-	manifestHeadCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Fail if manifest list is not received")
-
-	manifestGetCmd.Flags().BoolVarP(&manifestOpts.list, "list", "", true, "Deprecated: Output manifest list if available")
-	_ = manifestGetCmd.Flags().MarkHidden("list")
-	manifestGetCmd.Flags().StringVarP(&manifestOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
-	_ = manifestGetCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
-	manifestGetCmd.Flags().BoolVarP(&manifestOpts.requireList, "require-list", "", false, "Deprecated: Fail if manifest list is not received")
-	manifestGetCmd.Flags().StringVarP(&manifestOpts.formatGet, "format", "", "{{printPretty .}}", "Format output with go template syntax (use \"raw-body\" for the original manifest)")
-	_ = manifestGetCmd.RegisterFlagCompletionFunc("format", completeArgNone)
-
-	manifestPutCmd.Flags().BoolVarP(&manifestOpts.byDigest, "by-digest", "", false, "Push manifest by digest instead of tag")
-	manifestPutCmd.Flags().StringVarP(&manifestOpts.contentType, "content-type", "t", "", "Specify content-type (e.g. application/vnd.docker.distribution.manifest.v2+json)")
-	_ = manifestPutCmd.RegisterFlagCompletionFunc("content-type", completeArgMediaTypeManifest)
-	manifestPutCmd.Flags().StringVarP(&manifestOpts.formatPut, "format", "", "", "Format output with go template syntax")
-	_ = manifestPutCmd.RegisterFlagCompletionFunc("format", completeArgNone)
-
-	manifestTopCmd.AddCommand(manifestDeleteCmd)
-	manifestTopCmd.AddCommand(manifestDiffCmd)
-	manifestTopCmd.AddCommand(manifestHeadCmd)
-	manifestTopCmd.AddCommand(manifestGetCmd)
-	manifestTopCmd.AddCommand(manifestPutCmd)
-	return manifestTopCmd
+	cmd.Flags().BoolVarP(&opts.byDigest, "by-digest", "", false, "Push manifest by digest instead of tag")
+	cmd.Flags().StringVarP(&opts.contentType, "content-type", "t", "", "Specify content-type (e.g. application/vnd.docker.distribution.manifest.v2+json)")
+	_ = cmd.RegisterFlagCompletionFunc("content-type", completeArgMediaTypeManifest)
+	cmd.Flags().StringVarP(&opts.format, "format", "", "", "Format output with go template syntax")
+	_ = cmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	return cmd
 }
 
-func (manifestOpts *manifestCmd) runManifestDelete(cmd *cobra.Command, args []string) error {
+func (opts *manifestOpts) runManifestDelete(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	// dedup warnings
 	if w := warning.FromContext(ctx); w == nil {
@@ -187,26 +211,26 @@ func (manifestOpts *manifestCmd) runManifestDelete(cmd *cobra.Command, args []st
 	if err != nil {
 		return err
 	}
-	rc := manifestOpts.rootOpts.newRegClient()
+	rc := opts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
-	if r.Digest == "" && manifestOpts.forceTagDeref {
+	if r.Digest == "" && opts.forceTagDeref {
 		m, err := rc.ManifestHead(ctx, r, regclient.WithManifestRequireDigest())
 		if err != nil {
 			return err
 		}
 		r = r.AddDigest(manifest.GetDigest(m).String())
-		manifestOpts.rootOpts.log.Debug("Forced dereference of tag",
+		opts.rootOpts.log.Debug("Forced dereference of tag",
 			slog.String("orig", args[0]),
 			slog.String("resolved", r.CommonName()))
 	}
 
-	manifestOpts.rootOpts.log.Debug("Manifest delete",
+	opts.rootOpts.log.Debug("Manifest delete",
 		slog.String("host", r.Registry),
 		slog.String("repo", r.Repository),
 		slog.String("digest", r.Digest))
 	mOpts := []regclient.ManifestOpts{}
-	if manifestOpts.referrers {
+	if opts.referrers {
 		mOpts = append(mOpts, regclient.WithManifestCheckReferrers())
 	}
 
@@ -217,12 +241,12 @@ func (manifestOpts *manifestCmd) runManifestDelete(cmd *cobra.Command, args []st
 	return nil
 }
 
-func (manifestOpts *manifestCmd) runManifestDiff(cmd *cobra.Command, args []string) error {
+func (opts *manifestOpts) runManifestDiff(cmd *cobra.Command, args []string) error {
 	diffOpts := []diff.Opt{}
-	if manifestOpts.diffCtx > 0 {
-		diffOpts = append(diffOpts, diff.WithContext(manifestOpts.diffCtx, manifestOpts.diffCtx))
+	if opts.diffCtx > 0 {
+		diffOpts = append(diffOpts, diff.WithContext(opts.diffCtx, opts.diffCtx))
 	}
-	if manifestOpts.diffFullCtx {
+	if opts.diffFullCtx {
 		diffOpts = append(diffOpts, diff.WithFullContext())
 	}
 	ctx := cmd.Context()
@@ -239,9 +263,9 @@ func (manifestOpts *manifestCmd) runManifestDiff(cmd *cobra.Command, args []stri
 		return err
 	}
 
-	rc := manifestOpts.rootOpts.newRegClient()
+	rc := opts.rootOpts.newRegClient()
 
-	manifestOpts.rootOpts.log.Debug("Manifest diff",
+	opts.rootOpts.log.Debug("Manifest diff",
 		slog.String("ref1", r1.CommonName()),
 		slog.String("ref2", r2.CommonName()))
 
@@ -271,12 +295,12 @@ func (manifestOpts *manifestCmd) runManifestDiff(cmd *cobra.Command, args []stri
 	// return template.Writer(cmd.OutOrStdout(), manifestOpts.format, mDiff)
 }
 
-func (manifestOpts *manifestCmd) runManifestHead(cmd *cobra.Command, args []string) error {
+func (opts *manifestOpts) runManifestHead(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	if flagChanged(cmd, "list") {
-		manifestOpts.rootOpts.log.Info("list option has been deprecated, manifest list is output by default until a platform is specified")
+		opts.rootOpts.log.Info("list option has been deprecated, manifest list is output by default until a platform is specified")
 	}
-	if manifestOpts.platform != "" && manifestOpts.requireList {
+	if opts.platform != "" && opts.requireList {
 		return fmt.Errorf("cannot request a platform and require-list simultaneously")
 	}
 
@@ -284,22 +308,22 @@ func (manifestOpts *manifestCmd) runManifestHead(cmd *cobra.Command, args []stri
 	if err != nil {
 		return err
 	}
-	rc := manifestOpts.rootOpts.newRegClient()
+	rc := opts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
-	manifestOpts.rootOpts.log.Debug("Manifest head",
+	opts.rootOpts.log.Debug("Manifest head",
 		slog.String("host", r.Registry),
 		slog.String("repo", r.Repository),
 		slog.String("tag", r.Tag))
 
 	mOpts := []regclient.ManifestOpts{}
-	if manifestOpts.requireDigest || (!flagChanged(cmd, "require-digest") && !flagChanged(cmd, "format")) {
+	if opts.requireDigest || (!flagChanged(cmd, "require-digest") && !flagChanged(cmd, "format")) {
 		mOpts = append(mOpts, regclient.WithManifestRequireDigest())
 	}
-	if manifestOpts.platform != "" {
-		p, err := platform.Parse(manifestOpts.platform)
+	if opts.platform != "" {
+		p, err := platform.Parse(opts.platform)
 		if err != nil {
-			return fmt.Errorf("failed to parse platform %s: %w", manifestOpts.platform, err)
+			return fmt.Errorf("failed to parse platform %s: %w", opts.platform, err)
 		}
 		mOpts = append(mOpts, regclient.WithManifestPlatform(p))
 	}
@@ -309,21 +333,21 @@ func (manifestOpts *manifestCmd) runManifestHead(cmd *cobra.Command, args []stri
 		return err
 	}
 
-	switch manifestOpts.formatHead {
+	switch opts.format {
 	case "", "digest":
-		manifestOpts.formatHead = "{{ printf \"%s\\n\" .GetDescriptor.Digest }}"
+		opts.format = "{{ printf \"%s\\n\" .GetDescriptor.Digest }}"
 	case "rawHeaders", "raw-headers", "headers":
-		manifestOpts.formatHead = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
+		opts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
-	return template.Writer(cmd.OutOrStdout(), manifestOpts.formatHead, m)
+	return template.Writer(cmd.OutOrStdout(), opts.format, m)
 }
 
-func (manifestOpts *manifestCmd) runManifestGet(cmd *cobra.Command, args []string) error {
+func (opts *manifestOpts) runManifestGet(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	if flagChanged(cmd, "list") {
-		manifestOpts.rootOpts.log.Info("list option has been deprecated, manifest list is output by default until a platform is specified")
+		opts.rootOpts.log.Info("list option has been deprecated, manifest list is output by default until a platform is specified")
 	}
-	if manifestOpts.platform != "" && manifestOpts.requireList {
+	if opts.platform != "" && opts.requireList {
 		return fmt.Errorf("cannot request a platform and require-list simultaneously")
 	}
 
@@ -331,19 +355,19 @@ func (manifestOpts *manifestCmd) runManifestGet(cmd *cobra.Command, args []strin
 	if err != nil {
 		return err
 	}
-	rc := manifestOpts.rootOpts.newRegClient()
+	rc := opts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
-	manifestOpts.rootOpts.log.Debug("Manifest get",
+	opts.rootOpts.log.Debug("Manifest get",
 		slog.String("host", r.Registry),
 		slog.String("repo", r.Repository),
 		slog.String("tag", r.Tag))
 
 	mOpts := []regclient.ManifestOpts{}
-	if manifestOpts.platform != "" {
-		p, err := platform.Parse(manifestOpts.platform)
+	if opts.platform != "" {
+		p, err := platform.Parse(opts.platform)
 		if err != nil {
-			return fmt.Errorf("failed to parse platform %s: %w", manifestOpts.platform, err)
+			return fmt.Errorf("failed to parse platform %s: %w", opts.platform, err)
 		}
 		mOpts = append(mOpts, regclient.WithManifestPlatform(p))
 	}
@@ -353,44 +377,44 @@ func (manifestOpts *manifestCmd) runManifestGet(cmd *cobra.Command, args []strin
 		return err
 	}
 
-	switch manifestOpts.formatGet {
+	switch opts.format {
 	case "raw":
-		manifestOpts.formatGet = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .RawBody}}"
+		opts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .RawBody}}"
 	case "rawBody", "raw-body", "body":
-		manifestOpts.formatGet = "{{printf \"%s\" .RawBody}}"
+		opts.format = "{{printf \"%s\" .RawBody}}"
 	case "rawHeaders", "raw-headers", "headers":
-		manifestOpts.formatGet = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
+		opts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
-	return template.Writer(cmd.OutOrStdout(), manifestOpts.formatGet, m)
+	return template.Writer(cmd.OutOrStdout(), opts.format, m)
 }
 
-func (manifestOpts *manifestCmd) runManifestPut(cmd *cobra.Command, args []string) error {
+func (opts *manifestOpts) runManifestPut(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
-	rc := manifestOpts.rootOpts.newRegClient()
+	rc := opts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
 	raw, err := io.ReadAll(cmd.InOrStdin())
 	if err != nil {
 		return err
 	}
-	opts := []manifest.Opts{
+	mOpts := []manifest.Opts{
 		manifest.WithRef(r),
 		manifest.WithRaw(raw),
 	}
-	if manifestOpts.contentType != "" {
-		opts = append(opts, manifest.WithDesc(descriptor.Descriptor{
-			MediaType: manifestOpts.contentType,
+	if opts.contentType != "" {
+		mOpts = append(mOpts, manifest.WithDesc(descriptor.Descriptor{
+			MediaType: opts.contentType,
 		}))
 	}
-	rcM, err := manifest.New(opts...)
+	rcM, err := manifest.New(mOpts...)
 	if err != nil {
 		return err
 	}
-	if manifestOpts.byDigest {
+	if opts.byDigest {
 		r = r.SetDigest(rcM.GetDescriptor().Digest.String())
 	}
 
@@ -404,8 +428,8 @@ func (manifestOpts *manifestCmd) runManifestPut(cmd *cobra.Command, args []strin
 	}{
 		Manifest: rcM,
 	}
-	if manifestOpts.byDigest && manifestOpts.formatPut == "" {
-		manifestOpts.formatPut = "{{ printf \"%s\\n\" .Manifest.GetDescriptor.Digest }}"
+	if opts.byDigest && opts.format == "" {
+		opts.format = "{{ printf \"%s\\n\" .Manifest.GetDescriptor.Digest }}"
 	}
-	return template.Writer(cmd.OutOrStdout(), manifestOpts.formatPut, result)
+	return template.Writer(cmd.OutOrStdout(), opts.format, result)
 }

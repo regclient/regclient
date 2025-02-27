@@ -20,9 +20,9 @@ import (
 	"github.com/regclient/regclient/types/ref"
 )
 
-type registryCmd struct {
-	rootOpts             *rootCmd
-	formatConf           string
+type registryOpts struct {
+	rootOpts             *rootOpts
+	format               string
 	user, pass           string // login opts
 	passStdin            bool
 	credHelper           string
@@ -42,15 +42,24 @@ type registryCmd struct {
 	dns                  []string // TODO: remove
 }
 
-func NewRegistryCmd(rootOpts *rootCmd) *cobra.Command {
-	registryOpts := registryCmd{
-		rootOpts: rootOpts,
-	}
-	var registryTopCmd = &cobra.Command{
+func NewRegistryCmd(rOpts *rootOpts) *cobra.Command {
+	cmd := &cobra.Command{
 		Use:   "registry <cmd>",
 		Short: "manage registries",
 	}
-	var registryConfigCmd = &cobra.Command{
+	cmd.AddCommand(newRegistryConfigCmd(rOpts))
+	cmd.AddCommand(newRegistryLoginCmd(rOpts))
+	cmd.AddCommand(newRegistryLogoutCmd(rOpts))
+	cmd.AddCommand(newRegistrySetCmd(rOpts))
+	cmd.AddCommand(newRegistryWhoamiCmd(rOpts))
+	return cmd
+}
+
+func newRegistryConfigCmd(rOpts *rootOpts) *cobra.Command {
+	opts := registryOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:   "config [registry]",
 		Short: "show registry config",
 		Long: `Displays the configuration used for a registry. Secrets are not included
@@ -69,9 +78,18 @@ regctl registry config docker.io
 regctl registry config docker.io --format '{{.User}}'`,
 		Args:              cobra.RangeArgs(0, 1),
 		ValidArgsFunction: registryArgListReg,
-		RunE:              registryOpts.runRegistryConfig,
+		RunE:              opts.runRegistryConfig,
 	}
-	var registryLoginCmd = &cobra.Command{
+	cmd.Flags().StringVar(&opts.format, "format", "{{jsonPretty .}}", "Format output with go template syntax")
+	_ = cmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	return cmd
+}
+
+func newRegistryLoginCmd(rOpts *rootOpts) *cobra.Command {
+	opts := registryOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:   "login <registry>",
 		Short: "login to a registry",
 		Long: `Provide login credentials for a registry. This may not be necessary if you
@@ -87,9 +105,22 @@ regctl registry login registry.example.org
 echo "${token}" | regctl registry login ghcr.io -u "${username}" --pass-stdin`,
 		Args:              cobra.RangeArgs(0, 1),
 		ValidArgsFunction: registryArgListReg,
-		RunE:              registryOpts.runRegistryLogin,
+		RunE:              opts.runRegistryLogin,
 	}
-	var registryLogoutCmd = &cobra.Command{
+	cmd.Flags().StringVarP(&opts.pass, "pass", "p", "", "Password")
+	_ = cmd.RegisterFlagCompletionFunc("pass", completeArgNone)
+	cmd.Flags().BoolVar(&opts.passStdin, "pass-stdin", false, "Read password from stdin")
+	cmd.Flags().BoolVar(&opts.skipCheck, "skip-check", false, "Skip checking connectivity to the registry")
+	cmd.Flags().StringVarP(&opts.user, "user", "u", "", "Username")
+	_ = cmd.RegisterFlagCompletionFunc("user", completeArgNone)
+	return cmd
+}
+
+func newRegistryLogoutCmd(rOpts *rootOpts) *cobra.Command {
+	opts := registryOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:   "logout <registry>",
 		Short: "logout of a registry",
 		Long:  `Remove registry credentials from the configuration.`,
@@ -101,9 +132,16 @@ regctl registry logout
 regctl registry logout registry.example.org`,
 		Args:              cobra.RangeArgs(0, 1),
 		ValidArgsFunction: registryArgListReg,
-		RunE:              registryOpts.runRegistryLogout,
+		RunE:              opts.runRegistryLogout,
 	}
-	var registrySetCmd = &cobra.Command{
+	return cmd
+}
+
+func newRegistrySetCmd(rOpts *rootOpts) *cobra.Command {
+	opts := registryOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:   "set <registry>",
 		Short: "set options on a registry",
 		Long:  `Set or modify the configuration of a registry.`,
@@ -121,9 +159,52 @@ regctl registry set docker.io --mirror hub-mirror.example.org
 regctl registry set quay.io --req-per-sec 10`,
 		Args:              cobra.RangeArgs(0, 1),
 		ValidArgsFunction: registryArgListReg,
-		RunE:              registryOpts.runRegistrySet,
+		RunE:              opts.runRegistrySet,
 	}
-	var registryWhoamiCmd = &cobra.Command{
+	cmd.Flags().StringArrayVar(&opts.apiOpts, "api-opts", nil, "List of options (key=value))")
+	cmd.Flags().Int64Var(&opts.blobChunk, "blob-chunk", 0, "Blob chunk size")
+	_ = cmd.RegisterFlagCompletionFunc("blob-chunk", completeArgNone)
+	cmd.Flags().Int64Var(&opts.blobMax, "blob-max", 0, "Blob size before switching to chunked push, -1 to disable")
+	_ = cmd.RegisterFlagCompletionFunc("blob-max", completeArgNone)
+	cmd.Flags().StringVar(&opts.cacert, "cacert", "", "CA Certificate (not a filename, use \"$(cat ca.pem)\" to use a file)")
+	_ = cmd.RegisterFlagCompletionFunc("cacert", completeArgNone)
+	cmd.Flags().StringVar(&opts.clientCert, "client-cert", "", "Client certificate for mTLS (not a filename, use \"$(cat client.pem)\" to use a file)")
+	cmd.Flags().StringVar(&opts.clientKey, "client-key", "", "Client key for mTLS (not a filename, use \"$(cat client.key)\" to use a file)")
+	cmd.Flags().StringVar(&opts.credHelper, "cred-helper", "", "Credential helper (full binary name, including docker-credential- prefix)")
+	cmd.Flags().StringVar(&opts.hostname, "hostname", "", "Hostname or ip with port")
+	_ = cmd.RegisterFlagCompletionFunc("hostname", completeArgNone)
+	cmd.Flags().StringArrayVar(&opts.mirrors, "mirror", nil, "List of mirrors (registry names)")
+	_ = cmd.RegisterFlagCompletionFunc("mirror", completeArgNone)
+	cmd.Flags().StringVar(&opts.pathPrefix, "path-prefix", "", "Prefix to all repositories")
+	_ = cmd.RegisterFlagCompletionFunc("path-prefix", completeArgNone)
+	cmd.Flags().UintVar(&opts.priority, "priority", 0, "Priority (for sorting mirrors)")
+	_ = cmd.RegisterFlagCompletionFunc("priority", completeArgNone)
+	cmd.Flags().BoolVar(&opts.repoAuth, "repo-auth", false, "Separate auth requests per repository instead of per registry")
+	cmd.Flags().Int64Var(&opts.reqConcurrent, "req-concurrent", 0, "Concurrent requests")
+	cmd.Flags().Float64Var(&opts.reqPerSec, "req-per-sec", 0, "Requests per second")
+	cmd.Flags().BoolVar(&opts.skipCheck, "skip-check", false, "Skip checking connectivity to the registry")
+	cmd.Flags().StringVar(&opts.tls, "tls", "", "TLS (enabled, insecure, disabled)")
+	_ = cmd.RegisterFlagCompletionFunc("tls", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{
+			"enabled",
+			"insecure",
+			"disabled",
+		}, cobra.ShellCompDirectiveNoFileComp
+	})
+
+	// TODO: eventually remove
+	cmd.Flags().StringArrayVar(&opts.dns, "dns", nil, "[Deprecated] DNS hostname or ip with port")
+	_ = cmd.Flags().MarkHidden("dns")
+	cmd.Flags().StringVar(&opts.scheme, "scheme", "", "[Deprecated] Scheme (http, https)")
+	_ = cmd.Flags().MarkHidden("scheme")
+	return cmd
+}
+
+func newRegistryWhoamiCmd(rOpts *rootOpts) *cobra.Command {
+	opts := registryOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:   "whoami [registry]",
 		Short: "show current login for a registry",
 		Long:  `Displays the username for a given registry.`,
@@ -135,61 +216,9 @@ regctl registry whoami
 regctl registry whoami registry.example.org`,
 		Args:              cobra.RangeArgs(0, 1),
 		ValidArgsFunction: registryArgListReg,
-		RunE:              registryOpts.runRegistryWhoami,
+		RunE:              opts.runRegistryWhoami,
 	}
-
-	registryConfigCmd.Flags().StringVar(&registryOpts.formatConf, "format", "{{jsonPretty .}}", "Format output with go template syntax")
-
-	registryLoginCmd.Flags().StringVarP(&registryOpts.user, "user", "u", "", "Username")
-	registryLoginCmd.Flags().StringVarP(&registryOpts.pass, "pass", "p", "", "Password")
-	registryLoginCmd.Flags().BoolVar(&registryOpts.passStdin, "pass-stdin", false, "Read password from stdin")
-	registryLoginCmd.Flags().BoolVar(&registryOpts.skipCheck, "skip-check", false, "Skip checking connectivity to the registry")
-	_ = registryLoginCmd.RegisterFlagCompletionFunc("user", completeArgNone)
-	_ = registryLoginCmd.RegisterFlagCompletionFunc("pass", completeArgNone)
-
-	registrySetCmd.Flags().StringVar(&registryOpts.credHelper, "cred-helper", "", "Credential helper (full binary name, including docker-credential- prefix)")
-	registrySetCmd.Flags().StringVar(&registryOpts.cacert, "cacert", "", "CA Certificate (not a filename, use \"$(cat ca.pem)\" to use a file)")
-	registrySetCmd.Flags().StringVar(&registryOpts.clientCert, "client-cert", "", "Client certificate for mTLS (not a filename, use \"$(cat client.pem)\" to use a file)")
-	registrySetCmd.Flags().StringVar(&registryOpts.clientKey, "client-key", "", "Client key for mTLS (not a filename, use \"$(cat client.key)\" to use a file)")
-	registrySetCmd.Flags().StringVar(&registryOpts.tls, "tls", "", "TLS (enabled, insecure, disabled)")
-	registrySetCmd.Flags().StringVar(&registryOpts.hostname, "hostname", "", "Hostname or ip with port")
-	registrySetCmd.Flags().StringVar(&registryOpts.pathPrefix, "path-prefix", "", "Prefix to all repositories")
-	registrySetCmd.Flags().StringArrayVar(&registryOpts.mirrors, "mirror", nil, "List of mirrors (registry names)")
-	registrySetCmd.Flags().UintVar(&registryOpts.priority, "priority", 0, "Priority (for sorting mirrors)")
-	registrySetCmd.Flags().BoolVar(&registryOpts.repoAuth, "repo-auth", false, "Separate auth requests per repository instead of per registry")
-	registrySetCmd.Flags().Int64Var(&registryOpts.blobChunk, "blob-chunk", 0, "Blob chunk size")
-	registrySetCmd.Flags().Int64Var(&registryOpts.blobMax, "blob-max", 0, "Blob size before switching to chunked push, -1 to disable")
-	registrySetCmd.Flags().Float64Var(&registryOpts.reqPerSec, "req-per-sec", 0, "Requests per second")
-	registrySetCmd.Flags().Int64Var(&registryOpts.reqConcurrent, "req-concurrent", 0, "Concurrent requests")
-	registrySetCmd.Flags().BoolVar(&registryOpts.skipCheck, "skip-check", false, "Skip checking connectivity to the registry")
-	registrySetCmd.Flags().StringArrayVar(&registryOpts.apiOpts, "api-opts", nil, "List of options (key=value))")
-	_ = registrySetCmd.RegisterFlagCompletionFunc("cacert", completeArgNone)
-	_ = registrySetCmd.RegisterFlagCompletionFunc("tls", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{
-			"enabled",
-			"insecure",
-			"disabled",
-		}, cobra.ShellCompDirectiveNoFileComp
-	})
-	_ = registrySetCmd.RegisterFlagCompletionFunc("hostname", completeArgNone)
-	_ = registrySetCmd.RegisterFlagCompletionFunc("path-prefix", completeArgNone)
-	_ = registrySetCmd.RegisterFlagCompletionFunc("mirror", completeArgNone)
-	_ = registrySetCmd.RegisterFlagCompletionFunc("priority", completeArgNone)
-	_ = registrySetCmd.RegisterFlagCompletionFunc("blob-chunk", completeArgNone)
-	_ = registrySetCmd.RegisterFlagCompletionFunc("blob-max", completeArgNone)
-
-	// TODO: eventually remove
-	registrySetCmd.Flags().StringVar(&registryOpts.scheme, "scheme", "", "[Deprecated] Scheme (http, https)")
-	registrySetCmd.Flags().StringArrayVar(&registryOpts.dns, "dns", nil, "[Deprecated] DNS hostname or ip with port")
-	_ = registrySetCmd.Flags().MarkHidden("scheme")
-	_ = registrySetCmd.Flags().MarkHidden("dns")
-
-	registryTopCmd.AddCommand(registryConfigCmd)
-	registryTopCmd.AddCommand(registryLoginCmd)
-	registryTopCmd.AddCommand(registryLogoutCmd)
-	registryTopCmd.AddCommand(registrySetCmd)
-	registryTopCmd.AddCommand(registryWhoamiCmd)
-	return registryTopCmd
+	return cmd
 }
 
 func registryArgListReg(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -206,7 +235,7 @@ func registryArgListReg(cmd *cobra.Command, args []string, toComplete string) ([
 	return result, cobra.ShellCompDirectiveNoFileComp
 }
 
-func (registryOpts *registryCmd) runRegistryConfig(cmd *cobra.Command, args []string) error {
+func (opts *registryOpts) runRegistryConfig(cmd *cobra.Command, args []string) error {
 	c, err := ConfigLoadDefault()
 	if err != nil {
 		return err
@@ -214,7 +243,7 @@ func (registryOpts *registryCmd) runRegistryConfig(cmd *cobra.Command, args []st
 	if len(args) > 0 {
 		h, ok := c.Hosts[args[0]]
 		if !ok {
-			registryOpts.rootOpts.log.Warn("No configuration found for registry",
+			opts.rootOpts.log.Warn("No configuration found for registry",
 				slog.String("registry", args[0]))
 			return nil
 		}
@@ -225,7 +254,7 @@ func (registryOpts *registryCmd) runRegistryConfig(cmd *cobra.Command, args []st
 		h.Pass = ""
 		h.Token = ""
 		h.ClientKey = ""
-		return template.Writer(cmd.OutOrStdout(), registryOpts.formatConf, h)
+		return template.Writer(cmd.OutOrStdout(), opts.format, h)
 	} else {
 		// do not output secrets
 		for i := range c.Hosts {
@@ -233,11 +262,11 @@ func (registryOpts *registryCmd) runRegistryConfig(cmd *cobra.Command, args []st
 			c.Hosts[i].Token = ""
 			c.Hosts[i].ClientKey = ""
 		}
-		return template.Writer(cmd.OutOrStdout(), registryOpts.formatConf, c)
+		return template.Writer(cmd.OutOrStdout(), opts.format, c)
 	}
 }
 
-func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []string) error {
+func (opts *registryOpts) runRegistryLogin(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	// disable signal handler to allow ctrl-c to be used on prompts (context cancel on a blocking reader is difficult)
 	signal.Reset(os.Interrupt, syscall.SIGTERM)
@@ -258,8 +287,8 @@ func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []str
 		c.Hosts[h.Name] = h
 	}
 	if flagChanged(cmd, "user") {
-		h.User = registryOpts.user
-	} else if registryOpts.passStdin {
+		h.User = opts.user
+	} else if opts.passStdin {
 		return fmt.Errorf("user must be provided to read password from stdin")
 	} else {
 		// prompt for username
@@ -274,14 +303,14 @@ func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []str
 		if user != "" {
 			h.User = user
 		} else if h.User == "" {
-			registryOpts.rootOpts.log.Error("Username is required")
+			opts.rootOpts.log.Error("Username is required")
 
 			return ErrMissingInput
 		}
 	}
 	if flagChanged(cmd, "pass") {
-		h.Pass = registryOpts.pass
-	} else if registryOpts.passStdin {
+		h.Pass = opts.pass
+	} else if opts.passStdin {
 		pass, err := io.ReadAll(cmd.InOrStdin())
 		if err != nil {
 			return fmt.Errorf("failed to read password from stdin: %w", err)
@@ -290,7 +319,7 @@ func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []str
 		if passwd != "" {
 			h.Pass = passwd
 		} else {
-			registryOpts.rootOpts.log.Error("Password is required")
+			opts.rootOpts.log.Error("Password is required")
 
 			return ErrMissingInput
 		}
@@ -312,7 +341,7 @@ func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []str
 		if passwd != "" {
 			h.Pass = passwd
 		} else {
-			registryOpts.rootOpts.log.Error("Password is required")
+			opts.rootOpts.log.Error("Password is required")
 
 			return ErrMissingInput
 		}
@@ -329,25 +358,25 @@ func (registryOpts *registryCmd) runRegistryLogin(cmd *cobra.Command, args []str
 	if err != nil {
 		return err
 	}
-	if !registryOpts.skipCheck {
+	if !opts.skipCheck {
 		r, err := ref.NewHost(args[0])
 		if err != nil {
 			return err
 		}
-		rc := registryOpts.rootOpts.newRegClient()
+		rc := opts.rootOpts.newRegClient()
 		_, err = rc.Ping(ctx, r)
 		if err != nil {
-			registryOpts.rootOpts.log.Warn("Failed to ping registry, credentials were still stored")
+			opts.rootOpts.log.Warn("Failed to ping registry, credentials were still stored")
 
 			return err
 		}
 	}
-	registryOpts.rootOpts.log.Info("Credentials set",
+	opts.rootOpts.log.Info("Credentials set",
 		slog.String("registry", args[0]))
 	return nil
 }
 
-func (registryOpts *registryCmd) runRegistryLogout(cmd *cobra.Command, args []string) error {
+func (opts *registryOpts) runRegistryLogout(cmd *cobra.Command, args []string) error {
 	c, err := ConfigLoadDefault()
 	if err != nil {
 		return err
@@ -362,7 +391,7 @@ func (registryOpts *registryCmd) runRegistryLogout(cmd *cobra.Command, args []st
 	if curH, ok := c.Hosts[h.Name]; ok {
 		h = curH
 	} else {
-		registryOpts.rootOpts.log.Warn("No configuration/credentials found",
+		opts.rootOpts.log.Warn("No configuration/credentials found",
 			slog.String("registry", h.Name))
 		return nil
 	}
@@ -375,12 +404,12 @@ func (registryOpts *registryCmd) runRegistryLogout(cmd *cobra.Command, args []st
 		return err
 	}
 
-	registryOpts.rootOpts.log.Debug("Credentials unset",
+	opts.rootOpts.log.Debug("Credentials unset",
 		slog.String("registry", args[0]))
 	return nil
 }
 
-func (registryOpts *registryCmd) runRegistrySet(cmd *cobra.Command, args []string) error {
+func (opts *registryOpts) runRegistrySet(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	c, err := ConfigLoadDefault()
 	if err != nil {
@@ -399,64 +428,64 @@ func (registryOpts *registryCmd) runRegistrySet(cmd *cobra.Command, args []strin
 		c.Hosts[h.Name] = h
 	}
 	if flagChanged(cmd, "scheme") {
-		registryOpts.rootOpts.log.Warn("Scheme flag is deprecated, for http set tls to disabled",
+		opts.rootOpts.log.Warn("Scheme flag is deprecated, for http set tls to disabled",
 			slog.String("name", h.Name),
-			slog.String("scheme", registryOpts.scheme))
+			slog.String("scheme", opts.scheme))
 	}
 	if flagChanged(cmd, "dns") {
-		registryOpts.rootOpts.log.Warn("DNS flag is deprecated, use hostname and mirrors instead",
+		opts.rootOpts.log.Warn("DNS flag is deprecated, use hostname and mirrors instead",
 			slog.String("name", h.Name),
-			slog.Any("dns", registryOpts.dns))
+			slog.Any("dns", opts.dns))
 	}
 	if flagChanged(cmd, "cred-helper") {
-		h.CredHelper = registryOpts.credHelper
+		h.CredHelper = opts.credHelper
 	}
 	if flagChanged(cmd, "tls") {
-		if err := h.TLS.UnmarshalText([]byte(registryOpts.tls)); err != nil {
+		if err := h.TLS.UnmarshalText([]byte(opts.tls)); err != nil {
 			return err
 		}
 	}
 	if flagChanged(cmd, "cacert") {
-		h.RegCert = registryOpts.cacert
+		h.RegCert = opts.cacert
 	}
 	if flagChanged(cmd, "client-cert") {
-		h.ClientCert = registryOpts.clientCert
+		h.ClientCert = opts.clientCert
 	}
 	if flagChanged(cmd, "client-key") {
-		h.ClientKey = registryOpts.clientKey
+		h.ClientKey = opts.clientKey
 	}
 	if flagChanged(cmd, "hostname") {
-		h.Hostname = registryOpts.hostname
+		h.Hostname = opts.hostname
 	}
 	if flagChanged(cmd, "path-prefix") {
-		h.PathPrefix = registryOpts.pathPrefix
+		h.PathPrefix = opts.pathPrefix
 	}
 	if flagChanged(cmd, "mirror") {
-		h.Mirrors = registryOpts.mirrors
+		h.Mirrors = opts.mirrors
 	}
 	if flagChanged(cmd, "priority") {
-		h.Priority = registryOpts.priority
+		h.Priority = opts.priority
 	}
 	if flagChanged(cmd, "repo-auth") {
-		h.RepoAuth = registryOpts.repoAuth
+		h.RepoAuth = opts.repoAuth
 	}
 	if flagChanged(cmd, "blob-chunk") {
-		h.BlobChunk = registryOpts.blobChunk
+		h.BlobChunk = opts.blobChunk
 	}
 	if flagChanged(cmd, "blob-max") {
-		h.BlobMax = registryOpts.blobMax
+		h.BlobMax = opts.blobMax
 	}
 	if flagChanged(cmd, "req-per-sec") {
-		h.ReqPerSec = registryOpts.reqPerSec
+		h.ReqPerSec = opts.reqPerSec
 	}
 	if flagChanged(cmd, "req-concurrent") {
-		h.ReqConcurrent = registryOpts.reqConcurrent
+		h.ReqConcurrent = opts.reqConcurrent
 	}
 	if flagChanged(cmd, "api-opts") {
 		if h.APIOpts == nil {
 			h.APIOpts = map[string]string{}
 		}
-		for _, kv := range registryOpts.apiOpts {
+		for _, kv := range opts.apiOpts {
 			kvArr := strings.SplitN(kv, "=", 2)
 			if len(kvArr) == 2 && kvArr[1] != "" {
 				// set a value
@@ -473,26 +502,26 @@ func (registryOpts *registryCmd) runRegistrySet(cmd *cobra.Command, args []strin
 		return err
 	}
 
-	if !registryOpts.skipCheck {
+	if !opts.skipCheck {
 		r, err := ref.NewHost(args[0])
 		if err != nil {
 			return err
 		}
-		rc := registryOpts.rootOpts.newRegClient()
+		rc := opts.rootOpts.newRegClient()
 		_, err = rc.Ping(ctx, r)
 		if err != nil {
-			registryOpts.rootOpts.log.Warn("Failed to ping registry, configuration still updated")
+			opts.rootOpts.log.Warn("Failed to ping registry, configuration still updated")
 
 			return err
 		}
 	}
 
-	registryOpts.rootOpts.log.Info("Registry configuration updated/set",
+	opts.rootOpts.log.Info("Registry configuration updated/set",
 		slog.String("name", h.Name))
 	return nil
 }
 
-func (registryOpts *registryCmd) runRegistryWhoami(cmd *cobra.Command, args []string) error {
+func (opts *registryOpts) runRegistryWhoami(cmd *cobra.Command, args []string) error {
 	c, err := ConfigLoadDefault()
 	if err != nil {
 		return err

@@ -52,7 +52,7 @@ func completeArgMediaTypeManifest(cmd *cobra.Command, args []string, toComplete 
 	}, cobra.ShellCompDirectiveNoFileComp
 }
 
-func (rootOpts *rootCmd) completeArgTag(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func (opts *rootOpts) completeArgTag(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	result := []string{}
 	// TODO: is it possible to expand registry, then repo, then tag?
 	input := strings.TrimRight(toComplete, ":")
@@ -60,7 +60,7 @@ func (rootOpts *rootCmd) completeArgTag(cmd *cobra.Command, args []string, toCom
 	if err != nil || r.Digest != "" {
 		return result, cobra.ShellCompDirectiveNoFileComp
 	}
-	rc := rootOpts.newRegClient()
+	rc := opts.newRegClient()
 	tl, err := rc.TagList(context.Background(), r)
 	if err != nil {
 		return result, cobra.ShellCompDirectiveNoFileComp
