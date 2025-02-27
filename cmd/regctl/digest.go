@@ -14,18 +14,18 @@ import (
 	"github.com/regclient/regclient/pkg/template"
 )
 
-type digestCmd struct {
-	rootOpts *rootCmd
+type digestOpts struct {
+	rootOpts *rootOpts
 	algo     string
 	format   string
 }
 
-func NewDigestCmd(rootOpts *rootCmd) *cobra.Command {
-	digestOpts := digestCmd{
-		rootOpts: rootOpts,
+func NewDigestCmd(rOpts *rootOpts) *cobra.Command {
+	opts := digestOpts{
+		rootOpts: rOpts,
 	}
 	// TODO(bmitch): consider if this should be moved out of hidden/experimental
-	var digestCmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Hidden: true,
 		Use:    "digest",
 		Short:  "compute digest on stdin",
@@ -35,19 +35,22 @@ This command is EXPERIMENTAL and could be removed in the future.`,
 # compute the digest of hello world
 echo hello world | regctl digest`,
 		Args: cobra.RangeArgs(0, 0),
-		RunE: digestOpts.runDigest,
+		RunE: opts.runDigest,
 	}
+	cmd.Flags().StringVar(&opts.algo, "algorithm", "sha256", "Digest algorithm")
+	_ = cmd.RegisterFlagCompletionFunc("algorithm", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"sha256", "sha512"}, cobra.ShellCompDirectiveNoFileComp
+	})
+	cmd.Flags().StringVar(&opts.format, "format", "{{.String}}", "Go template to output the digest result")
+	_ = cmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
-	digestCmd.Flags().StringVar(&digestOpts.algo, "algorithm", "sha256", "Digest algorithm")
-	digestCmd.Flags().StringVar(&digestOpts.format, "format", "{{.String}}", "Go template to output the digest result")
-
-	return digestCmd
+	return cmd
 }
 
-func (digestOpts *digestCmd) runDigest(cmd *cobra.Command, args []string) error {
-	algo := digest.Algorithm(digestOpts.algo)
+func (opts *digestOpts) runDigest(cmd *cobra.Command, args []string) error {
+	algo := digest.Algorithm(opts.algo)
 	if !algo.Available() {
-		return fmt.Errorf("digest algorithm %s is not available", digestOpts.algo)
+		return fmt.Errorf("digest algorithm %s is not available", opts.algo)
 	}
 	digester := algo.Digester()
 
@@ -56,5 +59,5 @@ func (digestOpts *digestCmd) runDigest(cmd *cobra.Command, args []string) error 
 		return err
 	}
 
-	return template.Writer(cmd.OutOrStdout(), digestOpts.format, digester.Digest())
+	return template.Writer(cmd.OutOrStdout(), opts.format, digester.Digest())
 }

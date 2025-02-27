@@ -12,8 +12,8 @@ import (
 	"github.com/regclient/regclient/types/ref"
 )
 
-type tagCmd struct {
-	rootOpts *rootCmd
+type tagOpts struct {
+	rootOpts *rootOpts
 	limit    int
 	last     string
 	include  []string
@@ -21,15 +21,21 @@ type tagCmd struct {
 	format   string
 }
 
-func NewTagCmd(rootOpts *rootCmd) *cobra.Command {
-	tagOpts := tagCmd{
-		rootOpts: rootOpts,
-	}
-	var tagTopCmd = &cobra.Command{
+func NewTagCmd(rOpts *rootOpts) *cobra.Command {
+	cmd := &cobra.Command{
 		Use:   "tag <cmd>",
 		Short: "manage tags",
 	}
-	var tagDeleteCmd = &cobra.Command{
+	cmd.AddCommand(newTagDeleteCmd(rOpts))
+	cmd.AddCommand(newTagLsCmd(rOpts))
+	return cmd
+}
+
+func newTagDeleteCmd(rOpts *rootOpts) *cobra.Command {
+	opts := tagOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:     "delete <image_ref>",
 		Aliases: []string{"del", "rm", "remove"},
 		Short:   "delete a tag in a repo",
@@ -42,10 +48,17 @@ If the registry does not support the delete API, the dummy manifest will remain.
 # delete a tag
 regctl tag delete registry.example.org/repo:v42`,
 		Args:              cobra.ExactArgs(1),
-		ValidArgsFunction: rootOpts.completeArgTag,
-		RunE:              tagOpts.runTagDelete,
+		ValidArgsFunction: rOpts.completeArgTag,
+		RunE:              opts.runTagDelete,
 	}
-	var tagLsCmd = &cobra.Command{
+	return cmd
+}
+
+func newTagLsCmd(rOpts *rootOpts) *cobra.Command {
+	opts := tagOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:     "ls <repository>",
 		Aliases: []string{"list"},
 		Short:   "list tags in a repo",
@@ -60,34 +73,31 @@ regctl tag ls registry.example.org/repo
 regctl tag ls registry.example.org/repo --exclude 'sha256-.*'`,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{},
-		RunE:      tagOpts.runTagLs,
+		RunE:      opts.runTagLs,
 	}
 
-	tagLsCmd.Flags().StringVarP(&tagOpts.last, "last", "", "", "Specify the last tag from a previous request for pagination (depends on registry support)")
-	_ = tagLsCmd.RegisterFlagCompletionFunc("last", completeArgNone)
-	tagLsCmd.Flags().IntVarP(&tagOpts.limit, "limit", "", 0, "Specify the number of tags to retrieve (depends on registry support)")
-	_ = tagLsCmd.RegisterFlagCompletionFunc("limit", completeArgNone)
-	tagLsCmd.Flags().StringArrayVar(&tagOpts.include, "include", []string{}, "Regexp of tags to include (expression is bound to beginning and ending of tag)")
-	_ = tagLsCmd.RegisterFlagCompletionFunc("include", completeArgNone)
-	tagLsCmd.Flags().StringArrayVar(&tagOpts.exclude, "exclude", []string{}, "Regexp of tags to exclude (expression is bound to beginning and ending of tag)")
-	_ = tagLsCmd.RegisterFlagCompletionFunc("exclude", completeArgNone)
-	tagLsCmd.Flags().StringVarP(&tagOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
-	_ = tagLsCmd.RegisterFlagCompletionFunc("format", completeArgNone)
-
-	tagTopCmd.AddCommand(tagDeleteCmd)
-	tagTopCmd.AddCommand(tagLsCmd)
-	return tagTopCmd
+	cmd.Flags().StringArrayVar(&opts.exclude, "exclude", []string{}, "Regexp of tags to exclude (expression is bound to beginning and ending of tag)")
+	_ = cmd.RegisterFlagCompletionFunc("exclude", completeArgNone)
+	cmd.Flags().StringVarP(&opts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+	_ = cmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	cmd.Flags().StringArrayVar(&opts.include, "include", []string{}, "Regexp of tags to include (expression is bound to beginning and ending of tag)")
+	_ = cmd.RegisterFlagCompletionFunc("include", completeArgNone)
+	cmd.Flags().StringVarP(&opts.last, "last", "", "", "Specify the last tag from a previous request for pagination (depends on registry support)")
+	_ = cmd.RegisterFlagCompletionFunc("last", completeArgNone)
+	cmd.Flags().IntVarP(&opts.limit, "limit", "", 0, "Specify the number of tags to retrieve (depends on registry support)")
+	_ = cmd.RegisterFlagCompletionFunc("limit", completeArgNone)
+	return cmd
 }
 
-func (tagOpts *tagCmd) runTagDelete(cmd *cobra.Command, args []string) error {
+func (opts *tagOpts) runTagDelete(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
-	rc := tagOpts.rootOpts.newRegClient()
+	rc := opts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
-	tagOpts.rootOpts.log.Debug("Delete tag",
+	opts.rootOpts.log.Debug("Delete tag",
 		slog.String("host", r.Registry),
 		slog.String("repository", r.Repository),
 		slog.String("tag", r.Tag))
@@ -98,7 +108,7 @@ func (tagOpts *tagCmd) runTagDelete(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func (tagOpts *tagCmd) runTagLs(cmd *cobra.Command, args []string) error {
+func (opts *tagOpts) runTagLs(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
@@ -106,33 +116,33 @@ func (tagOpts *tagCmd) runTagLs(cmd *cobra.Command, args []string) error {
 	}
 	reInclude := []*regexp.Regexp{}
 	reExclude := []*regexp.Regexp{}
-	for _, expr := range tagOpts.include {
+	for _, expr := range opts.include {
 		re, err := regexp.Compile("^" + expr + "$")
 		if err != nil {
 			return fmt.Errorf("failed to parse regexp \"%s\": %w", expr, err)
 		}
 		reInclude = append(reInclude, re)
 	}
-	for _, expr := range tagOpts.exclude {
+	for _, expr := range opts.exclude {
 		re, err := regexp.Compile("^" + expr + "$")
 		if err != nil {
 			return fmt.Errorf("failed to parse regexp \"%s\": %w", expr, err)
 		}
 		reExclude = append(reExclude, re)
 	}
-	rc := tagOpts.rootOpts.newRegClient()
+	rc := opts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
-	tagOpts.rootOpts.log.Debug("Listing tags",
+	opts.rootOpts.log.Debug("Listing tags",
 		slog.String("host", r.Registry),
 		slog.String("repository", r.Repository))
-	opts := []scheme.TagOpts{}
-	if tagOpts.limit != 0 {
-		opts = append(opts, scheme.WithTagLimit(tagOpts.limit))
+	sOpts := []scheme.TagOpts{}
+	if opts.limit != 0 {
+		sOpts = append(sOpts, scheme.WithTagLimit(opts.limit))
 	}
-	if tagOpts.last != "" {
-		opts = append(opts, scheme.WithTagLast(tagOpts.last))
+	if opts.last != "" {
+		sOpts = append(sOpts, scheme.WithTagLast(opts.last))
 	}
-	tl, err := rc.TagList(ctx, r, opts...)
+	tl, err := rc.TagList(ctx, r, sOpts...)
 	if err != nil {
 		return err
 	}
@@ -161,13 +171,13 @@ func (tagOpts *tagCmd) runTagLs(cmd *cobra.Command, args []string) error {
 		}
 		tl.Tags = filtered
 	}
-	switch tagOpts.format {
+	switch opts.format {
 	case "raw":
-		tagOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .RawBody}}"
+		opts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .RawBody}}"
 	case "rawBody", "raw-body", "body":
-		tagOpts.format = "{{printf \"%s\" .RawBody}}"
+		opts.format = "{{printf \"%s\" .RawBody}}"
 	case "rawHeaders", "raw-headers", "headers":
-		tagOpts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
+		opts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
-	return template.Writer(cmd.OutOrStdout(), tagOpts.format, tl)
+	return template.Writer(cmd.OutOrStdout(), opts.format, tl)
 }

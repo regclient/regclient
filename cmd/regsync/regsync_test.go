@@ -698,7 +698,7 @@ defaults:
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			// run each test
-			rootOpts := rootCmd{
+			rootOpts := rootOpts{
 				conf:     conf,
 				rc:       rc,
 				throttle: pq,
@@ -811,7 +811,7 @@ func TestProcessRef(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			rootOpts := rootCmd{
+			rootOpts := rootOpts{
 				rc: rc,
 				conf: &Config{
 					Sync: []ConfigSync{cs},

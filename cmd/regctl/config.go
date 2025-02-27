@@ -35,8 +35,8 @@ type Config struct {
 	IncDockerCred *bool                   `json:"incDockerCred,omitempty"`
 }
 
-type configCmd struct {
-	rootOpts      *rootCmd
+type configOpts struct {
+	rootOpts      *rootOpts
 	blobLimit     int64
 	defCredHelper string
 	dockerCert    bool
@@ -44,15 +44,21 @@ type configCmd struct {
 	format        string
 }
 
-func NewConfigCmd(rootOpts *rootCmd) *cobra.Command {
-	configOpts := configCmd{
-		rootOpts: rootOpts,
-	}
-	var configTopCmd = &cobra.Command{
+func NewConfigCmd(rOpts *rootOpts) *cobra.Command {
+	cmd := &cobra.Command{
 		Use:   "config <cmd>",
 		Short: "read/set configuration options",
 	}
-	var configGetCmd = &cobra.Command{
+	cmd.AddCommand(newConfigGetCmd(rOpts))
+	cmd.AddCommand(newConfigSetCmd(rOpts))
+	return cmd
+}
+
+func newConfigGetCmd(rOpts *rootOpts) *cobra.Command {
+	opts := configOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:   "get",
 		Short: "show the config",
 		Long:  `Displays the configuration. Passwords are not included in the output.`,
@@ -63,9 +69,18 @@ regctl config get
 # display the filename of the config
 regctl config get --format '{{.Filename}}'`,
 		Args: cobra.ExactArgs(0),
-		RunE: configOpts.runConfigGet,
+		RunE: opts.runConfigGet,
 	}
-	var configSetCmd = &cobra.Command{
+	cmd.Flags().StringVar(&opts.format, "format", "{{ printPretty . }}", "format the output with Go template syntax")
+	_ = cmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	return cmd
+}
+
+func newConfigSetCmd(rOpts *rootOpts) *cobra.Command {
+	opts := configOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:   "set",
 		Short: "set a configuration option",
 		Long:  `Modifies an option used in future executions.`,
@@ -76,22 +91,16 @@ regctl config set --docker-cred=false
 # enable loading credentials from docker
 regctl config set --docker-cred`,
 		Args: cobra.ExactArgs(0),
-		RunE: configOpts.runConfigSet,
+		RunE: opts.runConfigSet,
 	}
-
-	configGetCmd.Flags().StringVar(&configOpts.format, "format", "{{ printPretty . }}", "format the output with Go template syntax")
-
-	configSetCmd.Flags().Int64Var(&configOpts.blobLimit, "blob-limit", 0, "limit for blob chunks, this is stored in memory")
-	configSetCmd.Flags().BoolVar(&configOpts.dockerCert, "docker-cert", false, "load certificates from docker")
-	configSetCmd.Flags().BoolVar(&configOpts.dockerCred, "docker-cred", false, "load credentials from docker")
-	configSetCmd.Flags().StringVar(&configOpts.defCredHelper, "default-cred-helper", "", "default credential helper")
-
-	configTopCmd.AddCommand(configGetCmd)
-	configTopCmd.AddCommand(configSetCmd)
-	return configTopCmd
+	cmd.Flags().Int64Var(&opts.blobLimit, "blob-limit", 0, "limit for blob chunks, this is stored in memory")
+	cmd.Flags().StringVar(&opts.defCredHelper, "default-cred-helper", "", "default credential helper")
+	cmd.Flags().BoolVar(&opts.dockerCert, "docker-cert", false, "load certificates from docker")
+	cmd.Flags().BoolVar(&opts.dockerCred, "docker-cred", false, "load credentials from docker")
+	return cmd
 }
 
-func (configOpts *configCmd) runConfigGet(cmd *cobra.Command, args []string) error {
+func (opts *configOpts) runConfigGet(cmd *cobra.Command, args []string) error {
 	c, err := ConfigLoadDefault()
 	if err != nil {
 		return err
@@ -101,38 +110,38 @@ func (configOpts *configCmd) runConfigGet(cmd *cobra.Command, args []string) err
 		c.Hosts[i].Token = ""
 	}
 
-	return template.Writer(cmd.OutOrStdout(), configOpts.format, c)
+	return template.Writer(cmd.OutOrStdout(), opts.format, c)
 }
 
-func (configOpts *configCmd) runConfigSet(cmd *cobra.Command, args []string) error {
+func (opts *configOpts) runConfigSet(cmd *cobra.Command, args []string) error {
 	c, err := ConfigLoadDefault()
 	if err != nil {
 		return err
 	}
 
 	if flagChanged(cmd, "blob-limit") {
-		c.BlobLimit = configOpts.blobLimit
+		c.BlobLimit = opts.blobLimit
 	}
 	if flagChanged(cmd, "default-cred-helper") {
 		if c.HostDefault != nil {
-			c.HostDefault.CredHelper = configOpts.defCredHelper
+			c.HostDefault.CredHelper = opts.defCredHelper
 		}
-		if c.HostDefault == nil && configOpts.defCredHelper != "" {
+		if c.HostDefault == nil && opts.defCredHelper != "" {
 			c.HostDefault = &config.Host{
-				CredHelper: configOpts.defCredHelper,
+				CredHelper: opts.defCredHelper,
 			}
 		}
 	}
 	if flagChanged(cmd, "docker-cert") {
-		if !configOpts.dockerCert {
-			c.IncDockerCert = &configOpts.dockerCert
+		if !opts.dockerCert {
+			c.IncDockerCert = &opts.dockerCert
 		} else {
 			c.IncDockerCert = nil
 		}
 	}
 	if flagChanged(cmd, "docker-cred") {
-		if !configOpts.dockerCred {
-			c.IncDockerCred = &configOpts.dockerCred
+		if !opts.dockerCred {
+			c.IncDockerCred = &opts.dockerCred
 		} else {
 			c.IncDockerCred = nil
 		}
