@@ -63,7 +63,7 @@ jobs:
       uses: anchore/sbom-action/download-syft@f325610c9f50a54015d37c8d16cb3b0e2c8f4de0 # v0.18.0
       id: syft
       with:
-        syft-version: "v1.19.0"
+        syft-version: "v1.20.0"
 
     - name: Build artifacts
       if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main'
@@ -155,7 +155,7 @@ jobs:
 
     - name: Save artifacts
       if: github.ref == 'refs/heads/main' && matrix.gover == env.RELEASE_GO_VER
-      uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+      uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
       with:
         name: binaries
         path: ./artifacts/
