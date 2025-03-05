@@ -25,12 +25,13 @@ const (
 )
 
 type rootOpts struct {
+	hosts     []string
 	name      string
-	verbosity string
 	logopts   []string
 	log       *slog.Logger
-	hosts     []string
+	rcOpts    []regclient.Opt
 	userAgent string
+	verbosity string
 }
 
 type versionOpts struct {
@@ -159,6 +160,9 @@ func (opts *rootOpts) newRegClient() *regclient.RegClient {
 	rcOpts := []regclient.Opt{
 		regclient.WithSlog(opts.log),
 		regclient.WithRegOpts(reg.WithCache(time.Minute*5, 500)),
+	}
+	if len(opts.rcOpts) > 0 {
+		rcOpts = append(rcOpts, opts.rcOpts...)
 	}
 	if opts.userAgent != "" {
 		rcOpts = append(rcOpts, regclient.WithUserAgent(opts.userAgent))

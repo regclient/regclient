@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http/httptest"
@@ -12,8 +13,124 @@ import (
 	"github.com/olareg/olareg"
 	oConfig "github.com/olareg/olareg/config"
 
+	"github.com/regclient/regclient"
+	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/types/errs"
+	"github.com/regclient/regclient/types/ref"
 )
+
+func TestImageCheckBase(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	regHandler := olareg.New(oConfig.Config{
+		Storage: oConfig.ConfigStorage{
+			StoreType: oConfig.StoreMem,
+			RootDir:   "../../testdata",
+		},
+	})
+	ts := httptest.NewServer(regHandler)
+	tsURL, _ := url.Parse(ts.URL)
+	tsHost := tsURL.Host
+	t.Cleanup(func() {
+		ts.Close()
+		_ = regHandler.Close()
+	})
+	rcOpts := []regclient.Opt{
+		regclient.WithConfigHost(
+			config.Host{
+				Name: tsHost,
+				TLS:  config.TLSDisabled,
+			},
+			config.Host{
+				Name:     "registry.example.org",
+				Hostname: tsHost,
+				TLS:      config.TLSDisabled,
+			},
+		),
+	}
+
+	rb, err := ref.New("ocidir://../../testdata/testrepo:b3")
+	if err != nil {
+		t.Fatalf("failed to parse ref: %v", err)
+	}
+	rc := regclient.New(rcOpts...)
+	mb, err := rc.ManifestHead(ctx, rb, regclient.WithManifestRequireDigest())
+	if err != nil {
+		t.Fatalf("failed to head ref %s: %v", rb.CommonName(), err)
+	}
+	dig := mb.GetDescriptor().Digest
+
+	tt := []struct {
+		name      string
+		args      []string
+		expectErr error
+		expectOut string
+	}{
+		{
+			name:      "missing annotation",
+			args:      []string{"image", "check-base", tsHost + "/testrepo:v1"},
+			expectErr: errs.ErrMissingAnnotation,
+		},
+		{
+			name:      "annotation v2",
+			args:      []string{"image", "check-base", tsHost + "/testrepo:v2"},
+			expectErr: errs.ErrMismatch,
+			expectOut: "base image has changed",
+		},
+		{
+			name:      "annotation v3",
+			args:      []string{"image", "check-base", tsHost + "/testrepo:v3"},
+			expectErr: errs.ErrMismatch,
+			expectOut: "base image has changed",
+		},
+		{
+			name:      "manual v2 b1",
+			args:      []string{"image", "check-base", tsHost + "/testrepo:v2", "--base", tsHost + "/testrepo:b1"},
+			expectOut: "base image matches",
+		},
+		{
+			name:      "manual v2 b2",
+			args:      []string{"image", "check-base", tsHost + "/testrepo:v2", "--base", tsHost + "/testrepo:b2"},
+			expectErr: errs.ErrMismatch,
+			expectOut: "base image has changed",
+		},
+		{
+			name:      "manual v3 b1",
+			args:      []string{"image", "check-base", tsHost + "/testrepo:v3", "--base", tsHost + "/testrepo:b1"},
+			expectOut: "base image matches",
+		},
+		{
+			name:      "manual v3 b3",
+			args:      []string{"image", "check-base", tsHost + "/testrepo:v3", "--base", tsHost + "/testrepo:b3"},
+			expectErr: errs.ErrMismatch,
+			expectOut: "base image has changed",
+		},
+		{
+			name:      "manual v3 b3 with digest",
+			args:      []string{"image", "check-base", tsHost + "/testrepo:v3", "--base", tsHost + "/testrepo:b3", "--digest", dig.String()},
+			expectOut: "base image matches",
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := cobraTest(t, &cobraTestOpts{rcOpts: rcOpts}, tc.args...)
+			if tc.expectErr != nil {
+				if err == nil {
+					t.Errorf("did not receive expected error: %v", tc.expectErr)
+				} else if !errors.Is(err, tc.expectErr) && err.Error() != tc.expectErr.Error() {
+					t.Errorf("unexpected error, received %v, expected %v", err, tc.expectErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("returned unexpected error: %v", err)
+			}
+			if out != tc.expectOut {
+				t.Errorf("unexpected output, expected %s, received %s", tc.expectOut, out)
+			}
+		})
+	}
+}
 
 func TestImageCopy(t *testing.T) {
 	tempDir := t.TempDir()
