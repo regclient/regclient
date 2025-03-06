@@ -26,7 +26,9 @@ func main() {
 	godbg.SignalTrace()
 
 	if err := cmd.ExecuteContext(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
+		if err.Error() != "" {
+			fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+		}
 		// provide tips for common error messages
 		switch {
 		case strings.Contains(err.Error(), "http: server gave HTTP response to HTTPS client"):

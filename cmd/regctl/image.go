@@ -63,6 +63,7 @@ type imageOpts struct {
 	modOpts         []mod.Opts
 	platform        string
 	platforms       []string
+	quiet           bool
 	referrers       bool
 	referrerSrc     string
 	referrerTgt     string
@@ -107,11 +108,15 @@ If the base name is not provided, annotations will be checked in the image.
 If the digest is available, this checks if that matches the base name.
 If the digest is not available, layers of each manifest are compared.
 If the layers match, the config (history and roots) are optionally compared.	
-If the base image does not match, the command exits with a non-zero status.
-Use "-v info" to see more details.`,
+If the base image does not match, the command exits with a non-zero status.`,
 		Example: `
 # report if base image has changed using annotations
-regctl image check-base ghcr.io/regclient/regctl:alpine -v info`,
+regctl image check-base ghcr.io/regclient/regctl:alpine
+
+# suppress the normal output with --quiet for scripts
+if ! regctl image check-base ghcr.io/regclient/regctl:alpine --quiet; then
+  echo build a new image here
+fi`,
 		Args:              cobra.ExactArgs(1),
 		ValidArgsFunction: rOpts.completeArgTag,
 		RunE:              opts.runImageCheckBase,
@@ -120,6 +125,7 @@ regctl image check-base ghcr.io/regclient/regctl:alpine -v info`,
 	cmd.Flags().StringVar(&opts.checkBaseDigest, "digest", "", "Base image digest (checks if digest matches base)")
 	cmd.Flags().BoolVar(&opts.checkSkipConfig, "no-config", false, "Skip check of config history")
 	cmd.Flags().StringVarP(&opts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
+	cmd.Flags().BoolVar(&opts.quiet, "quiet", false, "Do not output to stdout")
 	return cmd
 }
 
@@ -1059,15 +1065,19 @@ func (opts *imageOpts) runImageCheckBase(cmd *cobra.Command, args []string) erro
 	err = rc.ImageCheckBase(ctx, r, rcOpts...)
 	if err == nil {
 		opts.rootOpts.log.Info("base image matches")
-		return nil
+		if !opts.quiet {
+			fmt.Fprintf(cmd.OutOrStdout(), "base image matches\n")
+		}
 	} else if errors.Is(err, errs.ErrMismatch) {
 		opts.rootOpts.log.Info("base image mismatch",
 			slog.String("err", err.Error()))
 		// return empty error message
-		return fmt.Errorf("%.0w", err)
-	} else {
-		return err
+		err = fmt.Errorf("%.0w", err)
+		if !opts.quiet {
+			fmt.Fprintf(cmd.OutOrStdout(), "base image has changed\n")
+		}
 	}
+	return err
 }
 
 func (opts *imageOpts) runImageCopy(cmd *cobra.Command, args []string) error {
