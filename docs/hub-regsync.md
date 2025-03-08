@@ -72,7 +72,7 @@ sync:
       allow:
       - "latest"
       - "3"
-      - "3.\\d+"
+      - "3\\.\\d+"
   - source: regclient/regctl:latest
     target: registry:5000/regclient/regctl:latest
     type: image
