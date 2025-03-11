@@ -35,7 +35,7 @@ ifeq "$(strip $(VER_BUMP))" ''
 endif
 MARKDOWN_LINT_VER?=v0.17.2
 GOMAJOR_VER?=v0.14.0
-GOSEC_VER?=v2.22.1
+GOSEC_VER?=v2.22.2
 GO_VULNCHECK_VER?=v1.1.4
 OSV_SCANNER_VER?=v1.9.2
 SYFT?=$(shell command -v syft 2>/dev/null)
@@ -48,7 +48,7 @@ ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 		-u "$(shell id -u):$(shell id -g)" \
 		$(SYFT_CONTAINER)
 endif
-STATICCHECK_VER?=v0.6.0
+STATICCHECK_VER?=v0.6.1
 CI_DISTRIBUTION_VER?=2.8.3
 CI_ZOT_VER?=v2.1.2
 
