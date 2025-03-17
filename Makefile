@@ -37,7 +37,7 @@ MARKDOWN_LINT_VER?=v0.17.2
 GOMAJOR_VER?=v0.14.0
 GOSEC_VER?=v2.22.2
 GO_VULNCHECK_VER?=v1.1.4
-OSV_SCANNER_VER?=v1.9.2
+OSV_SCANNER_VER?=v2.0.0
 SYFT?=$(shell command -v syft 2>/dev/null)
 SYFT_CMD_VER:=$(shell [ -x "$(SYFT)" ] && echo "v$$($(SYFT) version | awk '/^Version: / {print $$2}')" || echo "0")
 SYFT_VERSION?=v1.20.0
@@ -102,7 +102,7 @@ vulnerability-scan: osv-scanner vulncheck-go ## Run all vulnerability scanners
 
 .PHONY: osv-scanner
 osv-scanner: $(GOPATH)/bin/osv-scanner .FORCE ## Run OSV Scanner
-	$(GOPATH)/bin/osv-scanner scan --config .osv-scanner.toml -r --experimental-licenses="Apache-2.0,BSD-3-Clause,MIT,CC-BY-SA-4.0,UNKNOWN" .
+	$(GOPATH)/bin/osv-scanner scan --config .osv-scanner.toml -r --licenses="Apache-2.0,BSD-3-Clause,MIT,CC-BY-SA-4.0,UNKNOWN" .
 
 .PHONY: vulncheck-go
 vulncheck-go: $(GOPATH)/bin/govulncheck .FORCE ## Run govulncheck
@@ -253,7 +253,7 @@ $(GOPATH)/bin/govulncheck: .FORCE
 $(GOPATH)/bin/osv-scanner: .FORCE
 	@[ -f $(GOPATH)/bin/osv-scanner ] \
 	&& [ "$$(osv-scanner --version | awk -F ': ' '{ if ($$1 == "osv-scanner version") { printf "%s\n", $$2 } }')" = "$(OSV_SCANNER_VER)" ] \
-	|| CGO_ENABLED=0 go install "github.com/google/osv-scanner/cmd/osv-scanner@$(OSV_SCANNER_VER)"
+	|| CGO_ENABLED=0 go install "github.com/google/osv-scanner/v2/cmd/osv-scanner@$(OSV_SCANNER_VER)"
 
 .PHONY: help
 help: # Display help
