@@ -54,15 +54,16 @@ const (
 type throttle struct{}
 
 type rootOpts struct {
-	confFile  string
-	verbosity string
-	logopts   []string
-	log       *slog.Logger
-	format    string // for Go template formatting of various commands
-	missing   bool
-	conf      *Config
-	rc        *regclient.RegClient
-	throttle  *pqueue.Queue[throttle]
+	confFile   string
+	verbosity  string
+	logopts    []string
+	log        *slog.Logger
+	format     string // for Go template formatting of various commands
+	abortOnErr bool
+	missing    bool
+	conf       *Config
+	rc         *regclient.RegClient
+	throttle   *pqueue.Queue[throttle]
 }
 
 func NewRootCmd() (*cobra.Command, *rootOpts) {
@@ -117,6 +118,9 @@ sync step is finished.`,
 		curCmd.Flags().StringVarP(&opts.confFile, "config", "c", "", "Config file")
 		_ = curCmd.MarkFlagFilename("config")
 		_ = curCmd.MarkFlagRequired("config")
+	}
+	for _, curCmd := range []*cobra.Command{serverCmd, checkCmd, onceCmd} {
+		curCmd.Flags().BoolVar(&opts.abortOnErr, "abort-on-error", false, "Immediately abort on any errors")
 	}
 
 	var versionCmd = &cobra.Command{
@@ -193,33 +197,38 @@ func (opts *rootOpts) runOnce(cmd *cobra.Command, args []string) error {
 	if opts.missing {
 		action = actionMissing
 	}
-	ctx := cmd.Context()
+	ctx, cancel := context.WithCancel(cmd.Context())
+	defer cancel()
+	var mu sync.Mutex
 	var wg sync.WaitGroup
-	var mainErr error
+	errs := []error{}
 	for _, s := range opts.conf.Sync {
 		if opts.conf.Defaults.Parallel > 0 {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				err := opts.process(ctx, s, action)
-				if err != nil {
-					if mainErr == nil {
-						mainErr = err
+				if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, ErrCanceled) {
+					if opts.abortOnErr {
+						cancel()
 					}
-					return
+					mu.Lock()
+					errs = append(errs, err)
+					mu.Unlock()
 				}
 			}()
 		} else {
 			err := opts.process(ctx, s, action)
 			if err != nil {
-				if mainErr == nil {
-					mainErr = err
+				errs = append(errs, err)
+				if opts.abortOnErr {
+					break
 				}
 			}
 		}
 	}
 	wg.Wait()
-	return mainErr
+	return errors.Join(errs...)
 }
 
 // runServer stays running with cron scheduled tasks
@@ -228,10 +237,11 @@ func (opts *rootOpts) runServer(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	ctx := cmd.Context()
+	ctx, cancel := context.WithCancel(cmd.Context())
+	defer cancel()
+	var mu sync.Mutex
 	var wg sync.WaitGroup
-	// TODO: switch to joining array of errors once 1.20 is the minimum version
-	var mainErr error
+	errs := []error{}
 	c := cron.New(cron.WithChain(
 		cron.SkipIfStillRunning(cron.DefaultLogger),
 	))
@@ -246,7 +256,7 @@ func (opts *rootOpts) runServer(cmd *cobra.Command, args []string) error {
 				slog.String("target", s.Target),
 				slog.String("type", s.Type),
 				slog.String("sched", sched))
-			_, errCron := c.AddFunc(sched, func() {
+			_, err := c.AddFunc(sched, func() {
 				opts.log.Debug("Running task",
 					slog.String("source", s.Source),
 					slog.String("target", s.Target),
@@ -254,18 +264,24 @@ func (opts *rootOpts) runServer(cmd *cobra.Command, args []string) error {
 				wg.Add(1)
 				defer wg.Done()
 				err := opts.process(ctx, s, actionCopy)
-				if mainErr == nil {
-					mainErr = err
+				if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, ErrCanceled) {
+					if opts.abortOnErr {
+						cancel()
+					}
+					mu.Lock()
+					errs = append(errs, err)
+					mu.Unlock()
 				}
 			})
-			if errCron != nil {
+			if err != nil {
 				opts.log.Error("Failed to schedule cron",
 					slog.String("source", s.Source),
 					slog.String("target", s.Target),
 					slog.String("sched", sched),
-					slog.String("err", errCron.Error()))
-				if mainErr != nil {
-					mainErr = errCron
+					slog.String("err", err.Error()))
+				errs = append(errs, err)
+				if opts.abortOnErr {
+					break
 				}
 			}
 			// immediately copy any images that are missing from target
@@ -274,18 +290,23 @@ func (opts *rootOpts) runServer(cmd *cobra.Command, args []string) error {
 				go func() {
 					defer wg.Done()
 					err := opts.process(ctx, s, actionMissing)
-					if err != nil {
-						if mainErr == nil {
-							mainErr = err
+					if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, ErrCanceled) {
+						if opts.abortOnErr {
+							cancel()
 						}
-						return
+						mu.Lock()
+						errs = append(errs, err)
+						mu.Unlock()
 					}
 				}()
 			} else {
 				err := opts.process(ctx, s, actionMissing)
-				if err != nil {
-					if mainErr == nil {
-						mainErr = err
+				if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, ErrCanceled) {
+					mu.Lock()
+					errs = append(errs, err)
+					mu.Unlock()
+					if opts.abortOnErr {
+						break
 					}
 				}
 			}
@@ -296,20 +317,23 @@ func (opts *rootOpts) runServer(cmd *cobra.Command, args []string) error {
 				slog.String("type", s.Type))
 		}
 	}
-	// wait for any initial copies to finish before scheduling
+	// wait for any initial copies to finish
 	wg.Wait()
+	if ctx.Err() != nil {
+		return errors.Join(errs...)
+	}
+	// start the server and wait until interrupted
 	c.Start()
-	// wait on interrupt signal
 	done := ctx.Done()
 	if done != nil {
 		<-done
 	}
+	// perform a clean shutdown
 	opts.log.Info("Stopping server")
-	// clean shutdown
 	c.Stop()
 	opts.log.Debug("Waiting on running tasks")
 	wg.Wait()
-	return mainErr
+	return errors.Join(errs...)
 }
 
 // run check is used for a dry-run
@@ -318,17 +342,18 @@ func (opts *rootOpts) runCheck(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	var mainErr error
+	errs := []error{}
 	ctx := cmd.Context()
 	for _, s := range opts.conf.Sync {
 		err := opts.process(ctx, s, actionCheck)
-		if err != nil {
-			if mainErr == nil {
-				mainErr = err
+		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, ErrCanceled) {
+			errs = append(errs, err)
+			if opts.abortOnErr {
+				break
 			}
 		}
 	}
-	return mainErr
+	return errors.Join(errs...)
 }
 
 func (opts *rootOpts) loadConf() error {
@@ -423,7 +448,8 @@ func (opts *rootOpts) process(ctx context.Context, s ConfigSync, action actionTy
 
 func (opts *rootOpts) processRegistry(ctx context.Context, s ConfigSync, src, tgt string, action actionType) error {
 	last := ""
-	var retErr error
+	errs := []error{}
+	// loop through pages of the _catalog response
 	for {
 		repoOpts := []scheme.RepoOpts{}
 		if last != "" {
@@ -459,11 +485,17 @@ func (opts *rootOpts) processRegistry(ctx context.Context, s ConfigSync, src, tg
 		}
 		for _, repo := range sRepoList {
 			if err := opts.processRepo(ctx, s, fmt.Sprintf("%s/%s", src, repo), fmt.Sprintf("%s/%s", tgt, repo), action); err != nil {
-				retErr = err
+				errs = append(errs, err)
+				if opts.abortOnErr {
+					break
+				}
 			}
 		}
+		if opts.abortOnErr && len(errs) > 0 {
+			break
+		}
 	}
-	return retErr
+	return errors.Join(errs...)
 }
 
 func (opts *rootOpts) processRepo(ctx context.Context, s ConfigSync, src, tgt string, action actionType) error {
@@ -551,13 +583,16 @@ func (opts *rootOpts) processRepo(ctx context.Context, s ConfigSync, src, tgt st
 			}
 		}
 	}
-	var retErr error
+	errs := []error{}
 	for _, tag := range sTagList {
 		if err := opts.processImage(ctx, s, fmt.Sprintf("%s:%s", src, tag), fmt.Sprintf("%s:%s", tgt, tag), action); err != nil {
-			retErr = err
+			errs = append(errs, err)
+			if opts.abortOnErr {
+				break
+			}
 		}
 	}
-	return retErr
+	return errors.Join(errs...)
 }
 
 func (opts *rootOpts) processImage(ctx context.Context, s ConfigSync, src, tgt string, action actionType) error {
