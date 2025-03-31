@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"regexp"
@@ -9,16 +10,18 @@ import (
 
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/scheme"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/ref"
 )
 
 type tagOpts struct {
-	rootOpts *rootOpts
-	limit    int
-	last     string
-	include  []string
-	exclude  []string
-	format   string
+	rootOpts      *rootOpts
+	limit         int
+	last          string
+	include       []string
+	exclude       []string
+	format        string
+	ignoreMissing bool
 }
 
 func NewTagCmd(rOpts *rootOpts) *cobra.Command {
@@ -51,6 +54,7 @@ regctl tag delete registry.example.org/repo:v42`,
 		ValidArgsFunction: rOpts.completeArgTag,
 		RunE:              opts.runTagDelete,
 	}
+	cmd.Flags().BoolVar(&opts.ignoreMissing, "ignore-missing", false, "Ignore errors if tag is missing")
 	return cmd
 }
 
@@ -102,6 +106,12 @@ func (opts *tagOpts) runTagDelete(cmd *cobra.Command, args []string) error {
 		slog.String("repository", r.Repository),
 		slog.String("tag", r.Tag))
 	err = rc.TagDelete(ctx, r)
+	if err != nil && opts.ignoreMissing {
+		_, mErr := rc.ManifestHead(ctx, r)
+		if errors.Is(mErr, errs.ErrNotFound) {
+			return nil
+		}
+	}
 	if err != nil {
 		return err
 	}
