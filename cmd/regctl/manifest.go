@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -13,6 +14,7 @@ import (
 	"github.com/regclient/regclient/internal/diff"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/types/descriptor"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/platform"
 	"github.com/regclient/regclient/types/ref"
@@ -27,6 +29,7 @@ type manifestOpts struct {
 	diffFullCtx   bool
 	forceTagDeref bool
 	format        string
+	ignoreMissing bool
 	list          bool
 	platform      string
 	referrers     bool
@@ -75,8 +78,9 @@ regctl manifest delete --referrers \
 		ValidArgs: []string{}, // do not auto complete digests
 		RunE:      opts.runManifestDelete,
 	}
-	cmd.Flags().BoolVarP(&opts.forceTagDeref, "force-tag-dereference", "", false, "Dereference the a tag to a digest, this is unsafe")
-	cmd.Flags().BoolVarP(&opts.referrers, "referrers", "", false, "Check for referrers, recommended when deleting artifacts")
+	cmd.Flags().BoolVar(&opts.forceTagDeref, "force-tag-dereference", false, "Dereference the a tag to a digest, this is unsafe")
+	cmd.Flags().BoolVar(&opts.ignoreMissing, "ignore-missing", false, "Ignore errors if manifest is missing")
+	cmd.Flags().BoolVar(&opts.referrers, "referrers", false, "Check for referrers, recommended when deleting artifacts")
 	return cmd
 }
 
@@ -102,8 +106,8 @@ regctl manifest diff --context-full \
 		ValidArgsFunction: rOpts.completeArgTag,
 		RunE:              opts.runManifestDiff,
 	}
-	cmd.Flags().IntVarP(&opts.diffCtx, "context", "", 3, "Lines of context")
-	cmd.Flags().BoolVarP(&opts.diffFullCtx, "context-full", "", false, "Show all lines of context")
+	cmd.Flags().IntVar(&opts.diffCtx, "context", 3, "Lines of context")
+	cmd.Flags().BoolVar(&opts.diffFullCtx, "context-full", false, "Show all lines of context")
 	return cmd
 }
 
@@ -129,13 +133,13 @@ regctl manifest get golang --platform windows/amd64,osver=10.0.17763.4974`,
 		ValidArgsFunction: rOpts.completeArgTag,
 		RunE:              opts.runManifestGet,
 	}
-	cmd.Flags().StringVarP(&opts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax (use \"raw-body\" for the original manifest)")
+	cmd.Flags().StringVar(&opts.format, "format", "{{printPretty .}}", "Format output with go template syntax (use \"raw-body\" for the original manifest)")
 	_ = cmd.RegisterFlagCompletionFunc("format", completeArgNone)
-	cmd.Flags().BoolVarP(&opts.list, "list", "", true, "Deprecated: Output manifest list if available")
+	cmd.Flags().BoolVar(&opts.list, "list", true, "Deprecated: Output manifest list if available")
 	_ = cmd.Flags().MarkHidden("list")
 	cmd.Flags().StringVarP(&opts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	_ = cmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
-	cmd.Flags().BoolVarP(&opts.requireList, "require-list", "", false, "Deprecated: Fail if manifest list is not received")
+	cmd.Flags().BoolVar(&opts.requireList, "require-list", false, "Deprecated: Fail if manifest list is not received")
 	return cmd
 }
 
@@ -164,14 +168,14 @@ regctl manifest head alpine --format raw-headers`,
 		ValidArgsFunction: rOpts.completeArgTag,
 		RunE:              opts.runManifestHead,
 	}
-	cmd.Flags().StringVarP(&opts.format, "format", "", "", "Format output with go template syntax (use \"raw-body\" for the original manifest)")
+	cmd.Flags().StringVar(&opts.format, "format", "", "Format output with go template syntax (use \"raw-body\" for the original manifest)")
 	_ = cmd.RegisterFlagCompletionFunc("format", completeArgNone)
-	cmd.Flags().BoolVarP(&opts.list, "list", "", true, "Do not resolve platform from manifest list (enabled by default)")
+	cmd.Flags().BoolVar(&opts.list, "list", true, "Do not resolve platform from manifest list (enabled by default)")
 	_ = cmd.Flags().MarkHidden("list")
 	cmd.Flags().StringVarP(&opts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local, requires a get request)")
 	_ = cmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
-	cmd.Flags().BoolVarP(&opts.requireDigest, "require-digest", "", false, "Fallback to a GET request if digest is not received")
-	cmd.Flags().BoolVarP(&opts.requireList, "require-list", "", false, "Fail if manifest list is not received")
+	cmd.Flags().BoolVar(&opts.requireDigest, "require-digest", false, "Fallback to a GET request if digest is not received")
+	cmd.Flags().BoolVar(&opts.requireList, "require-list", false, "Fail if manifest list is not received")
 	return cmd
 }
 
@@ -193,10 +197,10 @@ regctl manifest put \
 		ValidArgsFunction: rOpts.completeArgTag,
 		RunE:              opts.runManifestPut,
 	}
-	cmd.Flags().BoolVarP(&opts.byDigest, "by-digest", "", false, "Push manifest by digest instead of tag")
+	cmd.Flags().BoolVar(&opts.byDigest, "by-digest", false, "Push manifest by digest instead of tag")
 	cmd.Flags().StringVarP(&opts.contentType, "content-type", "t", "", "Specify content-type (e.g. application/vnd.docker.distribution.manifest.v2+json)")
 	_ = cmd.RegisterFlagCompletionFunc("content-type", completeArgMediaTypeManifest)
-	cmd.Flags().StringVarP(&opts.format, "format", "", "", "Format output with go template syntax")
+	cmd.Flags().StringVar(&opts.format, "format", "", "Format output with go template syntax")
 	_ = cmd.RegisterFlagCompletionFunc("format", completeArgNone)
 	return cmd
 }
@@ -216,6 +220,12 @@ func (opts *manifestOpts) runManifestDelete(cmd *cobra.Command, args []string) e
 
 	if r.Digest == "" && opts.forceTagDeref {
 		m, err := rc.ManifestHead(ctx, r, regclient.WithManifestRequireDigest())
+		if err != nil && opts.ignoreMissing {
+			_, mErr := rc.ManifestHead(ctx, r)
+			if errors.Is(mErr, errs.ErrNotFound) {
+				return nil
+			}
+		}
 		if err != nil {
 			return err
 		}
@@ -235,6 +245,12 @@ func (opts *manifestOpts) runManifestDelete(cmd *cobra.Command, args []string) e
 	}
 
 	err = rc.ManifestDelete(ctx, r, mOpts...)
+	if err != nil && opts.ignoreMissing {
+		_, mErr := rc.ManifestHead(ctx, r)
+		if errors.Is(mErr, errs.ErrNotFound) {
+			return nil
+		}
+	}
 	if err != nil {
 		return err
 	}
