@@ -121,7 +121,7 @@ jobs:
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       uses: sigstore/cosign-installer@d7d6bc7722e3daa8354c50bcb52f4837da5e9b6a # v3.8.1
       with:
-        cosign-release: "v2.4.3"
+        cosign-release: "v2.5.0"
     
     - name: Install syft
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
