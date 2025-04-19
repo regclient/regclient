@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/regclient/regclient/internal/reqresp"
+	"github.com/regclient/regclient/types/errs"
 )
 
 func TestParseAuthHeader(t *testing.T) {
@@ -54,22 +55,48 @@ func TestParseAuthHeader(t *testing.T) {
 			wantE: nil,
 		},
 		{
+			name:  "Basic with charset",
+			in:    `Basic realm="Dev", charset="UTF-8"`,
+			wantC: []challenge{{authType: "basic", params: map[string]string{"realm": "Dev", "charset": "UTF-8"}}},
+			wantE: nil,
+		},
+		{
+			name:  "Quoted auth type and key",
+			in:    `"Basic" "realm"=/`,
+			wantC: []challenge{{authType: "basic", params: map[string]string{"realm": "/"}}},
+			wantE: nil,
+		},
+		{
+			name: "Multiple challenges",
+			in:   `Bearer realm="https://auth.docker.io/token", service="registry.docker.io", scope="repository:docker/docker:pull", Basic realm="GitHub Package Registry"`,
+			wantC: []challenge{
+				{authType: "bearer", params: map[string]string{"realm": "https://auth.docker.io/token", "service": "registry.docker.io", "scope": "repository:docker/docker:pull"}},
+				{authType: "basic", params: map[string]string{"realm": "GitHub Package Registry"}}},
+			wantE: nil,
+		},
+		{
+			name:  "Missing commas",
+			in:    `Basic realm="Dev" charset="UTF-8"`,
+			wantC: []challenge{},
+			wantE: errs.ErrParsingFailed,
+		},
+		{
 			name:  "Missing close quote",
 			in:    `Basic realm="GitHub Package Registry`,
 			wantC: []challenge{},
-			wantE: ErrParseFailure,
+			wantE: errs.ErrParsingFailed,
 		},
 		{
 			name:  "Missing value after escape",
 			in:    `Basic realm="GitHub Package Registry\\`,
 			wantC: []challenge{},
-			wantE: ErrParseFailure,
+			wantE: errs.ErrParsingFailed,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c, err := parseAuthHeader(tt.in)
-			if err != tt.wantE {
+			if !errors.Is(err, tt.wantE) {
 				t.Errorf("got error %v, want %v", err, tt.wantE)
 			}
 			if err != nil || tt.wantE != nil {
@@ -82,6 +109,9 @@ func TestParseAuthHeader(t *testing.T) {
 				if c[i].authType != tt.wantC[i].authType {
 					t.Errorf("c[%d] got authtype %s, want %s", i, c[i].authType, tt.wantC[i].authType)
 				}
+				if len(c[i].params) != len(tt.wantC[i].params) {
+					t.Errorf("c[%d] got number of params %d, want %d", i, len(c[i].params), len(tt.wantC[i].params))
+				}
 				for k := range tt.wantC[i].params {
 					if c[i].params[k] != tt.wantC[i].params[k] {
 						t.Errorf("c[%d] param %s got %s, want %s", i, k, c[i].params[k], tt.wantC[i].params[k])
@@ -90,6 +120,15 @@ func TestParseAuthHeader(t *testing.T) {
 			}
 		})
 	}
+}
+
+func FuzzParseAuthHeader(f *testing.F) {
+	f.Add(`Bearer realm="https://auth.docker.io/token",service="registry.docker.io",scope="repository:samalba/my-app:pull,push"`)
+	f.Add(`Basic realm="GitHub Package Registry"`)
+	f.Fuzz(func(t *testing.T, ah string) {
+		// test for parser panics
+		_, _ = parseAuthHeader(ah)
+	})
 }
 
 // TestAuth checks the auth interface using a mock http server
@@ -201,7 +240,7 @@ func TestAuth(t *testing.T) {
 					"WWW-Authenticate": []string{},
 				},
 			},
-			wantErrResp: ErrEmptyChallenge,
+			wantErrResp: errs.ErrEmptyChallenge,
 		},
 		{
 			name: "basic",
@@ -515,7 +554,7 @@ func TestBearer(t *testing.T) {
 
 	// send a second request without another challenge
 	err = bearer.AddScope("repository:reponame:pull")
-	if err != nil && !errors.Is(err, ErrNoNewChallenge) {
+	if err != nil && !errors.Is(err, errs.ErrNoNewChallenge) {
 		t.Errorf("failed adding scope: %v", err)
 	}
 	resp1a, err := bearer.GenerateAuth()
@@ -532,7 +571,7 @@ func TestBearer(t *testing.T) {
 	// send a third request with same challenge after token expires
 	bearer.token.IssuedAt = time.Now().Add(-900 * time.Second)
 	err = bearer.AddScope("repository:reponame:pull")
-	if err != nil && !errors.Is(err, ErrNoNewChallenge) {
+	if err != nil && !errors.Is(err, errs.ErrNoNewChallenge) {
 		t.Errorf("failed adding scope: %v", err)
 	}
 	err = bearer.ProcessChallenge(c[0])
@@ -640,8 +679,8 @@ func TestBearer(t *testing.T) {
 
 	// send new request without another challenge
 	err = bearer.AddScope("repository:newrepo:pull")
-	if !errors.Is(err, ErrNoNewChallenge) {
-		t.Errorf("unexpected error when adding scope: expected err: %v, received: %v", ErrNoNewChallenge, err)
+	if !errors.Is(err, errs.ErrNoNewChallenge) {
+		t.Errorf("unexpected error when adding scope: expected err: %v, received: %v", errs.ErrNoNewChallenge, err)
 	}
 	resp5a, err := bearer.GenerateAuth()
 	if err != nil {
