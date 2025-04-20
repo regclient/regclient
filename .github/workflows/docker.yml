@@ -132,7 +132,7 @@ jobs:
     
     # Dogfooding, use regctl to modify regclient images to improve reproducibility
     - name: Install regctl
-      uses: regclient/actions/regctl-installer@ce5fd131e371ffcdd7508b478cb223b3511a9183 # main
+      uses: regclient/actions/regctl-installer@ed3ac54990fbd1b78be04a978e4a928fbc7b2dea # main
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       with:
         release: main
