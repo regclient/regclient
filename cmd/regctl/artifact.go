@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	// crypto libraries included for go-digest
@@ -56,8 +57,8 @@ var configKnownTypes = []string{
 	"application/vnd.sylabs.sif.config.v1+json",
 }
 
-type artifactCmd struct {
-	rootOpts         *rootCmd
+type artifactOpts struct {
+	rootOpts         *rootOpts
 	annotations      []string
 	artifactMT       string
 	artifactType     string
@@ -71,9 +72,7 @@ type artifactCmd struct {
 	externalRepo     string
 	filterAT         string
 	filterAnnot      []string
-	formatList       string
-	formatPut        string
-	formatTree       string
+	format           string
 	getConfig        bool
 	index            bool
 	latest           bool
@@ -86,16 +85,23 @@ type artifactCmd struct {
 	subject          string
 }
 
-func NewArtifactCmd(rootOpts *rootCmd) *cobra.Command {
-	artifactOpts := artifactCmd{
-		rootOpts: rootOpts,
-	}
-
-	var artifactTopCmd = &cobra.Command{
+func NewArtifactCmd(rOpts *rootOpts) *cobra.Command {
+	cmd := &cobra.Command{
 		Use:   "artifact <cmd>",
 		Short: "manage artifacts",
 	}
-	var artifactGetCmd = &cobra.Command{
+	cmd.AddCommand(newArtifactGetCmd(rOpts))
+	cmd.AddCommand(newArtifactListCmd(rOpts))
+	cmd.AddCommand(newArtifactPutCmd(rOpts))
+	cmd.AddCommand(newArtifactTreeCmd(rOpts))
+	return cmd
+}
+
+func newArtifactGetCmd(rOpts *rootOpts) *cobra.Command {
+	opts := artifactOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:     "get <reference>",
 		Aliases: []string{"pull"},
 		Short:   "download artifacts",
@@ -114,9 +120,36 @@ regctl artifact get \
 regctl artifact get registry.example.org/artifact:0.0.1 --config`,
 		Args:      cobra.RangeArgs(0, 1),
 		ValidArgs: []string{}, // do not auto complete repository/tag
-		RunE:      artifactOpts.runArtifactGet,
+		RunE:      opts.runArtifactGet,
 	}
-	var artifactListCmd = &cobra.Command{
+	cmd.Flags().BoolVar(&opts.getConfig, "config", false, "Show the config, overrides file options")
+	cmd.Flags().StringVar(&opts.artifactConfig, "config-file", "", "Output config to a file")
+	cmd.Flags().StringVar(&opts.externalRepo, "external", "", "Query referrers from a separate source")
+	cmd.Flags().StringArrayVarP(&opts.artifactFile, "file", "f", []string{}, "Filter by artifact filename")
+	cmd.Flags().StringArrayVarP(&opts.artifactFileMT, "file-media-type", "m", []string{}, "Filter by artifact media-type")
+	_ = cmd.RegisterFlagCompletionFunc("file-media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return artifactFileKnownTypes, cobra.ShellCompDirectiveNoFileComp
+	})
+	cmd.Flags().StringArrayVar(&opts.filterAnnot, "filter-annotation", []string{}, "Filter referrers by annotation (key=value)")
+	cmd.Flags().StringVar(&opts.filterAT, "filter-artifact-type", "", "Filter referrers by artifactType")
+	cmd.Flags().BoolVar(&opts.latest, "latest", false, "Get the most recent referrer using the OCI created annotation")
+	cmd.Flags().StringVarP(&opts.outputDir, "output", "o", "", "Output directory for multiple artifacts")
+	cmd.Flags().StringVarP(&opts.platform, "platform", "p", "", "Specify platform of a subject (e.g. linux/amd64 or local)")
+	_ = cmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
+	cmd.Flags().StringVar(&opts.refers, "refers", "", "Deprecated: Get a referrer to the reference")
+	_ = cmd.Flags().MarkHidden("refers")
+	cmd.Flags().StringVar(&opts.sortAnnot, "sort-annotation", "", "Annotation used for sorting results")
+	cmd.Flags().BoolVar(&opts.sortDesc, "sort-desc", false, "Sort in descending order")
+	cmd.Flags().StringVar(&opts.subject, "subject", "", "Get a referrer to the subject reference")
+	cmd.Flags().BoolVar(&opts.stripDirs, "strip-dirs", false, "Strip directories from filenames in output dir")
+	return cmd
+}
+
+func newArtifactListCmd(rOpts *rootOpts) *cobra.Command {
+	opts := artifactOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:     "list <reference>",
 		Aliases: []string{"ls"},
 		Short:   "list artifacts that have a subject to the given reference",
@@ -132,11 +165,29 @@ regctl artifact list registry.example.com/repo:v1 --format body
 regctl artifact list registry.example.com/repo:v1 --format '{{jsonPretty .Manifest}}'`,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{}, // do not auto complete repository/tag
-		RunE:      artifactOpts.runArtifactList,
+		RunE:      opts.runArtifactList,
 	}
-	var artifactPutCmd = &cobra.Command{
+	cmd.Flags().BoolVar(&opts.digestTags, "digest-tags", false, "Include digest tags")
+	cmd.Flags().StringVar(&opts.externalRepo, "external", "", "Query referrers from a separate source")
+	cmd.Flags().StringVar(&opts.filterAT, "filter-artifact-type", "", "Filter descriptors by artifactType")
+	cmd.Flags().StringArrayVar(&opts.filterAnnot, "filter-annotation", []string{}, "Filter descriptors by annotation (key=value)")
+	cmd.Flags().StringVar(&opts.format, "format", "{{printPretty .}}", "Format output with go template syntax")
+	_ = cmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	cmd.Flags().BoolVar(&opts.latest, "latest", false, "Sort using the OCI created annotation")
+	cmd.Flags().StringVarP(&opts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
+	_ = cmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
+	cmd.Flags().StringVar(&opts.sortAnnot, "sort-annotation", "", "Annotation used for sorting results")
+	cmd.Flags().BoolVar(&opts.sortDesc, "sort-desc", false, "Sort in descending order")
+	return cmd
+}
+
+func newArtifactPutCmd(rOpts *rootOpts) *cobra.Command {
+	opts := artifactOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:     "put <reference>",
-		Aliases: []string{"push"},
+		Aliases: []string{"create", "push"},
 		Short:   "upload artifacts",
 		Long:    `Upload artifacts to the registry.`,
 		Example: `
@@ -160,9 +211,46 @@ regctl artifact put \
   < spdx.json`,
 		Args:      cobra.RangeArgs(0, 1),
 		ValidArgs: []string{}, // do not auto complete repository/tag
-		RunE:      artifactOpts.runArtifactPut,
+		RunE:      opts.runArtifactPut,
 	}
-	var artifactTreeCmd = &cobra.Command{
+	cmd.Flags().StringArrayVar(&opts.annotations, "annotation", []string{}, "Annotation to include on manifest")
+	cmd.Flags().StringVar(&opts.artifactType, "artifact-type", "", "Artifact type (recommended)")
+	_ = cmd.RegisterFlagCompletionFunc("artifact-type", completeArgNone)
+	cmd.Flags().BoolVar(&opts.byDigest, "by-digest", false, "Push manifest by digest instead of tag")
+	cmd.Flags().StringVar(&opts.artifactConfig, "config-file", "", "Filename for config content")
+	cmd.Flags().StringVar(&opts.artifactConfigMT, "config-type", "", "Config mediaType")
+	_ = cmd.RegisterFlagCompletionFunc("config-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return configKnownTypes, cobra.ShellCompDirectiveNoFileComp
+	})
+	cmd.Flags().StringVar(&opts.externalRepo, "external", "", "Push referrers to a separate repository")
+	cmd.Flags().StringArrayVarP(&opts.artifactFile, "file", "f", []string{}, "Artifact filename")
+	cmd.Flags().StringArrayVarP(&opts.artifactFileMT, "file-media-type", "m", []string{}, "Set the mediaType for the individual files")
+	_ = cmd.RegisterFlagCompletionFunc("file-media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return artifactFileKnownTypes, cobra.ShellCompDirectiveNoFileComp
+	})
+	cmd.Flags().BoolVar(&opts.artifactTitle, "file-title", false, "Include a title annotation with the filename")
+	cmd.Flags().StringVarP(&opts.artifactMT, "media-type", "", mediatype.OCI1Manifest, "EXPERIMENTAL: Manifest media-type")
+	_ = cmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return manifestKnownTypes, cobra.ShellCompDirectiveNoFileComp
+	})
+	_ = cmd.Flags().MarkHidden("media-type")
+	cmd.Flags().StringVar(&opts.format, "format", "", "Format output with go template syntax")
+	_ = cmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	cmd.Flags().BoolVar(&opts.index, "index", false, "Create/append artifact to an index")
+	cmd.Flags().StringVarP(&opts.platform, "platform", "p", "", "Specify platform of a subject (e.g. linux/amd64 or local)")
+	_ = cmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
+	cmd.Flags().StringVar(&opts.refers, "refers", "", "EXPERIMENTAL: Set a referrer to the reference")
+	_ = cmd.Flags().MarkHidden("refers")
+	cmd.Flags().BoolVar(&opts.stripDirs, "strip-dirs", false, "Strip directories from filenames in file-title")
+	cmd.Flags().StringVar(&opts.subject, "subject", "", "Set the subject to a reference (used for referrer queries)")
+	return cmd
+}
+
+func newArtifactTreeCmd(rOpts *rootOpts) *cobra.Command {
+	opts := artifactOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:     "tree <reference>",
 		Aliases: []string{},
 		Short:   "tree listing of artifacts",
@@ -177,109 +265,42 @@ regctl artifact tree ghcr.io/regclient/regsync:latest
 regctl artifact tree --digest-tags ghcr.io/regclient/regsync:latest`,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{}, // do not auto complete repository/tag
-		RunE:      artifactOpts.runArtifactTree,
+		RunE:      opts.runArtifactTree,
 	}
-
-	artifactGetCmd.Flags().StringVar(&artifactOpts.subject, "subject", "", "Get a referrer to the subject reference")
-	artifactGetCmd.Flags().StringVar(&artifactOpts.externalRepo, "external", "", "Query referrers from a separate source")
-	artifactGetCmd.Flags().StringVarP(&artifactOpts.platform, "platform", "p", "", "Specify platform of a subject (e.g. linux/amd64 or local)")
-	_ = artifactGetCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
-	artifactGetCmd.Flags().StringVar(&artifactOpts.filterAT, "filter-artifact-type", "", "Filter referrers by artifactType")
-	artifactGetCmd.Flags().StringArrayVar(&artifactOpts.filterAnnot, "filter-annotation", []string{}, "Filter referrers by annotation (key=value)")
-	artifactGetCmd.Flags().BoolVar(&artifactOpts.getConfig, "config", false, "Show the config, overrides file options")
-	artifactGetCmd.Flags().StringVar(&artifactOpts.artifactConfig, "config-file", "", "Output config to a file")
-	artifactGetCmd.Flags().StringArrayVarP(&artifactOpts.artifactFile, "file", "f", []string{}, "Filter by artifact filename")
-	artifactGetCmd.Flags().StringArrayVarP(&artifactOpts.artifactFileMT, "file-media-type", "m", []string{}, "Filter by artifact media-type")
-	_ = artifactGetCmd.RegisterFlagCompletionFunc("file-media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return artifactFileKnownTypes, cobra.ShellCompDirectiveNoFileComp
-	})
-	artifactGetCmd.Flags().BoolVar(&artifactOpts.latest, "latest", false, "Get the most recent referrer using the OCI created annotation")
-	artifactGetCmd.Flags().StringVarP(&artifactOpts.outputDir, "output", "o", "", "Output directory for multiple artifacts")
-	artifactGetCmd.Flags().BoolVar(&artifactOpts.stripDirs, "strip-dirs", false, "Strip directories from filenames in output dir")
-	artifactGetCmd.Flags().StringVar(&artifactOpts.refers, "refers", "", "Deprecated: Get a referrer to the reference")
-	_ = artifactGetCmd.Flags().MarkHidden("refers")
-	artifactGetCmd.Flags().StringVar(&artifactOpts.sortAnnot, "sort-annotation", "", "Annotation used for sorting results")
-	artifactGetCmd.Flags().BoolVar(&artifactOpts.sortDesc, "sort-desc", false, "Sort in descending order")
-
-	artifactListCmd.Flags().BoolVar(&artifactOpts.digestTags, "digest-tags", false, "Include digest tags")
-	artifactListCmd.Flags().StringVar(&artifactOpts.externalRepo, "external", "", "Query referrers from a separate source")
-	artifactListCmd.Flags().StringVar(&artifactOpts.filterAT, "filter-artifact-type", "", "Filter descriptors by artifactType")
-	artifactListCmd.Flags().StringArrayVar(&artifactOpts.filterAnnot, "filter-annotation", []string{}, "Filter descriptors by annotation (key=value)")
-	artifactListCmd.Flags().StringVar(&artifactOpts.formatList, "format", "{{printPretty .}}", "Format output with go template syntax")
-	artifactListCmd.Flags().BoolVar(&artifactOpts.latest, "latest", false, "Sort using the OCI created annotation")
-	artifactListCmd.Flags().StringVarP(&artifactOpts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
-	_ = artifactListCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
-	artifactListCmd.Flags().StringVar(&artifactOpts.sortAnnot, "sort-annotation", "", "Annotation used for sorting results")
-	artifactListCmd.Flags().BoolVar(&artifactOpts.sortDesc, "sort-desc", false, "Sort in descending order")
-
-	artifactPutCmd.Flags().StringVarP(&artifactOpts.artifactMT, "media-type", "", mediatype.OCI1Manifest, "EXPERIMENTAL: Manifest media-type")
-	_ = artifactPutCmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return manifestKnownTypes, cobra.ShellCompDirectiveNoFileComp
-	})
-	_ = artifactPutCmd.Flags().MarkHidden("media-type")
-	artifactPutCmd.Flags().StringVar(&artifactOpts.artifactType, "artifact-type", "", "Artifact type (recommended)")
-	_ = artifactPutCmd.RegisterFlagCompletionFunc("artifact-type", completeArgNone)
-	artifactPutCmd.Flags().StringVar(&artifactOpts.artifactConfig, "config-file", "", "Filename for config content")
-	artifactPutCmd.Flags().StringVar(&artifactOpts.artifactConfigMT, "config-type", "", "Config mediaType")
-	_ = artifactPutCmd.RegisterFlagCompletionFunc("config-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return configKnownTypes, cobra.ShellCompDirectiveNoFileComp
-	})
-	artifactPutCmd.Flags().StringVar(&artifactOpts.externalRepo, "external", "", "Push referrers to a separate repository")
-	artifactPutCmd.Flags().StringArrayVarP(&artifactOpts.artifactFile, "file", "f", []string{}, "Artifact filename")
-	artifactPutCmd.Flags().StringArrayVarP(&artifactOpts.artifactFileMT, "file-media-type", "m", []string{}, "Set the mediaType for the individual files")
-	_ = artifactPutCmd.RegisterFlagCompletionFunc("file-media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return artifactFileKnownTypes, cobra.ShellCompDirectiveNoFileComp
-	})
-	artifactPutCmd.Flags().BoolVar(&artifactOpts.artifactTitle, "file-title", false, "Include a title annotation with the filename")
-	artifactPutCmd.Flags().StringArrayVar(&artifactOpts.annotations, "annotation", []string{}, "Annotation to include on manifest")
-	artifactPutCmd.Flags().BoolVar(&artifactOpts.byDigest, "by-digest", false, "Push manifest by digest instead of tag")
-	artifactPutCmd.Flags().StringVar(&artifactOpts.formatPut, "format", "", "Format output with go template syntax")
-	artifactPutCmd.Flags().BoolVar(&artifactOpts.index, "index", false, "Create/append artifact to an index")
-	artifactPutCmd.Flags().StringVar(&artifactOpts.subject, "subject", "", "Set the subject to a reference (used for referrer queries)")
-	artifactPutCmd.Flags().BoolVar(&artifactOpts.stripDirs, "strip-dirs", false, "Strip directories from filenames in file-title")
-	artifactPutCmd.Flags().StringVarP(&artifactOpts.platform, "platform", "p", "", "Specify platform of a subject (e.g. linux/amd64 or local)")
-	_ = artifactPutCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
-	artifactPutCmd.Flags().StringVar(&artifactOpts.refers, "refers", "", "EXPERIMENTAL: Set a referrer to the reference")
-	_ = artifactPutCmd.Flags().MarkHidden("refers")
-
-	artifactTreeCmd.Flags().BoolVar(&artifactOpts.digestTags, "digest-tags", false, "Include digest tags")
-	artifactTreeCmd.Flags().StringVar(&artifactOpts.externalRepo, "external", "", "Query referrers from a separate source")
-	artifactTreeCmd.Flags().StringVar(&artifactOpts.filterAT, "filter-artifact-type", "", "Filter descriptors by artifactType")
-	artifactTreeCmd.Flags().StringArrayVar(&artifactOpts.filterAnnot, "filter-annotation", []string{}, "Filter descriptors by annotation (key=value)")
-	artifactTreeCmd.Flags().StringVar(&artifactOpts.formatTree, "format", "{{printPretty .}}", "Format output with go template syntax")
-
-	artifactTopCmd.AddCommand(artifactGetCmd)
-	artifactTopCmd.AddCommand(artifactListCmd)
-	artifactTopCmd.AddCommand(artifactPutCmd)
-	artifactTopCmd.AddCommand(artifactTreeCmd)
-	return artifactTopCmd
+	cmd.Flags().BoolVar(&opts.digestTags, "digest-tags", false, "Include digest tags")
+	cmd.Flags().StringVar(&opts.externalRepo, "external", "", "Query referrers from a separate source")
+	cmd.Flags().StringVar(&opts.filterAT, "filter-artifact-type", "", "Filter descriptors by artifactType")
+	cmd.Flags().StringArrayVar(&opts.filterAnnot, "filter-annotation", []string{}, "Filter descriptors by annotation (key=value)")
+	cmd.Flags().StringVar(&opts.format, "format", "{{printPretty .}}", "Format output with go template syntax")
+	_ = cmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	return cmd
 }
 
-func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []string) error {
+func (opts *artifactOpts) runArtifactGet(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
-	rc := artifactOpts.rootOpts.newRegClient()
+	rc := opts.rootOpts.newRegClient()
 
 	// validate inputs
-	if artifactOpts.refers != "" {
-		artifactOpts.rootOpts.log.Warn("--refers is deprecated, use --subject instead")
-		if artifactOpts.subject == "" {
-			artifactOpts.subject = artifactOpts.refers
+	if opts.refers != "" {
+		opts.rootOpts.log.Warn("--refers is deprecated, use --subject instead")
+		if opts.subject == "" {
+			opts.subject = opts.refers
 		}
 	}
-	if artifactOpts.externalRepo != "" && artifactOpts.subject == "" {
-		artifactOpts.rootOpts.log.Warn("--external option depends on --subject")
+	if opts.externalRepo != "" && opts.subject == "" {
+		opts.rootOpts.log.Warn("--external option depends on --subject")
 	}
-	if artifactOpts.latest && artifactOpts.sortAnnot != "" {
+	if opts.latest && opts.sortAnnot != "" {
 		return fmt.Errorf("--latest cannot be used with --sort-annotation")
 	}
 	// if output dir defined, ensure it exists
-	if artifactOpts.outputDir != "" {
-		fi, err := os.Stat(artifactOpts.outputDir)
+	if opts.outputDir != "" {
+		fi, err := os.Stat(opts.outputDir)
 		if err != nil {
 			return fmt.Errorf("output directory unavailable: %w", err)
 		}
 		if !fi.IsDir() {
-			return fmt.Errorf("output must be a directory: \"%s\"", artifactOpts.outputDir)
+			return fmt.Errorf("output must be a directory: \"%s\"", opts.outputDir)
 		}
 	}
 	// dedup warnings
@@ -289,13 +310,13 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 
 	r := ref.Ref{}
 	matchOpts := descriptor.MatchOpt{
-		ArtifactType:   artifactOpts.filterAT,
-		SortAnnotation: artifactOpts.sortAnnot,
-		SortDesc:       artifactOpts.sortDesc,
+		ArtifactType:   opts.filterAT,
+		SortAnnotation: opts.sortAnnot,
+		SortDesc:       opts.sortDesc,
 	}
-	if artifactOpts.filterAnnot != nil {
+	if opts.filterAnnot != nil {
 		matchOpts.Annotations = map[string]string{}
-		for _, kv := range artifactOpts.filterAnnot {
+		for _, kv := range opts.filterAnnot {
 			kvSplit := strings.SplitN(kv, "=", 2)
 			if len(kvSplit) == 2 {
 				matchOpts.Annotations[kvSplit[0]] = kvSplit[1]
@@ -304,12 +325,12 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 			}
 		}
 	}
-	if artifactOpts.latest {
+	if opts.latest {
 		matchOpts.SortAnnotation = types.AnnotationCreated
 		matchOpts.SortDesc = true
 	}
-	if artifactOpts.platform != "" {
-		p, err := platform.Parse(artifactOpts.platform)
+	if opts.platform != "" {
+		p, err := platform.Parse(opts.platform)
 		if err != nil {
 			return fmt.Errorf("platform could not be parsed: %w", err)
 		}
@@ -317,8 +338,8 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 	}
 
 	// lookup referrers to the subject
-	if len(args) == 0 && artifactOpts.subject != "" {
-		rSubject, err := ref.New(artifactOpts.subject)
+	if len(args) == 0 && opts.subject != "" {
+		rSubject, err := ref.New(opts.subject)
 		if err != nil {
 			return err
 		}
@@ -327,11 +348,11 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 		referrerOpts := []scheme.ReferrerOpts{
 			scheme.WithReferrerMatchOpt(referrerMatchOpts),
 		}
-		if artifactOpts.platform != "" {
-			referrerOpts = append(referrerOpts, scheme.WithReferrerPlatform(artifactOpts.platform))
+		if opts.platform != "" {
+			referrerOpts = append(referrerOpts, scheme.WithReferrerPlatform(opts.platform))
 		}
-		if artifactOpts.externalRepo != "" {
-			rExt, err := ref.New(artifactOpts.externalRepo)
+		if opts.externalRepo != "" {
+			rExt, err := ref.New(opts.externalRepo)
 			if err != nil {
 				return fmt.Errorf("failed to parse external ref: %w", err)
 			}
@@ -345,11 +366,11 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 			return err
 		}
 		if len(rl.Descriptors) == 0 {
-			return fmt.Errorf("no matching referrers to %s", artifactOpts.subject)
-		} else if len(rl.Descriptors) > 1 && artifactOpts.sortAnnot == "" && !artifactOpts.latest {
-			artifactOpts.rootOpts.log.Warn("multiple referrers match, using first match",
+			return fmt.Errorf("no matching referrers to %s", opts.subject)
+		} else if len(rl.Descriptors) > 1 && opts.sortAnnot == "" && !opts.latest {
+			opts.rootOpts.log.Warn("multiple referrers match, using first match",
 				slog.Int("match count", len(rl.Descriptors)),
-				slog.String("subject", artifactOpts.subject))
+				slog.String("subject", opts.subject))
 		}
 		r = r.SetDigest(rl.Descriptors[0].Digest.String())
 	} else if len(args) > 0 {
@@ -382,8 +403,7 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 		if err != nil {
 			return fmt.Errorf("no matching artifacts found in index: %w", err)
 		}
-		r.Digest = d.Digest.String()
-		m, err = rc.ManifestGet(ctx, r)
+		m, err = rc.ManifestGet(ctx, r, regclient.WithManifestDesc(d))
 		if err != nil {
 			return err
 		}
@@ -394,7 +414,7 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 	}
 
 	// if config-file defined, create file as writer, perform a blob get
-	if artifactOpts.artifactConfig != "" || artifactOpts.getConfig {
+	if opts.artifactConfig != "" || opts.getConfig {
 		d, err := mi.GetConfig()
 		if err != nil {
 			return err
@@ -404,8 +424,8 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 			return err
 		}
 		defer rdr.Close()
-		if artifactOpts.artifactConfig != "" {
-			fh, err := os.Create(artifactOpts.artifactConfig)
+		if opts.artifactConfig != "" {
+			fh, err := os.Create(opts.artifactConfig)
 			if err != nil {
 				return err
 			}
@@ -420,7 +440,7 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 				return err
 			}
 		}
-		if artifactOpts.getConfig {
+		if opts.getConfig {
 			// do not return layer contents if request is only for a config
 			return nil
 		}
@@ -432,46 +452,28 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 		return err
 	}
 	// filter by media-type if defined
-	if len(artifactOpts.artifactFileMT) > 0 {
+	if len(opts.artifactFileMT) > 0 {
 		for i := len(layers) - 1; i >= 0; i-- {
-			found := false
-			for _, mt := range artifactOpts.artifactFileMT {
-				if layers[i].MediaType == mt {
-					found = true
-					break
-				}
-			}
-			if !found {
-				// remove from slice
-				layers = append(layers[:i], layers[i+1:]...)
+			if !slices.Contains(opts.artifactFileMT, layers[i].MediaType) {
+				layers = slices.Delete(layers, i, i+1)
 			}
 		}
 	}
 	// filter by filename if defined
-	if len(artifactOpts.artifactFile) > 0 {
+	if len(opts.artifactFile) > 0 {
 		for i := len(layers) - 1; i >= 0; i-- {
-			found := false
 			af, ok := layers[i].Annotations[ociAnnotTitle]
-			if ok {
-				for _, f := range artifactOpts.artifactFile {
-					if af == f {
-						found = true
-						break
-					}
-				}
-			}
-			if !found {
-				// remove from slice
-				layers = append(layers[:i], layers[i+1:]...)
+			if !ok || !slices.Contains(opts.artifactFile, af) {
+				layers = slices.Delete(layers, i, i+1)
 			}
 		}
 	}
 
 	if len(layers) == 0 {
-		return fmt.Errorf("no matching layers found in the artifact, verify media-type and filename")
+		return fmt.Errorf("no matching layers found in the artifact, verify media-type and filename%.0w", errs.ErrNotFound)
 	}
 
-	if artifactOpts.outputDir != "" {
+	if opts.outputDir != "" {
 		// loop through each matching layer
 		for _, l := range layers {
 			if err = l.Digest.Validate(); err != nil {
@@ -494,7 +496,7 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 				if strings.HasSuffix(l.Annotations[ociAnnotTitle], "/") || l.Annotations["io.deis.oras.content.unpack"] == "true" {
 					f = f + "/"
 				}
-				if artifactOpts.stripDirs {
+				if opts.stripDirs {
 					f = f[strings.LastIndex(f, "/"):]
 				}
 				dirs := strings.Split(f, "/")
@@ -502,7 +504,7 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 				if len(dirs) > 2 {
 					// strip the leading empty dir and trailing filename
 					dirs = dirs[1 : len(dirs)-1]
-					dest := filepath.Join(artifactOpts.outputDir, filepath.Join(dirs...))
+					dest := filepath.Join(opts.outputDir, filepath.Join(dirs...))
 					fi, err := os.Stat(dest)
 					if os.IsNotExist(err) {
 						//#nosec G301 defer to user umask setting, simplifies container scenarios, registry content is often public
@@ -518,13 +520,13 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 				}
 				// if there's a trailing slash, expand the compressed blob into the folder
 				if strings.HasSuffix(f, "/") {
-					err = archive.Extract(ctx, filepath.Join(artifactOpts.outputDir, f), rdr)
+					err = archive.Extract(ctx, filepath.Join(opts.outputDir, f), rdr)
 					if err != nil {
 						return err
 					}
 				} else {
 					// create file as writer
-					out := filepath.Join(artifactOpts.outputDir, f)
+					out := filepath.Join(opts.outputDir, f)
 					//#nosec G304 command is run by a user accessing their own files
 					fh, err := os.Create(out)
 					if err != nil {
@@ -563,7 +565,7 @@ func (artifactOpts *artifactCmd) runArtifactGet(cmd *cobra.Command, args []strin
 	return nil
 }
 
-func (artifactOpts *artifactCmd) runArtifactList(cmd *cobra.Command, args []string) error {
+func (opts *artifactOpts) runArtifactList(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 
 	// validate inputs
@@ -571,7 +573,7 @@ func (artifactOpts *artifactCmd) runArtifactList(cmd *cobra.Command, args []stri
 	if err != nil {
 		return err
 	}
-	if artifactOpts.latest && artifactOpts.sortAnnot != "" {
+	if opts.latest && opts.sortAnnot != "" {
 		return fmt.Errorf("--latest cannot be used with --sort-annotation")
 	}
 	// dedup warnings
@@ -579,17 +581,17 @@ func (artifactOpts *artifactCmd) runArtifactList(cmd *cobra.Command, args []stri
 		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
 	}
 
-	rc := artifactOpts.rootOpts.newRegClient()
+	rc := opts.rootOpts.newRegClient()
 	defer rc.Close(ctx, rSubject)
 
 	matchOpts := descriptor.MatchOpt{
-		ArtifactType:   artifactOpts.filterAT,
-		SortAnnotation: artifactOpts.sortAnnot,
-		SortDesc:       artifactOpts.sortDesc,
+		ArtifactType:   opts.filterAT,
+		SortAnnotation: opts.sortAnnot,
+		SortDesc:       opts.sortDesc,
 	}
-	if artifactOpts.filterAnnot != nil {
+	if opts.filterAnnot != nil {
 		matchOpts.Annotations = map[string]string{}
-		for _, kv := range artifactOpts.filterAnnot {
+		for _, kv := range opts.filterAnnot {
 			kvSplit := strings.SplitN(kv, "=", 2)
 			if len(kvSplit) == 2 {
 				matchOpts.Annotations[kvSplit[0]] = kvSplit[1]
@@ -598,18 +600,18 @@ func (artifactOpts *artifactCmd) runArtifactList(cmd *cobra.Command, args []stri
 			}
 		}
 	}
-	if artifactOpts.latest {
+	if opts.latest {
 		matchOpts.SortAnnotation = types.AnnotationCreated
 		matchOpts.SortDesc = true
 	}
 	referrerOpts := []scheme.ReferrerOpts{
 		scheme.WithReferrerMatchOpt(matchOpts),
 	}
-	if artifactOpts.platform != "" {
-		referrerOpts = append(referrerOpts, scheme.WithReferrerPlatform(artifactOpts.platform))
+	if opts.platform != "" {
+		referrerOpts = append(referrerOpts, scheme.WithReferrerPlatform(opts.platform))
 	}
-	if artifactOpts.externalRepo != "" {
-		rExternal, err := ref.New(artifactOpts.externalRepo)
+	if opts.externalRepo != "" {
+		rExternal, err := ref.New(opts.externalRepo)
 		if err != nil {
 			return fmt.Errorf("failed to parse external ref: %w", err)
 		}
@@ -622,7 +624,7 @@ func (artifactOpts *artifactCmd) runArtifactList(cmd *cobra.Command, args []stri
 	}
 
 	// include digest tags if requested
-	if artifactOpts.digestTags {
+	if opts.digestTags {
 		tl, err := rc.TagList(ctx, rSubject)
 		if err != nil {
 			return fmt.Errorf("failed to list tags: %w", err)
@@ -639,7 +641,7 @@ func (artifactOpts *artifactCmd) runArtifactList(cmd *cobra.Command, args []stri
 			return fmt.Errorf("failed to compute fallback tag: %w", err)
 		}
 		for _, t := range tl.Tags {
-			if strings.HasPrefix(t, prefix.Tag) && !sliceHasStr(rl.Tags, t) {
+			if strings.HasPrefix(t, prefix.Tag) && !slices.Contains(rl.Tags, t) {
 				rTag := rl.Subject.SetTag(t)
 				mh, err := rc.ManifestHead(ctx, rTag, regclient.WithManifestRequireDigest())
 				if err != nil {
@@ -656,31 +658,31 @@ func (artifactOpts *artifactCmd) runArtifactList(cmd *cobra.Command, args []stri
 		}
 	}
 
-	switch artifactOpts.formatList {
+	switch opts.format {
 	case "raw":
-		artifactOpts.formatList = "{{ range $key,$vals := .Manifest.RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .Manifest.RawBody}}"
+		opts.format = "{{ range $key,$vals := .Manifest.RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .Manifest.RawBody}}"
 	case "rawBody", "raw-body", "body":
-		artifactOpts.formatList = "{{printf \"%s\" .Manifest.RawBody}}"
+		opts.format = "{{printf \"%s\" .Manifest.RawBody}}"
 	case "rawHeaders", "raw-headers", "headers":
-		artifactOpts.formatList = "{{ range $key,$vals := .Manifest.RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
+		opts.format = "{{ range $key,$vals := .Manifest.RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
-	return template.Writer(cmd.OutOrStdout(), artifactOpts.formatList, rl)
+	return template.Writer(cmd.OutOrStdout(), opts.format, rl)
 }
 
-func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []string) error {
+func (opts *artifactOpts) runArtifactPut(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	hasConfig := false
 	var r, rArt, rSubject ref.Ref
 	var err error
 
-	switch artifactOpts.artifactMT {
+	switch opts.artifactMT {
 	case mediatype.OCI1Artifact:
-		artifactOpts.rootOpts.log.Warn("changing media-type is experimental and non-portable")
+		opts.rootOpts.log.Warn("changing media-type is experimental and non-portable")
 		hasConfig = false
 	case "", mediatype.OCI1Manifest:
 		hasConfig = true
 	default:
-		return fmt.Errorf("unsupported manifest media type: %s%.0w", artifactOpts.artifactMT, errs.ErrUnsupportedMediaType)
+		return fmt.Errorf("unsupported manifest media type: %s%.0w", opts.artifactMT, errs.ErrUnsupportedMediaType)
 	}
 
 	// dedup warnings
@@ -689,17 +691,17 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 	}
 
 	// validate inputs
-	if artifactOpts.refers != "" {
-		artifactOpts.rootOpts.log.Warn("--refers is deprecated, use --subject instead")
-		if artifactOpts.subject == "" {
-			artifactOpts.subject = artifactOpts.refers
+	if opts.refers != "" {
+		opts.rootOpts.log.Warn("--refers is deprecated, use --subject instead")
+		if opts.subject == "" {
+			opts.subject = opts.refers
 		}
 	}
-	if len(args) == 0 && artifactOpts.subject == "" {
+	if len(args) == 0 && opts.subject == "" {
 		return fmt.Errorf("either a reference or subject must be provided")
 	}
-	if artifactOpts.subject != "" {
-		rSubject, err = ref.New(artifactOpts.subject)
+	if opts.subject != "" {
+		rSubject, err = ref.New(opts.subject)
 		if err != nil {
 			return err
 		}
@@ -712,11 +714,11 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 		}
 		r = rArt
 	}
-	if artifactOpts.externalRepo != "" {
+	if opts.externalRepo != "" {
 		if rSubject.IsZero() {
 			return fmt.Errorf("pushing a referrer to an external repository requires a subject%.0w", errs.ErrUnsupported)
 		}
-		rExt, err := ref.New(artifactOpts.externalRepo)
+		rExt, err := ref.New(opts.externalRepo)
 		if err != nil {
 			return err
 		}
@@ -732,56 +734,56 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 	}
 
 	// validate/set artifactType and config.mediaType
-	if artifactOpts.artifactConfigMT != "" && !mediatype.Valid(artifactOpts.artifactConfigMT) {
-		return fmt.Errorf("invalid media type: %s%.0w", artifactOpts.artifactConfigMT, errs.ErrUnsupportedMediaType)
+	if opts.artifactConfigMT != "" && !mediatype.Valid(opts.artifactConfigMT) {
+		return fmt.Errorf("invalid media type: %s%.0w", opts.artifactConfigMT, errs.ErrUnsupportedMediaType)
 	}
-	if artifactOpts.artifactType != "" && !mediatype.Valid(artifactOpts.artifactType) {
-		return fmt.Errorf("invalid media type: %s%.0w", artifactOpts.artifactType, errs.ErrUnsupportedMediaType)
+	if opts.artifactType != "" && !mediatype.Valid(opts.artifactType) {
+		return fmt.Errorf("invalid media type: %s%.0w", opts.artifactType, errs.ErrUnsupportedMediaType)
 	}
-	for _, mt := range artifactOpts.artifactFileMT {
+	for _, mt := range opts.artifactFileMT {
 		if !mediatype.Valid(mt) {
 			return fmt.Errorf("invalid media type: %s%.0w", mt, errs.ErrUnsupportedMediaType)
 		}
 	}
-	if hasConfig && artifactOpts.artifactConfigMT == "" {
-		if artifactOpts.artifactConfig == "" {
-			artifactOpts.artifactConfigMT = mediatype.OCI1Empty
+	if hasConfig && opts.artifactConfigMT == "" {
+		if opts.artifactConfig == "" {
+			opts.artifactConfigMT = mediatype.OCI1Empty
 		} else {
-			if artifactOpts.artifactType != "" {
-				artifactOpts.artifactConfigMT = artifactOpts.artifactType
-				artifactOpts.rootOpts.log.Warn("setting config-type using artifact-type")
+			if opts.artifactType != "" {
+				opts.artifactConfigMT = opts.artifactType
+				opts.rootOpts.log.Warn("setting config-type using artifact-type")
 			} else {
 				return fmt.Errorf("config-type is required for config-file")
 			}
 		}
 	}
-	if !hasConfig && (artifactOpts.artifactConfig != "" || artifactOpts.artifactConfigMT != "") {
-		return fmt.Errorf("cannot set config-type or config-file on %s%.0w", artifactOpts.artifactMT, errs.ErrUnsupportedMediaType)
+	if !hasConfig && (opts.artifactConfig != "" || opts.artifactConfigMT != "") {
+		return fmt.Errorf("cannot set config-type or config-file on %s%.0w", opts.artifactMT, errs.ErrUnsupportedMediaType)
 	}
-	if artifactOpts.artifactType == "" {
-		if !hasConfig || artifactOpts.artifactConfigMT == mediatype.OCI1Empty {
-			artifactOpts.rootOpts.log.Warn("using default value for artifact-type is not recommended")
-			artifactOpts.artifactType = defaultMTArtifact
+	if opts.artifactType == "" {
+		if !hasConfig || opts.artifactConfigMT == mediatype.OCI1Empty {
+			opts.rootOpts.log.Warn("using default value for artifact-type is not recommended")
+			opts.artifactType = defaultMTArtifact
 		}
 	}
 
 	// set and validate artifact files with media types
-	if len(artifactOpts.artifactFile) <= 1 && len(artifactOpts.artifactFileMT) == 0 && artifactOpts.artifactType != "" && artifactOpts.artifactType != defaultMTArtifact {
+	if len(opts.artifactFile) <= 1 && len(opts.artifactFileMT) == 0 && opts.artifactType != "" && opts.artifactType != defaultMTArtifact {
 		// special case for single file and artifact-type
-		artifactOpts.artifactFileMT = []string{artifactOpts.artifactType}
-	} else if len(artifactOpts.artifactFile) == 1 && len(artifactOpts.artifactFileMT) == 0 {
+		opts.artifactFileMT = []string{opts.artifactType}
+	} else if len(opts.artifactFile) == 1 && len(opts.artifactFileMT) == 0 {
 		// default media-type for a single file, same is used for stdin
-		artifactOpts.artifactFileMT = []string{defaultMTLayer}
-	} else if len(artifactOpts.artifactFile) == 0 && len(artifactOpts.artifactFileMT) == 1 {
+		opts.artifactFileMT = []string{defaultMTLayer}
+	} else if len(opts.artifactFile) == 0 && len(opts.artifactFileMT) == 1 {
 		// no-op, special case for stdin with a media type
-	} else if len(artifactOpts.artifactFile) != len(artifactOpts.artifactFileMT) {
+	} else if len(opts.artifactFile) != len(opts.artifactFileMT) {
 		// all other mis-matches are invalid
 		return fmt.Errorf("one artifact media-type must be set for each artifact file")
 	}
 
 	// include annotations
 	annotations := map[string]string{}
-	for _, a := range artifactOpts.annotations {
+	for _, a := range opts.annotations {
 		aSplit := strings.SplitN(a, "=", 2)
 		if len(aSplit) == 1 {
 			annotations[aSplit[0]] = ""
@@ -791,16 +793,16 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 	}
 
 	// setup regclient
-	rc := artifactOpts.rootOpts.newRegClient()
+	rc := opts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
 	var subjectDesc *descriptor.Descriptor
 	if rSubject.IsSet() {
 		mOpts := []regclient.ManifestOpts{regclient.WithManifestRequireDigest()}
-		if artifactOpts.platform != "" {
-			p, err := platform.Parse(artifactOpts.platform)
+		if opts.platform != "" {
+			p, err := platform.Parse(opts.platform)
 			if err != nil {
-				return fmt.Errorf("failed to parse platform %s: %w", artifactOpts.platform, err)
+				return fmt.Errorf("failed to parse platform %s: %w", opts.platform, err)
 			}
 			mOpts = append(mOpts, regclient.WithManifestPlatform(p))
 		}
@@ -817,12 +819,12 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 	if hasConfig {
 		var configBytes []byte
 		var configDigest digest.Digest
-		if artifactOpts.artifactConfig == "" {
+		if opts.artifactConfig == "" {
 			configBytes = descriptor.EmptyData
 			configDigest = descriptor.EmptyDigest
 		} else {
 			var err error
-			configBytes, err = os.ReadFile(artifactOpts.artifactConfig)
+			configBytes, err = os.ReadFile(opts.artifactConfig)
 			if err != nil {
 				return err
 			}
@@ -835,19 +837,19 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 		}
 		// save config descriptor to manifest
 		confDesc = descriptor.Descriptor{
-			MediaType: artifactOpts.artifactConfigMT,
+			MediaType: opts.artifactConfigMT,
 			Digest:    configDigest,
 			Size:      int64(len(configBytes)),
 		}
 	}
 
 	blobs := []descriptor.Descriptor{}
-	if len(artifactOpts.artifactFile) > 0 {
+	if len(opts.artifactFile) > 0 {
 		// if files were passed
-		for i, f := range artifactOpts.artifactFile {
+		for i, f := range opts.artifactFile {
 			// wrap in a closure to trigger defer on each step, avoiding open file handles
 			err = func() error {
-				mt := artifactOpts.artifactFileMT[i]
+				mt := opts.artifactFileMT[i]
 				openF := f
 				// if file is a directory, compress it into a tgz first
 				// this unfortunately needs a temp file for the digest
@@ -890,9 +892,9 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 				desc.Size = l
 				desc.Digest = digester.Digest()
 				// add layer to manifest
-				if artifactOpts.artifactTitle {
+				if opts.artifactTitle {
 					af := f
-					if artifactOpts.stripDirs {
+					if opts.stripDirs {
 						fSplit := strings.Split(f, "/")
 						if fSplit[len(fSplit)-1] != "" {
 							af = fSplit[len(fSplit)-1]
@@ -929,8 +931,8 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 	} else {
 		// no files passed, push from stdin
 		mt := defaultMTLayer
-		if len(artifactOpts.artifactFileMT) > 0 {
-			mt = artifactOpts.artifactFileMT[0]
+		if len(opts.artifactFileMT) > 0 {
+			mt = opts.artifactFileMT[0]
 		}
 		d, err := rc.BlobPut(ctx, r, descriptor.Descriptor{}, cmd.InOrStdin())
 		if err != nil {
@@ -941,11 +943,11 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 	}
 
 	mOpts := []manifest.Opts{}
-	switch artifactOpts.artifactMT {
+	switch opts.artifactMT {
 	case mediatype.OCI1Artifact:
 		m := v1.ArtifactManifest{
 			MediaType:    mediatype.OCI1Artifact,
-			ArtifactType: artifactOpts.artifactType,
+			ArtifactType: opts.artifactType,
 			Blobs:        blobs,
 			Annotations:  annotations,
 			Subject:      subjectDesc,
@@ -955,7 +957,7 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 		m := v1.Manifest{
 			Versioned:    v1.ManifestSchemaVersion,
 			MediaType:    mediatype.OCI1Manifest,
-			ArtifactType: artifactOpts.artifactType,
+			ArtifactType: opts.artifactType,
 			Config:       confDesc,
 			Layers:       blobs,
 			Annotations:  annotations,
@@ -963,7 +965,7 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 		}
 		mOpts = append(mOpts, manifest.WithOrig(m))
 	default:
-		return fmt.Errorf("unsupported manifest media type: %s", artifactOpts.artifactMT)
+		return fmt.Errorf("unsupported manifest media type: %s", opts.artifactMT)
 	}
 
 	// generate manifest
@@ -972,14 +974,13 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 		return err
 	}
 
-	if artifactOpts.byDigest || artifactOpts.index || rArt.IsZero() {
-		r.Tag = ""
-		r.Digest = mm.GetDescriptor().Digest.String()
+	if opts.byDigest || opts.index || rArt.IsZero() {
+		r = r.SetDigest(mm.GetDescriptor().Digest.String())
 	}
 
 	// push manifest
 	putOpts := []regclient.ManifestOpts{}
-	if rArt.IsZero() || artifactOpts.index {
+	if rArt.IsZero() || opts.index {
 		putOpts = append(putOpts, regclient.WithManifestChild())
 	}
 	err = rc.ManifestPut(ctx, r, mm, putOpts...)
@@ -988,13 +989,13 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 	}
 
 	// create/append to index
-	if artifactOpts.index && rArt.IsSet() {
+	if opts.index && rArt.IsSet() {
 		// create a descriptor to add
 		d := mm.GetDescriptor()
-		d.ArtifactType = artifactOpts.artifactType
+		d.ArtifactType = opts.artifactType
 		d.Annotations = annotations
-		if artifactOpts.platform != "" {
-			p, err := platform.Parse(artifactOpts.platform)
+		if opts.platform != "" {
+			p, err := platform.Parse(opts.platform)
 			if err != nil {
 				return fmt.Errorf("failed to parse platform: %w", err)
 			}
@@ -1043,13 +1044,13 @@ func (artifactOpts *artifactCmd) runArtifactPut(cmd *cobra.Command, args []strin
 	}{
 		Manifest: mm,
 	}
-	if artifactOpts.byDigest && artifactOpts.formatPut == "" {
-		artifactOpts.formatPut = "{{ printf \"%s\\n\" .Manifest.GetDescriptor.Digest }}"
+	if opts.byDigest && opts.format == "" {
+		opts.format = "{{ printf \"%s\\n\" .Manifest.GetDescriptor.Digest }}"
 	}
-	return template.Writer(cmd.OutOrStdout(), artifactOpts.formatPut, result)
+	return template.Writer(cmd.OutOrStdout(), opts.format, result)
 }
 
-func (artifactOpts *artifactCmd) runArtifactTree(cmd *cobra.Command, args []string) error {
+func (opts *artifactOpts) runArtifactTree(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 
 	// validate inputs
@@ -1058,7 +1059,7 @@ func (artifactOpts *artifactCmd) runArtifactTree(cmd *cobra.Command, args []stri
 		return err
 	}
 
-	rc := artifactOpts.rootOpts.newRegClient()
+	rc := opts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
 	// dedup warnings
@@ -1066,12 +1067,12 @@ func (artifactOpts *artifactCmd) runArtifactTree(cmd *cobra.Command, args []stri
 		ctx = warning.NewContext(ctx, &warning.Warning{Hook: warning.DefaultHook()})
 	}
 	referrerOpts := []scheme.ReferrerOpts{}
-	if artifactOpts.filterAT != "" {
-		referrerOpts = append(referrerOpts, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{ArtifactType: artifactOpts.filterAT}))
+	if opts.filterAT != "" {
+		referrerOpts = append(referrerOpts, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{ArtifactType: opts.filterAT}))
 	}
-	if artifactOpts.filterAnnot != nil {
+	if opts.filterAnnot != nil {
 		af := map[string]string{}
-		for _, kv := range artifactOpts.filterAnnot {
+		for _, kv := range opts.filterAnnot {
 			kvSplit := strings.SplitN(kv, "=", 2)
 			if len(kvSplit) == 2 {
 				af[kvSplit[0]] = kvSplit[1]
@@ -1082,8 +1083,8 @@ func (artifactOpts *artifactCmd) runArtifactTree(cmd *cobra.Command, args []stri
 		referrerOpts = append(referrerOpts, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{Annotations: af}))
 	}
 	rRefSrc := r
-	if artifactOpts.externalRepo != "" {
-		rRefSrc, err = ref.New(artifactOpts.externalRepo)
+	if opts.externalRepo != "" {
+		rRefSrc, err = ref.New(opts.externalRepo)
 		if err != nil {
 			return fmt.Errorf("failed to parse external ref: %w", err)
 		}
@@ -1092,7 +1093,7 @@ func (artifactOpts *artifactCmd) runArtifactTree(cmd *cobra.Command, args []stri
 
 	// include digest tags if requested
 	tags := []string{}
-	if artifactOpts.digestTags {
+	if opts.digestTags {
 		tl, err := rc.TagList(ctx, r)
 		if err != nil {
 			return fmt.Errorf("failed to list tags: %w", err)
@@ -1101,10 +1102,10 @@ func (artifactOpts *artifactCmd) runArtifactTree(cmd *cobra.Command, args []stri
 	}
 
 	seen := []string{}
-	tr, err := artifactOpts.treeAddResult(ctx, rc, r, seen, referrerOpts, tags)
+	tr, err := opts.treeAddResult(ctx, rc, r, seen, referrerOpts, tags)
 	var twErr error
 	if tr != nil {
-		twErr = template.Writer(cmd.OutOrStdout(), artifactOpts.formatTree, tr)
+		twErr = template.Writer(cmd.OutOrStdout(), opts.format, tr)
 	}
 	if err != nil {
 		return err
@@ -1112,7 +1113,7 @@ func (artifactOpts *artifactCmd) runArtifactTree(cmd *cobra.Command, args []stri
 	return twErr
 }
 
-func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclient.RegClient, r ref.Ref, seen []string, rOpts []scheme.ReferrerOpts, tags []string) (*treeResult, error) {
+func (opts *artifactOpts) treeAddResult(ctx context.Context, rc *regclient.RegClient, r ref.Ref, seen []string, rOpts []scheme.ReferrerOpts, tags []string) (*treeResult, error) {
 	tr := treeResult{
 		Ref: r,
 	}
@@ -1123,13 +1124,11 @@ func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclien
 		return nil, err
 	}
 	tr.Manifest = m
-	if r.Digest == "" {
-		r.Digest = m.GetDescriptor().Digest.String()
-	}
+	r = r.AddDigest(m.GetDescriptor().Digest.String())
 
 	// track already seen manifests
 	dig := m.GetDescriptor().Digest.String()
-	if sliceHasStr(seen, dig) {
+	if slices.Contains(seen, dig) {
 		return &tr, fmt.Errorf("%w, already processed %s", ErrLoopEncountered, dig)
 	}
 	seen = append(seen, dig)
@@ -1147,7 +1146,7 @@ func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclien
 		}
 		for _, d := range dl {
 			rChild := r.SetDigest(d.Digest.String())
-			tChild, err := artifactOpts.treeAddResult(ctx, rc, rChild, seen, rOpts, tags)
+			tChild, err := opts.treeAddResult(ctx, rc, rChild, seen, rOpts, tags)
 			if tChild != nil {
 				tChild.ArtifactType = d.ArtifactType
 				if d.Platform != nil {
@@ -1177,7 +1176,7 @@ func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclien
 		tr.Referrer = []*treeResult{}
 		for _, d := range rl.Descriptors {
 			rReferrer = rReferrer.SetDigest(d.Digest.String())
-			tReferrer, err := artifactOpts.treeAddResult(ctx, rc, rReferrer, seen, rOpts, tags)
+			tReferrer, err := opts.treeAddResult(ctx, rc, rReferrer, seen, rOpts, tags)
 			if tReferrer != nil {
 				tReferrer.ArtifactType = d.ArtifactType
 				if d.Platform != nil {
@@ -1193,15 +1192,15 @@ func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclien
 	}
 
 	// include digest tags if requested
-	if artifactOpts.digestTags {
+	if opts.digestTags {
 		prefix, err := referrer.FallbackTag(r)
 		if err != nil {
 			return &tr, fmt.Errorf("failed to compute fallback tag: %w", err)
 		}
 		for _, t := range tags {
-			if strings.HasPrefix(t, prefix.Tag) && !sliceHasStr(rl.Tags, t) {
+			if strings.HasPrefix(t, prefix.Tag) && !slices.Contains(rl.Tags, t) {
 				rTag := r.SetTag(t)
-				tReferrer, err := artifactOpts.treeAddResult(ctx, rc, rTag, seen, rOpts, tags)
+				tReferrer, err := opts.treeAddResult(ctx, rc, rTag, seen, rOpts, tags)
 				if tReferrer != nil {
 					tReferrer.Ref = tReferrer.Ref.SetTag(t)
 					tr.Referrer = append(tr.Referrer, tReferrer)
@@ -1214,15 +1213,6 @@ func (artifactOpts *artifactCmd) treeAddResult(ctx context.Context, rc *regclien
 	}
 
 	return &tr, nil
-}
-
-func sliceHasStr(list []string, search string) bool {
-	for _, el := range list {
-		if el == search {
-			return true
-		}
-	}
-	return false
 }
 
 type treeResult struct {
@@ -1240,7 +1230,7 @@ func (tr *treeResult) MarshalPretty() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []byte(fmt.Sprintf("Ref: %s\nDigest: %s", tr.Ref.CommonName(), mp)), nil
+	return fmt.Appendf(nil, "Ref: %s\nDigest: %s", tr.Ref.CommonName(), mp), nil
 }
 
 func (tr *treeResult) marshalPretty(indent string) ([]byte, error) {

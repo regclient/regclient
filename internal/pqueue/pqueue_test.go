@@ -63,14 +63,14 @@ func TestQueue(t *testing.T) {
 	}
 	// background acquire two more, which should block
 	for _, i := range []int{2, 3} {
-		go func(i int) {
+		go func() {
 			done, err := q.Acquire(ctx, eList[i])
 			if err != nil {
 				t.Errorf("failed to acquire queue %d: %v", i, err)
 			}
 			finished <- i
 			done()
-		}(i)
+		}()
 	}
 	// verify background jobs blocked
 	sleepMS(2)

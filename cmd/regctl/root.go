@@ -24,19 +24,24 @@ const (
 	UserAgent = "regclient/regctl"
 )
 
-type rootCmd struct {
+type rootOpts struct {
+	hosts     []string
 	name      string
-	verbosity string
 	logopts   []string
 	log       *slog.Logger
-	format    string // for Go template formatting of various commands
-	hosts     []string
+	rcOpts    []regclient.Opt
 	userAgent string
+	verbosity string
 }
 
-func NewRootCmd() (*cobra.Command, *rootCmd) {
-	rootOpts := rootCmd{}
-	var rootTopCmd = &cobra.Command{
+type versionOpts struct {
+	rootOpts *rootOpts
+	format   string
+}
+
+func NewRootCmd() (*cobra.Command, *rootOpts) {
+	rOpts := &rootOpts{}
+	cmd := &cobra.Command{
 		Use:   "regctl <cmd>",
 		Short: "Utility for accessing docker registries",
 		Long: `Utility for accessing docker registries
@@ -62,11 +67,47 @@ regctl image digest --host reg=localhost:5000,tls=disabled localhost:5000/repo:v
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	rootOpts.name = rootTopCmd.Name()
-	var versionCmd = &cobra.Command{
+	rOpts.name = cmd.Name()
+	rOpts.log = slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+	cmd.PersistentFlags().StringVarP(&rOpts.verbosity, "verbosity", "v", slog.LevelWarn.String(), "Log level (trace, debug, info, warn, error)")
+	_ = cmd.RegisterFlagCompletionFunc("verbosity", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"trace", "debug", "info", "warn", "error"}, cobra.ShellCompDirectiveNoFileComp
+	})
+	cmd.PersistentFlags().StringArrayVar(&rOpts.logopts, "logopt", []string{}, "Log options")
+	_ = cmd.RegisterFlagCompletionFunc("logopt", completeArgNone)
+	cmd.PersistentFlags().StringArrayVar(&rOpts.hosts, "host", []string{}, "Registry hosts to add (reg=registry,user=username,pass=password,tls=enabled)")
+	_ = cmd.RegisterFlagCompletionFunc("host", completeArgNone)
+	cmd.PersistentFlags().StringVarP(&rOpts.userAgent, "user-agent", "", "", "Override user agent")
+	_ = cmd.RegisterFlagCompletionFunc("user-agent", completeArgNone)
+
+	cmd.PersistentPreRunE = rOpts.rootPreRun
+	cmd.AddCommand(cobradoc.NewCmd(rOpts.name, "cli-doc"))
+	cmd.AddCommand(
+		NewArtifactCmd(rOpts),
+		NewBlobCmd(rOpts),
+		NewConfigCmd(rOpts),
+		NewDigestCmd(rOpts),
+		NewImageCmd(rOpts),
+		NewIndexCmd(rOpts),
+		NewManifestCmd(rOpts),
+		NewRefCmd(rOpts),
+		NewRegistryCmd(rOpts),
+		NewRepoCmd(rOpts),
+		NewTagCmd(rOpts),
+		newVersionCmd(rOpts),
+	)
+	return cmd, rOpts
+}
+
+func newVersionCmd(rOpts *rootOpts) *cobra.Command {
+	opts := versionOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Show the version",
-		Long:  fmt.Sprintf(`Show the version of %s`, rootOpts.name),
+		Long:  fmt.Sprintf(`Show the version of %s`, opts.rootOpts.name),
 		Example: `
 # display full version details
 regctl version
@@ -74,78 +115,42 @@ regctl version
 # retrieve the version number
 regctl version --format '{{.VCSTag}}'`,
 		Args: cobra.ExactArgs(0),
-		RunE: rootOpts.runVersion,
+		RunE: opts.runVersion,
 	}
-
-	rootOpts.log = slog.New(slog.NewTextHandler(rootTopCmd.ErrOrStderr(), &slog.HandlerOptions{Level: slog.LevelWarn}))
-
-	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", slog.LevelWarn.String(), "Log level (trace, debug, info, warn, error)")
-	_ = rootTopCmd.RegisterFlagCompletionFunc("verbosity", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{"trace", "debug", "info", "warn", "error"}, cobra.ShellCompDirectiveNoFileComp
-	})
-	rootTopCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
-	_ = rootTopCmd.RegisterFlagCompletionFunc("logopt", completeArgNone)
-	rootTopCmd.PersistentFlags().StringArrayVar(&rootOpts.hosts, "host", []string{}, "Registry hosts to add (reg=registry,user=username,pass=password,tls=enabled)")
-	_ = rootTopCmd.RegisterFlagCompletionFunc("host", completeArgNone)
-	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.userAgent, "user-agent", "", "", "Override user agent")
-	_ = rootTopCmd.RegisterFlagCompletionFunc("user-agent", completeArgNone)
-
-	versionCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
-	_ = versionCmd.RegisterFlagCompletionFunc("format", completeArgNone)
-
-	rootTopCmd.PersistentPreRunE = rootOpts.rootPreRun
-	rootTopCmd.AddCommand(versionCmd)
-	rootTopCmd.AddCommand(cobradoc.NewCmd(rootOpts.name, "cli-doc"))
-	rootTopCmd.AddCommand(
-		NewArtifactCmd(&rootOpts),
-		NewBlobCmd(&rootOpts),
-		NewConfigCmd(&rootOpts),
-		NewDigestCmd(&rootOpts),
-		NewImageCmd(&rootOpts),
-		NewIndexCmd(&rootOpts),
-		NewManifestCmd(&rootOpts),
-		NewRefCmd(&rootOpts),
-		NewRegistryCmd(&rootOpts),
-		NewRepoCmd(&rootOpts),
-		NewTagCmd(&rootOpts),
-	)
-	return rootTopCmd, &rootOpts
+	cmd.Flags().StringVarP(&opts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+	_ = cmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	return cmd
 }
 
-func (rootOpts *rootCmd) rootPreRun(cmd *cobra.Command, args []string) error {
+func (opts *rootOpts) rootPreRun(cmd *cobra.Command, args []string) error {
 	var lvl slog.Level
-	err := lvl.UnmarshalText([]byte(rootOpts.verbosity))
+	err := lvl.UnmarshalText([]byte(opts.verbosity))
 	if err != nil {
 		// handle custom levels
-		if rootOpts.verbosity == strings.ToLower("trace") {
+		if opts.verbosity == strings.ToLower("trace") {
 			lvl = types.LevelTrace
 		} else {
-			return fmt.Errorf("unable to parse verbosity %s: %v", rootOpts.verbosity, err)
+			return fmt.Errorf("unable to parse verbosity %s: %v", opts.verbosity, err)
 		}
 	}
 	formatJSON := false
-	for _, opt := range rootOpts.logopts {
+	for _, opt := range opts.logopts {
 		if opt == "json" {
 			formatJSON = true
 		}
 	}
 	if formatJSON {
-		rootOpts.log = slog.New(slog.NewJSONHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: lvl}))
+		opts.log = slog.New(slog.NewJSONHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: lvl}))
 	} else {
-		rootOpts.log = slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: lvl}))
+		opts.log = slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: lvl}))
 	}
 	return nil
 }
 
-func (rootOpts *rootCmd) runVersion(cmd *cobra.Command, args []string) error {
-	info := version.GetInfo()
-	return template.Writer(cmd.OutOrStdout(), rootOpts.format, info)
-}
-
-func (rootOpts *rootCmd) newRegClient() *regclient.RegClient {
+func (opts *rootOpts) newRegClient() *regclient.RegClient {
 	conf, err := ConfigLoadDefault()
 	if err != nil {
-		rootOpts.log.Warn("Failed to load default config",
+		opts.log.Warn("Failed to load default config",
 			slog.String("err", err.Error()))
 		if conf == nil {
 			conf = ConfigNew()
@@ -153,11 +158,14 @@ func (rootOpts *rootCmd) newRegClient() *regclient.RegClient {
 	}
 
 	rcOpts := []regclient.Opt{
-		regclient.WithSlog(rootOpts.log),
+		regclient.WithSlog(opts.log),
 		regclient.WithRegOpts(reg.WithCache(time.Minute*5, 500)),
 	}
-	if rootOpts.userAgent != "" {
-		rcOpts = append(rcOpts, regclient.WithUserAgent(rootOpts.userAgent))
+	if len(opts.rcOpts) > 0 {
+		rcOpts = append(rcOpts, opts.rcOpts...)
+	}
+	if opts.userAgent != "" {
+		rcOpts = append(rcOpts, regclient.WithUserAgent(opts.userAgent))
 	} else {
 		info := version.GetInfo()
 		if info.VCSTag != "" {
@@ -184,10 +192,10 @@ func (rootOpts *rootCmd) newRegClient() *regclient.RegClient {
 		host.Name = name
 		rcHosts = append(rcHosts, *host)
 	}
-	for _, h := range rootOpts.hosts {
+	for _, h := range opts.hosts {
 		hKV, err := strparse.SplitCSKV(h)
 		if err != nil {
-			rootOpts.log.Warn("unable to parse host string",
+			opts.log.Warn("unable to parse host string",
 				slog.String("host", h),
 				slog.String("err", err.Error()))
 		}
@@ -200,7 +208,7 @@ func (rootOpts *rootCmd) newRegClient() *regclient.RegClient {
 			var hostTLS config.TLSConf
 			err := hostTLS.UnmarshalText([]byte(hKV["tls"]))
 			if err != nil {
-				rootOpts.log.Warn("unable to parse tls setting",
+				opts.log.Warn("unable to parse tls setting",
 					slog.String("host", h),
 					slog.String("tls", hKV["tls"]),
 					slog.String("err", err.Error()))
@@ -215,6 +223,11 @@ func (rootOpts *rootCmd) newRegClient() *regclient.RegClient {
 	}
 
 	return regclient.New(rcOpts...)
+}
+
+func (opts *versionOpts) runVersion(cmd *cobra.Command, args []string) error {
+	info := version.GetInfo()
+	return template.Writer(cmd.OutOrStdout(), opts.format, info)
 }
 
 func flagChanged(cmd *cobra.Command, name string) bool {

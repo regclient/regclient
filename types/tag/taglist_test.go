@@ -24,8 +24,8 @@ func TestNew(t *testing.T) {
 	}
 	registryRef, _ := ref.New("localhost:5000/regclient/test")
 	registryRepoName := "regclient/test"
-	registryRaw := []byte(fmt.Sprintf(`{"name":"%s","tags":["%s"]}`, registryRepoName,
-		strings.Join(registryTags, `","`)))
+	registryRaw := fmt.Appendf(nil, `{"name":"%s","tags":["%s"]}`, registryRepoName,
+		strings.Join(registryTags, `","`))
 	registryMediaType := "application/json"
 	registryHeaders := http.Header{
 		"Content-Type": {registryMediaType},
@@ -104,11 +104,11 @@ func TestNew(t *testing.T) {
 	gcrTags := []string{"v0.3.0", "sha256-96ef6fb02c5a56901dc3c2e0ca34eec9ed926ab8d936ea30ec38f9ec9db017a5.sig"}
 	gcrRef, _ := ref.New("gcr.io/example/test")
 	gcrRepoName := "example/test"
-	gcrRaw := []byte(fmt.Sprintf(`{"child": ["%s"], "manifest":{%s}, "name":"%s", "tags":["%s"]}`,
+	gcrRaw := fmt.Appendf(nil, `{"child": ["%s"], "manifest":{%s}, "name":"%s", "tags":["%s"]}`,
 		strings.Join(gcrChild, `","`),
 		gcrManifestRaw,
 		gcrRepoName,
-		strings.Join(gcrTags, `","`)))
+		strings.Join(gcrTags, `","`))
 	gcrMediaType := "application/json"
 	gcrHeaders := http.Header{
 		"Content-Type": {gcrMediaType},

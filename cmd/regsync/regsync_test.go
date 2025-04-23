@@ -55,6 +55,16 @@ func TestProcess(t *testing.T) {
 	ts := httptest.NewServer(regHandler)
 	tsURL, _ := url.Parse(ts.URL)
 	tsHost := tsURL.Host
+	regROHandler := olareg.New(oConfig.Config{
+		Storage: oConfig.ConfigStorage{
+			StoreType: oConfig.StoreMem,
+			RootDir:   "../../testdata",
+			ReadOnly:  &boolT,
+		},
+	})
+	tsRO := httptest.NewServer(regROHandler)
+	tsROURL, _ := url.Parse(tsRO.URL)
+	tsROHost := tsROURL.Host
 	t.Cleanup(func() {
 		ts.Close()
 		_ = regHandler.Close()
@@ -63,6 +73,11 @@ func TestProcess(t *testing.T) {
 		{
 			Name:     tsHost,
 			Hostname: tsHost,
+			TLS:      config.TLSDisabled,
+		},
+		{
+			Name:     tsROHost,
+			Hostname: tsROHost,
 			TLS:      config.TLSDisabled,
 		},
 		{
@@ -189,13 +204,14 @@ defaults:
 
 	// run process on each entry
 	tt := []struct {
-		name    string
-		sync    ConfigSync
-		action  actionType
-		expect  map[string]digest.Digest
-		exists  []string
-		missing []string
-		expErr  error
+		name       string
+		sync       ConfigSync
+		action     actionType
+		abortOnErr bool
+		expect     map[string]digest.Digest
+		exists     []string
+		missing    []string
+		expErr     error
 	}{
 		{
 			name: "Action Missing",
@@ -233,6 +249,17 @@ defaults:
 				tsHost + "/test2:v3": d3,
 			},
 			expErr: nil,
+		},
+		{
+			name: "ReadOnly Error Abort",
+			sync: ConfigSync{
+				Source: tsHost + "/testrepo",
+				Target: tsROHost + "/test-readonly",
+				Type:   "repository",
+			},
+			action:     actionCopy,
+			abortOnErr: true,
+			expErr:     errs.ErrHTTPStatus,
 		},
 		{
 			name: "Overwrite",
@@ -698,11 +725,12 @@ defaults:
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			// run each test
-			rootOpts := rootCmd{
-				conf:     conf,
-				rc:       rc,
-				throttle: pq,
-				log:      slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})),
+			rootOpts := rootOpts{
+				conf:       conf,
+				rc:         rc,
+				throttle:   pq,
+				log:        slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})),
+				abortOnErr: tc.abortOnErr,
 			}
 			syncSetDefaults(&tc.sync, conf.Defaults)
 			err = rootOpts.process(ctx, tc.sync, tc.action)
@@ -811,7 +839,7 @@ func TestProcessRef(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			rootOpts := rootCmd{
+			rootOpts := rootOpts{
 				rc: rc,
 				conf: &Config{
 					Sync: []ConfigSync{cs},

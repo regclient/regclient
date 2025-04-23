@@ -3,10 +3,12 @@ package mod
 import (
 	"archive/tar"
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/opencontainers/go-digest"
 
@@ -96,7 +98,7 @@ func dagGet(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, d descri
 		cd, err := mi.GetConfig()
 		if err != nil && !errors.Is(err, errs.ErrUnsupportedMediaType) {
 			return nil, err
-		} else if err == nil && inListStr(cd.MediaType, mtKnownConfig) {
+		} else if err == nil && slices.Contains(mtKnownConfig, cd.MediaType) {
 			oc, err := rc.BlobGetOCIConfig(ctx, rSrc, cd)
 			if err != nil {
 				return nil, err
@@ -202,7 +204,7 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rT
 			if child.mod != deleted {
 				continue
 			}
-			ociI.Manifests = append(ociI.Manifests[:i], ociI.Manifests[i+1:]...)
+			ociI.Manifests = slices.Delete(ociI.Manifests, i, i+1)
 			changed = true
 		}
 		err = manifest.OCIIndexToAny(ociI, &om)
@@ -315,12 +317,12 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rT
 				}
 				continue
 			}
-			ociM.Layers = append(ociM.Layers[:i], ociM.Layers[i+1:]...)
+			ociM.Layers = slices.Delete(ociM.Layers, i, i+1)
 			if oc.RootFS.DiffIDs != nil && len(oc.RootFS.DiffIDs) >= i+1 {
-				oc.RootFS.DiffIDs = append(oc.RootFS.DiffIDs[:i], oc.RootFS.DiffIDs[i+1:]...)
+				oc.RootFS.DiffIDs = slices.Delete(oc.RootFS.DiffIDs, i, i+1)
 			}
 			if iConfig >= 0 {
-				oc.History = append(oc.History[:iConfig], oc.History[iConfig+1:]...)
+				oc.History = slices.Delete(oc.History, iConfig, iConfig+1)
 				iConfig--
 			}
 			changed = true
@@ -435,18 +437,10 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rT
 		rPut := rTgt
 		if !dm.top {
 			mpOpts = append(mpOpts, regclient.WithManifestChild())
-			rPut.Tag = ""
-		}
-		if rPut.Tag == "" {
-			// push by digest
-			if dm.newDesc.Digest != "" {
-				rPut.Digest = dm.newDesc.Digest.String()
-			} else {
-				rPut.Digest = dm.origDesc.Digest.String()
-			}
-		} else {
-			// push by tag
-			rPut.Digest = ""
+			rPut = rPut.SetDigest(cmp.Or(dm.newDesc.Digest.String(), dm.origDesc.Digest.String()))
+		} else if rPut.Tag == "" || rPut.Digest != "" {
+			// update digest, prefer newDesc if set
+			rPut = rPut.AddDigest(cmp.Or(dm.newDesc.Digest.String(), dm.origDesc.Digest.String()))
 		}
 		err = rc.ManifestPut(ctx, rPut, dm.m, mpOpts...)
 		if err != nil {

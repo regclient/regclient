@@ -2,6 +2,7 @@ package referrer
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -359,6 +360,79 @@ func TestDelete(t *testing.T) {
 	}
 	if len(rl.Descriptors) != 0 {
 		t.Errorf("number of descriptors, expected 0, received %d", len(rl.Descriptors))
+	}
+}
+
+func TestFallback(t *testing.T) {
+	t.Parallel()
+	dig256 := digest.SHA256.FromString("test")
+	dig512 := digest.SHA512.FromString("test")
+	digInvalid := "invalid+algorithm:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	fb256 := fmt.Sprintf("%s-%s", dig256.Algorithm(), dig256.Hex())
+	fb512 := fmt.Sprintf("%s-%.64s", dig512.Algorithm(), dig512.Hex())
+	rRef, err := ref.New("registry.example.org/proj")
+	if err != nil {
+		t.Fatalf("failed to set ref: %v", err)
+	}
+	oRef, err := ref.New("ocidir://path/to/proj")
+	if err != nil {
+		t.Fatalf("failed to set ref: %v", err)
+	}
+	tt := []struct {
+		name   string
+		r      ref.Ref
+		err    error
+		expect ref.Ref
+	}{
+		{
+			name:   "reg-sha256",
+			r:      rRef.SetDigest(dig256.String()),
+			expect: rRef.SetTag(fb256),
+		},
+		{
+			name:   "reg-sha512",
+			r:      rRef.SetDigest(dig512.String()),
+			expect: rRef.SetTag(fb512),
+		},
+		{
+			name: "reg-invalid",
+			r:    rRef.SetDigest(digInvalid),
+			err:  digest.ErrDigestUnsupported,
+		},
+		{
+			name:   "ocidir-sha256",
+			r:      oRef.SetDigest(dig256.String()),
+			expect: oRef.SetTag(fb256),
+		},
+		{
+			name:   "ocidir-sha512",
+			r:      oRef.SetDigest(dig512.String()),
+			expect: oRef.SetTag(fb512),
+		},
+		{
+			name: "ocidir-invalid",
+			r:    oRef.SetDigest(digInvalid),
+			err:  digest.ErrDigestUnsupported,
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := FallbackTag(tc.r)
+			if tc.err != nil {
+				if err == nil {
+					t.Errorf("did not return expected error: %v", tc.err)
+				} else if !errors.Is(err, tc.err) {
+					t.Errorf("unexpected error, expected: %v, received: %v", tc.err, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if out.CommonName() != tc.expect.CommonName() {
+				t.Errorf("expected %s, received %s", tc.expect.CommonName(), out.CommonName())
+			}
+		})
 	}
 }
 

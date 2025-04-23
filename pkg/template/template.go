@@ -12,7 +12,7 @@ import (
 )
 
 var tmplFuncs = gotemplate.FuncMap{
-	"default": func(def, orig interface{}) interface{} {
+	"default": func(def, orig any) any {
 		if orig == nil || orig == reflect.Zero(reflect.TypeOf(orig)).Interface() {
 			return def
 		}
@@ -30,14 +30,14 @@ var tmplFuncs = gotemplate.FuncMap{
 		return strings.TrimSpace(string(b))
 	},
 	"join": strings.Join,
-	"json": func(v interface{}) string {
+	"json": func(v any) string {
 		buf := &bytes.Buffer{}
 		enc := json.NewEncoder(buf)
 		enc.SetEscapeHTML(false)
 		_ = enc.Encode(v)
 		return buf.String()
 	},
-	"jsonPretty": func(v interface{}) string {
+	"jsonPretty": func(v any) string {
 		buf := &bytes.Buffer{}
 		enc := json.NewEncoder(buf)
 		enc.SetEscapeHTML(false)
@@ -57,7 +57,7 @@ var tmplFuncs = gotemplate.FuncMap{
 type Opt func(*gotemplate.Template) (*gotemplate.Template, error)
 
 // Writer outputs a template to an io.Writer
-func Writer(out io.Writer, tmpl string, data interface{}, opts ...Opt) error {
+func Writer(out io.Writer, tmpl string, data any, opts ...Opt) error {
 	var err error
 	t := gotemplate.New("out").Funcs(tmplFuncs)
 	for _, opt := range opts {
@@ -74,7 +74,7 @@ func Writer(out io.Writer, tmpl string, data interface{}, opts ...Opt) error {
 }
 
 // String converts a template to a string
-func String(tmpl string, data interface{}, opts ...Opt) (string, error) {
+func String(tmpl string, data any, opts ...Opt) (string, error) {
 	var sb strings.Builder
 	err := Writer(&sb, tmpl, data)
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -29,7 +30,7 @@ func WithBuildArgRm(arg string, value *regexp.Regexp) Opts {
 			for i := len(oc.History) - 1; i >= 0; i-- {
 				if argexp.MatchString(oc.History[i].CreatedBy) && oc.History[i].EmptyLayer {
 					// delete empty build arg history entry
-					oc.History = append(oc.History[:i], oc.History[i+1:]...)
+					oc.History = slices.Delete(oc.History, i, i+1)
 					changed = true
 				} else if match := runexp.FindStringSubmatch(oc.History[i].CreatedBy); len(match) == 4 {
 					// delete arg from run steps
@@ -61,7 +62,7 @@ func WithConfigCmd(cmd []string) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
 			oc := doc.oc.GetConfig()
-			if eqStrSlice(cmd, oc.Config.Cmd) {
+			if slices.Equal(cmd, oc.Config.Cmd) {
 				return nil
 			}
 			oc.Config.Cmd = cmd
@@ -112,7 +113,7 @@ func WithConfigEntrypoint(entrypoint []string) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
 			oc := doc.oc.GetConfig()
-			if eqStrSlice(entrypoint, oc.Config.Entrypoint) {
+			if slices.Equal(entrypoint, oc.Config.Entrypoint) {
 				return nil
 			}
 			oc.Config.Entrypoint = entrypoint
@@ -320,11 +321,7 @@ func WithEnv(name, value string) Opts {
 				found = true
 				if value == "" {
 					// delete an entry
-					if i < len(oc.Config.Env)-1 {
-						oc.Config.Env = append(oc.Config.Env[:i], oc.Config.Env[i+1:]...)
-					} else {
-						oc.Config.Env = oc.Config.Env[:i]
-					}
+					oc.Config.Env = slices.Delete(oc.Config.Env, i, i+1)
 					changed = true
 				} else if len(kvSplit) < 2 || value != kvSplit[1] {
 					// change an entry

@@ -29,7 +29,7 @@ More details at <https://github.com/regclient/regclient>`
 	UserAgent = "regclient/regbot"
 )
 
-type rootCmd struct {
+type rootOpts struct {
 	confFile  string
 	dryRun    bool
 	verbosity string
@@ -41,106 +41,111 @@ type rootCmd struct {
 	throttle  *pqueue.Queue[struct{}]
 }
 
-func NewRootCmd() (*cobra.Command, *rootCmd) {
-	rootOpts := rootCmd{
+func NewRootCmd() (*cobra.Command, *rootOpts) {
+	opts := rootOpts{
 		log: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})),
 	}
-	var rootTopCmd = &cobra.Command{
-		Use:           "regbot <cmd>",
-		Short:         "Utility for automating repository actions",
-		Long:          usageDesc,
-		SilenceUsage:  true,
-		SilenceErrors: true,
+	cmd := &cobra.Command{
+		Use:               "regbot <cmd>",
+		Short:             "Utility for automating repository actions",
+		Long:              usageDesc,
+		SilenceUsage:      true,
+		SilenceErrors:     true,
+		PersistentPreRunE: opts.rootPreRun,
 	}
-	var serverCmd = &cobra.Command{
+	serverCmd := &cobra.Command{
 		Use:   "server",
 		Short: "run the regbot server",
 		Long:  `Runs the various scripts according to their schedule.`,
 		Args:  cobra.RangeArgs(0, 0),
-		RunE:  rootOpts.runServer,
+		RunE:  opts.runServer,
 	}
-	var onceCmd = &cobra.Command{
+	onceCmd := &cobra.Command{
 		Use:   "once",
 		Short: "runs each script once",
 		Long: `Each script is executed once ignoring any scheduling. The command
 returns after the last script completes.`,
 		Args: cobra.RangeArgs(0, 0),
-		RunE: rootOpts.runOnce,
+		RunE: opts.runOnce,
 	}
-
-	var versionCmd = &cobra.Command{
+	versionCmd := &cobra.Command{
 		Use:   "version",
 		Short: "Show the version",
 		Long:  `Show the version`,
 		Args:  cobra.RangeArgs(0, 0),
-		RunE:  rootOpts.runVersion,
+		RunE:  opts.runVersion,
 	}
 
-	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.confFile, "config", "c", "", "Config file")
-	rootTopCmd.PersistentFlags().BoolVarP(&rootOpts.dryRun, "dry-run", "", false, "Dry Run, skip all external actions")
-	rootTopCmd.PersistentFlags().StringVarP(&rootOpts.verbosity, "verbosity", "v", slog.LevelInfo.String(), "Log level (trace, debug, info, warn, error)")
-	rootTopCmd.PersistentFlags().StringArrayVar(&rootOpts.logopts, "logopt", []string{}, "Log options")
-	versionCmd.Flags().StringVarP(&rootOpts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+	cmd.PersistentFlags().StringArrayVar(&opts.logopts, "logopt", []string{}, "Log options")
+	cmd.PersistentFlags().StringVarP(&opts.verbosity, "verbosity", "v", slog.LevelInfo.String(), "Log level (trace, debug, info, warn, error)")
 
-	_ = rootTopCmd.MarkPersistentFlagFilename("config")
-	_ = serverCmd.MarkPersistentFlagRequired("config")
-	_ = onceCmd.MarkPersistentFlagRequired("config")
+	for _, curCmd := range []*cobra.Command{serverCmd, onceCmd} {
+		curCmd.Flags().StringVarP(&opts.confFile, "config", "c", "", "Config file")
+		_ = curCmd.MarkFlagFilename("config")
+		_ = curCmd.MarkFlagRequired("config")
+		curCmd.Flags().BoolVarP(&opts.dryRun, "dry-run", "", false, "Dry Run, skip all external actions")
+	}
 
-	rootTopCmd.AddCommand(serverCmd)
-	rootTopCmd.AddCommand(onceCmd)
-	rootTopCmd.AddCommand(versionCmd)
-	rootTopCmd.AddCommand(cobradoc.NewCmd(rootTopCmd.Name(), "cli-doc"))
+	versionCmd.Flags().StringVarP(&opts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+	_ = versionCmd.RegisterFlagCompletionFunc("format", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	})
 
-	rootTopCmd.PersistentPreRunE = rootOpts.rootPreRun
-	return rootTopCmd, &rootOpts
+	cmd.AddCommand(
+		serverCmd,
+		onceCmd,
+		versionCmd,
+		cobradoc.NewCmd(cmd.Name(), "cli-doc"),
+	)
+
+	return cmd, &opts
 }
 
-func (rootOpts *rootCmd) rootPreRun(cmd *cobra.Command, args []string) error {
+func (opts *rootOpts) rootPreRun(cmd *cobra.Command, args []string) error {
 	var lvl slog.Level
-	err := lvl.UnmarshalText([]byte(rootOpts.verbosity))
+	err := lvl.UnmarshalText([]byte(opts.verbosity))
 	if err != nil {
 		// handle custom levels
-		if rootOpts.verbosity == strings.ToLower("trace") {
+		if opts.verbosity == strings.ToLower("trace") {
 			lvl = types.LevelTrace
 		} else {
-			return fmt.Errorf("unable to parse verbosity %s: %v", rootOpts.verbosity, err)
+			return fmt.Errorf("unable to parse verbosity %s: %v", opts.verbosity, err)
 		}
 	}
 	formatJSON := false
-	for _, opt := range rootOpts.logopts {
+	for _, opt := range opts.logopts {
 		if opt == "json" {
 			formatJSON = true
 		}
 	}
 	if formatJSON {
-		rootOpts.log = slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: lvl}))
+		opts.log = slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: lvl}))
 	} else {
-		rootOpts.log = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: lvl}))
+		opts.log = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: lvl}))
 	}
 	return nil
 }
 
-func (rootOpts *rootCmd) runVersion(cmd *cobra.Command, args []string) error {
+func (opts *rootOpts) runVersion(cmd *cobra.Command, args []string) error {
 	info := version.GetInfo()
-	return template.Writer(os.Stdout, rootOpts.format, info)
+	return template.Writer(os.Stdout, opts.format, info)
 }
 
 // runOnce processes the file in one pass, ignoring cron
-func (rootOpts *rootCmd) runOnce(cmd *cobra.Command, args []string) error {
-	err := rootOpts.loadConf()
+func (opts *rootOpts) runOnce(cmd *cobra.Command, args []string) error {
+	err := opts.loadConf()
 	if err != nil {
 		return err
 	}
 	ctx := cmd.Context()
 	var wg sync.WaitGroup
 	var mainErr error
-	for _, s := range rootOpts.conf.Scripts {
-		s := s
-		if rootOpts.conf.Defaults.Parallel > 0 {
+	for _, s := range opts.conf.Scripts {
+		if opts.conf.Defaults.Parallel > 0 {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				err := rootOpts.process(ctx, s)
+				err := opts.process(ctx, s)
 				if err != nil {
 					if mainErr == nil {
 						mainErr = err
@@ -149,7 +154,7 @@ func (rootOpts *rootCmd) runOnce(cmd *cobra.Command, args []string) error {
 				}
 			}()
 		} else {
-			err := rootOpts.process(ctx, s)
+			err := opts.process(ctx, s)
 			if err != nil {
 				if mainErr == nil {
 					mainErr = err
@@ -162,8 +167,8 @@ func (rootOpts *rootCmd) runOnce(cmd *cobra.Command, args []string) error {
 }
 
 // runServer stays running with cron scheduled tasks
-func (rootOpts *rootCmd) runServer(cmd *cobra.Command, args []string) error {
-	err := rootOpts.loadConf()
+func (opts *rootOpts) runServer(cmd *cobra.Command, args []string) error {
+	err := opts.loadConf()
 	if err != nil {
 		return err
 	}
@@ -173,28 +178,27 @@ func (rootOpts *rootCmd) runServer(cmd *cobra.Command, args []string) error {
 	c := cron.New(cron.WithChain(
 		cron.SkipIfStillRunning(cron.DefaultLogger),
 	))
-	for _, s := range rootOpts.conf.Scripts {
-		s := s
+	for _, s := range opts.conf.Scripts {
 		sched := s.Schedule
 		if sched == "" && s.Interval != 0 {
 			sched = "@every " + s.Interval.String()
 		}
 		if sched != "" {
-			rootOpts.log.Debug("Scheduled task",
+			opts.log.Debug("Scheduled task",
 				slog.String("name", s.Name),
 				slog.String("sched", sched))
 			_, errCron := c.AddFunc(sched, func() {
-				rootOpts.log.Debug("Running task",
+				opts.log.Debug("Running task",
 					slog.String("name", s.Name))
 				wg.Add(1)
 				defer wg.Done()
-				err := rootOpts.process(ctx, s)
+				err := opts.process(ctx, s)
 				if mainErr == nil {
 					mainErr = err
 				}
 			})
 			if errCron != nil {
-				rootOpts.log.Error("Failed to schedule cron",
+				opts.log.Error("Failed to schedule cron",
 					slog.String("name", s.Name),
 					slog.String("sched", sched),
 					slog.String("err", errCron.Error()))
@@ -203,7 +207,7 @@ func (rootOpts *rootCmd) runServer(cmd *cobra.Command, args []string) error {
 				}
 			}
 		} else {
-			rootOpts.log.Error("No schedule or interval found, ignoring",
+			opts.log.Error("No schedule or interval found, ignoring",
 				slog.String("name", s.Name))
 		}
 	}
@@ -213,28 +217,28 @@ func (rootOpts *rootCmd) runServer(cmd *cobra.Command, args []string) error {
 	if done != nil {
 		<-done
 	}
-	rootOpts.log.Info("Stopping server")
+	opts.log.Info("Stopping server")
 	// clean shutdown
 	c.Stop()
-	rootOpts.log.Debug("Waiting on running tasks")
+	opts.log.Debug("Waiting on running tasks")
 	wg.Wait()
 	return mainErr
 }
 
-func (rootOpts *rootCmd) loadConf() error {
+func (opts *rootOpts) loadConf() error {
 	var err error
-	if rootOpts.confFile == "-" {
-		rootOpts.conf, err = ConfigLoadReader(os.Stdin)
+	if opts.confFile == "-" {
+		opts.conf, err = ConfigLoadReader(os.Stdin)
 		if err != nil {
 			return err
 		}
-	} else if rootOpts.confFile != "" {
-		r, err := os.Open(rootOpts.confFile)
+	} else if opts.confFile != "" {
+		r, err := os.Open(opts.confFile)
 		if err != nil {
 			return err
 		}
 		defer r.Close()
-		rootOpts.conf, err = ConfigLoadReader(r)
+		opts.conf, err = ConfigLoadReader(r)
 		if err != nil {
 			return err
 		}
@@ -242,25 +246,25 @@ func (rootOpts *rootCmd) loadConf() error {
 		return ErrMissingInput
 	}
 	// use a throttle to control parallelism
-	concurrent := rootOpts.conf.Defaults.Parallel
+	concurrent := opts.conf.Defaults.Parallel
 	if concurrent <= 0 {
 		concurrent = 1
 	}
-	rootOpts.log.Debug("Configuring parallel settings",
+	opts.log.Debug("Configuring parallel settings",
 		slog.Int("concurrent", concurrent))
-	rootOpts.throttle = pqueue.New(pqueue.Opts[struct{}]{Max: concurrent})
+	opts.throttle = pqueue.New(pqueue.Opts[struct{}]{Max: concurrent})
 	// set the regclient, loading docker creds unless disabled, and inject logins from config file
 	rcOpts := []regclient.Opt{
-		regclient.WithSlog(rootOpts.log),
+		regclient.WithSlog(opts.log),
 	}
-	if rootOpts.conf.Defaults.BlobLimit != 0 {
-		rcOpts = append(rcOpts, regclient.WithRegOpts(reg.WithBlobLimit(rootOpts.conf.Defaults.BlobLimit)))
+	if opts.conf.Defaults.BlobLimit != 0 {
+		rcOpts = append(rcOpts, regclient.WithRegOpts(reg.WithBlobLimit(opts.conf.Defaults.BlobLimit)))
 	}
-	if !rootOpts.conf.Defaults.SkipDockerConf {
+	if !opts.conf.Defaults.SkipDockerConf {
 		rcOpts = append(rcOpts, regclient.WithDockerCreds(), regclient.WithDockerCerts())
 	}
-	if rootOpts.conf.Defaults.UserAgent != "" {
-		rcOpts = append(rcOpts, regclient.WithUserAgent(rootOpts.conf.Defaults.UserAgent))
+	if opts.conf.Defaults.UserAgent != "" {
+		rcOpts = append(rcOpts, regclient.WithUserAgent(opts.conf.Defaults.UserAgent))
 	} else {
 		info := version.GetInfo()
 		if info.VCSTag != "" {
@@ -270,9 +274,9 @@ func (rootOpts *rootCmd) loadConf() error {
 		}
 	}
 	rcHosts := []config.Host{}
-	for _, host := range rootOpts.conf.Creds {
+	for _, host := range opts.conf.Creds {
 		if host.Scheme != "" {
-			rootOpts.log.Warn("Scheme is deprecated, for http set TLS to disabled",
+			opts.log.Warn("Scheme is deprecated, for http set TLS to disabled",
 				slog.String("name", host.Name))
 		}
 		rcHosts = append(rcHosts, host)
@@ -280,13 +284,13 @@ func (rootOpts *rootCmd) loadConf() error {
 	if len(rcHosts) > 0 {
 		rcOpts = append(rcOpts, regclient.WithConfigHost(rcHosts...))
 	}
-	rootOpts.rc = regclient.New(rcOpts...)
+	opts.rc = regclient.New(rcOpts...)
 	return nil
 }
 
 // process a sync step
-func (rootOpts *rootCmd) process(ctx context.Context, s ConfigScript) error {
-	rootOpts.log.Debug("Starting script",
+func (opts *rootOpts) process(ctx context.Context, s ConfigScript) error {
+	opts.log.Debug("Starting script",
 		slog.String("script", s.Name))
 	// add a timeout to the context
 	if s.Timeout > 0 {
@@ -296,23 +300,23 @@ func (rootOpts *rootCmd) process(ctx context.Context, s ConfigScript) error {
 	}
 	sbOpts := []sandbox.Opt{
 		sandbox.WithContext(ctx),
-		sandbox.WithRegClient(rootOpts.rc),
-		sandbox.WithSlog(rootOpts.log),
-		sandbox.WithThrottle(rootOpts.throttle),
+		sandbox.WithRegClient(opts.rc),
+		sandbox.WithSlog(opts.log),
+		sandbox.WithThrottle(opts.throttle),
 	}
-	if rootOpts.dryRun {
+	if opts.dryRun {
 		sbOpts = append(sbOpts, sandbox.WithDryRun())
 	}
 	sb := sandbox.New(s.Name, sbOpts...)
 	defer sb.Close()
 	err := sb.RunScript(s.Script)
 	if err != nil {
-		rootOpts.log.Warn("Error running script",
+		opts.log.Warn("Error running script",
 			slog.String("script", s.Name),
 			slog.String("error", err.Error()))
-		return ErrScriptFailed
+		return fmt.Errorf("%w%.0w", err, ErrScriptFailed)
 	}
-	rootOpts.log.Debug("Finished script",
+	opts.log.Debug("Finished script",
 		slog.String("script", s.Name))
 	return nil
 }

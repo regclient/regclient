@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/opencontainers/go-digest"
@@ -26,8 +27,8 @@ var indexKnownTypes = []string{
 	mediatype.Docker2ManifestList,
 }
 
-type indexCmd struct {
-	rootOpts        *rootCmd
+type indexOpts struct {
+	rootOpts        *rootOpts
 	annotations     []string
 	artifactType    string
 	byDigest        bool
@@ -43,16 +44,22 @@ type indexCmd struct {
 	subject         string
 }
 
-func NewIndexCmd(rootOpts *rootCmd) *cobra.Command {
-	indexOpts := indexCmd{
-		rootOpts: rootOpts,
-	}
-	var indexTopCmd = &cobra.Command{
+func NewIndexCmd(rOpts *rootOpts) *cobra.Command {
+	var indexCmd = &cobra.Command{
 		Use:   "index <cmd>",
 		Short: "manage manifest lists and OCI index",
 	}
+	indexCmd.AddCommand(newIndexAddCmd(rOpts))
+	indexCmd.AddCommand(newIndexCreateCmd(rOpts))
+	indexCmd.AddCommand(newIndexDeleteCmd(rOpts))
+	return indexCmd
+}
 
-	var indexAddCmd = &cobra.Command{
+func newIndexAddCmd(rOpts *rootOpts) *cobra.Command {
+	opts := indexOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:     "add <image_ref>",
 		Aliases: []string{"append", "insert"},
 		Short:   "add an index entry",
@@ -62,12 +69,26 @@ func NewIndexCmd(rootOpts *rootCmd) *cobra.Command {
 regctl index add registry.example.org/repo:v1 --ref registry.example.org/repo:arm64`,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{}, // do not auto complete digests
-		RunE:      indexOpts.runIndexAdd,
+		RunE:      opts.runIndexAdd,
 	}
+	cmd.Flags().StringArrayVar(&opts.descAnnotations, "desc-annotation", []string{}, "Annotation to add to descriptors of new entries")
+	cmd.Flags().StringVar(&opts.descPlatform, "desc-platform", "", "Platform to set in descriptors of new entries")
+	cmd.Flags().StringArrayVar(&opts.digests, "digest", []string{}, "Digest to add")
+	cmd.Flags().BoolVar(&opts.incDigestTags, "digest-tags", false, "Include digest tags")
+	cmd.Flags().BoolVar(&opts.incReferrers, "referrers", false, "Include referrers")
+	cmd.Flags().StringArrayVar(&opts.refs, "ref", []string{}, "References to add")
+	cmd.Flags().StringArrayVar(&opts.platforms, "platform", []string{}, "Platforms to include from ref")
+	_ = cmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
+	return cmd
+}
 
-	var indexCreateCmd = &cobra.Command{
+func newIndexCreateCmd(rOpts *rootOpts) *cobra.Command {
+	opts := indexOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:     "create <image_ref>",
-		Aliases: []string{"init", "new"},
+		Aliases: []string{"init", "new", "put"},
 		Short:   "create an index",
 		Long:    `Create a manifest list or OCI Index.`,
 		Example: `
@@ -90,10 +111,34 @@ regctl index create registry.example.org/library/golang:windows \
 	--platform windows/amd64,osver=10.0.17763.5458`,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{}, // do not auto complete digests
-		RunE:      indexOpts.runIndexCreate,
+		RunE:      opts.runIndexCreate,
 	}
+	cmd.Flags().StringArrayVar(&opts.annotations, "annotation", []string{}, "Annotation to set on manifest")
+	cmd.Flags().StringVar(&opts.artifactType, "artifact-type", "", "Include an artifactType value")
+	cmd.Flags().BoolVar(&opts.byDigest, "by-digest", false, "Push manifest by digest instead of tag")
+	cmd.Flags().StringArrayVar(&opts.descAnnotations, "desc-annotation", []string{}, "Annotation to add to descriptors of new entries")
+	cmd.Flags().StringVar(&opts.descPlatform, "desc-platform", "", "Platform to set in descriptors of new entries")
+	cmd.Flags().StringArrayVar(&opts.digests, "digest", []string{}, "Digest to include in new index")
+	cmd.Flags().BoolVar(&opts.incDigestTags, "digest-tags", false, "Include digest tags")
+	cmd.Flags().StringVar(&opts.format, "format", "", "Format output with go template syntax")
+	_ = cmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	cmd.Flags().StringVarP(&opts.mediaType, "media-type", "m", mediatype.OCI1ManifestList, "Media-type for manifest list or OCI Index")
+	_ = cmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return indexKnownTypes, cobra.ShellCompDirectiveNoFileComp
+	})
+	cmd.Flags().StringArrayVar(&opts.platforms, "platform", []string{}, "Platforms to include from ref")
+	_ = cmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
+	cmd.Flags().StringArrayVar(&opts.refs, "ref", []string{}, "References to include in new index")
+	cmd.Flags().BoolVar(&opts.incReferrers, "referrers", false, "Include referrers")
+	cmd.Flags().StringVar(&opts.subject, "subject", "", "Specify a subject tag or digest (this manifest must already exist in the repo)")
+	return cmd
+}
 
-	var indexDeleteCmd = &cobra.Command{
+func newIndexDeleteCmd(rOpts *rootOpts) *cobra.Command {
+	opts := indexOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:     "delete <image_ref>",
 		Aliases: []string{"del", "rm", "remove"},
 		Short:   "delete an index entry",
@@ -105,47 +150,15 @@ regctl index delete registry.example.org/repo:v1 \
   --platform linux/ppc64le --platform linux/mips64le`,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{}, // do not auto complete digests
-		RunE:      indexOpts.runIndexDelete,
+		RunE:      opts.runIndexDelete,
 	}
-
-	indexAddCmd.Flags().StringArrayVar(&indexOpts.descAnnotations, "desc-annotation", []string{}, "Annotation to add to descriptors of new entries")
-	indexAddCmd.Flags().StringVar(&indexOpts.descPlatform, "desc-platform", "", "Platform to set in descriptors of new entries")
-	indexAddCmd.Flags().StringArrayVar(&indexOpts.digests, "digest", []string{}, "Digest to add")
-	indexAddCmd.Flags().BoolVar(&indexOpts.incDigestTags, "digest-tags", false, "Include digest tags")
-	indexAddCmd.Flags().BoolVar(&indexOpts.incReferrers, "referrers", false, "Include referrers")
-	indexAddCmd.Flags().StringArrayVar(&indexOpts.refs, "ref", []string{}, "References to add")
-	indexAddCmd.Flags().StringArrayVar(&indexOpts.platforms, "platform", []string{}, "Platforms to include from ref")
-	_ = indexAddCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
-
-	indexCreateCmd.Flags().StringArrayVar(&indexOpts.annotations, "annotation", []string{}, "Annotation to set on manifest")
-	indexCreateCmd.Flags().StringVar(&indexOpts.artifactType, "artifact-type", "", "Include an artifactType value")
-	indexCreateCmd.Flags().BoolVar(&indexOpts.byDigest, "by-digest", false, "Push manifest by digest instead of tag")
-	indexCreateCmd.Flags().StringArrayVar(&indexOpts.descAnnotations, "desc-annotation", []string{}, "Annotation to add to descriptors of new entries")
-	indexCreateCmd.Flags().StringVar(&indexOpts.descPlatform, "desc-platform", "", "Platform to set in descriptors of new entries")
-	indexCreateCmd.Flags().StringArrayVar(&indexOpts.digests, "digest", []string{}, "Digest to include in new index")
-	indexCreateCmd.Flags().StringVar(&indexOpts.format, "format", "", "Format output with go template syntax")
-	indexCreateCmd.Flags().BoolVar(&indexOpts.incDigestTags, "digest-tags", false, "Include digest tags")
-	indexCreateCmd.Flags().BoolVar(&indexOpts.incReferrers, "referrers", false, "Include referrers")
-	indexCreateCmd.Flags().StringVarP(&indexOpts.mediaType, "media-type", "m", mediatype.OCI1ManifestList, "Media-type for manifest list or OCI Index")
-	_ = indexCreateCmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return indexKnownTypes, cobra.ShellCompDirectiveNoFileComp
-	})
-	indexCreateCmd.Flags().StringVar(&indexOpts.subject, "subject", "", "Specify a subject tag or digest (this manifest must already exist in the repo)")
-	indexCreateCmd.Flags().StringArrayVar(&indexOpts.refs, "ref", []string{}, "References to include in new index")
-	indexCreateCmd.Flags().StringArrayVar(&indexOpts.platforms, "platform", []string{}, "Platforms to include from ref")
-	_ = indexCreateCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
-
-	indexDeleteCmd.Flags().StringArrayVar(&indexOpts.digests, "digest", []string{}, "Digest to delete")
-	indexDeleteCmd.Flags().StringArrayVar(&indexOpts.platforms, "platform", []string{}, "Platform to delete")
-	_ = indexDeleteCmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
-
-	indexTopCmd.AddCommand(indexAddCmd)
-	indexTopCmd.AddCommand(indexCreateCmd)
-	indexTopCmd.AddCommand(indexDeleteCmd)
-	return indexTopCmd
+	cmd.Flags().StringArrayVar(&opts.digests, "digest", []string{}, "Digest to delete")
+	cmd.Flags().StringArrayVar(&opts.platforms, "platform", []string{}, "Platform to delete")
+	_ = cmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
+	return cmd
 }
 
-func (indexOpts *indexCmd) runIndexAdd(cmd *cobra.Command, args []string) error {
+func (opts *indexOpts) runIndexAdd(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	// dedup warnings
 	if w := warning.FromContext(ctx); w == nil {
@@ -159,7 +172,7 @@ func (indexOpts *indexCmd) runIndexAdd(cmd *cobra.Command, args []string) error 
 	}
 
 	// setup regclient
-	rc := indexOpts.rootOpts.newRegClient()
+	rc := opts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
 	// pull existing index
@@ -177,7 +190,7 @@ func (indexOpts *indexCmd) runIndexAdd(cmd *cobra.Command, args []string) error 
 	}
 
 	// generate a list of descriptors from CLI args
-	descList, err := indexOpts.indexBuildDescList(ctx, rc, r)
+	descList, err := opts.indexBuildDescList(ctx, rc, r)
 	if err != nil {
 		return err
 	}
@@ -191,8 +204,8 @@ func (indexOpts *indexCmd) runIndexAdd(cmd *cobra.Command, args []string) error 
 	}
 
 	// push the index
-	if r.Tag == "" && r.Digest != "" {
-		r.Digest = m.GetDescriptor().Digest.String()
+	if r.Digest != "" {
+		r = r.AddDigest(m.GetDescriptor().Digest.String())
 	}
 	err = rc.ManifestPut(ctx, r, m)
 	if err != nil {
@@ -205,13 +218,13 @@ func (indexOpts *indexCmd) runIndexAdd(cmd *cobra.Command, args []string) error 
 	}{
 		Manifest: m,
 	}
-	if r.Tag == "" && r.Digest != "" && indexOpts.format == "" {
-		indexOpts.format = "{{ printf \"%s\\n\" .Manifest.GetDescriptor.Digest }}"
+	if r.Tag == "" && r.Digest != "" && opts.format == "" {
+		opts.format = "{{ printf \"%s\\n\" .Manifest.GetDescriptor.Digest }}"
 	}
-	return template.Writer(cmd.OutOrStdout(), indexOpts.format, result)
+	return template.Writer(cmd.OutOrStdout(), opts.format, result)
 }
 
-func (indexOpts *indexCmd) runIndexCreate(cmd *cobra.Command, args []string) error {
+func (opts *indexOpts) runIndexCreate(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	// dedup warnings
 	if w := warning.FromContext(ctx); w == nil {
@@ -219,8 +232,8 @@ func (indexOpts *indexCmd) runIndexCreate(cmd *cobra.Command, args []string) err
 	}
 
 	// validate media type
-	if indexOpts.mediaType != mediatype.OCI1ManifestList && indexOpts.mediaType != mediatype.Docker2ManifestList {
-		return fmt.Errorf("unsupported manifest media type: %s%.0w", indexOpts.mediaType, errs.ErrUnsupportedMediaType)
+	if opts.mediaType != mediatype.OCI1ManifestList && opts.mediaType != mediatype.Docker2ManifestList {
+		return fmt.Errorf("unsupported manifest media type: %s%.0w", opts.mediaType, errs.ErrUnsupportedMediaType)
 	}
 
 	// parse ref
@@ -230,12 +243,12 @@ func (indexOpts *indexCmd) runIndexCreate(cmd *cobra.Command, args []string) err
 	}
 
 	// setup regclient
-	rc := indexOpts.rootOpts.newRegClient()
+	rc := opts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
 	// parse annotations
 	annotations := map[string]string{}
-	for _, a := range indexOpts.annotations {
+	for _, a := range opts.annotations {
 		aSplit := strings.SplitN(a, "=", 2)
 		if len(aSplit) == 1 {
 			annotations[aSplit[0]] = ""
@@ -245,20 +258,20 @@ func (indexOpts *indexCmd) runIndexCreate(cmd *cobra.Command, args []string) err
 	}
 
 	// generate a list of descriptors from CLI args
-	descList, err := indexOpts.indexBuildDescList(ctx, rc, r)
+	descList, err := opts.indexBuildDescList(ctx, rc, r)
 	if err != nil {
 		return err
 	}
 	descList = indexDescListRmDup(descList)
 
 	var subj *descriptor.Descriptor
-	if indexOpts.subject != "" && indexOpts.mediaType == mediatype.OCI1ManifestList {
+	if opts.subject != "" && opts.mediaType == mediatype.OCI1ManifestList {
 		var rSubj ref.Ref
-		dig, err := digest.Parse(indexOpts.subject)
+		dig, err := digest.Parse(opts.subject)
 		if err == nil {
 			rSubj = r.SetDigest(dig.String())
 		} else {
-			rSubj = r.SetTag(indexOpts.subject)
+			rSubj = r.SetTag(opts.subject)
 		}
 		mSubj, err := rc.ManifestHead(ctx, rSubj, regclient.WithManifestRequireDigest())
 		if err != nil {
@@ -271,12 +284,12 @@ func (indexOpts *indexCmd) runIndexCreate(cmd *cobra.Command, args []string) err
 
 	// build the index
 	mOpts := []manifest.Opts{}
-	switch indexOpts.mediaType {
+	switch opts.mediaType {
 	case mediatype.OCI1ManifestList:
 		m := v1.Index{
 			Versioned:    v1.IndexSchemaVersion,
 			MediaType:    mediatype.OCI1ManifestList,
-			ArtifactType: indexOpts.artifactType,
+			ArtifactType: opts.artifactType,
 			Manifests:    descList,
 			Subject:      subj,
 		}
@@ -300,9 +313,8 @@ func (indexOpts *indexCmd) runIndexCreate(cmd *cobra.Command, args []string) err
 	}
 
 	// push the index
-	if indexOpts.byDigest {
-		r.Tag = ""
-		r.Digest = mm.GetDescriptor().Digest.String()
+	if opts.byDigest {
+		r = r.SetDigest(mm.GetDescriptor().Digest.String())
 	}
 	err = rc.ManifestPut(ctx, r, mm)
 	if err != nil {
@@ -315,13 +327,13 @@ func (indexOpts *indexCmd) runIndexCreate(cmd *cobra.Command, args []string) err
 	}{
 		Manifest: mm,
 	}
-	if indexOpts.byDigest && indexOpts.format == "" {
-		indexOpts.format = "{{ printf \"%s\\n\" .Manifest.GetDescriptor.Digest }}"
+	if opts.byDigest && opts.format == "" {
+		opts.format = "{{ printf \"%s\\n\" .Manifest.GetDescriptor.Digest }}"
 	}
-	return template.Writer(cmd.OutOrStdout(), indexOpts.format, result)
+	return template.Writer(cmd.OutOrStdout(), opts.format, result)
 }
 
-func (indexOpts *indexCmd) runIndexDelete(cmd *cobra.Command, args []string) error {
+func (opts *indexOpts) runIndexDelete(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	// dedup warnings
 	if w := warning.FromContext(ctx); w == nil {
@@ -335,7 +347,7 @@ func (indexOpts *indexCmd) runIndexDelete(cmd *cobra.Command, args []string) err
 	}
 
 	// setup regclient
-	rc := indexOpts.rootOpts.newRegClient()
+	rc := opts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
 	// pull existing index
@@ -353,20 +365,16 @@ func (indexOpts *indexCmd) runIndexDelete(cmd *cobra.Command, args []string) err
 	}
 
 	// for each CLI arg, find and delete matching entries
-	for _, dig := range indexOpts.digests {
+	for _, dig := range opts.digests {
 		i := len(curDesc) - 1
 		for i >= 0 {
 			if curDesc[i].Digest.String() == dig {
-				if i < len(curDesc)-1 {
-					curDesc = append(curDesc[:i], curDesc[i+1:]...)
-				} else {
-					curDesc = curDesc[:i]
-				}
+				curDesc = slices.Delete(curDesc, i, i+1)
 			}
 			i--
 		}
 	}
-	for _, platStr := range indexOpts.platforms {
+	for _, platStr := range opts.platforms {
 		plat, err := platform.Parse(platStr)
 		if err != nil {
 			return err
@@ -374,11 +382,7 @@ func (indexOpts *indexCmd) runIndexDelete(cmd *cobra.Command, args []string) err
 		i := len(curDesc) - 1
 		for i >= 0 {
 			if curDesc[i].Platform != nil && platform.Match(plat, *curDesc[i].Platform) {
-				if i < len(curDesc)-1 {
-					curDesc = append(curDesc[:i], curDesc[i+1:]...)
-				} else {
-					curDesc = curDesc[:i]
-				}
+				curDesc = slices.Delete(curDesc, i, i+1)
 			}
 			i--
 		}
@@ -391,8 +395,8 @@ func (indexOpts *indexCmd) runIndexDelete(cmd *cobra.Command, args []string) err
 	}
 
 	// push the index
-	if r.Tag == "" && r.Digest != "" {
-		r.Digest = m.GetDescriptor().Digest.String()
+	if r.Digest != "" {
+		r = r.AddDigest(m.GetDescriptor().Digest.String())
 	}
 	err = rc.ManifestPut(ctx, r, m)
 	if err != nil {
@@ -405,25 +409,25 @@ func (indexOpts *indexCmd) runIndexDelete(cmd *cobra.Command, args []string) err
 	}{
 		Manifest: m,
 	}
-	if r.Tag == "" && r.Digest != "" && indexOpts.format == "" {
-		indexOpts.format = "{{ printf \"%s\\n\" .Manifest.GetDescriptor.Digest }}"
+	if r.Tag == "" && r.Digest != "" && opts.format == "" {
+		opts.format = "{{ printf \"%s\\n\" .Manifest.GetDescriptor.Digest }}"
 	}
-	return template.Writer(cmd.OutOrStdout(), indexOpts.format, result)
+	return template.Writer(cmd.OutOrStdout(), opts.format, result)
 }
 
-func (indexOpts *indexCmd) indexBuildDescList(ctx context.Context, rc *regclient.RegClient, r ref.Ref) ([]descriptor.Descriptor, error) {
+func (opts *indexOpts) indexBuildDescList(ctx context.Context, rc *regclient.RegClient, r ref.Ref) ([]descriptor.Descriptor, error) {
 	imgCopyOpts := []regclient.ImageOpts{
 		regclient.ImageWithChild(),
 	}
-	if indexOpts.incDigestTags {
+	if opts.incDigestTags {
 		imgCopyOpts = append(imgCopyOpts, regclient.ImageWithDigestTags())
 	}
-	if indexOpts.incReferrers {
+	if opts.incReferrers {
 		imgCopyOpts = append(imgCopyOpts, regclient.ImageWithReferrers())
 	}
 
 	descAnnotations := map[string]string{}
-	for _, a := range indexOpts.descAnnotations {
+	for _, a := range opts.descAnnotations {
 		aSplit := strings.SplitN(a, "=", 2)
 		if len(aSplit) == 1 {
 			descAnnotations[aSplit[0]] = ""
@@ -432,7 +436,7 @@ func (indexOpts *indexCmd) indexBuildDescList(ctx context.Context, rc *regclient
 		}
 	}
 	platforms := []platform.Platform{}
-	for _, pStr := range indexOpts.platforms {
+	for _, pStr := range opts.platforms {
 		p, err := platform.Parse(pStr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse platform %s: %w", pStr, err)
@@ -441,10 +445,10 @@ func (indexOpts *indexCmd) indexBuildDescList(ctx context.Context, rc *regclient
 	}
 
 	// copy each ref by digest to the destination repository
-	if indexOpts.digests == nil {
-		indexOpts.digests = []string{}
+	if opts.digests == nil {
+		opts.digests = []string{}
 	}
-	for _, rStr := range indexOpts.refs {
+	for _, rStr := range opts.refs {
 		srcRef, err := ref.New(rStr)
 		if err != nil {
 			return nil, err
@@ -461,7 +465,7 @@ func (indexOpts *indexCmd) indexBuildDescList(ctx context.Context, rc *regclient
 			if err != nil {
 				return nil, err
 			}
-			indexOpts.digests = append(indexOpts.digests, desc.Digest.String())
+			opts.digests = append(opts.digests, desc.Digest.String())
 		} else {
 			// platform specific descriptors are being extracted from a manifest list
 			mCopy, err = rc.ManifestGet(ctx, srcRef)
@@ -484,7 +488,7 @@ func (indexOpts *indexCmd) indexBuildDescList(ctx context.Context, rc *regclient
 					if err != nil {
 						return nil, err
 					}
-					indexOpts.digests = append(indexOpts.digests, d.Digest.String())
+					opts.digests = append(opts.digests, d.Digest.String())
 				}
 			}
 		}
@@ -492,7 +496,7 @@ func (indexOpts *indexCmd) indexBuildDescList(ctx context.Context, rc *regclient
 
 	// parse each digest, pull manifest, get config, append to list of descriptors
 	descList := []descriptor.Descriptor{}
-	for _, dig := range indexOpts.digests {
+	for _, dig := range opts.digests {
 		rDig := r.SetDigest(dig)
 		mDig, err := rc.ManifestHead(ctx, rDig, regclient.WithManifestRequireDigest())
 		if err != nil {
@@ -500,8 +504,8 @@ func (indexOpts *indexCmd) indexBuildDescList(ctx context.Context, rc *regclient
 		}
 		desc := mDig.GetDescriptor()
 		plat := &platform.Platform{}
-		if indexOpts.descPlatform != "" {
-			*plat, err = platform.Parse(indexOpts.descPlatform)
+		if opts.descPlatform != "" {
+			*plat, err = platform.Parse(opts.descPlatform)
 		} else {
 			plat, err = indexGetPlatform(ctx, rc, rDig, mDig)
 		}
@@ -556,11 +560,7 @@ func indexDescListRmDup(dl []descriptor.Descriptor) []descriptor.Descriptor {
 		j := len(dl) - 1
 		for j > i {
 			if dl[i].Equal(dl[j]) {
-				if j < len(dl)-1 {
-					dl = append(dl[:j], dl[j+1:]...)
-				} else {
-					dl = dl[:j]
-				}
+				dl = slices.Delete(dl, j, j+1)
 			}
 			j--
 		}

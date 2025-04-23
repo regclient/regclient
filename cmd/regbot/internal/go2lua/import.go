@@ -1,6 +1,7 @@
 package go2lua
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"runtime/debug"
@@ -11,7 +12,7 @@ import (
 
 // Import takes a Lua value and copies matching values into the provided Go interface.
 // By providing the orig interface, values that cannot be imported from Lua will be copied from orig.
-func Import(ls *lua.LState, lv lua.LValue, v, orig interface{}) (err error) {
+func Import(ls *lua.LState, lv lua.LValue, v, orig any) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("go2lua import panic: %v\n%s", r, string(debug.Stack()))
@@ -63,7 +64,7 @@ func importReflect(ls *lua.LState, lv lua.LValue, v, orig reflect.Value) error {
 	case reflect.Array:
 		// If we have an array, and lua is the expected table, iterate and recursively import contents.
 		if lvi, ok := lv.(*lua.LTable); ok {
-			for i := 0; i < v.Len(); i++ {
+			for i := range v.Len() {
 				// Orig is also iterated on if it has a matching type and length
 				var origI reflect.Value
 				if orig.IsValid() && orig.Type() == v.Type() && orig.Len() < i {
@@ -80,7 +81,7 @@ func importReflect(ls *lua.LState, lv lua.LValue, v, orig reflect.Value) error {
 		// Slice follows the same pattern as array, except the slice is first created with the desired size.
 		if lvi, ok := lv.(*lua.LTable); ok {
 			newV := reflect.MakeSlice(v.Type(), lvi.Len(), lvi.Len())
-			for i := 0; i < newV.Len(); i++ {
+			for i := range newV.Len() {
 				var origI reflect.Value
 				if orig.IsValid() && orig.Type() == v.Type() && orig.Len() > i {
 					origI = orig.Index(i)
@@ -94,8 +95,7 @@ func importReflect(ls *lua.LState, lv lua.LValue, v, orig reflect.Value) error {
 		}
 		return nil
 	case reflect.Map:
-		// TODO: with go 1.20, switch to error list and return errors.Join
-		var retErr error
+		var errs []error
 		if lvi, ok := lv.(*lua.LTable); ok {
 			newV := reflect.MakeMap(v.Type())
 			lvi.ForEach(func(lvtKey, lvtElem lua.LValue) {
@@ -103,7 +103,7 @@ func importReflect(ls *lua.LState, lv lua.LValue, v, orig reflect.Value) error {
 				newElem := reflect.Indirect(reflect.New(v.Type().Elem()))
 				err := importReflect(ls, lvtKey, newKey, reflect.Value{})
 				if err != nil {
-					retErr = err
+					errs = append(errs, err)
 				}
 				var origElem reflect.Value
 				if orig.IsValid() && orig.Type() == v.Type() {
@@ -111,18 +111,18 @@ func importReflect(ls *lua.LState, lv lua.LValue, v, orig reflect.Value) error {
 				}
 				err = importReflect(ls, lvtElem, newElem, origElem)
 				if err != nil {
-					retErr = err
+					errs = append(errs, err)
 				}
 				newV.SetMapIndex(newKey, newElem)
 			})
 			v.Set(newV)
 		}
-		return retErr
+		return errors.Join(errs...)
 	case reflect.Struct:
 		foundExported := false
 		if lvi, ok := lv.(*lua.LTable); ok {
 			vType := v.Type()
-			for i := 0; i < vType.NumField(); i++ {
+			for i := range vType.NumField() {
 				field := vType.Field(i)
 				// skip unexported fields
 				if !v.FieldByName(field.Name).CanInterface() {

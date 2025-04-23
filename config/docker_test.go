@@ -23,7 +23,6 @@ func TestDocker(t *testing.T) {
 	}
 	hostMap := map[string]*Host{}
 	for _, h := range hosts {
-		h := h // shadow h for unique var/pointer
 		hostMap[h.Name] = &h
 	}
 	tt := []struct {
@@ -87,21 +86,41 @@ func TestDocker(t *testing.T) {
 		},
 		{
 			name:          "missing-from-repo.example.com", // entries with a repository are ignored
+			hostname:      "missing-from-repo.example.com",
 			expectMissing: true,
 		},
 		{
 			name:          "index.docker.io", // verify access-token and refresh-token entries are ignored
+			hostname:      "index.docker.io",
+			expectMissing: true,
+		},
+		{
+			name:          "https://index.docker.io/v1/access-token",
+			hostname:      "https://index.docker.io/v1/access-token",
+			expectMissing: true,
+		},
+		{
+			name:          "https://index.docker.io/v1/test-token",
+			hostname:      "https://index.docker.io/v1/test-token",
+			expectMissing: true,
+		},
+		{
+			name:          "https://index.docker.io/v1/helper-token",
+			hostname:      "https://index.docker.io/v1/helper-token",
 			expectMissing: true,
 		},
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			h, ok := hostMap[tc.hostname]
-			if !ok {
-				if !tc.expectMissing {
-					t.Fatalf("host not found: %s", tc.hostname)
+			if tc.expectMissing {
+				if ok {
+					t.Fatalf("entry found that should be missing: %s", tc.hostname)
 				}
 				return
+			}
+			if !ok {
+				t.Fatalf("host not found: %s", tc.hostname)
 			}
 			if tc.expectUser != h.User {
 				t.Errorf("user mismatch, expect %s, received %s", tc.expectUser, h.User)

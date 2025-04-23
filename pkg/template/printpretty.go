@@ -9,7 +9,7 @@ type prettyPrinter interface {
 	MarshalPretty() ([]byte, error)
 }
 
-func printPretty(v interface{}) string {
+func printPretty(v any) string {
 	if pp, ok := v.(prettyPrinter); ok {
 		b, err := pp.MarshalPretty()
 		if err != nil {

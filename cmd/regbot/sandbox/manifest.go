@@ -7,6 +7,7 @@ import (
 
 	lua "github.com/yuin/gopher-lua"
 
+	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/cmd/regbot/internal/go2lua"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/platform"
@@ -104,8 +105,7 @@ func (s *Sandbox) manifestDelete(ls *lua.LState) int {
 	m := s.checkManifest(ls, 1, true, true)
 	r := m.r
 	if r.Digest == "" {
-		d := m.m.GetDescriptor()
-		r.Digest = d.Digest.String()
+		r = r.AddDigest(m.m.GetDescriptor().Digest.String())
 	}
 	s.log.Info("Delete manifest",
 		slog.String("script", s.name),
@@ -290,8 +290,7 @@ func (s *Sandbox) rcManifestGet(r ref.Ref, list bool, pStr string) (manifest.Man
 		if err != nil {
 			return m, err
 		}
-		r.Digest = desc.Digest.String()
-		m, err = s.rc.ManifestGet(s.ctx, r)
+		m, err = s.rc.ManifestGet(s.ctx, r, regclient.WithManifestDesc(*desc))
 		if err != nil {
 			return m, err
 		}

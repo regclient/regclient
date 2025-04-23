@@ -49,6 +49,7 @@ func TestCredHelper(t *testing.T) {
 		},
 		{
 			name:       "missing helper",
+			host:       "missing.example.org",
 			credHelper: "./testdata/docker-credential-missing",
 			expectErr:  true,
 		},

@@ -13,17 +13,17 @@ import (
 	"github.com/regclient/regclient/types/ref"
 )
 
-type refCmd struct {
-	rootOpts *rootCmd
+type refOpts struct {
+	rootOpts *rootOpts
 	format   string
 }
 
-func NewRefCmd(rootOpts *rootCmd) *cobra.Command {
-	refOpts := refCmd{
-		rootOpts: rootOpts,
+func NewRefCmd(rOpts *rootOpts) *cobra.Command {
+	opts := refOpts{
+		rootOpts: rOpts,
 	}
 	// TODO(bmitch): consider if this should be moved out of hidden/experimental
-	var refCmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Hidden: true,
 		Use:    "ref",
 		Short:  "parse an image ref",
@@ -34,19 +34,19 @@ This command is EXPERIMENTAL and could be removed in the future.`,
 regctl ref nginx --format '{{ .Registry }}'
 `,
 		Args: cobra.ExactArgs(1),
-		RunE: refOpts.runRef,
+		RunE: opts.runRef,
 	}
+	cmd.Flags().StringVar(&opts.format, "format", "{{.CommonName}}", "Format the output using a Go template")
+	_ = cmd.RegisterFlagCompletionFunc("format", completeArgNone)
 
-	refCmd.Flags().StringVar(&refOpts.format, "format", "{{.CommonName}}", "Format the output using a Go template")
-
-	return refCmd
+	return cmd
 }
 
-func (refOpts *refCmd) runRef(cmd *cobra.Command, args []string) error {
+func (opts *refOpts) runRef(cmd *cobra.Command, args []string) error {
 	r, err := ref.New(args[0])
 	if err != nil {
 		return fmt.Errorf("failed to parse %s: %w", args[0], err)
 	}
 
-	return template.Writer(cmd.OutOrStdout(), refOpts.format, r)
+	return template.Writer(cmd.OutOrStdout(), opts.format, r)
 }

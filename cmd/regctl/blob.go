@@ -26,30 +26,60 @@ import (
 	"github.com/regclient/regclient/types/warning"
 )
 
-type blobCmd struct {
-	rootOpts       *rootCmd
+type blopOpts struct {
+	rootOpts       *rootOpts
 	diffCtx        int
 	diffFullCtx    bool
 	diffIgnoreTime bool
-	formatGet      string
-	formatFile     string
-	formatHead     string
-	formatPut      string
+	format         string
 	mt             string
 	digest         string
 }
 
-func NewBlobCmd(rootOpts *rootCmd) *cobra.Command {
-	blobOpts := blobCmd{
-		rootOpts: rootOpts,
-	}
-
-	var blobTopCmd = &cobra.Command{
+func NewBlobCmd(rOpts *rootOpts) *cobra.Command {
+	cmd := &cobra.Command{
 		Use:     "blob <cmd>",
 		Aliases: []string{"layer"},
 		Short:   "manage image blobs/layers",
 	}
-	var blobDeleteCmd = &cobra.Command{
+	cmd.AddCommand(newBlobCopyCmd(rOpts))
+	cmd.AddCommand(newBlobDeleteCmd(rOpts))
+	cmd.AddCommand(newBlobDiffConfigCmd(rOpts))
+	cmd.AddCommand(newBlobDiffLayerCmd(rOpts))
+	cmd.AddCommand(newBlobGetCmd(rOpts))
+	cmd.AddCommand(newBlobGetFileCmd(rOpts))
+	cmd.AddCommand(newBlobHeadCmd(rOpts))
+	cmd.AddCommand(newBlobPutCmd(rOpts))
+	return cmd
+}
+
+func newBlobCopyCmd(rOpts *rootOpts) *cobra.Command {
+	opts := blopOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
+		Use:     "copy <src_image_ref> <dst_image_ref> <digest>",
+		Aliases: []string{"cp"},
+		Short:   "copy blob",
+		Long: `Copy a blob between repositories. This works in the same registry only. It
+attempts to mount the layers between repositories. And within the same repository
+it only sends the manifest with the new tag.`,
+		Example: `
+# copy a blob
+regctl blob copy alpine registry.example.org/library/alpine \
+  sha256:9123ac7c32f74759e6283f04dbf571f18246abe5bb2c779efcb32cd50f3ff13c`,
+		Args:      cobra.ExactArgs(3),
+		ValidArgs: []string{}, // do not auto complete repository or digest
+		RunE:      opts.runBlobCopy,
+	}
+	return cmd
+}
+
+func newBlobDeleteCmd(rOpts *rootOpts) *cobra.Command {
+	opts := blopOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:     "delete <repository> <digest>",
 		Aliases: []string{"del", "rm"},
 		Short:   "delete a blob",
@@ -63,9 +93,16 @@ regctl blob delete registry.example.org/repo \
   sha256:a58ecd4f0c864650a4286c3c2d49c7219a3f2fc8d7a0bf478aa9834acfe14ae7`,
 		Args:      cobra.ExactArgs(2),
 		ValidArgs: []string{}, // do not auto complete repository or digest
-		RunE:      blobOpts.runBlobDelete,
+		RunE:      opts.runBlobDelete,
 	}
-	var blobDiffConfigCmd = &cobra.Command{
+	return cmd
+}
+
+func newBlobDiffConfigCmd(rOpts *rootOpts) *cobra.Command {
+	opts := blopOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:   "diff-config <repository> <digest> <repository> <digest>",
 		Short: "diff two image configs",
 		Long:  `This returns the difference between two configs, comparing the contents of each config json.`,
@@ -76,9 +113,18 @@ regctl blob diff-config \
   busybox sha256:3f57d9401f8d42f986df300f0c69192fc41da28ccc8d797829467780db3dd741`,
 		Args:      cobra.ExactArgs(4),
 		ValidArgs: []string{}, // do not auto complete repository or digest
-		RunE:      blobOpts.runBlobDiffConfig,
+		RunE:      opts.runBlobDiffConfig,
 	}
-	var blobDiffLayerCmd = &cobra.Command{
+	cmd.Flags().IntVarP(&opts.diffCtx, "context", "", 3, "Lines of context")
+	cmd.Flags().BoolVarP(&opts.diffFullCtx, "context-full", "", false, "Show all lines of context")
+	return cmd
+}
+
+func newBlobDiffLayerCmd(rOpts *rootOpts) *cobra.Command {
+	opts := blopOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:   "diff-layer <repository> <digest> <repository> <digest>",
 		Short: "diff two tar layers",
 		Long:  `This returns the difference between two layers, comparing the contents of each tar.`,
@@ -89,9 +135,19 @@ regctl blob diff-layer \
   busybox sha256:9ad63333ebc97e32b987ae66aa3cff81300e4c2e6d2f2395cef8a3ae18b249fe --ignore-timestamp`,
 		Args:      cobra.ExactArgs(4),
 		ValidArgs: []string{}, // do not auto complete repository or digest
-		RunE:      blobOpts.runBlobDiffLayer,
+		RunE:      opts.runBlobDiffLayer,
 	}
-	var blobGetCmd = &cobra.Command{
+	cmd.Flags().IntVarP(&opts.diffCtx, "context", "", 3, "Lines of context")
+	cmd.Flags().BoolVarP(&opts.diffFullCtx, "context-full", "", false, "Show all lines of context")
+	cmd.Flags().BoolVarP(&opts.diffIgnoreTime, "ignore-timestamp", "", false, "Ignore timestamps on files")
+	return cmd
+}
+
+func newBlobGetCmd(rOpts *rootOpts) *cobra.Command {
+	opts := blopOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:     "get <repository> <digest>",
 		Aliases: []string{"pull"},
 		Short:   "download a blob/layer",
@@ -105,9 +161,25 @@ regctl blob get busybox \
   | tar -tvzf -`,
 		Args:      cobra.ExactArgs(2),
 		ValidArgs: []string{}, // do not auto complete repository or digest
-		RunE:      blobOpts.runBlobGet,
+		RunE:      opts.runBlobGet,
 	}
-	var blobGetFileCmd = &cobra.Command{
+	cmd.Flags().StringVarP(&opts.format, "format", "", "{{printPretty .}}", "Format output with go template syntax")
+	_ = cmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	cmd.Flags().StringVarP(&opts.mt, "media-type", "", "", "Set the requested mediaType (deprecated)")
+	_ = cmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{
+			"application/octet-stream",
+		}, cobra.ShellCompDirectiveNoFileComp
+	})
+	_ = cmd.Flags().MarkHidden("media-type")
+	return cmd
+}
+
+func newBlobGetFileCmd(rOpts *rootOpts) *cobra.Command {
+	opts := blopOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:     "get-file <repository> <digest> <file> [out-file]",
 		Aliases: []string{"cat"},
 		Short:   "get a file from a layer",
@@ -119,9 +191,18 @@ regctl blob get-file alpine \
   /etc/alpine-release`,
 		Args:      cobra.RangeArgs(3, 4),
 		ValidArgs: []string{}, // do not auto complete repository, digest, or filenames
-		RunE:      blobOpts.runBlobGetFile,
+		RunE:      opts.runBlobGetFile,
 	}
-	var blobHeadCmd = &cobra.Command{
+	cmd.Flags().StringVarP(&opts.format, "format", "", "", "Format output with go template syntax")
+	_ = cmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	return cmd
+}
+
+func newBlobHeadCmd(rOpts *rootOpts) *cobra.Command {
+	opts := blopOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:     "head <repository> <digest>",
 		Aliases: []string{"digest"},
 		Short:   "http head request for a blob",
@@ -132,9 +213,18 @@ regctl blob head alpine \
   sha256:9123ac7c32f74759e6283f04dbf571f18246abe5bb2c779efcb32cd50f3ff13c`,
 		Args:      cobra.ExactArgs(2),
 		ValidArgs: []string{}, // do not auto complete repository or digest
-		RunE:      blobOpts.runBlobHead,
+		RunE:      opts.runBlobHead,
 	}
-	var blobPutCmd = &cobra.Command{
+	cmd.Flags().StringVarP(&opts.format, "format", "", "", "Format output with go template syntax")
+	_ = cmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	return cmd
+}
+
+func newBlobPutCmd(rOpts *rootOpts) *cobra.Command {
+	opts := blopOpts{
+		rootOpts: rOpts,
+	}
+	cmd := &cobra.Command{
 		Use:     "put <repository>",
 		Aliases: []string{"push"},
 		Short:   "upload a blob/layer",
@@ -145,70 +235,51 @@ is the digest of the blob.`,
 regctl blob put registry.example.org/repo <layer.tgz`,
 		Args:      cobra.ExactArgs(1),
 		ValidArgs: []string{}, // do not auto complete repository
-		RunE:      blobOpts.runBlobPut,
+		RunE:      opts.runBlobPut,
 	}
-	var blobCopyCmd = &cobra.Command{
-		Use:     "copy <src_image_ref> <dst_image_ref> <digest>",
-		Aliases: []string{"cp"},
-		Short:   "copy blob",
-		Long: `Copy a blob between repositories. This works in the same registry only. It
-attempts to mount the layers between repositories. And within the same repository
-it only sends the manifest with the new tag.`,
-		Example: `
-# copy a blob
-regctl blob copy alpine registry.example.org/library/alpine \
-  sha256:9123ac7c32f74759e6283f04dbf571f18246abe5bb2c779efcb32cd50f3ff13c`,
-		Args:      cobra.ExactArgs(3),
-		ValidArgs: []string{}, // do not auto complete repository or digest
-		RunE:      blobOpts.runBlobCopy,
-	}
-
-	blobDiffConfigCmd.Flags().IntVarP(&blobOpts.diffCtx, "context", "", 3, "Lines of context")
-	blobDiffConfigCmd.Flags().BoolVarP(&blobOpts.diffFullCtx, "context-full", "", false, "Show all lines of context")
-
-	blobDiffLayerCmd.Flags().IntVarP(&blobOpts.diffCtx, "context", "", 3, "Lines of context")
-	blobDiffLayerCmd.Flags().BoolVarP(&blobOpts.diffFullCtx, "context-full", "", false, "Show all lines of context")
-	blobDiffLayerCmd.Flags().BoolVarP(&blobOpts.diffIgnoreTime, "ignore-timestamp", "", false, "Ignore timestamps on files")
-
-	blobGetCmd.Flags().StringVarP(&blobOpts.formatGet, "format", "", "{{printPretty .}}", "Format output with go template syntax")
-	blobGetCmd.Flags().StringVarP(&blobOpts.mt, "media-type", "", "", "Set the requested mediaType (deprecated)")
-	_ = blobGetCmd.RegisterFlagCompletionFunc("format", completeArgNone)
-	_ = blobGetCmd.RegisterFlagCompletionFunc("media-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	cmd.Flags().StringVarP(&opts.mt, "content-type", "", "", "Set the requested content type (deprecated)")
+	_ = cmd.RegisterFlagCompletionFunc("content-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{
 			"application/octet-stream",
 		}, cobra.ShellCompDirectiveNoFileComp
 	})
-	_ = blobGetCmd.Flags().MarkHidden("media-type")
-
-	blobGetFileCmd.Flags().StringVarP(&blobOpts.formatFile, "format", "", "", "Format output with go template syntax")
-
-	blobHeadCmd.Flags().StringVarP(&blobOpts.formatHead, "format", "", "", "Format output with go template syntax")
-	_ = blobHeadCmd.RegisterFlagCompletionFunc("format", completeArgNone)
-
-	blobPutCmd.Flags().StringVarP(&blobOpts.mt, "content-type", "", "", "Set the requested content type (deprecated)")
-	blobPutCmd.Flags().StringVarP(&blobOpts.digest, "digest", "", "", "Set the expected digest")
-	blobPutCmd.Flags().StringVarP(&blobOpts.formatPut, "format", "", "{{println .Digest}}", "Format output with go template syntax")
-	_ = blobPutCmd.RegisterFlagCompletionFunc("content-type", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return []string{
-			"application/octet-stream",
-		}, cobra.ShellCompDirectiveNoFileComp
-	})
-	_ = blobPutCmd.RegisterFlagCompletionFunc("digest", completeArgNone)
-	_ = blobPutCmd.Flags().MarkHidden("content-type")
-
-	blobTopCmd.AddCommand(blobDeleteCmd)
-	blobTopCmd.AddCommand(blobDiffConfigCmd)
-	blobTopCmd.AddCommand(blobDiffLayerCmd)
-	blobTopCmd.AddCommand(blobGetCmd)
-	blobTopCmd.AddCommand(blobGetFileCmd)
-	blobTopCmd.AddCommand(blobHeadCmd)
-	blobTopCmd.AddCommand(blobPutCmd)
-	blobTopCmd.AddCommand(blobCopyCmd)
-
-	return blobTopCmd
+	_ = cmd.Flags().MarkHidden("content-type")
+	cmd.Flags().StringVarP(&opts.digest, "digest", "", "", "Set the expected digest")
+	_ = cmd.RegisterFlagCompletionFunc("digest", completeArgNone)
+	cmd.Flags().StringVarP(&opts.format, "format", "", "{{println .Digest}}", "Format output with go template syntax")
+	_ = cmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	return cmd
 }
 
-func (blobOpts *blobCmd) runBlobDelete(cmd *cobra.Command, args []string) error {
+func (opts *blopOpts) runBlobCopy(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
+	rSrc, err := ref.New(args[0])
+	if err != nil {
+		return err
+	}
+	rTgt, err := ref.New(args[1])
+	if err != nil {
+		return err
+	}
+	d, err := digest.Parse(args[2])
+	if err != nil {
+		return err
+	}
+	rc := opts.rootOpts.newRegClient()
+	defer rc.Close(ctx, rSrc)
+
+	opts.rootOpts.log.Debug("Blob copy",
+		slog.String("source", rSrc.CommonName()),
+		slog.String("target", rTgt.CommonName()),
+		slog.String("digest", args[2]))
+	err = rc.BlobCopy(ctx, rSrc, rTgt, descriptor.Descriptor{Digest: d})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (opts *blopOpts) runBlobDelete(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
@@ -218,22 +289,22 @@ func (blobOpts *blobCmd) runBlobDelete(cmd *cobra.Command, args []string) error 
 	if err != nil {
 		return err
 	}
-	rc := blobOpts.rootOpts.newRegClient()
+	rc := opts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
-	blobOpts.rootOpts.log.Debug("Deleting blob",
+	opts.rootOpts.log.Debug("Deleting blob",
 		slog.String("host", r.Registry),
 		slog.String("repository", r.Repository),
 		slog.String("digest", args[1]))
 	return rc.BlobDelete(ctx, r, descriptor.Descriptor{Digest: d})
 }
 
-func (blobOpts *blobCmd) runBlobDiffConfig(cmd *cobra.Command, args []string) error {
+func (opts *blopOpts) runBlobDiffConfig(cmd *cobra.Command, args []string) error {
 	diffOpts := []diff.Opt{}
-	if blobOpts.diffCtx > 0 {
-		diffOpts = append(diffOpts, diff.WithContext(blobOpts.diffCtx, blobOpts.diffCtx))
+	if opts.diffCtx > 0 {
+		diffOpts = append(diffOpts, diff.WithContext(opts.diffCtx, opts.diffCtx))
 	}
-	if blobOpts.diffFullCtx {
+	if opts.diffFullCtx {
 		diffOpts = append(diffOpts, diff.WithFullContext())
 	}
 	ctx := cmd.Context()
@@ -249,7 +320,7 @@ func (blobOpts *blobCmd) runBlobDiffConfig(cmd *cobra.Command, args []string) er
 	if err != nil {
 		return err
 	}
-	rc := blobOpts.rootOpts.newRegClient()
+	rc := opts.rootOpts.newRegClient()
 
 	// open both configs, and output each as formatted json
 	d1, err := digest.Parse(args[1])
@@ -286,12 +357,12 @@ func (blobOpts *blobCmd) runBlobDiffConfig(cmd *cobra.Command, args []string) er
 	// return template.Writer(cmd.OutOrStdout(), blobOpts.format, cDiff)
 }
 
-func (blobOpts *blobCmd) runBlobDiffLayer(cmd *cobra.Command, args []string) error {
+func (opts *blopOpts) runBlobDiffLayer(cmd *cobra.Command, args []string) error {
 	diffOpts := []diff.Opt{}
-	if blobOpts.diffCtx > 0 {
-		diffOpts = append(diffOpts, diff.WithContext(blobOpts.diffCtx, blobOpts.diffCtx))
+	if opts.diffCtx > 0 {
+		diffOpts = append(diffOpts, diff.WithContext(opts.diffCtx, opts.diffCtx))
 	}
-	if blobOpts.diffFullCtx {
+	if opts.diffFullCtx {
 		diffOpts = append(diffOpts, diff.WithFullContext())
 	}
 	ctx := cmd.Context()
@@ -307,7 +378,7 @@ func (blobOpts *blobCmd) runBlobDiffLayer(cmd *cobra.Command, args []string) err
 	if err != nil {
 		return err
 	}
-	rc := blobOpts.rootOpts.newRegClient()
+	rc := opts.rootOpts.newRegClient()
 
 	// open both blobs, and generate reports of each content
 	d1, err := digest.Parse(args[1])
@@ -327,7 +398,7 @@ func (blobOpts *blobCmd) runBlobDiffLayer(cmd *cobra.Command, args []string) err
 	if err != nil {
 		return err
 	}
-	rep1, err := blobOpts.blobReportLayer(tr1)
+	rep1, err := opts.blobReportLayer(tr1)
 	if err != nil {
 		return err
 	}
@@ -353,7 +424,7 @@ func (blobOpts *blobCmd) runBlobDiffLayer(cmd *cobra.Command, args []string) err
 	if err != nil {
 		return err
 	}
-	rep2, err := blobOpts.blobReportLayer(tr2)
+	rep2, err := opts.blobReportLayer(tr2)
 	if err != nil {
 		return err
 	}
@@ -368,7 +439,7 @@ func (blobOpts *blobCmd) runBlobDiffLayer(cmd *cobra.Command, args []string) err
 	return err
 }
 
-func (blobOpts *blobCmd) runBlobGet(cmd *cobra.Command, args []string) error {
+func (opts *blopOpts) runBlobGet(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
@@ -378,14 +449,14 @@ func (blobOpts *blobCmd) runBlobGet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	rc := blobOpts.rootOpts.newRegClient()
+	rc := opts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
-	if blobOpts.mt != "" {
-		blobOpts.rootOpts.log.Info("Specifying the blob media type is deprecated",
-			slog.String("mt", blobOpts.mt))
+	if opts.mt != "" {
+		opts.rootOpts.log.Info("Specifying the blob media type is deprecated",
+			slog.String("mt", opts.mt))
 	}
 
-	blobOpts.rootOpts.log.Debug("Pulling blob",
+	opts.rootOpts.log.Debug("Pulling blob",
 		slog.String("host", r.Registry),
 		slog.String("repository", r.Repository),
 		slog.String("digest", args[1]))
@@ -394,23 +465,23 @@ func (blobOpts *blobCmd) runBlobGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	switch blobOpts.formatGet {
+	switch opts.format {
 	case "raw":
-		blobOpts.formatGet = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .RawBody}}"
+		opts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}{{printf \"\\n%s\" .RawBody}}"
 	case "rawBody", "raw-body", "body":
 		_, err = io.Copy(cmd.OutOrStdout(), blob)
 		return err
 	case "rawHeaders", "raw-headers", "headers":
-		blobOpts.formatGet = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
+		opts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	case "{{printPretty .}}":
 		_, err = io.Copy(cmd.OutOrStdout(), blob)
 		return err
 	}
 
-	return template.Writer(cmd.OutOrStdout(), blobOpts.formatGet, blob)
+	return template.Writer(cmd.OutOrStdout(), opts.format, blob)
 }
 
-func (blobOpts *blobCmd) runBlobGetFile(cmd *cobra.Command, args []string) error {
+func (opts *blopOpts) runBlobGetFile(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
@@ -422,10 +493,10 @@ func (blobOpts *blobCmd) runBlobGetFile(cmd *cobra.Command, args []string) error
 	}
 	filename := args[2]
 	filename = strings.TrimPrefix(filename, "/")
-	rc := blobOpts.rootOpts.newRegClient()
+	rc := opts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
-	blobOpts.rootOpts.log.Debug("Get file",
+	opts.rootOpts.log.Debug("Get file",
 		slog.String("host", r.Registry),
 		slog.String("repository", r.Repository),
 		slog.String("digest", args[1]),
@@ -442,7 +513,7 @@ func (blobOpts *blobCmd) runBlobGetFile(cmd *cobra.Command, args []string) error
 	if err != nil {
 		return err
 	}
-	if blobOpts.formatFile != "" {
+	if opts.format != "" {
 		data := struct {
 			Header *tar.Header
 			Reader io.Reader
@@ -450,7 +521,7 @@ func (blobOpts *blobCmd) runBlobGetFile(cmd *cobra.Command, args []string) error
 			Header: th,
 			Reader: rdr,
 		}
-		return template.Writer(cmd.OutOrStdout(), blobOpts.formatFile, data)
+		return template.Writer(cmd.OutOrStdout(), opts.format, data)
 	}
 	var w io.Writer
 	if len(args) < 4 {
@@ -474,7 +545,7 @@ func (blobOpts *blobCmd) runBlobGetFile(cmd *cobra.Command, args []string) error
 	return nil
 }
 
-func (blobOpts *blobCmd) runBlobHead(cmd *cobra.Command, args []string) error {
+func (opts *blopOpts) runBlobHead(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
@@ -484,10 +555,10 @@ func (blobOpts *blobCmd) runBlobHead(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	rc := blobOpts.rootOpts.newRegClient()
+	rc := opts.rootOpts.newRegClient()
 	defer rc.Close(ctx, r)
 
-	blobOpts.rootOpts.log.Debug("Blob head",
+	opts.rootOpts.log.Debug("Blob head",
 		slog.String("host", r.Registry),
 		slog.String("repository", r.Repository),
 		slog.String("digest", args[1]))
@@ -496,32 +567,32 @@ func (blobOpts *blobCmd) runBlobHead(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	switch blobOpts.formatHead {
+	switch opts.format {
 	case "", "rawHeaders", "raw-headers", "headers":
-		blobOpts.formatHead = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
+		opts.format = "{{ range $key,$vals := .RawHeaders}}{{range $val := $vals}}{{printf \"%s: %s\\n\" $key $val }}{{end}}{{end}}"
 	}
 
-	return template.Writer(cmd.OutOrStdout(), blobOpts.formatHead, blob)
+	return template.Writer(cmd.OutOrStdout(), opts.format, blob)
 }
 
-func (blobOpts *blobCmd) runBlobPut(cmd *cobra.Command, args []string) error {
+func (opts *blopOpts) runBlobPut(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 	r, err := ref.New(args[0])
 	if err != nil {
 		return err
 	}
-	rc := blobOpts.rootOpts.newRegClient()
+	rc := opts.rootOpts.newRegClient()
 
-	if blobOpts.mt != "" {
-		blobOpts.rootOpts.log.Info("Specifying the blob media type is deprecated",
-			slog.String("mt", blobOpts.mt))
+	if opts.mt != "" {
+		opts.rootOpts.log.Info("Specifying the blob media type is deprecated",
+			slog.String("mt", opts.mt))
 	}
 
-	blobOpts.rootOpts.log.Debug("Pushing blob",
+	opts.rootOpts.log.Debug("Pushing blob",
 		slog.String("host", r.Registry),
 		slog.String("repository", r.Repository),
-		slog.String("digest", blobOpts.digest))
-	dOut, err := rc.BlobPut(ctx, r, descriptor.Descriptor{Digest: digest.Digest(blobOpts.digest)}, cmd.InOrStdin())
+		slog.String("digest", opts.digest))
+	dOut, err := rc.BlobPut(ctx, r, descriptor.Descriptor{Digest: digest.Digest(opts.digest)}, cmd.InOrStdin())
 	if err != nil {
 		return err
 	}
@@ -534,38 +605,10 @@ func (blobOpts *blobCmd) runBlobPut(cmd *cobra.Command, args []string) error {
 		Size:   dOut.Size,
 	}
 
-	return template.Writer(cmd.OutOrStdout(), blobOpts.formatPut, result)
+	return template.Writer(cmd.OutOrStdout(), opts.format, result)
 }
 
-func (blobOpts *blobCmd) runBlobCopy(cmd *cobra.Command, args []string) error {
-	ctx := cmd.Context()
-	rSrc, err := ref.New(args[0])
-	if err != nil {
-		return err
-	}
-	rTgt, err := ref.New(args[1])
-	if err != nil {
-		return err
-	}
-	d, err := digest.Parse(args[2])
-	if err != nil {
-		return err
-	}
-	rc := blobOpts.rootOpts.newRegClient()
-	defer rc.Close(ctx, rSrc)
-
-	blobOpts.rootOpts.log.Debug("Blob copy",
-		slog.String("source", rSrc.CommonName()),
-		slog.String("target", rTgt.CommonName()),
-		slog.String("digest", args[2]))
-	err = rc.BlobCopy(ctx, rSrc, rTgt, descriptor.Descriptor{Digest: d})
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (blobOpts *blobCmd) blobReportLayer(tr *tar.Reader) ([]string, error) {
+func (opts *blopOpts) blobReportLayer(tr *tar.Reader) ([]string, error) {
 	report := []string{}
 	if tr == nil {
 		return report, nil
@@ -582,7 +625,7 @@ func (blobOpts *blobCmd) blobReportLayer(tr *tar.Reader) ([]string, error) {
 			return report, fmt.Errorf("integer conversion overflow/underflow (file mode = %d)", th.Mode)
 		}
 		line := fmt.Sprintf("%s %d/%d %8d", fs.FileMode(th.Mode).String(), th.Uid, th.Gid, th.Size)
-		if !blobOpts.diffIgnoreTime {
+		if !opts.diffIgnoreTime {
 			line += " " + th.ModTime.Format(time.RFC3339)
 		}
 		line += fmt.Sprintf(" %-40s", th.Name)

@@ -165,7 +165,7 @@ defaults:
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rootOpts := rootCmd{
+			rootOpts := rootOpts{
 				dryRun:   tt.dryrun,
 				conf:     conf,
 				log:      slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})),

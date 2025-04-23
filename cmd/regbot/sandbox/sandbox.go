@@ -3,6 +3,7 @@ package sandbox
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 
@@ -138,7 +139,7 @@ func (s *Sandbox) RunScript(script string) (err error) {
 			s.log.Error("Runtime error from script",
 				slog.String("script", s.name),
 				slog.Any("error", r))
-			err = ErrScriptFailed
+			err = fmt.Errorf("%w: %v", ErrScriptFailed, r)
 		}
 	}()
 	return s.ls.DoString(script)
@@ -160,7 +161,7 @@ func (s *Sandbox) sandboxLog(ls *lua.LState) int {
 // wrapUserData creates a userdata -> wrapped table -> userdata metatable
 // structure. This allows references to a struct to resolve for read access,
 // while providing access to only the desired methods on the userdata.
-func wrapUserData(ls *lua.LState, udVal interface{}, wrapVal interface{}, udType string) (lua.LValue, error) {
+func wrapUserData(ls *lua.LState, udVal any, wrapVal any, udType string) (lua.LValue, error) {
 	ud := ls.NewUserData()
 	ud.Value = udVal
 	udTypeMT, ok := (ls.GetTypeMetatable(udType)).(*lua.LTable)

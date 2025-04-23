@@ -32,15 +32,15 @@ func TestTag(t *testing.T) {
 	repoPath2 := "/proj2"
 	pageLen := 2
 	listTagList := []string{"latest", "v1", "v1.1", "v1.1.1"}
-	listTagBody := []byte(fmt.Sprintf("{\"name\":\"%s\",\"tags\":[\"%s\"]}",
+	listTagBody := fmt.Appendf(nil, "{\"name\":\"%s\",\"tags\":[\"%s\"]}",
 		strings.TrimLeft(repoPath, "/"),
-		strings.Join(listTagList, "\",\"")))
-	listTagBody1 := []byte(fmt.Sprintf("{\"name\":\"%s\",\"tags\":[\"%s\"]}",
+		strings.Join(listTagList, "\",\""))
+	listTagBody1 := fmt.Appendf(nil, "{\"name\":\"%s\",\"tags\":[\"%s\"]}",
 		strings.TrimLeft(repoPath, "/"),
-		strings.Join(listTagList[:pageLen], "\",\"")))
-	listTagBody2 := []byte(fmt.Sprintf("{\"name\":\"%s\",\"tags\":[\"%s\"]}",
+		strings.Join(listTagList[:pageLen], "\",\""))
+	listTagBody2 := fmt.Appendf(nil, "{\"name\":\"%s\",\"tags\":[\"%s\"]}",
 		strings.TrimLeft(repoPath, "/"),
-		strings.Join(listTagList[pageLen:], "\",\"")))
+		strings.Join(listTagList[pageLen:], "\",\""))
 	missingRepo := "/missing"
 	delOCITag := "del-oci"
 	delFallbackTag := "del-fallback"

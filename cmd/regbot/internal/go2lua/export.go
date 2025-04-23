@@ -9,7 +9,7 @@ import (
 )
 
 // Export takes an input Go interface and converts it to a Lua value
-func Export(ls *lua.LState, v interface{}) lua.LValue {
+func Export(ls *lua.LState, v any) lua.LValue {
 	return exportReflect(ls, reflect.ValueOf(v))
 }
 
@@ -30,13 +30,13 @@ func exportReflect(ls *lua.LState, v reflect.Value) lua.LValue {
 		return lua.LString(v.String())
 	case reflect.Array:
 		lTab := ls.NewTable()
-		for i := 0; i < v.Len(); i++ {
+		for i := range v.Len() {
 			lTab.RawSetInt(i+1, exportReflect(ls, v.Index(i)))
 		}
 		return lTab
 	case reflect.Slice:
 		lTab := ls.NewTable()
-		for i := 0; i < v.Len(); i++ {
+		for i := range v.Len() {
 			lTab.RawSetInt(i+1, exportReflect(ls, v.Index(i)))
 		}
 		return lTab
@@ -55,7 +55,7 @@ func exportReflect(ls *lua.LState, v reflect.Value) lua.LValue {
 		vType := v.Type()
 		lTab := ls.NewTable()
 		foundExported := false
-		for i := 0; i < vType.NumField(); i++ {
+		for i := range vType.NumField() {
 			field := vType.Field(i)
 			// skip unexported fields
 			if !v.FieldByName(field.Name).CanInterface() {

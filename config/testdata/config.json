@@ -19,7 +19,9 @@
   "credHelpers": {
     "testhost.example.com": "test",
     "https://index.docker.io/v1/": "test",
-    "http://http.example.com/": "test"
+    "http://http.example.com/": "test",
+    "https://index.docker.io/v1/test-token": "test",
+    "https://index.docker.io/v1/access-token": "test"
   },
   "credsStore": "teststore"
 }
