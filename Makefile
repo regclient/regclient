@@ -33,9 +33,9 @@ ifeq "$(strip $(VER_BUMP))" ''
 		-u "$(shell id -u):$(shell id -g)" \
 		$(VER_BUMP_CONTAINER)
 endif
-MARKDOWN_LINT_VER?=v0.17.2
+MARKDOWN_LINT_VER?=v0.18.0
 GOMAJOR_VER?=v0.14.0
-GOSEC_VER?=v2.22.3
+GOSEC_VER?=v2.22.4
 GO_VULNCHECK_VER?=v1.1.4
 OSV_SCANNER_VER?=v2.0.2
 SYFT?=$(shell command -v syft 2>/dev/null)
