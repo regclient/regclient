@@ -40,8 +40,8 @@ GO_VULNCHECK_VER?=v1.1.4
 OSV_SCANNER_VER?=v2.0.2
 SYFT?=$(shell command -v syft 2>/dev/null)
 SYFT_CMD_VER:=$(shell [ -x "$(SYFT)" ] && echo "v$$($(SYFT) version | awk '/^Version: / {print $$2}')" || echo "0")
-SYFT_VERSION?=v1.25.1
-SYFT_CONTAINER?=anchore/syft:v1.25.1@sha256:95a24c45eb1d19997c0f11ab0969783cd9b58b0a8eda1114ad8d23775a6f0192
+SYFT_VERSION?=v1.26.1
+SYFT_CONTAINER?=anchore/syft:v1.26.1@sha256:a29957b223c67ee0503018d9228e74495903b0c6290f9bc6d74d1501680fef85
 ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 	SYFT=docker run --rm \
 		-v "$(shell pwd)/:$(shell pwd)/" -w "$(shell pwd)" \
@@ -50,7 +50,7 @@ ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 endif
 STATICCHECK_VER?=v0.6.1
 CI_DISTRIBUTION_VER?=3.0.0
-CI_ZOT_VER?=v2.1.2
+CI_ZOT_VER?=v2.1.3
 
 .PHONY: .FORCE
 .FORCE:
