@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"gopkg.in/yaml.v3"
+	"github.com/goccy/go-yaml"
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/pkg/template"
