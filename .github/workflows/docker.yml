@@ -29,7 +29,7 @@ jobs:
 
     env:
       ALPINE_NAME: "alpine:3"
-      ALPINE_DIGEST: "sha256:a8560b36e8b8210634f77d9f7f9efd7ffa463e380b75e2e74aff4511df3ef88c" # 3.21.3
+      ALPINE_DIGEST: "sha256:8a1f59ffb675680d47db6337b49d22281a139e9d709335b492be023728e11715" # 3.22.0
 
     steps:
     - name: Check out code
@@ -103,7 +103,7 @@ jobs:
         password: ${{ secrets.GHCR_TOKEN }}
 
     - name: Build
-      uses: docker/build-push-action@1dc73863535b631f98b2378be8619f83b136f4a0 # v6.17.0
+      uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
       id: build
       with:
         context: .
