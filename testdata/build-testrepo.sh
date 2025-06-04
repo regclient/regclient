@@ -66,12 +66,18 @@ for i in 2 3; do
     --replace "ocidir://testrepo:v${i}"
 done
 
-# create a docker artifact on v1
+# create docker-like attestations on v1
 echo scripted build | regctl artifact put \
   --media-type application/vnd.oci.image.manifest.v1+json \
   --config-type application/vnd.oci.image.config.v1+json \
   --file-media-type application/vnd.example.build-type+json \
   ocidir://testrepo:a-docker
+echo scripted oci build | regctl artifact put \
+  --media-type application/vnd.oci.image.manifest.v1+json \
+  --config-type application/vnd.oci.image.config.v1+json \
+  --file-media-type application/vnd.example.build-type+json \
+  --subject ocidir://testrepo:v1 --platform linux/arm64 \
+  ocidir://testrepo:a-docker-oci
 regctl index add \
   --ref "ocidir://testrepo:a-docker" \
   --desc-annotation "vnd.docker.reference.type=builder" \
@@ -79,7 +85,7 @@ regctl index add \
   --desc-platform "unknown/unknown" \
   ocidir://testrepo:v1
 regctl index add \
-  --ref "ocidir://testrepo:a-docker" \
+  --ref "ocidir://testrepo:a-docker-oci" \
   --desc-annotation "vnd.docker.reference.type=builder" \
   --desc-annotation "vnd.docker.reference.digest=$(regctl image digest --platform linux/arm64 ocidir://testrepo:v1)" \
   --desc-platform "unknown/unknown" \
