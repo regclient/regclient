@@ -53,7 +53,7 @@ func ConfigNew() *Config {
 // ConfigLoadReader reads the config from an io.Reader
 func ConfigLoadReader(r io.Reader) (*Config, error) {
 	c := ConfigNew()
-	if err := yaml.NewDecoder(r).Decode(c); err != nil && !errors.Is(err, io.EOF) {
+	if err := yaml.NewDecoder(r, yaml.AllowDuplicateMapKey()).Decode(c); err != nil && !errors.Is(err, io.EOF) {
 		return nil, err
 	}
 	// verify loaded version is not higher than supported version
