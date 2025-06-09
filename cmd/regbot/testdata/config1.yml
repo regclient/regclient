@@ -6,9 +6,12 @@ defaults:
   parallel: 2
   interval: 60m
   timeout: 600s
+x-anchor: &anchor
+  name: this is overridden
+  timeout: 1m
 scripts:
-  - name: hello world
-    timeout: 1m
+  - <<: *anchor
+    name: hello world
     script: |
       log("hello world")
   - name: top of the hour

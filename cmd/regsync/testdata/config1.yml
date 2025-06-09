@@ -14,6 +14,7 @@ defaults:
   cacheTime: "5m"
 x-sync-hub: &sync-hub
   target: registry:5000/hub/{{ .Sync.Source }}
+  type: image
 x-sync-gcr: &sync-gcr
   target: registry:5000/gcr/{{ index (split .Sync.Source "gcr.io/") 1 }}
 sync:
