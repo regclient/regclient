@@ -23,18 +23,20 @@ const (
 )
 
 var (
-	hostPartS   = `(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)`
-	hostPortS   = `(?:` + hostPartS + `(?:` + regexp.QuoteMeta(`.`) + hostPartS + `)*` + regexp.QuoteMeta(`.`) + `?` + regexp.QuoteMeta(`:`) + `[0-9]+)`
-	hostDomainS = `(?:` + hostPartS + `(?:(?:` + regexp.QuoteMeta(`.`) + hostPartS + `)+` + regexp.QuoteMeta(`.`) + `?|` + regexp.QuoteMeta(`.`) + `))`
-	hostUpperS  = `(?:[a-zA-Z0-9]*[A-Z][a-zA-Z0-9-]*[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[A-Z][a-zA-Z0-9]*)`
-	registryS   = `(?:` + hostDomainS + `|` + hostPortS + `|` + hostUpperS + `|localhost(?:` + regexp.QuoteMeta(`:`) + `[0-9]+)?)`
-	repoPartS   = `[a-z0-9]+(?:(?:\.|_|__|-+)[a-z0-9]+)*`
-	pathS       = `[/a-zA-Z0-9_\-. ~\+]+`
-	tagS        = `[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}`
-	digestS     = `[A-Za-z][A-Za-z0-9]*(?:[-_+.][A-Za-z][A-Za-z0-9]*)*[:][[:xdigit:]]{32,}`
-	schemeRE    = regexp.MustCompile(`^([a-z]+)://(.+)$`)
-	registryRE  = regexp.MustCompile(`^(` + registryS + `)$`)
-	refRE       = regexp.MustCompile(`^(?:(` + registryS + `)` + regexp.QuoteMeta(`/`) + `)?` +
+	hostPartS     = `(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?)`
+	hostPortS     = `(?:` + hostPartS + `(?:` + regexp.QuoteMeta(`.`) + hostPartS + `)*` + regexp.QuoteMeta(`.`) + `?` + regexp.QuoteMeta(`:`) + `[0-9]+)`
+	hostPartIPv6S = `(?:[0-9a-fA-F]{0,4}:){1,7}[0-9a-fA-F]{0,4}`
+	hostPortIPv6S = `(?:` + regexp.QuoteMeta(`[`) + hostPartIPv6S + regexp.QuoteMeta(`]`) + `(?:` + regexp.QuoteMeta(`:`) + `[0-9]+)?)`
+	hostDomainS   = `(?:` + hostPartS + `(?:(?:` + regexp.QuoteMeta(`.`) + hostPartS + `)+` + regexp.QuoteMeta(`.`) + `?|` + regexp.QuoteMeta(`.`) + `))`
+	hostUpperS    = `(?:[a-zA-Z0-9]*[A-Z][a-zA-Z0-9-]*[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[A-Z][a-zA-Z0-9]*)`
+	registryS     = `(?:` + hostDomainS + `|` + hostPortS + `|` + hostPortIPv6S + `|` + hostUpperS + `|localhost(?:` + regexp.QuoteMeta(`:`) + `[0-9]+)?)`
+	repoPartS     = `[a-z0-9]+(?:(?:\.|_|__|-+)[a-z0-9]+)*`
+	pathS         = `[/a-zA-Z0-9_\-. ~\+]+`
+	tagS          = `[a-zA-Z0-9_][a-zA-Z0-9._-]{0,127}`
+	digestS       = `[A-Za-z][A-Za-z0-9]*(?:[-_+.][A-Za-z][A-Za-z0-9]*)*[:][[:xdigit:]]{32,}`
+	schemeRE      = regexp.MustCompile(`^([a-z]+)://(.+)$`)
+	registryRE    = regexp.MustCompile(`^(` + registryS + `)$`)
+	refRE         = regexp.MustCompile(`^(?:(` + registryS + `)` + regexp.QuoteMeta(`/`) + `)?` +
 		`(` + repoPartS + `(?:` + regexp.QuoteMeta(`/`) + repoPartS + `)*)` +
 		`(?:` + regexp.QuoteMeta(`:`) + `(` + tagS + `))?` +
 		`(?:` + regexp.QuoteMeta(`@`) + `(` + digestS + `))?$`)
