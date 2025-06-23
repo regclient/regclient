@@ -222,6 +222,17 @@ func TestNew(t *testing.T) {
 			wantE:      nil,
 		},
 		{
+			name:       "ipv6 localhost address registry",
+			ref:        "[::1]:5000/image:v42",
+			scheme:     "reg",
+			registry:   "[::1]:5000",
+			repository: "image",
+			tag:        "v42",
+			digest:     "",
+			path:       "",
+			wantE:      nil,
+		},
+		{
 			name:       "ipv6 address registry",
 			ref:        "[fddd:1222:1222:1222::ac29:5a6a]:5000/image:v42",
 			scheme:     "reg",
@@ -349,6 +360,16 @@ func TestNew(t *testing.T) {
 		{
 			name:  "invalid host trailing dash",
 			ref:   "docker-.io/project/image:tag",
+			wantE: errs.ErrInvalidReference,
+		},
+		{
+			name:  "invalid ipv6 compression",
+			ref:   "[1::2::3]/project/image:tag",
+			wantE: errs.ErrInvalidReference,
+		},
+		{
+			name:  "invalid ipv6 missing brackets",
+			ref:   "::1/project/image:tag",
 			wantE: errs.ErrInvalidReference,
 		},
 		{
@@ -544,6 +565,14 @@ func TestNewHost(t *testing.T) {
 			wantE:    nil,
 		},
 		{
+			name:     "ipv6 compressed address registry",
+			host:     "[::1]:5000",
+			scheme:   "reg",
+			registry: "[::1]:5000",
+			path:     "",
+			wantE:    nil,
+		},
+		{
 			name:     "ipv6 address registry",
 			host:     "[fddd:1222:1222:1222::ac29:5a6a]:5000",
 			scheme:   "reg",
@@ -625,6 +654,16 @@ func TestNewHost(t *testing.T) {
 		{
 			name:  "invalid host trailing dash",
 			host:  "docker-.io",
+			wantE: errs.ErrParsingFailed,
+		},
+		{
+			name:  "invalid ipv6 compression",
+			host:  "[1::2::3]:5000",
+			wantE: errs.ErrParsingFailed,
+		},
+		{
+			name:  "invalid ipv6 missing brackets",
+			host:  "::1:5000",
 			wantE: errs.ErrParsingFailed,
 		},
 	}
