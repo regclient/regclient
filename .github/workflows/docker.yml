@@ -29,7 +29,7 @@ jobs:
 
     env:
       ALPINE_NAME: "alpine:3"
-      ALPINE_DIGEST: "sha256:a8560b36e8b8210634f77d9f7f9efd7ffa463e380b75e2e74aff4511df3ef88c" # 3.21.3
+      ALPINE_DIGEST: "sha256:8a1f59ffb675680d47db6337b49d22281a139e9d709335b492be023728e11715" # 3.22.0
 
     steps:
     - name: Check out code
@@ -85,7 +85,7 @@ jobs:
         echo "repo_url=${REPO_URL}" >>$GITHUB_OUTPUT
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
+      uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
 
     - name: Login to DockerHub
       if: github.repository_owner == 'regclient'
@@ -103,14 +103,14 @@ jobs:
         password: ${{ secrets.GHCR_TOKEN }}
 
     - name: Build
-      uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.15.0
+      uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
       id: build
       with:
         context: .
         file: ./build/Dockerfile.${{ matrix.image }}.buildkit
         platforms: linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x
         target: release-${{ matrix.type }}
-        outputs: type=oci,dest=output/${{matrix.image}}-${{matrix.type}}.tar
+        outputs: type=oci,oci-artifact=true,dest=output/${{matrix.image}}-${{matrix.type}}.tar
         build-args: |
           SOURCE_DATE_EPOCH=${{ steps.prep.outputs.vcs_sec }}
           BUILD_DATE=${{ steps.prep.outputs.created }}
@@ -119,20 +119,20 @@ jobs:
 
     - name: Install cosign
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
-      uses: sigstore/cosign-installer@d7d6bc7722e3daa8354c50bcb52f4837da5e9b6a # v3.8.1
+      uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
       with:
-        cosign-release: "v2.5.0"
+        cosign-release: "v2.5.2"
     
     - name: Install syft
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
-      uses: anchore/sbom-action/download-syft@f325610c9f50a54015d37c8d16cb3b0e2c8f4de0 # v0.18.0
+      uses: anchore/sbom-action/download-syft@9246b90769f852b3a8921f330c59e0b3f439d6e9 # v0.20.1
       id: syft
       with:
-        syft-version: "v1.22.0"
+        syft-version: "v1.27.1"
     
     # Dogfooding, use regctl to modify regclient images to improve reproducibility
     - name: Install regctl
-      uses: regclient/actions/regctl-installer@ed3ac54990fbd1b78be04a978e4a928fbc7b2dea # main
+      uses: regclient/actions/regctl-installer@0a960cee89b1ef446f3d33b58064083fdd7728cb # main
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       with:
         release: main

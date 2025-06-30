@@ -1,9 +1,10 @@
 module github.com/regclient/regclient
 
-go 1.22
+go 1.23.0
 
 require (
 	github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7
+	github.com/goccy/go-yaml v1.18.0
 	github.com/klauspost/compress v1.18.0
 	github.com/olareg/olareg v0.1.2
 	github.com/opencontainers/go-digest v1.0.0
@@ -12,9 +13,8 @@ require (
 	github.com/spf13/cobra v1.9.1
 	github.com/ulikunitz/xz v0.5.12
 	github.com/yuin/gopher-lua v1.1.1
-	golang.org/x/sys v0.30.0
-	golang.org/x/term v0.29.0
-	gopkg.in/yaml.v3 v3.0.1
+	golang.org/x/sys v0.33.0
+	golang.org/x/term v0.32.0
 )
 
 require (

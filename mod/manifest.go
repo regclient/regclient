@@ -528,17 +528,20 @@ func WithManifestToOCIReferrers() Opts {
 						return fmt.Errorf("could not find digest, convert referrers before other mod actions, digest=%s", desc.Annotations[dockerReferenceDigest])
 					}
 					// validate the manifest being converted
-					_, ok = childDM.m.(manifest.Subjecter)
+					sm, ok := childDM.m.(manifest.Subjecter)
 					if !ok {
 						return fmt.Errorf("docker reference type does not support subject, mt=%s", childDM.m.GetDescriptor().MediaType)
 					}
-					am, ok := childDM.m.(manifest.Annotator)
-					if !ok {
-						return fmt.Errorf("docker reference type does not support annotations, mt=%s", childDM.m.GetDescriptor().MediaType)
-					}
-					err := am.SetAnnotation(dockerReferenceType, desc.Annotations[dockerReferenceType])
-					if err != nil {
-						return fmt.Errorf("failed to set annotations: %w", err)
+					if subj, err := sm.GetSubject(); err != nil || subj == nil || subj.Digest.String() != desc.Annotations[dockerReferenceDigest] {
+						// only add annotation for docker's first style of attestations
+						am, ok := childDM.m.(manifest.Annotator)
+						if !ok {
+							return fmt.Errorf("docker reference type does not support annotations, mt=%s", childDM.m.GetDescriptor().MediaType)
+						}
+						err := am.SetAnnotation(dockerReferenceType, desc.Annotations[dockerReferenceType])
+						if err != nil {
+							return fmt.Errorf("failed to set annotations: %w", err)
+						}
 					}
 					// copy childDM to add a referrer entry to the targetDM
 					referrerDM := *childDM
