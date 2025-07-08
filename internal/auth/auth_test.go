@@ -286,7 +286,7 @@ func TestAuth(t *testing.T) {
 			wantAuthHeader: "Bearer token1",
 		},
 		{
-			name: "bearer2",
+			name: "bearer2 relative path",
 			auth: NewAuth(
 				WithClientID(clientID),
 				WithCreds(credsFn),
@@ -298,7 +298,7 @@ func TestAuth(t *testing.T) {
 				StatusCode: http.StatusUnauthorized,
 				Header: http.Header{
 					http.CanonicalHeaderKey("WWW-Authenticate"): []string{
-						`Bearer realm="` + tsURL.String() + `/token2",service="` + tsHost + `",scope="repository:reponame:pull"`,
+						`Bearer realm="` + `/token2",service="` + tsHost + `",scope="repository:reponame:pull"`,
 					},
 				},
 			},
@@ -524,9 +524,13 @@ func TestBearer(t *testing.T) {
 		func(h string) Cred { return Cred{User: user, Password: pass} },
 		slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
 	).(*bearerHandler)
+	req, err := http.NewRequest("GET", tsURL.String(), nil)
+	if err != nil {
+		t.Fatalf("failed to setup request: %v", err)
+	}
 
 	// handle token1, verify expired token gets current time and isn't expired
-	err := bearer.AddScope("repository:reponame:pull")
+	err = bearer.AddScope("repository:reponame:pull")
 	if err != nil {
 		t.Errorf("failed adding scope: %v", err)
 	}
@@ -541,10 +545,11 @@ func TestBearer(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed on response to token1: %v", err)
 	}
-	resp1, err := bearer.GenerateAuth()
+	err = bearer.UpdateRequest(req)
 	if err != nil {
 		t.Errorf("failed to generate auth response1: %v", err)
 	}
+	resp1 := req.Header.Get("Authorization")
 	if resp1 != "Bearer token1" {
 		t.Errorf("token1 is invalid, expected %s, received %s", "Bearer token1", resp1)
 	}
@@ -557,10 +562,11 @@ func TestBearer(t *testing.T) {
 	if err != nil && !errors.Is(err, errs.ErrNoNewChallenge) {
 		t.Errorf("failed adding scope: %v", err)
 	}
-	resp1a, err := bearer.GenerateAuth()
+	err = bearer.UpdateRequest(req)
 	if err != nil {
 		t.Errorf("failed to generate auth response1 (rerun): %v", err)
 	}
+	resp1a := req.Header.Get("Authorization")
 	if resp1a != "Bearer token1" {
 		t.Errorf("token1 (rerun) is invalid, expected %s, received %s", "Bearer token1", resp1a)
 	}
@@ -578,10 +584,11 @@ func TestBearer(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed reprocess challenge on expired token: %v", err)
 	}
-	resp1b, err := bearer.GenerateAuth()
+	err = bearer.UpdateRequest(req)
 	if err != nil {
 		t.Errorf("failed to generate auth response1 (expired): %v", err)
 	}
+	resp1b := req.Header.Get("Authorization")
 	if resp1b != "Bearer token1" {
 		t.Errorf("token1 (expired) is invalid, expected %s, received %s", "Bearer token1", resp1b)
 	}
@@ -594,10 +601,11 @@ func TestBearer(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed adding scope: %v", err)
 	}
-	resp2, err := bearer.GenerateAuth()
+	err = bearer.UpdateRequest(req)
 	if err != nil {
 		t.Errorf("failed to generate auth response2 (push): %v", err)
 	}
+	resp2 := req.Header.Get("Authorization")
 	if resp2 != "Bearer token2" {
 		t.Errorf("token2 (push) is invalid, expected %s, received %s", "Bearer token2", resp2)
 	}
@@ -616,10 +624,11 @@ func TestBearer(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed adding scope: %v", err)
 	}
-	resp3, err := bearer.GenerateAuth()
+	err = bearer.UpdateRequest(req)
 	if err != nil {
 		t.Errorf("failed to generate auth response3 (delete): %v", err)
 	}
+	resp3 := req.Header.Get("Authorization")
 	if resp3 != "Bearer token3" {
 		t.Errorf("token3 (delete) is invalid, expected %s, received %s", "Bearer token3", resp3)
 	}
@@ -638,10 +647,11 @@ func TestBearer(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed adding scope: %v", err)
 	}
-	resp4, err := bearer.GenerateAuth()
+	err = bearer.UpdateRequest(req)
 	if err != nil {
 		t.Errorf("failed to generate auth response4 (custom): %v", err)
 	}
+	resp4 := req.Header.Get("Authorization")
 	if resp4 != "Bearer token4" {
 		t.Errorf("token4 (custom) is invalid, expected %s, received %s", "Bearer token4", resp4)
 	}
@@ -660,10 +670,11 @@ func TestBearer(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed adding scope: %v", err)
 	}
-	resp5, err := bearer.GenerateAuth()
+	err = bearer.UpdateRequest(req)
 	if err != nil {
 		t.Errorf("failed to generate auth response5 (push,pull): %v", err)
 	}
+	resp5 := req.Header.Get("Authorization")
 	if resp5 != "Bearer token5" {
 		t.Errorf("token5 (push,pull) is invalid, expected %s, received %s", "Bearer token5", resp5)
 	}
@@ -682,10 +693,11 @@ func TestBearer(t *testing.T) {
 	if !errors.Is(err, errs.ErrNoNewChallenge) {
 		t.Errorf("unexpected error when adding scope: expected err: %v, received: %v", errs.ErrNoNewChallenge, err)
 	}
-	resp5a, err := bearer.GenerateAuth()
+	err = bearer.UpdateRequest(req)
 	if err != nil {
 		t.Errorf("failed to generate auth response5 (rerun): %v", err)
 	}
+	resp5a := req.Header.Get("Authorization")
 	if resp5a != "Bearer token5" {
 		t.Errorf("token5 (rerun) is invalid, expected %s, received %s", "Bearer token5", resp5a)
 	}
@@ -753,12 +765,17 @@ func TestBearerToken(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed on response to token: %v", err)
 	}
-	resp, err := bearer.GenerateAuth()
+	req, err := http.NewRequest("GET", "http://localhost:5000", nil)
+	if err != nil {
+		t.Fatalf("failed to generate new request: %v", err)
+	}
+	err = bearer.UpdateRequest(req)
 	if err != nil {
 		t.Errorf("failed to generate auth response: %v", err)
 	}
-	bearerResp := fmt.Sprintf("Bearer %s", token)
-	if resp != bearerResp {
+	resp := req.Header.Get("Authorization")
+	want := fmt.Sprintf("Bearer %s", token)
+	if resp != want {
 		t.Errorf("token1 is invalid, expected %s, received %s", "Bearer token1", resp)
 	}
 	if bearer.isExpired() {
