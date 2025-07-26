@@ -82,6 +82,7 @@ fi
 docker buildx build --platform="$platforms" \
   -f "build/Dockerfile.${image}.buildkit" \
   -o "type=oci,oci-artifact=true,dest=output/${image}-${release}.tar" \
+  --provenance version=v1,mode=max \
   --target "release-${release}" \
   --build-arg "SOURCE_DATE_EPOCH=${vcs_sec}" \
   --build-arg "BUILD_DATE=${vcs_date}" \
