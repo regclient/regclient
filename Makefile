@@ -182,6 +182,13 @@ artifacts/%: artifact-pre .FORCE
 	$(SYFT) scan -q "file:$@" --source-name "$${command}" -o cyclonedx-json >"artifacts/$${command}-$${platform}.cyclonedx.json"; \
 	$(SYFT) scan -q "file:$@" --source-name "$${command}" -o spdx-json >"artifacts/$${command}-$${platform}.spdx.json"
 
+.PHONY: clean
+clean: ## delete generated content
+	[ ! -d artifacts ] || rm -r artifacts
+	[ ! -d bin ] || rm -r bin
+	[ ! -d output ] || rm -r output
+	[ ! -d vendor ] || rm -r vendor
+
 .PHONY: plugin-user
 plugin-user:
 	mkdir -p ${HOME}/.docker/cli-plugins/
