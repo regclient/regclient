@@ -13,8 +13,8 @@ require (
 	github.com/spf13/cobra v1.9.1
 	github.com/ulikunitz/xz v0.5.12
 	github.com/yuin/gopher-lua v1.1.1
-	golang.org/x/sys v0.34.0
-	golang.org/x/term v0.33.0
+	golang.org/x/sys v0.35.0
+	golang.org/x/term v0.34.0
 )
 
 require (
