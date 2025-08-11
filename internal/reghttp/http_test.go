@@ -719,6 +719,27 @@ func TestRegHttp(t *testing.T) {
 	tsURL, _ := url.Parse(ts.URL)
 	tsHost := tsURL.Host
 
+	// create a second server to validate ns query set to upstream hostname (different hostnames)
+	rrs2 := []reqresp.ReqResp{
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Method: "GET",
+				Path:   "/v2/ns-check/project-ns/manifests/tag-get",
+				Query: map[string][]string{
+					"ns": {tsHost},
+				},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusOK,
+				Body:   getBody,
+			},
+		},
+	}
+	ts2 := httptest.NewServer(reqresp.NewHandler(t, rrs2))
+	defer ts2.Close()
+	ts2URL, _ := url.Parse(ts2.URL)
+	ts2Host := ts2URL.Host
+
 	// create config for various hosts, different host pointing to same dns hostname
 	configHosts := map[string]*config.Host{
 		tsHost: {
@@ -891,6 +912,22 @@ func TestRegHttp(t *testing.T) {
 			Hostname:  tsHost,
 			TLS:       config.TLSDisabled,
 			ReqPerSec: reqPerSec,
+		},
+		"expectns." + ts2Host: {
+			Name:       "expectns." + ts2Host,
+			Hostname:   ts2Host,
+			TLS:        config.TLSDisabled,
+			PathPrefix: "ns-check",
+			Priority:   1,
+		},
+		"mirror-ns." + tsHost: {
+			Name:     "mirror-ns." + tsHost,
+			Hostname: tsHost,
+			TLS:      config.TLSDisabled,
+			Priority: 5,
+			Mirrors: []string{
+				"expectns." + ts2Host,
+			},
 		},
 	}
 
@@ -1695,5 +1732,27 @@ func TestRegHttp(t *testing.T) {
 			t.Errorf("requests finished faster than expected time, expected %s, received %s", expectMin.String(), dur.String())
 		}
 	})
+	// validate ns set to upstream hostname when mirror hostname differs
+	t.Run("Mirror ns hostname differs", func(t *testing.T) {
+		getReq := &Req{
+			Host:       "mirror-ns." + tsHost,
+			Method:     "GET",
+			Repository: "project-ns",
+			Path:       "manifests/tag-get",
+			Headers:    headers,
+		}
+		resp, err := hc.Do(ctx, getReq)
+		if err != nil {
+			t.Fatalf("failed to run get: %v", err)
+		}
+		if resp.HTTPResponse().StatusCode != 200 {
+			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
+		}
+		err = resp.Close()
+		if err != nil {
+			t.Errorf("error closing request: %v", err)
+		}
+	})
+
 	// TODO: test various TLS configs (custom root for all hosts, custom root for one host, insecure)
 }
