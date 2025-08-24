@@ -7,7 +7,7 @@ base_name=""
 release="scratch"
 push_tags=""
 ALPINE_NAME="alpine:3"
-ALPINE_DIGEST="sha256:8a1f59ffb675680d47db6337b49d22281a139e9d709335b492be023728e11715" # 3.22.0
+ALPINE_DIGEST="sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1" # 3.22.1
 
 # CLI options to override image, platform, base digest, and comma separated list of tags to push
 opt_c=0
@@ -82,6 +82,7 @@ fi
 docker buildx build --platform="$platforms" \
   -f "build/Dockerfile.${image}.buildkit" \
   -o "type=oci,oci-artifact=true,dest=output/${image}-${release}.tar" \
+  --provenance version=v1,mode=max \
   --target "release-${release}" \
   --build-arg "SOURCE_DATE_EPOCH=${vcs_sec}" \
   --build-arg "BUILD_DATE=${vcs_date}" \

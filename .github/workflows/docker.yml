@@ -29,11 +29,11 @@ jobs:
 
     env:
       ALPINE_NAME: "alpine:3"
-      ALPINE_DIGEST: "sha256:8a1f59ffb675680d47db6337b49d22281a139e9d709335b492be023728e11715" # 3.22.0
+      ALPINE_DIGEST: "sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1" # 3.22.1
 
     steps:
     - name: Check out code
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
     - name: Prepare
       id: prep
@@ -89,14 +89,14 @@ jobs:
 
     - name: Login to DockerHub
       if: github.repository_owner == 'regclient'
-      uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0 
+      uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0 
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
     - name: Login to GHCR
       if: github.repository_owner == 'regclient'
-      uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+      uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
       with:
         registry: ghcr.io
         username: ${{ secrets.GHCR_USERNAME }}
@@ -111,6 +111,7 @@ jobs:
         platforms: linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x
         target: release-${{ matrix.type }}
         outputs: type=oci,oci-artifact=true,dest=output/${{matrix.image}}-${{matrix.type}}.tar
+        provenance: version=v1,mode=max
         build-args: |
           SOURCE_DATE_EPOCH=${{ steps.prep.outputs.vcs_sec }}
           BUILD_DATE=${{ steps.prep.outputs.created }}
@@ -119,20 +120,20 @@ jobs:
 
     - name: Install cosign
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
-      uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+      uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
       with:
-        cosign-release: "v2.5.2"
+        cosign-release: "v2.5.3"
     
     - name: Install syft
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
-      uses: anchore/sbom-action/download-syft@9246b90769f852b3a8921f330c59e0b3f439d6e9 # v0.20.1
+      uses: anchore/sbom-action/download-syft@da167eac915b4e86f08b264dbdbc867b61be6f0c # v0.20.5
       id: syft
       with:
-        syft-version: "v1.27.1"
+        syft-version: "v1.31.0"
     
     # Dogfooding, use regctl to modify regclient images to improve reproducibility
     - name: Install regctl
-      uses: regclient/actions/regctl-installer@0a960cee89b1ef446f3d33b58064083fdd7728cb # main
+      uses: regclient/actions/regctl-installer@03ca0eeb8348921b9447b7d5d6b6d350550ddb3b # main
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       with:
         release: main
