@@ -107,7 +107,7 @@ func newImageCheckBaseCmd(rOpts *rootOpts) *cobra.Command {
 If the base name is not provided, annotations will be checked in the image.
 If the digest is available, this checks if that matches the base name.
 If the digest is not available, layers of each manifest are compared.
-If the layers match, the config (history and roots) are optionally compared.	
+If the layers match, the config (history and roots) are optionally compared.
 If the base image does not match, the command exits with a non-zero status.`,
 		Example: `
 # report if base image has changed using annotations
