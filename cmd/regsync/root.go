@@ -80,14 +80,14 @@ More details at <https://github.com/regclient/regclient>`,
 	cmd.PersistentFlags().StringVarP(&opts.verbosity, "verbosity", "v", slog.LevelInfo.String(), "Log level (trace, debug, info, warn, error)")
 	cmd.PersistentFlags().StringArrayVar(&opts.logopts, "logopt", []string{}, "Log options")
 
-	var serverCmd = &cobra.Command{
+	serverCmd := &cobra.Command{
 		Use:   "server",
 		Short: "run the regsync server",
 		Long:  `Sync registries according to the configuration.`,
 		Args:  cobra.RangeArgs(0, 0),
 		RunE:  opts.runServer,
 	}
-	var checkCmd = &cobra.Command{
+	checkCmd := &cobra.Command{
 		Use:   "check",
 		Short: "processes each sync command once but skip actual copy",
 		Long: `Processes each sync command in the configuration file in order.
@@ -97,7 +97,7 @@ sync step is finished.`,
 		Args: cobra.RangeArgs(0, 0),
 		RunE: opts.runCheck,
 	}
-	var onceCmd = &cobra.Command{
+	onceCmd := &cobra.Command{
 		Use:   "once",
 		Short: "processes each sync command once, ignoring cron schedule",
 		Long: `Processes each sync command in the configuration file in order.
@@ -107,7 +107,7 @@ sync step is finished.`,
 		RunE: opts.runOnce,
 	}
 	onceCmd.Flags().BoolVar(&opts.missing, "missing", false, "Only copy tags that are missing on target")
-	var configCmd = &cobra.Command{
+	configCmd := &cobra.Command{
 		Use:   "config",
 		Short: "Show the config",
 		Long:  `Show the config`,
@@ -123,12 +123,18 @@ sync step is finished.`,
 		curCmd.Flags().BoolVar(&opts.abortOnErr, "abort-on-error", false, "Immediately abort on any errors")
 	}
 
-	var versionCmd = &cobra.Command{
+	versionCmd := &cobra.Command{
 		Use:   "version",
 		Short: "Show the version",
-		Long:  `Show the version`,
-		Args:  cobra.RangeArgs(0, 0),
-		RunE:  opts.runVersion,
+		Long:  fmt.Sprintf(`Show the version of %s. Note that docker image builds will always be marked "dirty".`, cmd.Name()),
+		Example: fmt.Sprintf(`
+# display full version details
+%[1]s version
+
+# retrieve the version number
+%[1]s version --format '{{.VCSTag}}'`, cmd.Name()),
+		Args: cobra.ExactArgs(0),
+		RunE: opts.runVersion,
 	}
 	versionCmd.Flags().StringVar(&opts.format, "format", "{{printPretty .}}", "Format output with go template syntax")
 	_ = versionCmd.RegisterFlagCompletionFunc("format", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
