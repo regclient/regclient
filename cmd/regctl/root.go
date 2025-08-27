@@ -107,13 +107,13 @@ func newVersionCmd(rOpts *rootOpts) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Show the version",
-		Long:  fmt.Sprintf(`Show the version of %s`, opts.rootOpts.name),
-		Example: `
+		Long:  fmt.Sprintf(`Show the version of %s. Note that docker image builds will always be marked "dirty".`, opts.rootOpts.name),
+		Example: fmt.Sprintf(`
 # display full version details
-regctl version
+%[1]s version
 
 # retrieve the version number
-regctl version --format '{{.VCSTag}}'`,
+%[1]s version --format '{{.VCSTag}}'`, opts.rootOpts.name),
 		Args: cobra.ExactArgs(0),
 		RunE: opts.runVersion,
 	}
