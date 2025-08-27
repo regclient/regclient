@@ -1,6 +1,6 @@
 {"name":"docker-arg-alpine-digest","key":"docker.io/library/alpine:3.22.1","version":"sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1"}
 {"name":"docker-arg-alpine-tag","key":"docker.io/library/alpine","version":"3.22.1"}
-{"name":"docker-arg-ecr","key":"https://github.com/awslabs/amazon-ecr-credential-helper.git:main","version":"64b08bad70174a1849fe597f0c59288eb7b7cf91"}
+{"name":"docker-arg-ecr","key":"https://github.com/awslabs/amazon-ecr-credential-helper.git","version":"v0.10.1"}
 {"name":"docker-arg-gcr","key":"https://github.com/GoogleCloudPlatform/docker-credential-gcr.git","version":"v2.1.30"}
 {"name":"docker-arg-go-digest","key":"docker.io/library/golang:1.25.0-alpine","version":"sha256:f18a072054848d87a8077455f0ac8a25886f2397f88bfdd222d6fafbb5bba440"}
 {"name":"docker-arg-go-tag","key":"docker.io/library/golang","version":"1.25.0"}
