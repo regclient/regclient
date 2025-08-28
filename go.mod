@@ -11,7 +11,7 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.9.1
-	github.com/ulikunitz/xz v0.5.14
+	github.com/ulikunitz/xz v0.5.13
 	github.com/yuin/gopher-lua v1.1.1
 	golang.org/x/sys v0.35.0
 	golang.org/x/term v0.34.0
