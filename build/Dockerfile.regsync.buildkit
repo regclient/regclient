@@ -3,8 +3,9 @@
 ARG REGISTRY=docker.io
 ARG ALPINE_VER=3.22.1@sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1
 ARG GO_VER=1.25.0-alpine@sha256:f18a072054848d87a8077455f0ac8a25886f2397f88bfdd222d6fafbb5bba440
-ARG ECR_HELPER_VER=64b08bad70174a1849fe597f0c59288eb7b7cf91
+ARG ECR_HELPER_VER=v0.10.1
 ARG GCR_HELPER_VER=v2.1.30
+ARG VCS_VERSION=(devel)
 
 FROM --platform=$BUILDPLATFORM ${REGISTRY}/library/golang:${GO_VER} AS golang
 RUN apk add --no-cache \
@@ -74,15 +75,14 @@ COPY --from=docker-cred-gcr /usr/local/bin/docker-credential-* /usr/local/bin/
 COPY --from=build /src/bin/regsync /usr/local/bin/regsync
 USER appuser
 CMD [ "regsync", "--help" ]
-
 ARG BUILD_DATE
 ARG VCS_REF
-ARG VCS_VERSION=(devel)
+ARG VCS_VERSION
 LABEL maintainer="" \
       org.opencontainers.image.created=$BUILD_DATE \
       org.opencontainers.image.authors="regclient contributors" \
       org.opencontainers.image.url="https://github.com/regclient/regclient" \
-      org.opencontainers.image.documentation="https://github.com/regclient/regclient" \
+      org.opencontainers.image.documentation="https://regclient.org/" \
       org.opencontainers.image.source="https://github.com/regclient/regclient" \
       org.opencontainers.image.version=$VCS_VERSION \
       org.opencontainers.image.revision=$VCS_REF \
@@ -96,15 +96,14 @@ COPY --from=release-base /output /
 COPY --from=build /src/bin/regsync /regsync
 USER appuser
 ENTRYPOINT [ "/regsync" ]
-
 ARG BUILD_DATE
 ARG VCS_REF
-ARG VCS_VERSION=(devel)
+ARG VCS_VERSION
 LABEL maintainer="" \
       org.opencontainers.image.created=$BUILD_DATE \
       org.opencontainers.image.authors="regclient contributors" \
       org.opencontainers.image.url="https://github.com/regclient/regclient" \
-      org.opencontainers.image.documentation="https://github.com/regclient/regclient" \
+      org.opencontainers.image.documentation="https://regclient.org/" \
       org.opencontainers.image.source="https://github.com/regclient/regclient" \
       org.opencontainers.image.version=$VCS_VERSION \
       org.opencontainers.image.revision=$VCS_REF \

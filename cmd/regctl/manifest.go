@@ -60,7 +60,7 @@ func newManifestDeleteCmd(rOpts *rootOpts) *cobra.Command {
 		Aliases: []string{"del", "rm", "remove"},
 		Short:   "delete a manifest",
 		Long: `Delete a manifest. This will delete the manifest, and all tags pointing to that
-manifest. You must specify a digest, not a tag on this command (e.g. 
+manifest. You must specify a digest, not a tag on this command (e.g.
 image_name@sha256:1234abc...). It is up to the registry whether the delete
 API is supported. Additionally, registries may garbage collect the filesystem
 layers (blobs) separately or not at all. See also the "tag delete" command.`,

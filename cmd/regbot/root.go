@@ -71,9 +71,15 @@ returns after the last script completes.`,
 	versionCmd := &cobra.Command{
 		Use:   "version",
 		Short: "Show the version",
-		Long:  `Show the version`,
-		Args:  cobra.RangeArgs(0, 0),
-		RunE:  opts.runVersion,
+		Long:  fmt.Sprintf(`Show the version of %s. Note that docker image builds will always be marked "dirty".`, cmd.Name()),
+		Example: fmt.Sprintf(`
+# display full version details
+%[1]s version
+
+# retrieve the version number
+%[1]s version --format '{{.VCSTag}}'`, cmd.Name()),
+		Args: cobra.ExactArgs(0),
+		RunE: opts.runVersion,
 	}
 
 	cmd.PersistentFlags().StringArrayVar(&opts.logopts, "logopt", []string{}, "Log options")
