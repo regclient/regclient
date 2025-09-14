@@ -9,7 +9,7 @@
 {"name":"gha-alpine-digest","key":"docker.io/library/alpine:3.22.1","version":"sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1"}
 {"name":"gha-alpine-tag-base","key":"docker.io/library/alpine","version":"3"}
 {"name":"gha-alpine-tag-comment","key":"docker.io/library/alpine","version":"3.22.1"}
-{"name":"gha-cosign-version","key":"https://github.com/sigstore/cosign.git","version":"v2.5.3"}
+{"name":"gha-cosign-version","key":"https://github.com/sigstore/cosign.git","version":"v2.6.0"}
 {"name":"gha-golang-matrix","key":"golang-matrix","version":"[\"1.24\", \"1.25\"]"}
 {"name":"gha-golang-release","key":"golang-latest","version":"1.25"}
 {"name":"gha-syft-version","key":"docker.io/anchore/syft","version":"v1.32.0"}
@@ -21,8 +21,8 @@
 {"name":"gha-uses-commit","key":"https://github.com/docker/build-push-action.git:v6.18.0","version":"263435318d21b8e681c14492fe198d362a7d2c83"}
 {"name":"gha-uses-commit","key":"https://github.com/docker/login-action.git:v3.5.0","version":"184bdaa0721073962dff0199f1fb9940f07167d1"}
 {"name":"gha-uses-commit","key":"https://github.com/docker/setup-buildx-action.git:v3.11.1","version":"e468171a9de216ec08956ac3ada2f0791b6bd435"}
-{"name":"gha-uses-commit","key":"https://github.com/regclient/actions.git:main","version":"03ca0eeb8348921b9447b7d5d6b6d350550ddb3b"}
-{"name":"gha-uses-commit","key":"https://github.com/sigstore/cosign-installer.git:v3.9.2","version":"d58896d6a1865668819e1d91763c7751a165e159"}
+{"name":"gha-uses-commit","key":"https://github.com/regclient/actions.git:main","version":"495560f7c3b510b71ff9f22d6c667c2c429b8e45"}
+{"name":"gha-uses-commit","key":"https://github.com/sigstore/cosign-installer.git:v3.10.0","version":"d7543c93d881b35a8faa02e8e3605f69b7a1ce62"}
 {"name":"gha-uses-commit","key":"https://github.com/softprops/action-gh-release.git:v2.3.3","version":"6cbd405e2c4e67a21c47fa9e383d020e4e28b836"}
 {"name":"gha-uses-semver","key":"https://github.com/actions/checkout.git","version":"v5.0.0"}
 {"name":"gha-uses-semver","key":"https://github.com/actions/setup-go.git","version":"v6.0.0"}
@@ -32,7 +32,7 @@
 {"name":"gha-uses-semver","key":"https://github.com/docker/build-push-action.git","version":"v6.18.0"}
 {"name":"gha-uses-semver","key":"https://github.com/docker/login-action.git","version":"v3.5.0"}
 {"name":"gha-uses-semver","key":"https://github.com/docker/setup-buildx-action.git","version":"v3.11.1"}
-{"name":"gha-uses-semver","key":"https://github.com/sigstore/cosign-installer.git","version":"v3.9.2"}
+{"name":"gha-uses-semver","key":"https://github.com/sigstore/cosign-installer.git","version":"v3.10.0"}
 {"name":"gha-uses-semver","key":"https://github.com/softprops/action-gh-release.git","version":"v2.3.3"}
 {"name":"go-mod-golang-release","key":"golang-oldest","version":"1.24.0"}
 {"name":"makefile-ci-distribution","key":"docker.io/library/registry","version":"3.0.0"}
