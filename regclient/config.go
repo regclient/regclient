@@ -22,13 +22,12 @@ type (
 	TLSConf = config.TLSConf
 )
 
-var (
-	// ConfigHostNewName
-	//
-	// Deprecated: replace with [config.ConfigHostNewName].
-	//go:fix inline
-	ConfigHostNewName = config.HostNewName
-)
+// ConfigHostNewName
+//
+// Deprecated: replace with [config.ConfigHostNewName].
+//
+//go:fix inline
+var ConfigHostNewName = config.HostNewName
 
 const (
 	// TLSUndefined

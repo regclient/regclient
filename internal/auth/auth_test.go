@@ -19,7 +19,7 @@ import (
 
 func TestParseAuthHeader(t *testing.T) {
 	t.Parallel()
-	var tests = []struct {
+	tests := []struct {
 		name, in string
 		wantC    []challenge
 		wantE    error
@@ -71,7 +71,8 @@ func TestParseAuthHeader(t *testing.T) {
 			in:   `Bearer realm="https://auth.docker.io/token", service="registry.docker.io", scope="repository:docker/docker:pull", Basic realm="GitHub Package Registry"`,
 			wantC: []challenge{
 				{authType: "bearer", params: map[string]string{"realm": "https://auth.docker.io/token", "service": "registry.docker.io", "scope": "repository:docker/docker:pull"}},
-				{authType: "basic", params: map[string]string{"realm": "GitHub Package Registry"}}},
+				{authType: "basic", params: map[string]string{"realm": "GitHub Package Registry"}},
+			},
 			wantE: nil,
 		},
 		{
@@ -358,7 +359,6 @@ func TestAuth(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func TestBearer(t *testing.T) {

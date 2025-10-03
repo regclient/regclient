@@ -12,7 +12,7 @@ var testDigest = "sha256:15f840677a5e245d9ea199eb9b026b1539208a5183621dced7b469f
 
 func TestNew(t *testing.T) {
 	t.Parallel()
-	var tt = []struct {
+	tt := []struct {
 		name       string
 		ref        string
 		scheme     string
@@ -479,7 +479,7 @@ func TestNew(t *testing.T) {
 
 func TestNewHost(t *testing.T) {
 	t.Parallel()
-	var tt = []struct {
+	tt := []struct {
 		name     string
 		host     string
 		scheme   string
@@ -1019,7 +1019,6 @@ func TestSetAndAdd(t *testing.T) {
 	if r.Reference != rAddStr {
 		t.Errorf("AddDigest reference mismatch, expected %s, received %s", rAddStr, r.Reference)
 	}
-
 }
 
 func TestToReg(t *testing.T) {

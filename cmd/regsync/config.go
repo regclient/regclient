@@ -14,13 +14,15 @@ import (
 )
 
 // delay checking for at least 5 minutes when rate limit is exceeded
-var rateLimitRetryMin = time.Minute * 5
-var defaultMediaTypes = []string{
-	mediatype.Docker2Manifest,
-	mediatype.Docker2ManifestList,
-	mediatype.OCI1Manifest,
-	mediatype.OCI1ManifestList,
-}
+var (
+	rateLimitRetryMin = time.Minute * 5
+	defaultMediaTypes = []string{
+		mediatype.Docker2Manifest,
+		mediatype.Docker2ManifestList,
+		mediatype.OCI1Manifest,
+		mediatype.OCI1ManifestList,
+	}
+)
 
 // Config is parsed configuration file for regsync
 type Config struct {

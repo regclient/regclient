@@ -2,11 +2,10 @@
 package regclient
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 	"time"
-
-	"fmt"
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/version"
@@ -43,7 +42,7 @@ type Opt func(*RegClient)
 
 // New returns a registry client.
 func New(opts ...Opt) *RegClient {
-	var rc = RegClient{
+	rc := RegClient{
 		hosts:     map[string]*config.Host{},
 		userAgent: DefaultUserAgent,
 		regOpts:   []reg.Opts{},

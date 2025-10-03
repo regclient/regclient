@@ -83,7 +83,7 @@ type docOpts struct {
 // NewCmd generates a new cobra command for generating docs.
 func NewCmd(rootName, newName string) *cobra.Command {
 	opts := docOpts{}
-	var docCmd = &cobra.Command{
+	docCmd := &cobra.Command{
 		Hidden: true,
 		Use:    newName,
 		Short:  "Document CLI",

@@ -67,9 +67,11 @@ type retryable struct {
 	mu            sync.Mutex
 }
 
-var defaultDelayInit, _ = time.ParseDuration("1s")
-var defaultDelayMax, _ = time.ParseDuration("30s")
-var defaultLimit = 3
+var (
+	defaultDelayInit, _ = time.ParseDuration("1s")
+	defaultDelayMax, _  = time.ParseDuration("30s")
+	defaultLimit        = 3
+)
 
 // NewRetryable returns a retryable interface
 func NewRetryable(opts ...Opts) Retryable {

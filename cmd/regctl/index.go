@@ -45,7 +45,7 @@ type indexOpts struct {
 }
 
 func NewIndexCmd(rOpts *rootOpts) *cobra.Command {
-	var indexCmd = &cobra.Command{
+	indexCmd := &cobra.Command{
 		Use:   "index <cmd>",
 		Short: "manage manifest lists and OCI index",
 	}

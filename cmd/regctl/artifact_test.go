@@ -186,12 +186,12 @@ func TestArtifactPut(t *testing.T) {
 	testDir := t.TempDir()
 	testData := []byte("hello world")
 	testConfName := filepath.Join(testDir, "exConf")
-	err := os.WriteFile(testConfName, []byte(`{"hello": "world"}`), 0600)
+	err := os.WriteFile(testConfName, []byte(`{"hello": "world"}`), 0o600)
 	if err != nil {
 		t.Fatalf("failed creating test conf: %v", err)
 	}
 	testFileName := filepath.Join(testDir, "exFile")
-	err = os.WriteFile(testFileName, []byte(`example test file`), 0600)
+	err = os.WriteFile(testFileName, []byte(`example test file`), 0o600)
 	if err != nil {
 		t.Fatalf("failed creating test conf: %v", err)
 	}
@@ -394,7 +394,8 @@ func TestArtifactTree(t *testing.T) {
 			args:        []string{"artifact", "tree", "ocidir://../../testdata/testrepo:v2", "--external", "ocidir://../../testdata/external"},
 			expectOut:   "Referrers",
 			outContains: true,
-		}}
+		},
+	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			out, err := cobraTest(t, nil, tc.args...)

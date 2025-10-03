@@ -36,10 +36,11 @@ ifeq "$(strip $(VER_BUMP))" ''
 		$(VER_BUMP_CONTAINER)
 endif
 MARKDOWN_LINT_VER?=v0.18.1
+GOFUMPT_VER?=v0.9.1
 GOMAJOR_VER?=v0.15.0
 GOSEC_VER?=v2.22.9
 GO_VULNCHECK_VER?=v1.1.4
-OSV_SCANNER_VER?=v2.2.2
+OSV_SCANNER_VER?=v2.2.3
 SYFT?=$(shell command -v syft 2>/dev/null)
 SYFT_CMD_VER:=$(shell [ -x "$(SYFT)" ] && echo "v$$($(SYFT) version | awk '/^Version: / {print $$2}')" || echo "0")
 SYFT_VERSION?=v1.33.0
@@ -58,11 +59,15 @@ CI_ZOT_VER?=v2.1.8
 .FORCE:
 
 .PHONY: all
-all: fmt goimports vet test lint binaries ## Full build of Go binaries (including fmt, vet, test, and lint)
+all: fmt gofumpt goimports vet test lint binaries ## Full build of Go binaries (including fmt, vet, test, and lint)
 
 .PHONY: fmt
 fmt: ## go fmt
 	go fmt ./...
+
+.PHONY: gofumpt
+gofumpt: $(GOPATH)/bin/gofumpt ## gofumpt is a stricter alternative to go fmt
+	gofumpt -l -w .
 
 goimports: $(GOPATH)/bin/goimports
 	$(GOPATH)/bin/goimports -w -format-only -local github.com/regclient .
@@ -79,8 +84,9 @@ test: ## go test
 lint: lint-go lint-goimports lint-md lint-gosec ## Run all linting
 
 .PHONY: lint-go
-lint-go: $(GOPATH)/bin/staticcheck .FORCE ## Run linting for Go
+lint-go: $(GOPATH)/bin/gofumpt $(GOPATH)/bin/staticcheck .FORCE ## Run linting for Go
 	$(GOPATH)/bin/staticcheck -checks all ./...
+	$(GOPATH)/bin/gofumpt -l -d .
 
 lint-goimports: $(GOPATH)/bin/goimports
 	@if [ -n "$$($(GOPATH)/bin/goimports -l -format-only -local github.com/regclient .)" ]; then \
@@ -228,6 +234,11 @@ util-version-check: ## check all dependencies for updates
 .PHONY: util-version-update
 util-version-update: ## update versions on all dependencies
 	$(VER_BUMP) update
+
+$(GOPATH)/bin/gofumpt: .FORCE
+	@[ -f "$(GOPATH)/bin/gofumpt" ] \
+	&& [ "$$($(GOPATH)/bin/gofumpt -version | cut -f 1 -d ' ')" = "$(GOFUMPT_VER)" ] \
+	|| go install mvdan.cc/gofumpt@$(GOFUMPT_VER)
 
 $(GOPATH)/bin/gomajor: .FORCE
 	@[ -f "$(GOPATH)/bin/gomajor" ] \

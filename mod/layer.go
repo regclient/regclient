@@ -164,7 +164,8 @@ func WithLayerCompression(algo archive.CompressType) Opts {
 						dl.newDesc.Digest = digRaw.Digest()
 						dl.ucDigest = digUC.Digest()
 						return nil
-					}}, nil
+					},
+				}, nil
 
 			case archive.CompressZstd:
 				switch desc.MediaType {
@@ -204,7 +205,8 @@ func WithLayerCompression(algo archive.CompressType) Opts {
 						dl.newDesc.Digest = digRaw.Digest()
 						dl.ucDigest = digUC.Digest()
 						return nil
-					}}, nil
+					},
+				}, nil
 
 			case archive.CompressNone:
 				switch desc.MediaType {
@@ -236,7 +238,8 @@ func WithLayerCompression(algo archive.CompressType) Opts {
 						dl.newDesc.Digest = dig.Digest()
 						dl.ucDigest = dig.Digest()
 						return nil
-					}}, nil
+					},
+				}, nil
 
 			default:
 				return rdr, nil
@@ -311,7 +314,8 @@ func WithLayerDigestAlgo(algo digest.Algorithm) Opts {
 						return errors.Join(errs...)
 					}
 					return nil
-				}}, nil
+				},
+			}, nil
 		})
 		return nil
 	}
