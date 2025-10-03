@@ -12,4 +12,6 @@ import (
 // RateLimit is returned from some http requests
 //
 // Deprecated: replace with [types.RateLimit].
+//
+//go:fix inline
 type RateLimit = topTypes.RateLimit

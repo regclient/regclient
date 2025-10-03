@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"testing"
 
 	// crypto libraries included for go-digest
@@ -806,6 +807,132 @@ func TestListSearch(t *testing.T) {
 			}
 			if !tc.expect.Equal(result) {
 				t.Errorf("unexpected result, expected %v, received %v", tc.expect, result)
+			}
+		})
+	}
+}
+
+func TestMatchOptMerge(t *testing.T) {
+	tt := []struct {
+		name    string
+		orig    MatchOpt
+		changes MatchOpt
+		expect  MatchOpt
+	}{
+		{
+			name: "empty",
+		},
+		{
+			name:    "new ArtifactType",
+			changes: MatchOpt{ArtifactType: "application/vnd.example.artifact"},
+			expect:  MatchOpt{ArtifactType: "application/vnd.example.artifact"},
+		},
+		{
+			name:    "add Platform",
+			orig:    MatchOpt{ArtifactType: "application/vnd.example.artifact"},
+			changes: MatchOpt{Platform: &platform.Platform{OS: "linux", Architecture: "amd64"}},
+			expect: MatchOpt{
+				ArtifactType: "application/vnd.example.artifact",
+				Platform:     &platform.Platform{OS: "linux", Architecture: "amd64"},
+			},
+		},
+		{
+			name: "add Annotations",
+			orig: MatchOpt{
+				ArtifactType: "application/vnd.example.artifact",
+				Platform:     &platform.Platform{OS: "linux", Architecture: "amd64"},
+			},
+			changes: MatchOpt{
+				Annotations: map[string]string{
+					"annotation1": "value1",
+					"annotation2": "value2",
+				},
+			},
+			expect: MatchOpt{
+				ArtifactType: "application/vnd.example.artifact",
+				Platform:     &platform.Platform{OS: "linux", Architecture: "amd64"},
+				Annotations: map[string]string{
+					"annotation1": "value1",
+					"annotation2": "value2",
+				},
+			},
+		},
+		{
+			name: "add SortAnnotation and desc",
+			orig: MatchOpt{
+				ArtifactType: "application/vnd.example.artifact",
+				Platform:     &platform.Platform{OS: "linux", Architecture: "amd64"},
+				Annotations: map[string]string{
+					"annotation1": "value1",
+					"annotation2": "value2",
+				},
+			},
+			changes: MatchOpt{
+				SortAnnotation: "annotationSort",
+				SortDesc:       true,
+			},
+			expect: MatchOpt{
+				ArtifactType: "application/vnd.example.artifact",
+				Platform:     &platform.Platform{OS: "linux", Architecture: "amd64"},
+				Annotations: map[string]string{
+					"annotation1": "value1",
+					"annotation2": "value2",
+				},
+				SortAnnotation: "annotationSort",
+				SortDesc:       true,
+			},
+		},
+		{
+			name: "add third annotation",
+			orig: MatchOpt{
+				ArtifactType: "application/vnd.example.artifact",
+				Platform:     &platform.Platform{OS: "linux", Architecture: "amd64"},
+				Annotations: map[string]string{
+					"annotation1": "value1",
+					"annotation2": "value2",
+				},
+				SortAnnotation: "annotationSort",
+				SortDesc:       true,
+			},
+			changes: MatchOpt{
+				Annotations: map[string]string{
+					"annotation3": "value3",
+				},
+			},
+			expect: MatchOpt{
+				ArtifactType: "application/vnd.example.artifact",
+				Platform:     &platform.Platform{OS: "linux", Architecture: "amd64"},
+				Annotations: map[string]string{
+					"annotation1": "value1",
+					"annotation2": "value2",
+					"annotation3": "value3",
+				},
+				SortAnnotation: "annotationSort",
+				SortDesc:       true,
+			},
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			result := tc.orig.Merge(tc.changes)
+			if result.ArtifactType != tc.expect.ArtifactType {
+				t.Errorf("ArtifactType mismatch, expected %s, received %s", tc.expect.ArtifactType, result.ArtifactType)
+			}
+			if result.Platform == nil || tc.expect.Platform == nil {
+				if result.Platform != tc.expect.Platform {
+					t.Errorf("Platform mismatch, expected %v, received %v", tc.expect.Platform, result.Platform)
+				}
+			} else if result.Platform.String() != tc.expect.Platform.String() {
+				t.Errorf("Platform mismatch, expected %s, received %s", tc.expect.Platform.String(), result.Platform.String())
+			}
+			if result.SortAnnotation != tc.expect.SortAnnotation {
+				t.Errorf("SortAnnotation mismatch, expected %s, received %s", tc.expect.SortAnnotation, result.SortAnnotation)
+			}
+			if result.SortDesc != tc.expect.SortDesc {
+				t.Errorf("SortDesc mismatch, expected %t, received %t", tc.expect.SortDesc, result.SortDesc)
+			}
+			if !maps.Equal(result.Annotations, tc.expect.Annotations) {
+				t.Errorf("Annotations mismatch, expected %v, received %v", tc.expect.Annotations, result.Annotations)
 			}
 		})
 	}
