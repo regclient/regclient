@@ -68,7 +68,7 @@ type rootOpts struct {
 
 func NewRootCmd() (*cobra.Command, *rootOpts) {
 	opts := rootOpts{}
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "regsync <cmd>",
 		Short: "Utility for mirroring docker repositories",
 		Long: `Utility for mirroring docker repositories
@@ -921,7 +921,7 @@ func filterList(ad AllowDeny, in []string) ([]string, error) {
 	}
 
 	// compress result list, removing empty elements
-	var compressed = make([]string, 0, len(in))
+	compressed := make([]string, 0, len(in))
 	for i := range result {
 		if result[i] != "" {
 			compressed = append(compressed, result[i])

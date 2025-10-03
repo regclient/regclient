@@ -474,6 +474,5 @@ func TestManifest(t *testing.T) {
 		if !errors.Is(err, errs.ErrNotFound) {
 			t.Fatalf("head after delete did not return a non-found: %v", err)
 		}
-
 	})
 }

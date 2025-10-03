@@ -94,7 +94,7 @@ func TestProcess(t *testing.T) {
 		regclient.WithRegOpts(reg.WithDelay(delayInit, delayMax)),
 	)
 	pq := pqueue.New(pqueue.Opts[throttle]{Max: 1})
-	var confBytes = `
+	confBytes := `
 version: 1
 defaults:
   parallel: 1

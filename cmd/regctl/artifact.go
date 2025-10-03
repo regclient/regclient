@@ -44,6 +44,7 @@ const (
 var manifestKnownTypes = []string{
 	mediatype.OCI1Manifest,
 }
+
 var artifactFileKnownTypes = []string{
 	"application/octet-stream",
 	"application/tar+gzip",
@@ -51,6 +52,7 @@ var artifactFileKnownTypes = []string{
 	"application/vnd.oci.image.layer.v1.tar+zstd",
 	"application/vnd.oci.image.layer.v1.tar+gzip",
 }
+
 var configKnownTypes = []string{
 	"application/vnd.oci.image.config.v1+json",
 	"application/vnd.cncf.helm.chart.config.v1+json",
@@ -508,7 +510,7 @@ func (opts *artifactOpts) runArtifactGet(cmd *cobra.Command, args []string) erro
 					fi, err := os.Stat(dest)
 					if os.IsNotExist(err) {
 						//#nosec G301 defer to user umask setting, simplifies container scenarios, registry content is often public
-						err = os.MkdirAll(dest, 0777)
+						err = os.MkdirAll(dest, 0o777)
 						if err != nil {
 							return err
 						}

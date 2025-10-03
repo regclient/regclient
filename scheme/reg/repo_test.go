@@ -212,7 +212,6 @@ func TestRepo(t *testing.T) {
 		} else if stringSliceCmp(listRegistry[partialLen:], rlRepos) == false {
 			t.Errorf("repositories do not match: expected %v, received %v", listRegistry[partialLen:], rlRepos)
 		}
-
 	})
 	// test with http errors
 	t.Run("Disabled", func(t *testing.T) {
@@ -260,5 +259,4 @@ func TestRepo(t *testing.T) {
 			t.Errorf("repositories do not match: expected %v, received %v", listRegistry, rlRepos)
 		}
 	})
-
 }

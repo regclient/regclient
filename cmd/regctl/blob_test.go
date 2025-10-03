@@ -117,5 +117,4 @@ func TestBlob(t *testing.T) {
 			t.Errorf("no output received from diff-config")
 		}
 	})
-
 }

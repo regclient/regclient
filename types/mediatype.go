@@ -102,10 +102,9 @@ const (
 	MediaTypeBuildkitCacheConfig = mediatype.BuildkitCacheConfig
 )
 
-var (
-	// Base cleans the Content-Type header to return only the lower case base media type.
-	//
-	// Deprecated: replace with [mediatype.Base].
-	//go:fix inline
-	MediaTypeBase = mediatype.Base
-)
+// MediaTypeBase cleans the Content-Type header to return only the lower case base media type.
+//
+// Deprecated: replace with [mediatype.Base].
+//
+//go:fix inline
+var MediaTypeBase = mediatype.Base

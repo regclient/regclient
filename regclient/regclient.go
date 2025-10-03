@@ -26,12 +26,10 @@ const (
 	DockerRegistryDNS  = config.DockerRegistryDNS
 )
 
-var (
-	// VCSRef is injected from a build flag, used to version the UserAgent header
-	//
-	// Deprecated: this should now be set using github.com/regclient/regclient/internal/version.vcsTag.
-	VCSRef = "unknown"
-)
+// VCSRef is injected from a build flag, used to version the UserAgent header
+//
+// Deprecated: this should now be set using github.com/regclient/regclient/internal/version.vcsTag.
+var VCSRef = "unknown"
 
 type (
 	// RegClient is used to access OCI distribution-spec registries.

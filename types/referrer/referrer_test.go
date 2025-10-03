@@ -125,13 +125,16 @@ const bDockerImg = `
 }
 `
 
-var mOCIImg, mOCIImgAT, mOCIIndex, mDockerImg manifest.Manifest
-var dOCIImg = descriptor.Descriptor{
-	MediaType:    "application/vnd.oci.image.manifest.v1+json",
-	ArtifactType: "application/vnd.example.config.v1+json",
-	Size:         int64(len(bOCIImg)),
-	Digest:       digest.FromString(bOCIImg),
-}
+var (
+	mOCIImg, mOCIImgAT, mOCIIndex, mDockerImg manifest.Manifest
+	dOCIImg                                   = descriptor.Descriptor{
+		MediaType:    "application/vnd.oci.image.manifest.v1+json",
+		ArtifactType: "application/vnd.example.config.v1+json",
+		Size:         int64(len(bOCIImg)),
+		Digest:       digest.FromString(bOCIImg),
+	}
+)
+
 var dOCIImgAT = descriptor.Descriptor{
 	MediaType:    "application/vnd.oci.image.manifest.v1+json",
 	ArtifactType: "application/vnd.example.data",
@@ -142,6 +145,7 @@ var dOCIImgAT = descriptor.Descriptor{
 		"com.example.version":  "1.0",
 	},
 }
+
 var dOCIIndex = descriptor.Descriptor{
 	MediaType:    "application/vnd.oci.image.index.v1+json",
 	ArtifactType: "application/vnd.example.data",
@@ -492,5 +496,4 @@ func TestMarshal(t *testing.T) {
 	if !strings.Contains(out, "Annotations:") {
 		t.Errorf("empty response is missing an annotations line: %s", out)
 	}
-
 }
