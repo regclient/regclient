@@ -12,4 +12,6 @@ import (
 // TemplateFuncs adds functions to a template.
 //
 // Deprecated: replace with [gotemplate.FuncMap].
+//
+//go:fix inline
 var TemplateFuncs = gotemplate.FuncMap{}
