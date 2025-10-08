@@ -1199,7 +1199,6 @@ type imageProgressEntry struct {
 	state       types.CallbackState
 	start, last time.Time
 	cur, total  int64
-	bps         []float64
 }
 
 func (ip *imageProgress) callback(kind types.CallbackKind, instance string, state types.CallbackState, cur, total int64) {
@@ -1210,17 +1209,9 @@ func (ip *imageProgress) callback(kind types.CallbackKind, instance string, stat
 	now := time.Now()
 	if e, ok := ip.entries[kind.String()+":"+instance]; ok {
 		e.state = state
-		diff := now.Sub(e.last)
-		bps := float64(cur-e.cur) / diff.Seconds()
-		e.state = state
 		e.last = now
 		e.cur = cur
 		e.total = total
-		if len(e.bps) >= 10 {
-			e.bps = append(e.bps[1:], bps)
-		} else {
-			e.bps = append(e.bps, bps)
-		}
 	} else {
 		ip.entries[kind.String()+":"+instance] = &imageProgressEntry{
 			kind:     kind,
@@ -1230,7 +1221,6 @@ func (ip *imageProgress) callback(kind types.CallbackKind, instance string, stat
 			last:     now,
 			cur:      cur,
 			total:    total,
-			bps:      []float64{},
 		}
 	}
 }
