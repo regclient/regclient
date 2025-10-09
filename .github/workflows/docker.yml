@@ -29,7 +29,7 @@ jobs:
 
     env:
       ALPINE_NAME: "alpine:3"
-      ALPINE_DIGEST: "sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1" # 3.22.1
+      ALPINE_DIGEST: "sha256:4b7ce07002c69e8f3d704a9c5d6fd3053be500b7f1c69fc0d80990c2ad8dd412" # 3.22.2
 
     steps:
     - name: Check out code
@@ -122,7 +122,7 @@ jobs:
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       uses: sigstore/cosign-installer@d7543c93d881b35a8faa02e8e3605f69b7a1ce62 # v3.10.0
       with:
-        cosign-release: "v2.6.0"
+        cosign-release: "v2.6.1"
     
     - name: Install syft
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
@@ -133,7 +133,7 @@ jobs:
     
     # Dogfooding, use regctl to modify regclient images to improve reproducibility
     - name: Install regctl
-      uses: regclient/actions/regctl-installer@495560f7c3b510b71ff9f22d6c667c2c429b8e45 # main
+      uses: regclient/actions/regctl-installer@e90c98f47ac2fead0ab3cf8d7a59c5e6fc3b87d2 # main
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       with:
         release: main

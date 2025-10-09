@@ -153,6 +153,8 @@ processors:
       regexp: '^\s*cosign-release: "(?P<Version>v?[0-9\.]+)"\s*$'
     sourceArgs:
       url: "https://github.com/sigstore/cosign.git"
+    filter:
+      expr: '^v?2\.\d+\.\d+$' # pin to v2 pending cosign-installer upgrade
   gha-golang-matrix:
     <<: *registry-tag-semver
     key: "golang-matrix"
