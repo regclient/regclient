@@ -68,8 +68,8 @@ type ConfigSync struct {
 	Source          string                 `yaml:"source" json:"source"`
 	Target          string                 `yaml:"target" json:"target"`
 	Type            string                 `yaml:"type" json:"type"`
-	Tags            AllowDeny              `yaml:"tags" json:"tags"`
-	Repos           AllowDeny              `yaml:"repos" json:"repos"`
+	Tags            TagAllowDeny           `yaml:"tags" json:"tags"`
+	Repos           RepoAllowDeny          `yaml:"repos" json:"repos"`
 	DigestTags      *bool                  `yaml:"digestTags" json:"digestTags"`
 	Referrers       *bool                  `yaml:"referrers" json:"referrers"`
 	ReferrerFilters []ConfigReferrerFilter `yaml:"referrerFilters" json:"referrerFilters"`
@@ -88,10 +88,17 @@ type ConfigSync struct {
 	Hooks           ConfigHooks            `yaml:"hooks" json:"hooks"`
 }
 
-// AllowDeny is an allow and deny list of regex strings
-type AllowDeny struct {
+// RepoAllowDeny is an allow and deny list of regex strings for repository names
+type RepoAllowDeny struct {
 	Allow []string `yaml:"allow" json:"allow"`
 	Deny  []string `yaml:"deny" json:"deny"`
+}
+
+// TagAllowDeny is an allow and deny list of regex strings for tags, with optional semver version range support
+type TagAllowDeny struct {
+	Allow       []string `yaml:"allow" json:"allow"`
+	Deny        []string `yaml:"deny" json:"deny"`
+	SemverRange []string `yaml:"semverRange,omitempty" json:"semverRange,omitempty"` // array of semver constraints, e.g., [">=1.0.0 <2.0.0", ">=4.0.0"]
 }
 
 type ConfigReferrerFilter struct {
