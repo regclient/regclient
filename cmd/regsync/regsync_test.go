@@ -342,7 +342,7 @@ defaults:
 				Source: tsHost + "/testrepo",
 				Target: tsHost + "/test3",
 				Type:   "repository",
-				Tags: AllowDeny{
+				Tags: TagAllowDeny{
 					Allow: []string{"v1", "v3", "latest"},
 				},
 			},
@@ -364,7 +364,7 @@ defaults:
 				Source: tsHost + "/testrepo",
 				Target: tsHost + "/test4",
 				Type:   "repository",
-				Tags: AllowDeny{
+				Tags: TagAllowDeny{
 					Deny: []string{"v2", "old"},
 				},
 			},
@@ -439,7 +439,7 @@ defaults:
 				Source: tsHost + "/testrepo",
 				Target: tsHost + "/test-missing",
 				Type:   "repository",
-				Tags: AllowDeny{
+				Tags: TagAllowDeny{
 					Allow: []string{"v1", "v2", "v3", "latest"},
 				},
 			},
@@ -893,6 +893,213 @@ func TestProcessRef(t *testing.T) {
 	}
 }
 
+// TestFilterListVersionScheme tests the integration of semver filtering with tag filtering.
+// This focuses on real-world scenarios including:
+// - Tag patterns with suffixes (alpine, scratch, debian, etc.)
+// - Mixed version formats (v1, v1.5, v1.5.0)
+// - Multiple ranges and edge cases specific to container image tags
+// Note: Basic semver constraint tests are in internal/semver/semver_test.go
+func TestFilterListVersionScheme(t *testing.T) {
+	tests := []struct {
+		name        string
+		ad          TagAllowDeny
+		input       []string
+		expected    []string
+		expectError bool
+	}{
+		{
+			name: "semver with multiple ranges and deny",
+			ad: TagAllowDeny{
+				SemverRange: []string{">=1.0.0 <2.0.0", ">=4.0.0"},
+				Deny:        []string{".*-rc.*"},
+			},
+			input:    []string{"1.0.0", "1.5.0-rc1", "2.0.0", "4.0.0", "4.1.0-rc2", "5.0.0"},
+			expected: []string{"1.0.0", "4.0.0", "5.0.0"},
+		},
+		{
+			name: "semver filters non-semver tags",
+			ad: TagAllowDeny{
+				SemverRange: []string{">=1.0.0"},
+			},
+			input:    []string{"latest", "dev", "1.0.0", "1.5.0", "main"},
+			expected: []string{"1.0.0", "1.5.0"},
+		},
+		{
+			name: "semver with allow/deny combination",
+			ad: TagAllowDeny{
+				SemverRange: []string{">=1.0.0 <3.0.0"},
+				Deny:        []string{".*-rc.*"},
+			},
+			input:    []string{"1.0.0", "1.5.0-rc1", "2.0.0", "2.1.0-rc2", "3.0.0"},
+			expected: []string{"1.0.0", "2.0.0"},
+		},
+		{
+			name: "no version range (backward compatibility)",
+			ad: TagAllowDeny{
+				Allow: []string{"v[0-9]+\\.[0-9]+\\.[0-9]+"},
+			},
+			input:    []string{"v1.0.0", "v1.5.0", "latest", "dev"},
+			expected: []string{"v1.0.0", "v1.5.0"},
+		},
+		{
+			name: "empty result when no matches",
+			ad: TagAllowDeny{
+				SemverRange: []string{">=5.0.0"},
+			},
+			input:    []string{"1.0.0", "2.0.0", "3.0.0"},
+			expected: []string{},
+		},
+		{
+			name: "multiple ranges skip middle versions",
+			ad: TagAllowDeny{
+				SemverRange: []string{">=1.0.0 <1.20.0", ">=1.22.0"},
+			},
+			input:    []string{"1.0.0", "1.19.0", "1.20.0", "1.21.0", "1.22.0", "1.23.0"},
+			expected: []string{"1.0.0", "1.19.0", "1.22.0", "1.23.0"},
+		},
+		{
+			name: "version range with allow filter",
+			ad: TagAllowDeny{
+				SemverRange: []string{">=1.0.0"},
+				Allow:       []string{"v.*"},
+			},
+			input:    []string{"1.0.0", "v1.5.0", "v2.0.0", "3.0.0"},
+			expected: []string{"v1.5.0", "v2.0.0"}, // sequential: semver first (all 4), then allow filters by v.*
+		},
+		{
+			name: "empty version range array",
+			ad: TagAllowDeny{
+				SemverRange: []string{},
+			},
+			input:    []string{"1.0.0", "2.0.0"},
+			expected: []string{"1.0.0", "2.0.0"},
+		},
+		{
+			name: "semver with suffix alpine",
+			ad: TagAllowDeny{
+				SemverRange: []string{">=1.0.0 <2.0.0"},
+			},
+			input:    []string{"v1.2.3-alpine3.21", "v1.5.0-alpine3.20", "v2.0.0-alpine3.21", "v0.9.0-alpine3.19"},
+			expected: []string{"v1.2.3-alpine3.21", "v1.5.0-alpine3.20", "v2.0.0-alpine3.21"},
+		},
+		{
+			name: "semver with suffix scratch",
+			ad: TagAllowDeny{
+				SemverRange: []string{">=5.0.0"},
+			},
+			input:    []string{"v5-scratch", "v4-scratch", "v6-scratch", "v5.1-scratch"},
+			expected: []string{"v6-scratch", "v5.1-scratch"},
+		},
+		{
+			name: "semver with suffix mixed",
+			ad: TagAllowDeny{
+				SemverRange: []string{">=1.0.0 <3.0.0"},
+			},
+			input:    []string{"v1.0.0", "v1.5.0-alpine", "v2.0.0-scratch", "v2.5.1-debian", "v3.0.0-alpine"},
+			expected: []string{"v1.0.0", "v1.5.0-alpine", "v2.0.0-scratch", "v2.5.1-debian", "v3.0.0-alpine"},
+		},
+		{
+			name: "semver major version only",
+			ad: TagAllowDeny{
+				SemverRange: []string{">=2 <5"},
+			},
+			input:    []string{"v1", "v2", "v3", "v4", "v5", "v6"},
+			expected: []string{"v2", "v3", "v4"},
+		},
+		{
+			name: "semver major.minor only",
+			ad: TagAllowDeny{
+				SemverRange: []string{">=1.5 <2.0"},
+			},
+			input:    []string{"v1.4", "v1.5", "v1.6", "v1.9", "v2.0", "v2.1"},
+			expected: []string{"v1.5", "v1.6", "v1.9"},
+		},
+		{
+			name: "semver mixed version formats",
+			ad: TagAllowDeny{
+				SemverRange: []string{">=1.0.0 <3.0.0"},
+			},
+			input:    []string{"v1", "v1.5", "v1.5.0", "v2", "v2.0", "v2.0.0", "v3", "v3.0.0"},
+			expected: []string{"v1", "v1.5", "v1.5.0", "v2", "v2.0", "v2.0.0"},
+		},
+		{
+			name: "semver with deny on suffixes",
+			ad: TagAllowDeny{
+				SemverRange: []string{">=1.0.0"},
+				Deny:        []string{".*-alpine.*"},
+			},
+			input:    []string{"v1.0.0", "v1.2.3-alpine3.21", "v2.0.0-scratch", "v2.5.0-alpine3.20"},
+			expected: []string{"v1.0.0", "v2.0.0-scratch"},
+		},
+		{
+			name: "semver + allow adds non-semver tags",
+			ad: TagAllowDeny{
+				SemverRange: []string{">=1.0.0 <2.0.0"},
+				Allow:       []string{"latest", "edge"},
+			},
+			input:    []string{"0.9.0", "1.0.0", "1.5.0", "2.0.0", "latest", "edge", "dev"},
+			expected: []string{}, // sequential: semver filters out non-semver tags, so allow has nothing to match
+		},
+		{
+			name: "semver + allow + deny combines all filters",
+			ad: TagAllowDeny{
+				SemverRange: []string{">=1.0.0"},
+				Allow:       []string{"latest", "stable"},
+				Deny:        []string{".*-rc.*", "latest"},
+			},
+			input:    []string{"1.0.0", "1.5.0-rc1", "2.0.0", "latest", "stable", "dev"},
+			expected: []string{}, // sequential: semver filters out non-semver "latest", "stable", "dev"
+		},
+		{
+			name: "allow without semver still works (backward compatible)",
+			ad: TagAllowDeny{
+				Allow: []string{"v[0-9]+\\.[0-9]+"},
+			},
+			input:    []string{"v1.0", "v1.5", "v2.0", "latest", "edge"},
+			expected: []string{"v1.0", "v1.5", "v2.0"},
+		},
+		{
+			name: "semver + allow with overlapping matches",
+			ad: TagAllowDeny{
+				SemverRange: []string{">=1.0.0"},
+				Allow:       []string{"v[0-9]+\\.[0-9]+\\.[0-9]+"},
+			},
+			input:    []string{"v1.0.0", "v1.5.0", "v2.0.0", "latest"},
+			expected: []string{"v1.0.0", "v1.5.0", "v2.0.0"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := filterTagList(tt.ad, tt.input)
+
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+
+			if len(result) != len(tt.expected) {
+				t.Errorf("expected %d results, got %d\nexpected: %v\ngot: %v",
+					len(tt.expected), len(result), tt.expected, result)
+				return
+			}
+
+			for i := range result {
+				if result[i] != tt.expected[i] {
+					t.Errorf("result[%d]: expected %q, got %q", i, tt.expected[i], result[i])
+				}
+			}
+		})
+	}
+}
+
 func TestConfigRead(t *testing.T) {
 	t.Parallel()
 	bFalse := false
@@ -949,7 +1156,7 @@ func TestConfigRead(t *testing.T) {
 						Source: "alpine",
 						Target: "registry:5000/hub/alpine",
 						Type:   "repository",
-						Tags: AllowDeny{
+						Tags: TagAllowDeny{
 							Allow: []string{"3", "3.9", "latest"},
 						},
 						Interval: 60 * time.Minute,
@@ -969,7 +1176,7 @@ func TestConfigRead(t *testing.T) {
 						Source: "gcr.io/example/repo",
 						Target: "registry:5000/gcr/example/repo",
 						Type:   "repository",
-						Tags: AllowDeny{
+						Tags: TagAllowDeny{
 							Allow: []string{"3", "3.9", "latest"},
 						},
 						Interval: 60 * time.Minute,
