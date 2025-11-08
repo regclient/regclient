@@ -74,6 +74,7 @@ func TestVersionCompare(t *testing.T) {
 		{name: "prerelease less than release", v1: "1.2.3-rc1", v2: "1.2.3", expected: -1},
 		{name: "release greater than prerelease", v1: "1.2.3", v2: "1.2.3-rc1", expected: 1},
 		{name: "prerelease comparison", v1: "1.2.3-alpha", v2: "1.2.3-beta", expected: -1},
+		{name: "rc comparison", v1: "1.2.3-rc2", v2: "1.2.3-rc11", expected: -1},
 		{name: "windows version equal", v1: "10.0.17763.2114", v2: "10.0.17763.2114", expected: 0},
 		{name: "windows version less fourth part", v1: "10.0.17763.2114", v2: "10.0.17763.2115", expected: -1},
 		{name: "windows version greater fourth part", v1: "10.0.17763.2115", v2: "10.0.17763.2114", expected: 1},
@@ -202,6 +203,51 @@ func TestConstraintCheck(t *testing.T) {
 			result := c.Check(v)
 			if result != tt.expected {
 				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestSplitNumeric(t *testing.T) {
+	tt := []struct {
+		name                 string
+		val, head, num, tail string
+	}{
+		{
+			name: "rc11",
+			val:  "rc11",
+			head: "rc",
+			num:  "11",
+		},
+		{
+			name: "11",
+			val:  "11",
+			num:  "11",
+		},
+		{
+			name: "alpha",
+			val:  "alpha",
+			head: "alpha",
+		},
+		{
+			name: "alpha123num",
+			val:  "alpha123num",
+			head: "alpha",
+			num:  "123",
+			tail: "num",
+		},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			head, num, tail := splitNumeric(tc.val)
+			if tc.head != head {
+				t.Errorf("head expected %s, received %s", tc.head, head)
+			}
+			if tc.num != num {
+				t.Errorf("num expected %s, received %s", tc.num, num)
+			}
+			if tc.tail != tail {
+				t.Errorf("tail expected %s, received %s", tc.tail, tail)
 			}
 		})
 	}

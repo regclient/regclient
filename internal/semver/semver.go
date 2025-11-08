@@ -110,46 +110,76 @@ func comparePrereleases(a, b string) int {
 
 	// Compare each identifier
 	for i := 0; i < len(aParts) && i < len(bParts); i++ {
-		aNum, aIsNum := strconv.Atoi(aParts[i])
-		bNum, bIsNum := strconv.Atoi(bParts[i])
-
-		// Both numeric: compare as integers
-		if aIsNum == nil && bIsNum == nil {
-			if aNum != bNum {
-				if aNum < bNum {
+		aCur, bCur := aParts[i], bParts[i]
+		for aCur != "" && bCur != "" {
+			aHead, aNum, aTail := splitNumeric(aCur)
+			bHead, bNum, bTail := splitNumeric(bCur)
+			if aHead != bHead {
+				if aHead < bHead {
 					return -1
 				}
 				return 1
 			}
-			continue
+			aN, aErr := strconv.Atoi(aNum)
+			bN, bErr := strconv.Atoi(bNum)
+			if aErr != nil || bErr != nil {
+				// this should potentially panic
+				if bErr == nil {
+					return -1
+				}
+				if aErr == nil {
+					return 1
+				}
+				return 0
+			}
+			if aN != bN {
+				if aN < bN {
+					return -1
+				}
+				return 1
+			}
+			aCur, bCur = aTail, bTail
 		}
-
-		// Numeric has lower precedence than alphanumeric
-		if aIsNum == nil && bIsNum != nil {
+		if aCur != "" {
+			return 1
+		}
+		if bCur != "" {
 			return -1
 		}
-		if aIsNum != nil && bIsNum == nil {
-			return 1
-		}
-
-		// Both alphanumeric: lexical comparison
-		if aParts[i] != bParts[i] {
-			if aParts[i] < bParts[i] {
-				return -1
-			}
-			return 1
-		}
 	}
-
-	// Fewer parts = lower precedence
-	if len(aParts) < len(bParts) {
-		return -1
-	}
-	if len(aParts) > len(bParts) {
+	if len(aParts) != len(bParts) {
+		if len(aParts) < len(bParts) {
+			return -1
+		}
 		return 1
 	}
 
 	return 0
+}
+
+// Split an alpha-numeric string into:
+//  1. non-numeric head of string
+//  2. numeric portion
+//  3. tail of string
+func splitNumeric(v string) (string, string, string) {
+	head := v
+	// find the split where the number starts
+	for i, c := range v {
+		if c >= '0' && c <= '9' {
+			head = v[:i]
+			break
+		}
+	}
+	num, tail := v[len(head):], ""
+	// find the split where the number stops
+	for i, c := range num {
+		if c < '0' || c > '9' {
+			tail = num[i:]
+			num = num[:i]
+			break
+		}
+	}
+	return head, num, tail
 }
 
 // String returns the original version string
