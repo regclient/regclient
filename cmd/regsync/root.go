@@ -527,20 +527,42 @@ func (opts *rootOpts) processRepo(ctx context.Context, s ConfigSync, src, tgt st
 			slog.String("error", err.Error()))
 		return err
 	}
-	sTagList, err := filterTagList(s.Tags, sTagsList)
-	if err != nil {
-		opts.log.Error("Failed processing tag filters",
-			slog.String("source", sRepoRef.CommonName()),
-			slog.Any("allow", s.Tags.Allow),
-			slog.Any("deny", s.Tags.Deny),
-			slog.String("error", err.Error()))
-		return err
+	sets := s.TagSets
+	if len(s.Tags.Allow) > 0 || len(s.Tags.Deny) > 0 || len(s.Tags.SemverRange) > 0 {
+		sets = append(sets, s.Tags)
 	}
-	if len(sTagList) == 0 {
+	sTagsFiltered := []string{}
+	if len(sets) == 0 {
+		// no filters includes all tags
+		sTagsFiltered = sTagsList
+	}
+	for _, set := range sets {
+		sFilteredCur, err := filterTagList(set, sTagsList)
+		if err != nil {
+			opts.log.Error("Failed processing tag filters",
+				slog.String("source", sRepoRef.CommonName()),
+				slog.Any("allow", set.Allow),
+				slog.Any("deny", set.Deny),
+				slog.Any("semverRange", set.SemverRange),
+				slog.String("error", err.Error()))
+			return err
+		}
+		if len(sTagsFiltered) == 0 {
+			sTagsFiltered = sFilteredCur
+		} else {
+			// add unique tags
+			for _, tag := range sFilteredCur {
+				if !slices.Contains(sTagsFiltered, tag) {
+					sTagsFiltered = append(sTagsFiltered, tag)
+				}
+			}
+		}
+	}
+	if len(sTagsFiltered) == 0 {
 		opts.log.Warn("No matching tags found",
 			slog.String("source", sRepoRef.CommonName()),
-			slog.Any("allow", s.Tags.Allow),
-			slog.Any("deny", s.Tags.Deny),
+			slog.Any("tags", s.Tags),
+			slog.Any("tagSets", s.TagSets),
 			slog.Any("available", sTagsList))
 		return nil
 	}
@@ -568,12 +590,14 @@ func (opts *rootOpts) processRepo(ctx context.Context, s ConfigSync, src, tgt st
 					slog.String("error", err.Error()))
 			}
 		}
-		sI := len(sTagList) - 1
+		slices.Sort(sTagsFiltered)
+		slices.Sort(tTagList)
+		sI := len(sTagsFiltered) - 1
 		tI := len(tTagList) - 1
 		for sI >= 0 && tI >= 0 {
-			switch strings.Compare(sTagList[sI], tTagList[tI]) {
+			switch strings.Compare(sTagsFiltered[sI], tTagList[tI]) {
 			case 0:
-				sTagList = slices.Delete(sTagList, sI, sI+1)
+				sTagsFiltered = slices.Delete(sTagsFiltered, sI, sI+1)
 				sI--
 				tI--
 			case -1:
@@ -582,8 +606,8 @@ func (opts *rootOpts) processRepo(ctx context.Context, s ConfigSync, src, tgt st
 				sI--
 			default:
 				opts.log.Warn("strings.Compare unexpected result",
-					slog.Int("result", strings.Compare(sTagList[sI], tTagList[tI])),
-					slog.String("left", sTagList[sI]),
+					slog.Int("result", strings.Compare(sTagsFiltered[sI], tTagList[tI])),
+					slog.String("left", sTagsFiltered[sI]),
 					slog.String("right", tTagList[tI]))
 				sI--
 				tI--
@@ -591,7 +615,7 @@ func (opts *rootOpts) processRepo(ctx context.Context, s ConfigSync, src, tgt st
 		}
 	}
 	errs := []error{}
-	for _, tag := range sTagList {
+	for _, tag := range sTagsFiltered {
 		if err := opts.processImage(ctx, s, fmt.Sprintf("%s:%s", src, tag), fmt.Sprintf("%s:%s", tgt, tag), action); err != nil {
 			errs = append(errs, err)
 			if opts.abortOnErr {

@@ -69,6 +69,7 @@ type ConfigSync struct {
 	Target          string                 `yaml:"target" json:"target"`
 	Type            string                 `yaml:"type" json:"type"`
 	Tags            TagAllowDeny           `yaml:"tags" json:"tags"`
+	TagSets         []TagAllowDeny         `yaml:"tagSets" json:"tagSets"`
 	Repos           RepoAllowDeny          `yaml:"repos" json:"repos"`
 	DigestTags      *bool                  `yaml:"digestTags" json:"digestTags"`
 	Referrers       *bool                  `yaml:"referrers" json:"referrers"`
