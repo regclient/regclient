@@ -129,7 +129,7 @@ jobs:
       uses: anchore/sbom-action/download-syft@8e94d75ddd33f69f691467e42275782e4bfefe84 # v0.20.9
       id: syft
       with:
-        syft-version: "v1.36.0"
+        syft-version: "v1.37.0"
     
     # Dogfooding, use regctl to modify regclient images to improve reproducibility
     - name: Install regctl
