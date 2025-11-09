@@ -124,6 +124,18 @@ defaults:
 	if err != nil {
 		t.Fatalf("failed to parse v3 reference: %v", err)
 	}
+	ra1, err := ref.New(tsHost + "/testrepo:a1")
+	if err != nil {
+		t.Fatalf("failed to parse a1 reference: %v", err)
+	}
+	ra2, err := ref.New(tsHost + "/testrepo:a2")
+	if err != nil {
+		t.Fatalf("failed to parse a2 reference: %v", err)
+	}
+	ra3, err := ref.New(tsHost + "/testrepo:a3")
+	if err != nil {
+		t.Fatalf("failed to parse a3 reference: %v", err)
+	}
 	rMirror, err := ref.New(tsHost + "/testrepo:mirror")
 	if err != nil {
 		t.Fatalf("failed to parse mirror reference: %v", err)
@@ -186,6 +198,21 @@ defaults:
 		t.Fatalf("failed to get manifest v3: %v", err)
 	}
 	d3 := m3.GetDescriptor().Digest
+	ma1, err := rc.ManifestGet(ctx, ra1)
+	if err != nil {
+		t.Fatalf("failed to get manifest a1: %v", err)
+	}
+	da1 := ma1.GetDescriptor().Digest
+	ma2, err := rc.ManifestGet(ctx, ra2)
+	if err != nil {
+		t.Fatalf("failed to get manifest a2: %v", err)
+	}
+	da2 := ma2.GetDescriptor().Digest
+	ma3, err := rc.ManifestGet(ctx, ra3)
+	if err != nil {
+		t.Fatalf("failed to get manifest a3: %v", err)
+	}
+	da3 := ma3.GetDescriptor().Digest
 	mMirror, err := rc.ManifestGet(ctx, rMirror)
 	if err != nil {
 		t.Fatalf("failed to get manifest vMirror: %v", err)
@@ -377,6 +404,61 @@ defaults:
 			missing: []string{
 				tsHost + "/test4:v2",
 				tsHost + "/test4@" + d2.String(),
+			},
+			expErr: nil,
+		},
+		{
+			name: "RepoSemver",
+			sync: ConfigSync{
+				Source: tsHost + "/testrepo",
+				Target: tsHost + "/testsemver",
+				Type:   "repository",
+				Tags: TagAllowDeny{
+					SemverRange: []string{">=v2"},
+				},
+			},
+			action: actionCopy,
+			expect: map[string]digest.Digest{
+				tsHost + "/testsemver:v2": d2,
+				tsHost + "/testsemver:v3": d3,
+			},
+			missing: []string{
+				tsHost + "/testsemver:v1",
+				tsHost + "/testsemver:a1",
+				tsHost + "/testsemver:a2",
+				tsHost + "/testsemver:a3",
+				tsHost + "/testsemver:b1",
+				tsHost + "/testsemver:b2",
+				tsHost + "/testsemver:b3",
+				tsHost + "/testsemver:loop",
+			},
+			expErr: nil,
+		},
+		{
+			name: "RepoTagSet",
+			sync: ConfigSync{
+				Source: tsHost + "/testrepo",
+				Target: tsHost + "/testset",
+				Type:   "repository",
+				TagSets: []TagAllowDeny{
+					{Allow: []string{"a.*", "loop"}},
+					// {SemverRange: []string{">=v2"}},
+				},
+			},
+			action: actionCopy,
+			expect: map[string]digest.Digest{
+				// tsHost + "/testset:v2":   d2,
+				// tsHost + "/testset:v3":   d3,
+				tsHost + "/testset:a1":   da1,
+				tsHost + "/testset:a2":   da2,
+				tsHost + "/testset:a3":   da3,
+				tsHost + "/testset:loop": dLoop,
+			},
+			missing: []string{
+				tsHost + "/testset:v1",
+				tsHost + "/testset:b1",
+				tsHost + "/testset:b2",
+				tsHost + "/testset:b3",
 			},
 			expErr: nil,
 		},
