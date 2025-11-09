@@ -24,6 +24,7 @@ import (
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/cobradoc"
 	"github.com/regclient/regclient/internal/pqueue"
+	"github.com/regclient/regclient/internal/semver"
 	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/pkg/template"
 	"github.com/regclient/regclient/scheme"
@@ -68,7 +69,7 @@ type rootOpts struct {
 
 func NewRootCmd() (*cobra.Command, *rootOpts) {
 	opts := rootOpts{}
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "regsync <cmd>",
 		Short: "Utility for mirroring docker repositories",
 		Long: `Utility for mirroring docker repositories
@@ -480,7 +481,7 @@ func (opts *rootOpts) processRegistry(ctx context.Context, s ConfigSync, src, tg
 		}
 		last = sRepoList[len(sRepoList)-1]
 		// filter repos according to allow/deny rules
-		sRepoList, err = filterList(s.Repos, sRepoList)
+		sRepoList, err = filterRepoList(s.Repos, sRepoList)
 		if err != nil {
 			opts.log.Error("Failed processing repo filters",
 				slog.String("source", src),
@@ -526,20 +527,42 @@ func (opts *rootOpts) processRepo(ctx context.Context, s ConfigSync, src, tgt st
 			slog.String("error", err.Error()))
 		return err
 	}
-	sTagList, err := filterList(s.Tags, sTagsList)
-	if err != nil {
-		opts.log.Error("Failed processing tag filters",
-			slog.String("source", sRepoRef.CommonName()),
-			slog.Any("allow", s.Tags.Allow),
-			slog.Any("deny", s.Tags.Deny),
-			slog.String("error", err.Error()))
-		return err
+	sets := s.TagSets
+	if len(s.Tags.Allow) > 0 || len(s.Tags.Deny) > 0 || len(s.Tags.SemverRange) > 0 {
+		sets = append(sets, s.Tags)
 	}
-	if len(sTagList) == 0 {
+	sTagsFiltered := []string{}
+	if len(sets) == 0 {
+		// no filters includes all tags
+		sTagsFiltered = sTagsList
+	}
+	for _, set := range sets {
+		sFilteredCur, err := filterTagList(set, sTagsList)
+		if err != nil {
+			opts.log.Error("Failed processing tag filters",
+				slog.String("source", sRepoRef.CommonName()),
+				slog.Any("allow", set.Allow),
+				slog.Any("deny", set.Deny),
+				slog.Any("semverRange", set.SemverRange),
+				slog.String("error", err.Error()))
+			return err
+		}
+		if len(sTagsFiltered) == 0 {
+			sTagsFiltered = sFilteredCur
+		} else {
+			// add unique tags
+			for _, tag := range sFilteredCur {
+				if !slices.Contains(sTagsFiltered, tag) {
+					sTagsFiltered = append(sTagsFiltered, tag)
+				}
+			}
+		}
+	}
+	if len(sTagsFiltered) == 0 {
 		opts.log.Warn("No matching tags found",
 			slog.String("source", sRepoRef.CommonName()),
-			slog.Any("allow", s.Tags.Allow),
-			slog.Any("deny", s.Tags.Deny),
+			slog.Any("tags", s.Tags),
+			slog.Any("tagSets", s.TagSets),
 			slog.Any("available", sTagsList))
 		return nil
 	}
@@ -567,12 +590,14 @@ func (opts *rootOpts) processRepo(ctx context.Context, s ConfigSync, src, tgt st
 					slog.String("error", err.Error()))
 			}
 		}
-		sI := len(sTagList) - 1
+		slices.Sort(sTagsFiltered)
+		slices.Sort(tTagList)
+		sI := len(sTagsFiltered) - 1
 		tI := len(tTagList) - 1
 		for sI >= 0 && tI >= 0 {
-			switch strings.Compare(sTagList[sI], tTagList[tI]) {
+			switch strings.Compare(sTagsFiltered[sI], tTagList[tI]) {
 			case 0:
-				sTagList = slices.Delete(sTagList, sI, sI+1)
+				sTagsFiltered = slices.Delete(sTagsFiltered, sI, sI+1)
 				sI--
 				tI--
 			case -1:
@@ -581,8 +606,8 @@ func (opts *rootOpts) processRepo(ctx context.Context, s ConfigSync, src, tgt st
 				sI--
 			default:
 				opts.log.Warn("strings.Compare unexpected result",
-					slog.Int("result", strings.Compare(sTagList[sI], tTagList[tI])),
-					slog.String("left", sTagList[sI]),
+					slog.Int("result", strings.Compare(sTagsFiltered[sI], tTagList[tI])),
+					slog.String("left", sTagsFiltered[sI]),
 					slog.String("right", tTagList[tI]))
 				sI--
 				tI--
@@ -590,7 +615,7 @@ func (opts *rootOpts) processRepo(ctx context.Context, s ConfigSync, src, tgt st
 		}
 	}
 	errs := []error{}
-	for _, tag := range sTagList {
+	for _, tag := range sTagsFiltered {
 		if err := opts.processImage(ctx, s, fmt.Sprintf("%s:%s", src, tag), fmt.Sprintf("%s:%s", tgt, tag), action); err != nil {
 			errs = append(errs, err)
 			if opts.abortOnErr {
@@ -884,51 +909,131 @@ func (opts *rootOpts) processRef(ctx context.Context, s ConfigSync, src, tgt ref
 	return nil
 }
 
-func filterList(ad AllowDeny, in []string) ([]string, error) {
-	var result []string
-	// apply allow list
+// filterByRegex applies allow/deny regex patterns to a list of strings.
+// filterRegexAllow returns items that match at least one allow pattern.
+// If no patterns are provided, returns all items.
+func filterRegexAllow(patterns []string, in []string) ([]string, error) {
+	if len(patterns) == 0 {
+		return in, nil
+	}
+
+	// Compile all patterns
+	exps := make([]*regexp.Regexp, 0, len(patterns))
+	for _, pattern := range patterns {
+		exp, err := regexp.Compile("^" + pattern + "$")
+		if err != nil {
+			return nil, fmt.Errorf("invalid allow pattern %q: %w", pattern, err)
+		}
+		exps = append(exps, exp)
+	}
+
+	// Keep items matching any pattern
+	result := make([]string, 0, len(in))
+	for _, item := range in {
+		for _, exp := range exps {
+			if exp.MatchString(item) {
+				result = append(result, item)
+				break
+			}
+		}
+	}
+	return result, nil
+}
+
+// filterRegexDeny removes items that match any deny pattern.
+// If no patterns are provided, returns all items unchanged.
+func filterRegexDeny(patterns []string, in []string) ([]string, error) {
+	if len(patterns) == 0 {
+		return in, nil
+	}
+
+	// Compile all patterns
+	exps := make([]*regexp.Regexp, 0, len(patterns))
+	for _, pattern := range patterns {
+		exp, err := regexp.Compile("^" + pattern + "$")
+		if err != nil {
+			return nil, fmt.Errorf("invalid deny pattern %q: %w", pattern, err)
+		}
+		exps = append(exps, exp)
+	}
+
+	// Remove items matching any pattern
+	result := make([]string, 0, len(in))
+	for _, item := range in {
+		denied := false
+		for _, exp := range exps {
+			if exp.MatchString(item) {
+				denied = true
+				break
+			}
+		}
+		if !denied {
+			result = append(result, item)
+		}
+	}
+	return result, nil
+}
+
+func filterRepoList(ad RepoAllowDeny, in []string) ([]string, error) {
+	// Apply allow filter
+	result, err := filterRegexAllow(ad.Allow, in)
+	if err != nil {
+		return nil, err
+	}
+	// Apply deny filter
+	return filterRegexDeny(ad.Deny, result)
+}
+
+func filterTagList(ad TagAllowDeny, in []string) ([]string, error) {
+	result := in
+
+	// Step 1: Apply semverRange filter
+	if len(ad.SemverRange) > 0 {
+		// Parse all constraints
+		constraints := make([]semver.Constraint, 0, len(ad.SemverRange))
+		for _, rangeStr := range ad.SemverRange {
+			if rangeStr == "" {
+				continue
+			}
+			constraint, err := semver.NewConstraint(rangeStr)
+			if err != nil {
+				return nil, fmt.Errorf("invalid semver range %q: %w", rangeStr, err)
+			}
+			constraints = append(constraints, constraint)
+		}
+
+		// Apply version filtering if we have valid constraints
+		if len(constraints) > 0 {
+			filtered := make([]string, 0, len(result))
+			for _, tag := range result {
+				// Try to parse as semver, skip non-semver tags
+				v, err := semver.NewVersion(tag)
+				if err != nil {
+					continue
+				}
+				// Check if version matches any constraint (OR logic)
+				for _, constraint := range constraints {
+					if constraint.Check(v) {
+						filtered = append(filtered, tag)
+						break
+					}
+				}
+			}
+			result = filtered
+		}
+	}
+
+	// Step 2: Apply Allow filter
 	if len(ad.Allow) > 0 {
-		result = make([]string, len(in))
-		for _, filter := range ad.Allow {
-			exp, err := regexp.Compile("^" + filter + "$")
-			if err != nil {
-				return result, err
-			}
-			for i := range in {
-				if result[i] == "" && exp.MatchString(in[i]) {
-					result[i] = in[i]
-				}
-			}
-		}
-	} else {
-		// by default, everything is allowed
-		result = in
-	}
-
-	// apply deny list
-	if len(ad.Deny) > 0 {
-		for _, filter := range ad.Deny {
-			exp, err := regexp.Compile("^" + filter + "$")
-			if err != nil {
-				return result, err
-			}
-			for i := range result {
-				if result[i] != "" && exp.MatchString(result[i]) {
-					result[i] = ""
-				}
-			}
+		var err error
+		result, err = filterRegexAllow(ad.Allow, result)
+		if err != nil {
+			return nil, err
 		}
 	}
 
-	// compress result list, removing empty elements
-	var compressed = make([]string, 0, len(in))
-	for i := range result {
-		if result[i] != "" {
-			compressed = append(compressed, result[i])
-		}
-	}
-
-	return compressed, nil
+	// Step 3: Apply Deny filter
+	return filterRegexDeny(ad.Deny, result)
 }
 
 var manifestCache struct {

@@ -225,47 +225,17 @@ func WithConfigTimestamp(optTime OptTime) Opts {
 // WithConfigTimestampFromLabel sets the max timestamp in the config to match a label value.
 //
 // Deprecated: replace with [WithConfigTimestamp].
+//
+//go:fix inline
 func WithConfigTimestampFromLabel(label string) Opts {
-	return func(dc *dagConfig, dm *dagManifest) error {
-		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
-			var err error
-			changed := false
-			oc := doc.oc.GetConfig()
-			tl, ok := oc.Config.Labels[label]
-			if !ok {
-				return fmt.Errorf("label not found: %s", label)
-			}
-			t, err := time.Parse(time.RFC3339, tl)
-			if err != nil {
-				// TODO: add fallbacks
-				return fmt.Errorf("could not parse time %s from %s: %w", tl, label, err)
-			}
-			if oc.Created != nil && t.Before(*oc.Created) {
-				*oc.Created = t
-				changed = true
-			}
-			if oc.History != nil {
-				for i, h := range oc.History {
-					if h.Created != nil && t.Before(*h.Created) {
-						*oc.History[i].Created = t
-						changed = true
-					}
-				}
-			}
-			if changed {
-				doc.oc.SetConfig(oc)
-				doc.newDesc = doc.oc.GetDescriptor()
-				doc.modified = true
-			}
-			return nil
-		})
-		return nil
-	}
+	return WithConfigTimestamp(OptTime{FromLabel: label})
 }
 
 // WithConfigTimestampMax sets the max timestamp on any config objects.
 //
 // Deprecated: replace with [WithConfigTimestamp].
+//
+//go:fix inline
 func WithConfigTimestampMax(t time.Time) Opts {
 	return WithConfigTimestamp(OptTime{
 		Set:   t,

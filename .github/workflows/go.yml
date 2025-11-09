@@ -35,7 +35,7 @@ jobs:
       uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
     - name: "Set up Go ${{ matrix.gover }}"
-      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+      uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
       with:
         go-version: "${{ matrix.gover }}"
         check-latest: true
@@ -60,10 +60,10 @@ jobs:
 
     - name: Install syft
       if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main'
-      uses: anchore/sbom-action/download-syft@da167eac915b4e86f08b264dbdbc867b61be6f0c # v0.20.5
+      uses: anchore/sbom-action/download-syft@8e94d75ddd33f69f691467e42275782e4bfefe84 # v0.20.9
       id: syft
       with:
-        syft-version: "v1.32.0"
+        syft-version: "v1.37.0"
 
     - name: Build artifacts
       if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main'
@@ -71,9 +71,9 @@ jobs:
 
     - name: Install cosign
       if: ( startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main' ) && matrix.gover == env.RELEASE_GO_VER
-      uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+      uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
       with:
-        cosign-release: "v2.5.3"
+        cosign-release: "v2.6.1"
 
     - name: Package artifacts
       if: ( startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main' ) && matrix.gover == env.RELEASE_GO_VER
@@ -121,7 +121,7 @@ jobs:
     - name: Create release
       if: steps.release_details.outputs.valid == 'true' && matrix.gover == env.RELEASE_GO_VER
       id: release_create
-      uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8 # v2.3.2
+      uses: softprops/action-gh-release@5be0e66d93ac7ed76da52eca8bb058f665c3a5fe # v2.4.2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
@@ -155,7 +155,7 @@ jobs:
 
     - name: Save artifacts
       if: github.ref == 'refs/heads/main' && matrix.gover == env.RELEASE_GO_VER
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
       with:
         name: binaries
         path: ./artifacts/

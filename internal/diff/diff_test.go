@@ -171,7 +171,6 @@ func TestDiff(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 func strSliceEq(a, b []string) bool {

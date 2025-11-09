@@ -61,7 +61,7 @@ func TestRegbot(t *testing.T) {
 	)
 	// setup various globals normally done by loadConf
 	pq := pqueue.New(pqueue.Opts[struct{}]{Max: 1})
-	var confBytes = `
+	confBytes := `
 version: 1
 defaults:
   parallel: 1

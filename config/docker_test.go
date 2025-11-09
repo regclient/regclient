@@ -4,12 +4,20 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/regclient/regclient/internal/conffile"
 )
 
 func TestDocker(t *testing.T) {
 	// cannot run cred helper in parallel because of OS working directory race conditions
+	t.Setenv(dockerEnvConfig, `{
+  "auths": {
+    "testenv.example.com": {
+      "auth": "aGllbnY6dGVzdHBhc3M="
+    }
+  },
+  "credHelpers": {
+    "testenvhelper.example.com": "test"
+  }
+}`)
 	pwd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("failed to get working dir: %v", err)
@@ -41,6 +49,21 @@ func TestDocker(t *testing.T) {
 			hostname:         "testhost.example.com",
 			expectCredHelper: "docker-credential-test",
 			expectHostname:   "testhost.example.com",
+			expectTLS:        TLSEnabled,
+		},
+		{
+			name:           "testenv",
+			hostname:       "testenv.example.com",
+			expectUser:     "hienv",
+			expectPass:     "testpass",
+			expectHostname: "testenv.example.com",
+			expectTLS:      TLSEnabled,
+		},
+		{
+			name:             "testenvhelper",
+			hostname:         "testenvhelper.example.com",
+			expectCredHelper: "docker-credential-test",
+			expectHostname:   "testenvhelper.example.com",
 			expectTLS:        TLSEnabled,
 		},
 		{
@@ -145,8 +168,7 @@ func TestDocker(t *testing.T) {
 
 func TestLoadMissing(t *testing.T) {
 	// cannot run cred helper in parallel because of OS working directory race conditions
-	cf := conffile.New(conffile.WithFullname("testdata/missing.json"))
-	h, err := dockerParse(cf)
+	h, err := DockerLoadFile("testdata/missing.json")
 	if err != nil {
 		t.Errorf("error encountered when parsing missing file: %v", err)
 	}

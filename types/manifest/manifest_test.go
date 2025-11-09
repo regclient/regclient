@@ -431,7 +431,7 @@ func TestNew(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to setup preferred digest algorithm to sha512: %v", err)
 	}
-	var tt = []struct {
+	tt := []struct {
 		name        string
 		opts        []Opts
 		wantR       ref.Ref

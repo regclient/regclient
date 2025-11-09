@@ -164,7 +164,8 @@ func WithLayerCompression(algo archive.CompressType) Opts {
 						dl.newDesc.Digest = digRaw.Digest()
 						dl.ucDigest = digUC.Digest()
 						return nil
-					}}, nil
+					},
+				}, nil
 
 			case archive.CompressZstd:
 				switch desc.MediaType {
@@ -204,7 +205,8 @@ func WithLayerCompression(algo archive.CompressType) Opts {
 						dl.newDesc.Digest = digRaw.Digest()
 						dl.ucDigest = digUC.Digest()
 						return nil
-					}}, nil
+					},
+				}, nil
 
 			case archive.CompressNone:
 				switch desc.MediaType {
@@ -236,7 +238,8 @@ func WithLayerCompression(algo archive.CompressType) Opts {
 						dl.newDesc.Digest = dig.Digest()
 						dl.ucDigest = dig.Digest()
 						return nil
-					}}, nil
+					},
+				}, nil
 
 			default:
 				return rdr, nil
@@ -311,7 +314,8 @@ func WithLayerDigestAlgo(algo digest.Algorithm) Opts {
 						return errors.Join(errs...)
 					}
 					return nil
-				}}, nil
+				},
+			}, nil
 		})
 		return nil
 	}
@@ -578,60 +582,17 @@ func layerGetBaseRef(c context.Context, rc *regclient.RegClient, r ref.Ref, m ma
 // WithLayerTimestampFromLabel sets the max layer timestamp based on a label in the image.
 //
 // Deprecated: replace with [WithLayerTimestamp].
+//
+//go:fix inline
 func WithLayerTimestampFromLabel(label string) Opts {
-	t := time.Time{}
-	return func(dc *dagConfig, dm *dagManifest) error {
-		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
-			oc := doc.oc.GetConfig()
-			tl, ok := oc.Config.Labels[label]
-			if !ok {
-				return fmt.Errorf("label not found: %s", label)
-			}
-			tNew, err := time.Parse(time.RFC3339, tl)
-			if err != nil {
-				// TODO: add fallbacks
-				return fmt.Errorf("could not parse time %s from %s: %w", tl, label, err)
-			}
-			if !t.IsZero() && !t.Equal(tNew) {
-				return fmt.Errorf("conflicting time labels found %s and %s", t.String(), tNew.String())
-			}
-			t = tNew
-			return nil
-		})
-		dc.stepsLayerFile = append(dc.stepsLayerFile,
-			func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dl *dagLayer, th *tar.Header, tr io.Reader) (*tar.Header, io.Reader, changes, error) {
-				if t.IsZero() {
-					return nil, nil, unchanged, fmt.Errorf("timestamp not available")
-				}
-				changed := false
-				if th == nil || tr == nil {
-					return nil, nil, unchanged, fmt.Errorf("missing header or reader")
-				}
-				if t.Before(th.AccessTime) {
-					th.AccessTime = t
-					changed = true
-				}
-				if t.Before(th.ChangeTime) {
-					th.ChangeTime = t
-					changed = true
-				}
-				if t.Before(th.ModTime) {
-					th.ModTime = t
-					changed = true
-				}
-				if changed {
-					return th, tr, replaced, nil
-				}
-				return th, tr, unchanged, nil
-			},
-		)
-		return nil
-	}
+	return WithLayerTimestamp(OptTime{FromLabel: label})
 }
 
 // WithLayerTimestampMax ensures no file timestamps are after specified time.
 //
 // Deprecated: replace with [WithLayerTimestamp].
+//
+//go:fix inline
 func WithLayerTimestampMax(t time.Time) Opts {
 	return WithLayerTimestamp(OptTime{
 		Set:   t,
@@ -783,6 +744,8 @@ func WithFileTarTime(name string, optTime OptTime) Opts {
 // WithFileTarTimeMax processes a tar file within a layer and rewrites the contents with a max timestamp.
 //
 // Deprecated: replace with [WithFileTarTime].
+//
+//go:fix inline
 func WithFileTarTimeMax(name string, t time.Time) Opts {
 	return WithFileTarTime(name, OptTime{
 		Set:   t,

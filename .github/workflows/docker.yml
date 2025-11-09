@@ -29,7 +29,7 @@ jobs:
 
     env:
       ALPINE_NAME: "alpine:3"
-      ALPINE_DIGEST: "sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1" # 3.22.1
+      ALPINE_DIGEST: "sha256:4b7ce07002c69e8f3d704a9c5d6fd3053be500b7f1c69fc0d80990c2ad8dd412" # 3.22.2
 
     steps:
     - name: Check out code
@@ -89,14 +89,14 @@ jobs:
 
     - name: Login to DockerHub
       if: github.repository_owner == 'regclient'
-      uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0 
+      uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0 
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
     - name: Login to GHCR
       if: github.repository_owner == 'regclient'
-      uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
+      uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
       with:
         registry: ghcr.io
         username: ${{ secrets.GHCR_USERNAME }}
@@ -120,20 +120,20 @@ jobs:
 
     - name: Install cosign
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
-      uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+      uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
       with:
-        cosign-release: "v2.5.3"
+        cosign-release: "v2.6.1"
     
     - name: Install syft
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
-      uses: anchore/sbom-action/download-syft@da167eac915b4e86f08b264dbdbc867b61be6f0c # v0.20.5
+      uses: anchore/sbom-action/download-syft@8e94d75ddd33f69f691467e42275782e4bfefe84 # v0.20.9
       id: syft
       with:
-        syft-version: "v1.32.0"
+        syft-version: "v1.37.0"
     
     # Dogfooding, use regctl to modify regclient images to improve reproducibility
     - name: Install regctl
-      uses: regclient/actions/regctl-installer@03ca0eeb8348921b9447b7d5d6b6d350550ddb3b # main
+      uses: regclient/actions/regctl-installer@df29323daedc1f78ee74b261bd8d849327cb4ff0 # main
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       with:
         release: main

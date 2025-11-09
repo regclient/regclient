@@ -282,7 +282,6 @@ func TestBlobGet(t *testing.T) {
 			t.Errorf("Error does not match \"ErrUnauthorized\": %v", err)
 		}
 	})
-
 }
 
 func TestBlobPut(t *testing.T) {
@@ -672,7 +671,6 @@ func TestBlobPut(t *testing.T) {
 		if dp.Size != int64(len(blob1)) {
 			t.Errorf("Content length mismatch, expected %d, received %d", len(blob1), dp.Size)
 		}
-
 	})
 
 	t.Run("Retry", func(t *testing.T) {
@@ -691,7 +689,6 @@ func TestBlobPut(t *testing.T) {
 		if dp.Size != int64(len(blob2)) {
 			t.Errorf("Content length mismatch, expected %d, received %d", len(blob2), dp.Size)
 		}
-
 	})
 
 	t.Run("PartialChunk", func(t *testing.T) {
@@ -710,7 +707,6 @@ func TestBlobPut(t *testing.T) {
 		if dp.Size != int64(len(blob3)) {
 			t.Errorf("Content length mismatch, expected %d, received %d", len(blob3), dp.Size)
 		}
-
 	})
 }
 
