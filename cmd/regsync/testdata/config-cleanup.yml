@@ -1,0 +1,49 @@
+version: 1
+creds:
+  - registry: registry:5000
+    tls: disabled
+defaults:
+  cleanupTags: true
+  cleanupTagsExclude:
+    - ".*\\.sig$"
+    - ".*\\.att$"
+    - "backup-.*"
+sync:
+  # Test 1: cleanupTags true in sync entry
+  - source: test/repo1
+    target: registry:5000/test/repo1
+    type: repository
+    cleanupTags: true
+
+  # Test 2: cleanupTags false in sync entry
+  - source: test/repo2
+    target: registry:5000/test/repo2
+    type: repository
+    cleanupTags: false
+
+  # Test 3: cleanupTags not specified (should inherit from defaults)
+  - source: test/repo3
+    target: registry:5000/test/repo3
+    type: repository
+
+  # Test 4: custom cleanupTagsExclude patterns
+  - source: test/repo4
+    target: registry:5000/test/repo4
+    type: repository
+    cleanupTags: true
+    cleanupTagsExclude:
+      - "prod-.*"
+      - "stable"
+
+  # Test 5: empty cleanupTagsExclude array (override defaults)
+  - source: test/repo5
+    target: registry:5000/test/repo5
+    type: repository
+    cleanupTags: true
+    cleanupTagsExclude: []
+
+  # Test 6: cleanupTagsExclude not specified (should inherit from defaults)
+  - source: test/repo6
+    target: registry:5000/test/repo6
+    type: repository
+    cleanupTags: true

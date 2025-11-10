@@ -1233,6 +1233,7 @@ func TestConfigRead(t *testing.T) {
 						FastCheck:       &bFalse,
 						ForceRecursive:  &bFalse,
 						IncludeExternal: &bFalse,
+						CleanupTags:     &bFalse,
 					},
 					{
 						Source: "alpine",
@@ -1253,6 +1254,7 @@ func TestConfigRead(t *testing.T) {
 						FastCheck:       &bFalse,
 						ForceRecursive:  &bFalse,
 						IncludeExternal: &bFalse,
+						CleanupTags:     &bFalse,
 					},
 					{
 						Source: "gcr.io/example/repo",
@@ -1273,6 +1275,7 @@ func TestConfigRead(t *testing.T) {
 						FastCheck:       &bFalse,
 						ForceRecursive:  &bFalse,
 						IncludeExternal: &bFalse,
+						CleanupTags:     &bFalse,
 					},
 				},
 			},
@@ -1309,6 +1312,7 @@ func TestConfigRead(t *testing.T) {
 						FastCheck:       &bFalse,
 						ForceRecursive:  &bFalse,
 						IncludeExternal: &bFalse,
+						CleanupTags:     &bFalse,
 					},
 					{
 						Source:   "alpine:latest",
@@ -1324,6 +1328,7 @@ func TestConfigRead(t *testing.T) {
 						FastCheck:       &bFalse,
 						ForceRecursive:  &bFalse,
 						IncludeExternal: &bFalse,
+						CleanupTags:     &bFalse,
 					},
 				},
 			},
@@ -1343,6 +1348,1168 @@ func TestConfigRead(t *testing.T) {
 			}
 			if !reflect.DeepEqual(tc.expect, *cRead) {
 				t.Errorf("parsing mismatch, expected:\n%#v\n  received:\n%#v", tc.expect, *cRead)
+			}
+		})
+	}
+}
+
+// TestConfigCleanupParsing tests parsing of cleanupTags and cleanupTagsExclude fields
+func TestConfigCleanupParsing(t *testing.T) {
+	t.Parallel()
+	bTrue := true
+	bFalse := false
+
+	tt := []struct {
+		name   string
+		file   string
+		expect Config
+		expErr error
+	}{
+		{
+			name: "cleanup with defaults",
+			file: "config-cleanup.yml",
+			expect: Config{
+				Version: 1,
+				Creds: []config.Host{
+					{
+						Name: "registry:5000",
+						TLS:  config.TLSDisabled,
+					},
+				},
+				Defaults: ConfigDefaults{
+					CleanupTags: &bTrue,
+					CleanupTagsExclude: []string{
+						".*\\.sig$",
+						".*\\.att$",
+						"backup-.*",
+					},
+					RateLimit: ConfigRateLimit{
+						Retry: rateLimitRetryMin,
+					},
+				},
+				Sync: []ConfigSync{
+					{
+						Source:      "test/repo1",
+						Target:      "registry:5000/test/repo1",
+						Type:        "repository",
+						CleanupTags: &bTrue,
+						CleanupTagsExclude: []string{
+							".*\\.sig$",
+							".*\\.att$",
+							"backup-.*",
+						},
+						RateLimit: ConfigRateLimit{
+							Retry: rateLimitRetryMin,
+						},
+						MediaTypes:      defaultMediaTypes,
+						DigestTags:      &bFalse,
+						Referrers:       &bFalse,
+						FastCheck:       &bFalse,
+						ForceRecursive:  &bFalse,
+						IncludeExternal: &bFalse,
+					},
+					{
+						Source:      "test/repo2",
+						Target:      "registry:5000/test/repo2",
+						Type:        "repository",
+						CleanupTags: &bFalse,
+						CleanupTagsExclude: []string{
+							".*\\.sig$",
+							".*\\.att$",
+							"backup-.*",
+						},
+						RateLimit: ConfigRateLimit{
+							Retry: rateLimitRetryMin,
+						},
+						MediaTypes:      defaultMediaTypes,
+						DigestTags:      &bFalse,
+						Referrers:       &bFalse,
+						FastCheck:       &bFalse,
+						ForceRecursive:  &bFalse,
+						IncludeExternal: &bFalse,
+					},
+					{
+						Source:      "test/repo3",
+						Target:      "registry:5000/test/repo3",
+						Type:        "repository",
+						CleanupTags: &bTrue,
+						CleanupTagsExclude: []string{
+							".*\\.sig$",
+							".*\\.att$",
+							"backup-.*",
+						},
+						RateLimit: ConfigRateLimit{
+							Retry: rateLimitRetryMin,
+						},
+						MediaTypes:      defaultMediaTypes,
+						DigestTags:      &bFalse,
+						Referrers:       &bFalse,
+						FastCheck:       &bFalse,
+						ForceRecursive:  &bFalse,
+						IncludeExternal: &bFalse,
+					},
+					{
+						Source:      "test/repo4",
+						Target:      "registry:5000/test/repo4",
+						Type:        "repository",
+						CleanupTags: &bTrue,
+						CleanupTagsExclude: []string{
+							"prod-.*",
+							"stable",
+						},
+						RateLimit: ConfigRateLimit{
+							Retry: rateLimitRetryMin,
+						},
+						MediaTypes:      defaultMediaTypes,
+						DigestTags:      &bFalse,
+						Referrers:       &bFalse,
+						FastCheck:       &bFalse,
+						ForceRecursive:  &bFalse,
+						IncludeExternal: &bFalse,
+					},
+					{
+						Source:             "test/repo5",
+						Target:             "registry:5000/test/repo5",
+						Type:               "repository",
+						CleanupTags:        &bTrue,
+						CleanupTagsExclude: []string{},
+						RateLimit: ConfigRateLimit{
+							Retry: rateLimitRetryMin,
+						},
+						MediaTypes:      defaultMediaTypes,
+						DigestTags:      &bFalse,
+						Referrers:       &bFalse,
+						FastCheck:       &bFalse,
+						ForceRecursive:  &bFalse,
+						IncludeExternal: &bFalse,
+					},
+					{
+						Source:      "test/repo6",
+						Target:      "registry:5000/test/repo6",
+						Type:        "repository",
+						CleanupTags: &bTrue,
+						CleanupTagsExclude: []string{
+							".*\\.sig$",
+							".*\\.att$",
+							"backup-.*",
+						},
+						RateLimit: ConfigRateLimit{
+							Retry: rateLimitRetryMin,
+						},
+						MediaTypes:      defaultMediaTypes,
+						DigestTags:      &bFalse,
+						Referrers:       &bFalse,
+						FastCheck:       &bFalse,
+						ForceRecursive:  &bFalse,
+						IncludeExternal: &bFalse,
+					},
+				},
+			},
+		},
+		{
+			name: "cleanup without defaults",
+			file: "config-cleanup-no-defaults.yml",
+			expect: Config{
+				Version: 1,
+				Creds: []config.Host{
+					{
+						Name: "registry:5000",
+						TLS:  config.TLSDisabled,
+					},
+				},
+				Defaults: ConfigDefaults{
+					RateLimit: ConfigRateLimit{
+						Retry: rateLimitRetryMin,
+					},
+				},
+				Sync: []ConfigSync{
+					{
+						Source:             "test/repo1",
+						Target:             "registry:5000/test/repo1",
+						Type:               "repository",
+						CleanupTags:        &bTrue,
+						CleanupTagsExclude: nil,
+						RateLimit: ConfigRateLimit{
+							Retry: rateLimitRetryMin,
+						},
+						MediaTypes:      defaultMediaTypes,
+						DigestTags:      &bFalse,
+						Referrers:       &bFalse,
+						FastCheck:       &bFalse,
+						ForceRecursive:  &bFalse,
+						IncludeExternal: &bFalse,
+					},
+					{
+						Source:             "test/repo2",
+						Target:             "registry:5000/test/repo2",
+						Type:               "repository",
+						CleanupTags:        &bFalse,
+						CleanupTagsExclude: nil,
+						RateLimit: ConfigRateLimit{
+							Retry: rateLimitRetryMin,
+						},
+						MediaTypes:      defaultMediaTypes,
+						DigestTags:      &bFalse,
+						Referrers:       &bFalse,
+						FastCheck:       &bFalse,
+						ForceRecursive:  &bFalse,
+						IncludeExternal: &bFalse,
+					},
+					{
+						Source:             "test/repo3",
+						Target:             "registry:5000/test/repo3",
+						Type:               "repository",
+						CleanupTags:        &bTrue,
+						CleanupTagsExclude: nil,
+						RateLimit: ConfigRateLimit{
+							Retry: rateLimitRetryMin,
+						},
+						MediaTypes:      defaultMediaTypes,
+						DigestTags:      &bFalse,
+						Referrers:       &bFalse,
+						FastCheck:       &bFalse,
+						ForceRecursive:  &bFalse,
+						IncludeExternal: &bFalse,
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			cRead, err := ConfigLoadFile(filepath.Join("./testdata", tc.file))
+			if tc.expErr != nil {
+				if !errors.Is(err, tc.expErr) {
+					t.Errorf("expected error %v, received %v", tc.expErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("failed to read: %v", err)
+			}
+			if !reflect.DeepEqual(tc.expect, *cRead) {
+				t.Errorf("parsing mismatch, expected:\n%#v\n  received:\n%#v", tc.expect, *cRead)
+			}
+		})
+	}
+}
+
+// TestConfigCleanupDefaults tests the defaults inheritance mechanism for cleanup fields
+func TestConfigCleanupDefaults(t *testing.T) {
+	t.Parallel()
+	bTrue := true
+	bFalse := false
+
+	tt := []struct {
+		name     string
+		sync     ConfigSync
+		defaults ConfigDefaults
+		expect   ConfigSync
+	}{
+		{
+			name: "cleanupTags true in defaults, not in sync",
+			sync: ConfigSync{
+				Source: "test/repo",
+				Target: "registry:5000/test/repo",
+				Type:   "repository",
+			},
+			defaults: ConfigDefaults{
+				CleanupTags: &bTrue,
+			},
+			expect: ConfigSync{
+				Source:      "test/repo",
+				Target:      "registry:5000/test/repo",
+				Type:        "repository",
+				CleanupTags: &bTrue,
+			},
+		},
+		{
+			name: "cleanupTags false in defaults, not in sync",
+			sync: ConfigSync{
+				Source: "test/repo",
+				Target: "registry:5000/test/repo",
+				Type:   "repository",
+			},
+			defaults: ConfigDefaults{
+				CleanupTags: &bFalse,
+			},
+			expect: ConfigSync{
+				Source:      "test/repo",
+				Target:      "registry:5000/test/repo",
+				Type:        "repository",
+				CleanupTags: &bFalse,
+			},
+		},
+		{
+			name: "cleanupTags not in defaults, not in sync (default to false)",
+			sync: ConfigSync{
+				Source: "test/repo",
+				Target: "registry:5000/test/repo",
+				Type:   "repository",
+			},
+			defaults: ConfigDefaults{},
+			expect: ConfigSync{
+				Source:      "test/repo",
+				Target:      "registry:5000/test/repo",
+				Type:        "repository",
+				CleanupTags: &bFalse,
+			},
+		},
+		{
+			name: "sync entry overrides defaults (true overrides false)",
+			sync: ConfigSync{
+				Source:      "test/repo",
+				Target:      "registry:5000/test/repo",
+				Type:        "repository",
+				CleanupTags: &bTrue,
+			},
+			defaults: ConfigDefaults{
+				CleanupTags: &bFalse,
+			},
+			expect: ConfigSync{
+				Source:      "test/repo",
+				Target:      "registry:5000/test/repo",
+				Type:        "repository",
+				CleanupTags: &bTrue,
+			},
+		},
+		{
+			name: "sync entry overrides defaults (false overrides true)",
+			sync: ConfigSync{
+				Source:      "test/repo",
+				Target:      "registry:5000/test/repo",
+				Type:        "repository",
+				CleanupTags: &bFalse,
+			},
+			defaults: ConfigDefaults{
+				CleanupTags: &bTrue,
+			},
+			expect: ConfigSync{
+				Source:      "test/repo",
+				Target:      "registry:5000/test/repo",
+				Type:        "repository",
+				CleanupTags: &bFalse,
+			},
+		},
+		{
+			name: "cleanupTagsExclude in defaults, not in sync",
+			sync: ConfigSync{
+				Source: "test/repo",
+				Target: "registry:5000/test/repo",
+				Type:   "repository",
+			},
+			defaults: ConfigDefaults{
+				CleanupTagsExclude: []string{".*\\.sig$", ".*\\.att$"},
+			},
+			expect: ConfigSync{
+				Source:             "test/repo",
+				Target:             "registry:5000/test/repo",
+				Type:               "repository",
+				CleanupTags:        &bFalse,
+				CleanupTagsExclude: []string{".*\\.sig$", ".*\\.att$"},
+			},
+		},
+		{
+			name: "cleanupTagsExclude not in defaults, not in sync (nil)",
+			sync: ConfigSync{
+				Source: "test/repo",
+				Target: "registry:5000/test/repo",
+				Type:   "repository",
+			},
+			defaults: ConfigDefaults{},
+			expect: ConfigSync{
+				Source:             "test/repo",
+				Target:             "registry:5000/test/repo",
+				Type:               "repository",
+				CleanupTags:        &bFalse,
+				CleanupTagsExclude: nil,
+			},
+		},
+		{
+			name: "sync entry overrides defaults exclusion patterns",
+			sync: ConfigSync{
+				Source:             "test/repo",
+				Target:             "registry:5000/test/repo",
+				Type:               "repository",
+				CleanupTagsExclude: []string{"prod-.*"},
+			},
+			defaults: ConfigDefaults{
+				CleanupTagsExclude: []string{".*\\.sig$", ".*\\.att$"},
+			},
+			expect: ConfigSync{
+				Source:             "test/repo",
+				Target:             "registry:5000/test/repo",
+				Type:               "repository",
+				CleanupTags:        &bFalse,
+				CleanupTagsExclude: []string{"prod-.*"},
+			},
+		},
+		{
+			name: "sync entry empty array overrides defaults (disable exclusions)",
+			sync: ConfigSync{
+				Source:             "test/repo",
+				Target:             "registry:5000/test/repo",
+				Type:               "repository",
+				CleanupTagsExclude: []string{},
+			},
+			defaults: ConfigDefaults{
+				CleanupTagsExclude: []string{".*\\.sig$", ".*\\.att$"},
+			},
+			expect: ConfigSync{
+				Source:             "test/repo",
+				Target:             "registry:5000/test/repo",
+				Type:               "repository",
+				CleanupTags:        &bFalse,
+				CleanupTagsExclude: []string{},
+			},
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			syncSetDefaults(&tc.sync, tc.defaults)
+			
+			// Check CleanupTags
+			if tc.sync.CleanupTags == nil && tc.expect.CleanupTags != nil {
+				t.Errorf("CleanupTags is nil, expected %v", *tc.expect.CleanupTags)
+			} else if tc.sync.CleanupTags != nil && tc.expect.CleanupTags == nil {
+				t.Errorf("CleanupTags is %v, expected nil", *tc.sync.CleanupTags)
+			} else if tc.sync.CleanupTags != nil && tc.expect.CleanupTags != nil && *tc.sync.CleanupTags != *tc.expect.CleanupTags {
+				t.Errorf("CleanupTags mismatch: got %v, expected %v", *tc.sync.CleanupTags, *tc.expect.CleanupTags)
+			}
+
+			// Check CleanupTagsExclude
+			if !reflect.DeepEqual(tc.sync.CleanupTagsExclude, tc.expect.CleanupTagsExclude) {
+				t.Errorf("CleanupTagsExclude mismatch: got %v, expected %v", tc.sync.CleanupTagsExclude, tc.expect.CleanupTagsExclude)
+			}
+		})
+	}
+}
+
+// TestMatchesExclusionPattern tests the matchesExclusionPattern function
+func TestMatchesExclusionPattern(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		tag             string
+		patterns        []string
+		expectMatch     bool
+		expectPattern   string
+		expectError     bool
+	}{
+		// Custom exclusion patterns tests (8.2)
+		{
+			name:          "custom pattern matches",
+			tag:           "backup-v1.0.0",
+			patterns:      []string{"^backup-.*"},
+			expectMatch:   true,
+			expectPattern: "^backup-.*",
+			expectError:   false,
+		},
+		{
+			name:          "multiple custom patterns first matches",
+			tag:           "prod-v1.0.0",
+			patterns:      []string{"^prod-.*", "^staging-.*", "^dev-.*"},
+			expectMatch:   true,
+			expectPattern: "^prod-.*",
+			expectError:   false,
+		},
+		{
+			name:          "multiple custom patterns second matches",
+			tag:           "staging-v1.0.0",
+			patterns:      []string{"^prod-.*", "^staging-.*", "^dev-.*"},
+			expectMatch:   true,
+			expectPattern: "^staging-.*",
+			expectError:   false,
+		},
+		{
+			name:          "multiple custom patterns none match",
+			tag:           "v1.0.0",
+			patterns:      []string{"^prod-.*", "^staging-.*", "^dev-.*"},
+			expectMatch:   false,
+			expectPattern: "",
+			expectError:   false,
+		},
+		{
+			name:          "complex regex pattern matches",
+			tag:           "v1.0.0-rc1",
+			patterns:      []string{".*-rc[0-9]+$"},
+			expectMatch:   true,
+			expectPattern: ".*-rc[0-9]+$",
+			expectError:   false,
+		},
+		{
+			name:          "sig suffix pattern matches",
+			tag:           "v1.0.0.sig",
+			patterns:      []string{".*\\.sig$"},
+			expectMatch:   true,
+			expectPattern: ".*\\.sig$",
+			expectError:   false,
+		},
+		{
+			name:          "att suffix pattern matches",
+			tag:           "v1.0.0.att",
+			patterns:      []string{".*\\.att$"},
+			expectMatch:   true,
+			expectPattern: ".*\\.att$",
+			expectError:   false,
+		},
+		{
+			name:          "empty patterns list",
+			tag:           "v1.0.0",
+			patterns:      []string{},
+			expectMatch:   false,
+			expectPattern: "",
+			expectError:   false,
+		},
+		{
+			name:          "nil patterns list",
+			tag:           "v1.0.0",
+			patterns:      nil,
+			expectMatch:   false,
+			expectPattern: "",
+			expectError:   false,
+		},
+
+		// Invalid regex patterns tests (8.3)
+		{
+			name:          "invalid regex pattern unclosed bracket",
+			tag:           "v1.0.0",
+			patterns:      []string{"[invalid"},
+			expectMatch:   false,
+			expectPattern: "",
+			expectError:   true,
+		},
+		{
+			name:          "invalid regex pattern unclosed paren",
+			tag:           "v1.0.0",
+			patterns:      []string{"(invalid"},
+			expectMatch:   false,
+			expectPattern: "",
+			expectError:   true,
+		},
+		{
+			name:          "invalid regex pattern bad repetition",
+			tag:           "v1.0.0",
+			patterns:      []string{"*invalid"},
+			expectMatch:   false,
+			expectPattern: "",
+			expectError:   true,
+		},
+		{
+			name:          "valid pattern before invalid pattern",
+			tag:           "v1.0.0.sig",
+			patterns:      []string{".*\\.sig$", "[invalid"},
+			expectMatch:   true,
+			expectPattern: ".*\\.sig$",
+			expectError:   false,
+		},
+		{
+			name:          "invalid pattern before valid pattern",
+			tag:           "v1.0.0.sig",
+			patterns:      []string{"[invalid", ".*\\.sig$"},
+			expectMatch:   false,
+			expectPattern: "",
+			expectError:   true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			matched, pattern, err := matchesExclusionPattern(tc.tag, tc.patterns)
+
+			// Check error expectation
+			if tc.expectError {
+				if err == nil {
+					t.Errorf("expected error but got none")
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+
+			// Check match expectation
+			if matched != tc.expectMatch {
+				t.Errorf("expected match=%v, got match=%v", tc.expectMatch, matched)
+			}
+
+			// Check pattern expectation
+			if pattern != tc.expectPattern {
+				t.Errorf("expected pattern=%q, got pattern=%q", tc.expectPattern, pattern)
+			}
+		})
+	}
+}
+
+// TestCleanupTagIdentification tests the tag identification logic for cleanup (9.1)
+// This test requires a registry that supports tag deletion and is skipped if not available
+func TestCleanupTagIdentification(t *testing.T) {
+	t.Skip("Skipping cleanup test: requires registry with tag deletion support (not available in olareg)")
+	t.Parallel()
+	ctx := context.Background()
+	boolT := true
+
+	// Setup test registry
+	tempDir := t.TempDir()
+	err := copyfs.Copy(tempDir+"/testrepo", "../../testdata/testrepo")
+	if err != nil {
+		t.Fatalf("failed to copy testrepo to tempdir: %v", err)
+	}
+
+	regHandler := olareg.New(oConfig.Config{
+		Storage: oConfig.ConfigStorage{
+			StoreType: oConfig.StoreMem,
+			RootDir:   "../../testdata",
+		},
+	})
+	ts := httptest.NewServer(regHandler)
+	tsURL, _ := url.Parse(ts.URL)
+	tsHost := tsURL.Host
+	t.Cleanup(func() {
+		ts.Close()
+		_ = regHandler.Close()
+	})
+
+	rcHosts := []config.Host{
+		{
+			Name:     tsHost,
+			Hostname: tsHost,
+			TLS:      config.TLSDisabled,
+		},
+	}
+	delayInit, _ := time.ParseDuration("0.05s")
+	delayMax, _ := time.ParseDuration("0.10s")
+	rc := regclient.New(
+		regclient.WithConfigHost(rcHosts...),
+		regclient.WithRegOpts(reg.WithDelay(delayInit, delayMax)),
+	)
+	pq := pqueue.New(pqueue.Opts[throttle]{Max: 1})
+
+	confBytes := `
+version: 1
+defaults:
+  parallel: 1
+`
+	confRdr := bytes.NewReader([]byte(confBytes))
+	conf, err := ConfigLoadReader(confRdr)
+	if err != nil {
+		t.Fatalf("failed parsing config: %v", err)
+	}
+
+	// Get reference digests
+	r1, _ := ref.New(tsHost + "/testrepo:v1")
+	r2, _ := ref.New(tsHost + "/testrepo:v2")
+	r3, _ := ref.New(tsHost + "/testrepo:v3")
+	m1, _ := rc.ManifestGet(ctx, r1)
+	d1 := m1.GetDescriptor().Digest
+	m2, _ := rc.ManifestGet(ctx, r2)
+	d2 := m2.GetDescriptor().Digest
+	m3, _ := rc.ManifestGet(ctx, r3)
+	d3 := m3.GetDescriptor().Digest
+
+	tests := []struct {
+		name            string
+		setupSync       ConfigSync
+		cleanupSync     ConfigSync
+		expectTags      map[string]digest.Digest
+		expectMissing   []string
+	}{
+		{
+			name: "tags matching filters are preserved",
+			setupSync: ConfigSync{
+				Source: tsHost + "/testrepo",
+				Target: tsHost + "/test-cleanup1",
+				Type:   "repository",
+			},
+			cleanupSync: ConfigSync{
+				Source:      tsHost + "/testrepo",
+				Target:      tsHost + "/test-cleanup1",
+				Type:        "repository",
+				CleanupTags: &boolT,
+				Tags: TagAllowDeny{
+					Allow: []string{"v1", "v2"},
+				},
+			},
+			expectTags: map[string]digest.Digest{
+				tsHost + "/test-cleanup1:v1": d1,
+				tsHost + "/test-cleanup1:v2": d2,
+			},
+			expectMissing: []string{
+				tsHost + "/test-cleanup1:v3",
+			},
+		},
+		{
+			name: "tags not matching filters are deleted",
+			setupSync: ConfigSync{
+				Source: tsHost + "/testrepo",
+				Target: tsHost + "/test-cleanup2",
+				Type:   "repository",
+			},
+			cleanupSync: ConfigSync{
+				Source:      tsHost + "/testrepo",
+				Target:      tsHost + "/test-cleanup2",
+				Type:        "repository",
+				CleanupTags: &boolT,
+				Tags: TagAllowDeny{
+					Allow: []string{"v3"},
+				},
+			},
+			expectTags: map[string]digest.Digest{
+				tsHost + "/test-cleanup2:v3": d3,
+			},
+			expectMissing: []string{
+				tsHost + "/test-cleanup2:v1",
+				tsHost + "/test-cleanup2:v2",
+			},
+		},
+		{
+			name: "excluded tags are preserved regardless of filters",
+			setupSync: ConfigSync{
+				Source: tsHost + "/testrepo",
+				Target: tsHost + "/test-cleanup3",
+				Type:   "repository",
+			},
+			cleanupSync: ConfigSync{
+				Source:             tsHost + "/testrepo",
+				Target:             tsHost + "/test-cleanup3",
+				Type:               "repository",
+				CleanupTags:        &boolT,
+				CleanupTagsExclude: []string{"v2"},
+				Tags: TagAllowDeny{
+					Allow: []string{"v1"},
+				},
+			},
+			expectTags: map[string]digest.Digest{
+				tsHost + "/test-cleanup3:v1": d1,
+				tsHost + "/test-cleanup3:v2": d2,
+			},
+			expectMissing: []string{
+				tsHost + "/test-cleanup3:v3",
+			},
+		},
+		{
+			name: "multiple tagSets preserve matching tags",
+			setupSync: ConfigSync{
+				Source: tsHost + "/testrepo",
+				Target: tsHost + "/test-cleanup4",
+				Type:   "repository",
+			},
+			cleanupSync: ConfigSync{
+				Source:      tsHost + "/testrepo",
+				Target:      tsHost + "/test-cleanup4",
+				Type:        "repository",
+				CleanupTags: &boolT,
+				TagSets: []TagAllowDeny{
+					{Allow: []string{"v1"}},
+					{Allow: []string{"v3"}},
+				},
+			},
+			expectTags: map[string]digest.Digest{
+				tsHost + "/test-cleanup4:v1": d1,
+				tsHost + "/test-cleanup4:v3": d3,
+			},
+			expectMissing: []string{
+				tsHost + "/test-cleanup4:v2",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rootOpts := rootOpts{
+				conf:     conf,
+				rc:       rc,
+				throttle: pq,
+				log:      slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn})),
+			}
+
+			// Setup: sync all tags first
+			syncSetDefaults(&tc.setupSync, conf.Defaults)
+			err = rootOpts.process(ctx, tc.setupSync, actionCopy)
+			if err != nil {
+				t.Fatalf("setup sync failed: %v", err)
+			}
+
+			// Run cleanup with filters
+			syncSetDefaults(&tc.cleanupSync, conf.Defaults)
+			err = rootOpts.process(ctx, tc.cleanupSync, actionCopy)
+			if err != nil {
+				t.Fatalf("cleanup sync failed: %v", err)
+			}
+
+			// Verify expected tags exist
+			for tag, expectedDigest := range tc.expectTags {
+				r, err := ref.New(tag)
+				if err != nil {
+					t.Fatalf("cannot parse ref %s: %v", tag, err)
+				}
+				m, err := rc.ManifestHead(ctx, r)
+				if err != nil {
+					t.Errorf("expected tag does not exist: %s", tag)
+				} else if m.GetDescriptor().Digest != expectedDigest {
+					t.Errorf("digest mismatch for %s, expected %s, received %s",
+						tag, expectedDigest.String(), m.GetDescriptor().Digest.String())
+				}
+			}
+
+			// Verify missing tags don't exist
+			for _, missing := range tc.expectMissing {
+				r, err := ref.New(missing)
+				if err != nil {
+					t.Fatalf("cannot parse ref %s: %v", missing, err)
+				}
+				_, err = rc.ManifestHead(ctx, r)
+				if err == nil {
+					t.Errorf("tag exists that should be deleted: %s", missing)
+				}
+			}
+		})
+	}
+}
+
+// TestCleanupSyncTypes tests cleanup with different sync types (9.2)
+// This test requires a registry that supports tag deletion and is skipped if not available
+func TestCleanupSyncTypes(t *testing.T) {
+	t.Skip("Skipping cleanup test: requires registry with tag deletion support (not available in olareg)")
+	t.Parallel()
+	ctx := context.Background()
+	boolT := true
+
+	// Setup test registry
+	tempDir := t.TempDir()
+	err := copyfs.Copy(tempDir+"/testrepo", "../../testdata/testrepo")
+	if err != nil {
+		t.Fatalf("failed to copy testrepo to tempdir: %v", err)
+	}
+
+	regHandler := olareg.New(oConfig.Config{
+		Storage: oConfig.ConfigStorage{
+			StoreType: oConfig.StoreMem,
+			RootDir:   "../../testdata",
+		},
+	})
+	ts := httptest.NewServer(regHandler)
+	tsURL, _ := url.Parse(ts.URL)
+	tsHost := tsURL.Host
+	t.Cleanup(func() {
+		ts.Close()
+		_ = regHandler.Close()
+	})
+
+	rcHosts := []config.Host{
+		{
+			Name:     tsHost,
+			Hostname: tsHost,
+			TLS:      config.TLSDisabled,
+		},
+	}
+	delayInit, _ := time.ParseDuration("0.05s")
+	delayMax, _ := time.ParseDuration("0.10s")
+	rc := regclient.New(
+		regclient.WithConfigHost(rcHosts...),
+		regclient.WithRegOpts(reg.WithDelay(delayInit, delayMax)),
+	)
+	pq := pqueue.New(pqueue.Opts[throttle]{Max: 1})
+
+	confBytes := `
+version: 1
+defaults:
+  parallel: 1
+`
+	confRdr := bytes.NewReader([]byte(confBytes))
+	conf, err := ConfigLoadReader(confRdr)
+	if err != nil {
+		t.Fatalf("failed parsing config: %v", err)
+	}
+
+	tests := []struct {
+		name          string
+		setupSync     ConfigSync
+		cleanupSync   ConfigSync
+		expectCleanup bool
+	}{
+		{
+			name: "cleanup runs for repository type",
+			setupSync: ConfigSync{
+				Source: tsHost + "/testrepo",
+				Target: tsHost + "/test-type-repo",
+				Type:   "repository",
+			},
+			cleanupSync: ConfigSync{
+				Source:      tsHost + "/testrepo",
+				Target:      tsHost + "/test-type-repo",
+				Type:        "repository",
+				CleanupTags: &boolT,
+				Tags: TagAllowDeny{
+					Allow: []string{"v1"},
+				},
+			},
+			expectCleanup: true,
+		},
+		{
+			name: "cleanup does NOT run for image type",
+			setupSync: ConfigSync{
+				Source: tsHost + "/testrepo:v1",
+				Target: tsHost + "/test-type-image:v1",
+				Type:   "image",
+			},
+			cleanupSync: ConfigSync{
+				Source:      tsHost + "/testrepo:v2",
+				Target:      tsHost + "/test-type-image:v2",
+				Type:        "image",
+				CleanupTags: &boolT,
+			},
+			expectCleanup: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rootOpts := rootOpts{
+				conf:     conf,
+				rc:       rc,
+				throttle: pq,
+				log:      slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn})),
+			}
+
+			// Setup: sync initial tags
+			syncSetDefaults(&tc.setupSync, conf.Defaults)
+			err = rootOpts.process(ctx, tc.setupSync, actionCopy)
+			if err != nil {
+				t.Fatalf("setup sync failed: %v", err)
+			}
+
+			// For repository type, add an extra tag that should be cleaned up
+			if tc.cleanupSync.Type == "repository" {
+				// Copy v2 to target
+				extraSync := ConfigSync{
+					Source: tsHost + "/testrepo:v2",
+					Target: tc.cleanupSync.Target + ":v2",
+					Type:   "image",
+				}
+				syncSetDefaults(&extraSync, conf.Defaults)
+				err = rootOpts.process(ctx, extraSync, actionCopy)
+				if err != nil {
+					t.Fatalf("extra tag sync failed: %v", err)
+				}
+			}
+
+			// Run cleanup
+			syncSetDefaults(&tc.cleanupSync, conf.Defaults)
+			err = rootOpts.process(ctx, tc.cleanupSync, actionCopy)
+			if err != nil {
+				t.Fatalf("cleanup sync failed: %v", err)
+			}
+
+			// Verify cleanup behavior
+			if tc.expectCleanup {
+				// For repository type, v2 should be deleted
+				r, _ := ref.New(tc.cleanupSync.Target + ":v2")
+				_, err = rc.ManifestHead(ctx, r)
+				if err == nil {
+					t.Errorf("cleanup did not run: v2 tag still exists")
+				}
+			} else {
+				// For image type, both tags should exist
+				r1, _ := ref.New(tc.cleanupSync.Target)
+				r1 = r1.SetTag("v1")
+				_, err1 := rc.ManifestHead(ctx, r1)
+				r2, _ := ref.New(tc.cleanupSync.Target)
+				r2 = r2.SetTag("v2")
+				_, err2 := rc.ManifestHead(ctx, r2)
+				if err1 != nil || err2 != nil {
+					t.Errorf("cleanup ran when it should not have: v1 err=%v, v2 err=%v", err1, err2)
+				}
+			}
+		})
+	}
+}
+
+// TestCleanupErrorHandling tests error handling during cleanup (9.3)
+// This test requires a registry that supports tag deletion and is skipped if not available
+func TestCleanupErrorHandling(t *testing.T) {
+	t.Skip("Skipping cleanup test: requires registry with tag deletion support (not available in olareg)")
+	t.Parallel()
+	ctx := context.Background()
+	boolT := true
+
+	// Setup test registry
+	tempDir := t.TempDir()
+	err := copyfs.Copy(tempDir+"/testrepo", "../../testdata/testrepo")
+	if err != nil {
+		t.Fatalf("failed to copy testrepo to tempdir: %v", err)
+	}
+
+	regHandler := olareg.New(oConfig.Config{
+		Storage: oConfig.ConfigStorage{
+			StoreType: oConfig.StoreMem,
+			RootDir:   "../../testdata",
+		},
+	})
+	ts := httptest.NewServer(regHandler)
+	tsURL, _ := url.Parse(ts.URL)
+	tsHost := tsURL.Host
+	t.Cleanup(func() {
+		ts.Close()
+		_ = regHandler.Close()
+	})
+
+	// Setup read-only registry
+	regROHandler := olareg.New(oConfig.Config{
+		Storage: oConfig.ConfigStorage{
+			StoreType: oConfig.StoreMem,
+			RootDir:   "../../testdata",
+			ReadOnly:  &boolT,
+		},
+	})
+	tsRO := httptest.NewServer(regROHandler)
+	tsROURL, _ := url.Parse(tsRO.URL)
+	tsROHost := tsROURL.Host
+	t.Cleanup(func() {
+		tsRO.Close()
+		_ = regROHandler.Close()
+	})
+
+	rcHosts := []config.Host{
+		{
+			Name:     tsHost,
+			Hostname: tsHost,
+			TLS:      config.TLSDisabled,
+		},
+		{
+			Name:     tsROHost,
+			Hostname: tsROHost,
+			TLS:      config.TLSDisabled,
+		},
+	}
+	delayInit, _ := time.ParseDuration("0.05s")
+	delayMax, _ := time.ParseDuration("0.10s")
+	rc := regclient.New(
+		regclient.WithConfigHost(rcHosts...),
+		regclient.WithRegOpts(reg.WithDelay(delayInit, delayMax)),
+	)
+	pq := pqueue.New(pqueue.Opts[throttle]{Max: 1})
+
+	confBytes := `
+version: 1
+defaults:
+  parallel: 1
+`
+	confRdr := bytes.NewReader([]byte(confBytes))
+	conf, err := ConfigLoadReader(confRdr)
+	if err != nil {
+		t.Fatalf("failed parsing config: %v", err)
+	}
+
+	tests := []struct {
+		name        string
+		setupSync   ConfigSync
+		cleanupSync ConfigSync
+		abortOnErr  bool
+		expectError bool
+	}{
+		{
+			name: "cleanup continues after tag deletion failure without abortOnErr",
+			setupSync: ConfigSync{
+				Source: tsHost + "/testrepo",
+				Target: tsROHost + "/test-error1",
+				Type:   "repository",
+			},
+			cleanupSync: ConfigSync{
+				Source:      tsHost + "/testrepo",
+				Target:      tsROHost + "/test-error1",
+				Type:        "repository",
+				CleanupTags: &boolT,
+				Tags: TagAllowDeny{
+					Allow: []string{"v1"},
+				},
+			},
+			abortOnErr:  false,
+			expectError: true,
+		},
+		{
+			name: "cleanup aborts with abortOnErr",
+			setupSync: ConfigSync{
+				Source: tsHost + "/testrepo",
+				Target: tsROHost + "/test-error2",
+				Type:   "repository",
+			},
+			cleanupSync: ConfigSync{
+				Source:      tsHost + "/testrepo",
+				Target:      tsROHost + "/test-error2",
+				Type:        "repository",
+				CleanupTags: &boolT,
+				Tags: TagAllowDeny{
+					Allow: []string{"v1"},
+				},
+			},
+			abortOnErr:  true,
+			expectError: true,
+		},
+		{
+			name: "cleanup handles context cancellation",
+			setupSync: ConfigSync{
+				Source: tsHost + "/testrepo",
+				Target: tsHost + "/test-cancel",
+				Type:   "repository",
+			},
+			cleanupSync: ConfigSync{
+				Source:      tsHost + "/testrepo",
+				Target:      tsHost + "/test-cancel",
+				Type:        "repository",
+				CleanupTags: &boolT,
+				Tags: TagAllowDeny{
+					Allow: []string{"v1"},
+				},
+			},
+			abortOnErr:  false,
+			expectError: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rootOpts := rootOpts{
+				conf:       conf,
+				rc:         rc,
+				throttle:   pq,
+				log:        slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn})),
+				abortOnErr: tc.abortOnErr,
+			}
+
+			// Setup: sync all tags first
+			syncSetDefaults(&tc.setupSync, conf.Defaults)
+			err = rootOpts.process(ctx, tc.setupSync, actionCopy)
+			if err != nil {
+				t.Fatalf("setup sync failed: %v", err)
+			}
+
+			// Run cleanup
+			syncSetDefaults(&tc.cleanupSync, conf.Defaults)
+			
+			// For context cancellation test, use a cancelled context
+			testCtx := ctx
+			if tc.name == "cleanup handles context cancellation" {
+				cancelCtx, cancel := context.WithCancel(ctx)
+				cancel()
+				testCtx = cancelCtx
+			}
+			
+			err = rootOpts.process(testCtx, tc.cleanupSync, actionCopy)
+
+			// Verify error expectation
+			if tc.expectError {
+				if err == nil {
+					t.Errorf("expected error but got none")
+				}
+			} else {
+				if err != nil && !errors.Is(err, ErrCanceled) {
+					t.Errorf("unexpected error: %v", err)
+				}
 			}
 		})
 	}

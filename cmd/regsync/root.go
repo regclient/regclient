@@ -623,6 +623,23 @@ func (opts *rootOpts) processRepo(ctx context.Context, s ConfigSync, src, tgt st
 			}
 		}
 	}
+	
+	// Run cleanup if enabled (only for actionCopy, not for image sync type)
+	if action == actionCopy && s.CleanupTags != nil && *s.CleanupTags {
+		opts.log.Debug("Cleanup enabled for target",
+			slog.String("target", tgt))
+		cleanupErr := opts.cleanupTags(ctx, s, tgt)
+		if cleanupErr != nil {
+			opts.log.Error("Failed to cleanup tags",
+				slog.String("target", tgt),
+				slog.String("error", cleanupErr.Error()))
+			errs = append(errs, cleanupErr)
+			if opts.abortOnErr {
+				return errors.Join(errs...)
+			}
+		}
+	}
+	
 	return errors.Join(errs...)
 }
 
