@@ -47,9 +47,13 @@ type Platform struct {
 
 	// Features is an optional field specifying an array of strings, each listing a required CPU feature (for example `sse4` or `aes`).
 	Features []string `json:"features,omitempty"`
+
+	// Prefer indicates additional capabilities of a platform that may be preferred by some hosts.
+	// This field is EXPERIMENTAL.
+	Prefer map[string]string `json:"prefer,omitempty"`
 }
 
-// String outputs the platform in the <os>/<arch>/<variant> notation
+// String outputs the platform in the <os>/<arch>/<variant> notation.
 func (p Platform) String() string {
 	(&p).normalize()
 	if p.OS == "" {
@@ -59,7 +63,14 @@ func (p Platform) String() string {
 	}
 }
 
-// Parse converts a platform string into a struct
+// Parse converts a platform string into a struct.
+// The typical parsing is for the <os>/<arch>/<variant> input, where variant is optional depending on the arch.
+// Values that are not provided will be interpreted from the host, e.g. an input of "linux" will populate the other fields from the host.
+// To align with other implementations, <arch> may be passed alone for well known architectures.
+// regclient specific features include the ability to pass the string "local" to return the local platform, and additional comma separated key=value arguments.
+// Supported key=value fields include:
+//   - "osver" for windows, e.g. windows/amd64,osver=10.0.17763.5820.
+//   - "prefer" for indicating preferences, EXPERIMENTAL, e.g. linux/arm64,prefer="com.example.gpu=model-123,org.example.runtime=sandbox-x".
 func Parse(platStr string) (Platform, error) {
 	// args are a regclient specific way to extend the platform string
 	platArgs := strings.SplitN(platStr, ",", 2)
@@ -95,6 +106,12 @@ func Parse(platStr string) (Platform, error) {
 			switch strings.ToLower(k) {
 			case "osver", "osversion":
 				plat.OSVersion = v
+			case "prefer":
+				prefMap, err := strparse.SplitCSKV(v)
+				if err != nil {
+					return Platform{}, fmt.Errorf("failed to parse prefer arg in %s: %w", platStr, err)
+				}
+				plat.Prefer = prefMap
 			default:
 				return Platform{}, fmt.Errorf("unsupported platform arg type, %s in %s%.0w", k, platStr, errs.ErrParsingFailed)
 			}
