@@ -2,7 +2,7 @@
 
 set -e
 image="regctl"
-platforms="linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x"
+platforms="linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x,linux/riscv64"
 base_name=""
 release="scratch"
 push_tags=""
