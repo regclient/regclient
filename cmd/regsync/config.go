@@ -65,28 +65,29 @@ type ConfigRateLimit struct {
 
 // ConfigSync defines a source/target repository to sync
 type ConfigSync struct {
-	Source          string                 `yaml:"source" json:"source"`
-	Target          string                 `yaml:"target" json:"target"`
-	Type            string                 `yaml:"type" json:"type"`
-	Tags            TagAllowDeny           `yaml:"tags" json:"tags"`
-	TagSets         []TagAllowDeny         `yaml:"tagSets" json:"tagSets"`
-	Repos           RepoAllowDeny          `yaml:"repos" json:"repos"`
-	DigestTags      *bool                  `yaml:"digestTags" json:"digestTags"`
-	Referrers       *bool                  `yaml:"referrers" json:"referrers"`
-	ReferrerFilters []ConfigReferrerFilter `yaml:"referrerFilters" json:"referrerFilters"`
-	ReferrerSrc     string                 `yaml:"referrerSource" json:"referrerSource"`
-	ReferrerTgt     string                 `yaml:"referrerTarget" json:"referrerTarget"`
-	Platform        string                 `yaml:"platform" json:"platform"`
-	Platforms       []string               `yaml:"platforms" json:"platforms"`
-	FastCheck       *bool                  `yaml:"fastCheck" json:"fastCheck"`
-	ForceRecursive  *bool                  `yaml:"forceRecursive" json:"forceRecursive"`
-	IncludeExternal *bool                  `yaml:"includeExternal" json:"includeExternal"`
-	Backup          string                 `yaml:"backup" json:"backup"`
-	Interval        time.Duration          `yaml:"interval" json:"interval"`
-	Schedule        string                 `yaml:"schedule" json:"schedule"`
-	RateLimit       ConfigRateLimit        `yaml:"ratelimit" json:"ratelimit"`
-	MediaTypes      []string               `yaml:"mediaTypes" json:"mediaTypes"`
-	Hooks           ConfigHooks            `yaml:"hooks" json:"hooks"`
+	Source            string                 `yaml:"source" json:"source"`
+	Target            string                 `yaml:"target" json:"target"`
+	AdditionalTargets []string               `yaml:"additionalTargets" json:"additionalTargets"`
+	Type              string                 `yaml:"type" json:"type"`
+	Tags              TagAllowDeny           `yaml:"tags" json:"tags"`
+	TagSets           []TagAllowDeny         `yaml:"tagSets" json:"tagSets"`
+	Repos             RepoAllowDeny          `yaml:"repos" json:"repos"`
+	DigestTags        *bool                  `yaml:"digestTags" json:"digestTags"`
+	Referrers         *bool                  `yaml:"referrers" json:"referrers"`
+	ReferrerFilters   []ConfigReferrerFilter `yaml:"referrerFilters" json:"referrerFilters"`
+	ReferrerSrc       string                 `yaml:"referrerSource" json:"referrerSource"`
+	ReferrerTgt       string                 `yaml:"referrerTarget" json:"referrerTarget"`
+	Platform          string                 `yaml:"platform" json:"platform"`
+	Platforms         []string               `yaml:"platforms" json:"platforms"`
+	FastCheck         *bool                  `yaml:"fastCheck" json:"fastCheck"`
+	ForceRecursive    *bool                  `yaml:"forceRecursive" json:"forceRecursive"`
+	IncludeExternal   *bool                  `yaml:"includeExternal" json:"includeExternal"`
+	Backup            string                 `yaml:"backup" json:"backup"`
+	Interval          time.Duration          `yaml:"interval" json:"interval"`
+	Schedule          string                 `yaml:"schedule" json:"schedule"`
+	RateLimit         ConfigRateLimit        `yaml:"ratelimit" json:"ratelimit"`
+	MediaTypes        []string               `yaml:"mediaTypes" json:"mediaTypes"`
+	Hooks             ConfigHooks            `yaml:"hooks" json:"hooks"`
 }
 
 // RepoAllowDeny is an allow and deny list of regex strings for repository names
@@ -237,6 +238,13 @@ func configExpandTemplates(c *Config) error {
 			return err
 		}
 		c.Sync[i].Target = val
+		for j, additionalTgt := range c.Sync[i].AdditionalTargets {
+			val, err = template.String(additionalTgt, dataSync)
+			if err != nil {
+				return err
+			}
+			c.Sync[i].AdditionalTargets[j] = val
+		}
 		val, err = template.String(c.Sync[i].ReferrerTgt, dataSync)
 		if err != nil {
 			return err
