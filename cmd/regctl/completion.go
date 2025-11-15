@@ -33,11 +33,11 @@ func completeArgDefault(cmd *cobra.Command, args []string, toComplete string) ([
 
 func completeArgPlatform(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	return []string{
-		"local", "linux", "windows",
+		"local", "linux", "windows", "freebsd",
 		"linux/amd64", "linux/386",
 		"linux/arm/v5", "linux/arm/v6", "linux/arm/v7", "linux/arm64",
 		"linux/mips64le", "linux/ppc64le", "linux/riscv64", "linux/s390x",
-		"windows/amd64",
+		"windows/amd64", "freebsd/amd64",
 	}, cobra.ShellCompDirectiveNoFileComp
 }
 

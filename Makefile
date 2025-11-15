@@ -1,9 +1,9 @@
 COMMANDS?=regctl regsync regbot
 BINARIES?=$(addprefix bin/,$(COMMANDS))
 IMAGES?=$(addprefix docker-,$(COMMANDS))
-ARTIFACT_PLATFORMS?=linux-amd64 linux-arm64 linux-ppc64le linux-s390x linux-riscv64 darwin-amd64 darwin-arm64 windows-amd64.exe
+ARTIFACT_PLATFORMS?=linux-amd64 linux-arm64 linux-ppc64le linux-s390x linux-riscv64 darwin-amd64 darwin-arm64 windows-amd64.exe freebsd-amd64
 ARTIFACTS?=$(foreach cmd,$(addprefix artifacts/,$(COMMANDS)),$(addprefix $(cmd)-,$(ARTIFACT_PLATFORMS)))
-TEST_PLATFORMS?=linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x,linux/riscv64
+IMAGE_PLATFORMS?=linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x,linux/riscv64
 VCS_REPO?="https://github.com/regclient/regclient.git"
 VCS_REF?=$(shell git rev-list -1 HEAD)
 ifneq ($(shell git status --porcelain 2>/dev/null),)
@@ -137,15 +137,15 @@ docker-%: .FORCE
 oci-image: $(addprefix oci-image-,$(COMMANDS)) ## Build reproducible images to an OCI Layout
 
 oci-image-%: bin/regctl .FORCE
-	PATH="$(PWD)/bin:$(PATH)" build/oci-image.sh -r scratch -i "$*" -p "$(TEST_PLATFORMS)"
-	PATH="$(PWD)/bin:$(PATH)" build/oci-image.sh -r alpine  -i "$*" -p "$(TEST_PLATFORMS)" -b "alpine:3"
+	PATH="$(PWD)/bin:$(PATH)" build/oci-image.sh -r scratch -i "$*" -p "$(IMAGE_PLATFORMS)"
+	PATH="$(PWD)/bin:$(PATH)" build/oci-image.sh -r alpine  -i "$*" -p "$(IMAGE_PLATFORMS)" -b "alpine:3"
 
 .PHONY: test-docker
 test-docker: $(addprefix test-docker-,$(COMMANDS)) ## Build multi-platform docker images (but do not tag)
 
 test-docker-%:
-	docker buildx build --platform="$(TEST_PLATFORMS)" -f build/Dockerfile.$*.buildkit .
-	docker buildx build --platform="$(TEST_PLATFORMS)" -f build/Dockerfile.$*.buildkit --target release-alpine .
+	docker buildx build --platform="$(IMAGE_PLATFORMS)" -f build/Dockerfile.$*.buildkit .
+	docker buildx build --platform="$(IMAGE_PLATFORMS)" -f build/Dockerfile.$*.buildkit --target release-alpine .
 
 .PHONY: ci
 ci: ci-distribution ci-zot ## Run CI tests against self hosted registries
