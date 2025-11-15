@@ -441,7 +441,7 @@ func (opts *rootOpts) process(ctx context.Context, s ConfigSync, action actionTy
 			return err
 		}
 	case "image":
-		if err := opts.processImage(ctx, s, s.Source, s.Target, action); err != nil {
+		if err := opts.processImages(ctx, s, s.Source, s.Target, s.AdditionalTargets, action); err != nil {
 			return err
 		}
 	default:
@@ -616,7 +616,7 @@ func (opts *rootOpts) processRepo(ctx context.Context, s ConfigSync, src, tgt st
 	}
 	errs := []error{}
 	for _, tag := range sTagsFiltered {
-		if err := opts.processImage(ctx, s, fmt.Sprintf("%s:%s", src, tag), fmt.Sprintf("%s:%s", tgt, tag), action); err != nil {
+		if _, err := opts.processImage(ctx, s, fmt.Sprintf("%s:%s", src, tag), fmt.Sprintf("%s:%s", tgt, tag), action); err != nil {
 			errs = append(errs, err)
 			if opts.abortOnErr {
 				break
@@ -626,22 +626,41 @@ func (opts *rootOpts) processRepo(ctx context.Context, s ConfigSync, src, tgt st
 	return errors.Join(errs...)
 }
 
-func (opts *rootOpts) processImage(ctx context.Context, s ConfigSync, src, tgt string, action actionType) error {
+func (opts *rootOpts) processImages(ctx context.Context, s ConfigSync, src, tgt string, tgts []string, action actionType) error {
+	var errs []error
+
+	if synced, err := opts.processImage(ctx, s, src, tgt, action); err != nil || !synced {
+		return err
+	}
+
+	for _, additionalTgt := range tgts {
+		if _, err := opts.processImage(ctx, s, src, additionalTgt, action); err != nil {
+			errs = append(errs, err)
+			if opts.abortOnErr {
+				break
+			}
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
+func (opts *rootOpts) processImage(ctx context.Context, s ConfigSync, src, tgt string, action actionType) (bool, error) {
 	sRef, err := ref.New(src)
 	if err != nil {
 		opts.log.Error("Failed parsing source",
 			slog.String("source", src),
 			slog.String("error", err.Error()))
-		return err
+		return false, err
 	}
 	tRef, err := ref.New(tgt)
 	if err != nil {
 		opts.log.Error("Failed parsing target",
 			slog.String("target", tgt),
 			slog.String("error", err.Error()))
-		return err
+		return false, err
 	}
-	err = opts.processRef(ctx, s, sRef, tRef, action)
+	synced, err := opts.processRef(ctx, s, sRef, tRef, action)
 	if err != nil {
 		opts.log.Error("Failed to sync",
 			slog.String("target", tRef.CommonName()),
@@ -653,11 +672,11 @@ func (opts *rootOpts) processImage(ctx context.Context, s ConfigSync, src, tgt s
 			slog.String("ref", tRef.CommonName()),
 			slog.String("error", err.Error()))
 	}
-	return err
+	return synced, err
 }
 
 // process a sync step
-func (opts *rootOpts) processRef(ctx context.Context, s ConfigSync, src, tgt ref.Ref, action actionType) error {
+func (opts *rootOpts) processRef(ctx context.Context, s ConfigSync, src, tgt ref.Ref, action actionType) (bool, error) {
 	mSrc, err := opts.rc.ManifestHead(ctx, src, regclient.WithManifestRequireDigest())
 	if err != nil && errors.Is(err, errs.ErrUnsupportedAPI) {
 		mSrc, err = opts.rc.ManifestGet(ctx, src)
@@ -666,7 +685,7 @@ func (opts *rootOpts) processRef(ctx context.Context, s ConfigSync, src, tgt ref
 		opts.log.Error("Failed to lookup source manifest",
 			slog.String("source", src.CommonName()),
 			slog.String("error", err.Error()))
-		return err
+		return false, err
 	}
 	fastCheck := (s.FastCheck != nil && *s.FastCheck)
 	forceRecursive := (s.ForceRecursive != nil && *s.ForceRecursive)
@@ -682,13 +701,13 @@ func (opts *rootOpts) processRef(ctx context.Context, s ConfigSync, src, tgt ref
 		opts.log.Debug("Image matches",
 			slog.String("source", src.CommonName()),
 			slog.String("target", tgt.CommonName()))
-		return nil
+		return false, nil
 	}
 	if tgtExists && action == actionMissing {
 		opts.log.Debug("target exists",
 			slog.String("source", src.CommonName()),
 			slog.String("target", tgt.CommonName()))
-		return nil
+		return false, nil
 	}
 
 	// skip when source manifest is an unsupported type
@@ -698,14 +717,14 @@ func (opts *rootOpts) processRef(ctx context.Context, s ConfigSync, src, tgt ref
 			slog.String("ref", src.CommonName()),
 			slog.String("mediaType", manifest.GetMediaType(mSrc)),
 			slog.Any("allowed", s.MediaTypes))
-		return nil
+		return false, nil
 	}
 
 	// if platform is defined and source is a list, resolve the source platform
 	if mSrc.IsList() && s.Platform != "" {
 		platDigest, err := opts.getPlatformDigest(ctx, src, s.Platform, mSrc)
 		if err != nil {
-			return err
+			return false, err
 		}
 		src.Digest = platDigest.String()
 		if tgtExists && platDigest.String() == manifest.GetDigest(mTgt).String() {
@@ -716,7 +735,7 @@ func (opts *rootOpts) processRef(ctx context.Context, s ConfigSync, src, tgt ref
 				slog.String("source", src.CommonName()),
 				slog.String("platform", s.Platform),
 				slog.String("target", tgt.CommonName()))
-			return nil
+			return false, nil
 		}
 	}
 	if tgtMatches {
@@ -732,13 +751,13 @@ func (opts *rootOpts) processRef(ctx context.Context, s ConfigSync, src, tgt ref
 			slog.String("target", tgt.CommonName()))
 	}
 	if action == actionCheck {
-		return nil
+		return false, nil
 	}
 
 	// wait for parallel tasks
 	throttleDone, err := opts.throttle.Acquire(ctx, throttle{})
 	if err != nil {
-		return fmt.Errorf("failed to acquire throttle: %w", err)
+		return false, fmt.Errorf("failed to acquire throttle: %w", err)
 	}
 	// delay for rate limit on source
 	if s.RateLimit.Min > 0 && manifest.GetRateLimit(mSrc).Set {
@@ -749,7 +768,7 @@ func (opts *rootOpts) processRef(ctx context.Context, s ConfigSync, src, tgt ref
 				slog.String("source", src.CommonName()),
 				slog.String("error", err.Error()))
 			throttleDone()
-			return err
+			return false, err
 		}
 		// delay if rate limit exceeded
 		rlSrc := manifest.GetRateLimit(mSrc)
@@ -763,12 +782,12 @@ func (opts *rootOpts) processRef(ctx context.Context, s ConfigSync, src, tgt ref
 				slog.Duration("sleep", s.RateLimit.Retry))
 			select {
 			case <-ctx.Done():
-				return ErrCanceled
+				return false, ErrCanceled
 			case <-time.After(s.RateLimit.Retry):
 			}
 			throttleDone, err = opts.throttle.Acquire(ctx, throttle{})
 			if err != nil {
-				return fmt.Errorf("failed to reacquire throttle: %w", err)
+				return false, fmt.Errorf("failed to reacquire throttle: %w", err)
 			}
 			mSrc, err = opts.rc.ManifestHead(ctx, src)
 			if err != nil {
@@ -776,7 +795,7 @@ func (opts *rootOpts) processRef(ctx context.Context, s ConfigSync, src, tgt ref
 					slog.String("source", src.CommonName()),
 					slog.String("error", err.Error()))
 				throttleDone()
-				return err
+				return false, err
 			}
 			rlSrc = manifest.GetRateLimit(mSrc)
 		}
@@ -790,7 +809,7 @@ func (opts *rootOpts) processRef(ctx context.Context, s ConfigSync, src, tgt ref
 	// verify context has not been canceled while waiting for throttle
 	select {
 	case <-ctx.Done():
-		return ErrCanceled
+		return false, ErrCanceled
 	default:
 	}
 
@@ -808,7 +827,7 @@ func (opts *rootOpts) processRef(ctx context.Context, s ConfigSync, src, tgt ref
 				slog.String("original", tgt.CommonName()),
 				slog.String("backup-template", s.Backup),
 				slog.String("error", err.Error()))
-			return err
+			return false, err
 		}
 		backupStr = strings.TrimSpace(backupStr)
 		backupRef := tgt
@@ -821,7 +840,7 @@ func (opts *rootOpts) processRef(ctx context.Context, s ConfigSync, src, tgt ref
 					slog.String("template", s.Backup),
 					slog.String("backup", backupStr),
 					slog.String("error", err.Error()))
-				return err
+				return false, err
 			}
 		} else {
 			// else parse backup string as just a tag
@@ -904,9 +923,9 @@ func (opts *rootOpts) processRef(ctx context.Context, s ConfigSync, src, tgt ref
 			slog.String("source", src.CommonName()),
 			slog.String("target", tgt.CommonName()),
 			slog.String("error", err.Error()))
-		return err
+		return false, err
 	}
-	return nil
+	return true, nil
 }
 
 // filterByRegex applies allow/deny regex patterns to a list of strings.

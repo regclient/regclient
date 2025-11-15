@@ -938,7 +938,7 @@ func TestProcessRef(t *testing.T) {
 			}
 			src = src.SetTag(tc.src)
 			tgt = tgt.SetTag(tc.tgt)
-			err = rootOpts.processRef(ctx, cs, src, tgt, tc.action)
+			_, err = rootOpts.processRef(ctx, cs, src, tgt, tc.action)
 			// validate err
 			if tc.expErr != nil {
 				if err == nil {
