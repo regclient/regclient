@@ -162,7 +162,7 @@ processors:
     sourceArgs:
       url: "https://github.com/sigstore/cosign.git"
     filter:
-      expr: '^v?2\.\d+\.\d+$' # pin to v2 pending cosign-installer upgrade
+      expr: '^v?3\.\d+\.\d+$' # pin to v3, v4 will remove support for older clients
   gha-golang-matrix:
     <<: *registry-tag-semver
     key: "golang-matrix"
