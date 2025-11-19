@@ -210,7 +210,7 @@ jobs:
             echo "Pushing ${tag}"
             regctl image copy --referrers "ocidir://output/${{matrix.image}}:${{matrix.type}}@${digest}" "${tag}"
             # sign both with and without the bundle to support older clients
-            cosign sign -y -r --new-bundle-format=false -use-signing-config=false "${tag}@${digest}"
-            cosign sign -y -r --new-bundle-format=true  -use-signing-config=true  "${tag}@${digest}"
+            cosign sign -y -r --new-bundle-format=false --use-signing-config=false "${tag}@${digest}"
+            cosign sign -y -r --new-bundle-format=true  --use-signing-config=true  "${tag}@${digest}"
           fi
         done
