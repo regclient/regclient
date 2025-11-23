@@ -33,7 +33,7 @@ jobs:
 
     steps:
     - name: Check out code
-      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
 
     - name: Prepare
       id: prep
@@ -133,7 +133,7 @@ jobs:
     
     # Dogfooding, use regctl to modify regclient images to improve reproducibility
     - name: Install regctl
-      uses: regclient/actions/regctl-installer@f61d18f46c86af724a9c804cb9ff2a6fec741c7c # main
+      uses: regclient/actions/regctl-installer@ed5268e995795eb54f4187ada5728d118ad674f3 # main
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       with:
         release: main
