@@ -1,26 +1,27 @@
 ARG REGISTRY=docker.io
 ARG ALPINE_VER=3.22.2@sha256:4b7ce07002c69e8f3d704a9c5d6fd3053be500b7f1c69fc0d80990c2ad8dd412
 ARG GO_VER=1.25.4-alpine@sha256:d3f0cf7723f3429e3f9ed846243970b20a2de7bae6a5b66fc5914e228d831bbb
-ARG ECR_HELPER_VER=v0.10.1
+ARG ECR_HELPER_VER=v0.11.0
 ARG GCR_HELPER_VER=v2.1.30
 ARG VCS_VERSION=(devel)
 
 FROM ${REGISTRY}/library/golang:${GO_VER} AS golang
 RUN apk add --no-cache \
-      ca-certificates \
       git \
       make
 WORKDIR /src
 
 FROM golang AS build
-RUN addgroup -g 1000 appuser \
- && adduser -u 1000 -G appuser -D appuser \
- && mkdir -p /home/appuser/.regctl \
- && chown -R appuser /home/appuser/.regctl
 COPY go.* /src/
 RUN go mod download
 COPY . /src/
 RUN make bin/regctl
+
+FROM build AS debug
+RUN addgroup -g 1000 appuser \
+ && adduser -u 1000 -G appuser -D appuser \
+ && mkdir -p /home/appuser/.docker /home/appuser/.regctl \
+ && chown -R appuser /home/appuser/
 USER appuser
 CMD [ "bin/regctl" ]
 
@@ -42,9 +43,12 @@ RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 \
  && ( cp "${GOPATH}/bin/docker-credential-gcr" /usr/local/bin/docker-credential-gcr \
    || cp "${GOPATH}/bin/${TARGETOS}_${TARGETARCH}/docker-credential-gcr" /usr/local/bin/docker-credential-gcr )
 
-FROM build AS release-base
-USER root
-RUN mkdir -p /output/etc/ssl/certs/ /output/home /output/tmp /output/usr/local/bin \
+FROM ${REGISTRY}/library/alpine:${ALPINE_VER} AS release-base
+RUN addgroup -g 1000 appuser \
+ && adduser -u 1000 -G appuser -D appuser \
+ && mkdir -p /home/appuser/.docker /home/appuser/.regctl \
+ && chown -R appuser /home/appuser/ \
+ && mkdir -p /output/etc/ssl/certs/ /output/home /output/tmp /output/usr/local/bin \
  && cp -a /etc/passwd /etc/group /output/etc/ \
  && cp -a /etc/ssl/certs/ca-certificates.crt /output/etc/ssl/certs/ \
  && cp -a /home/appuser /output/home/ \

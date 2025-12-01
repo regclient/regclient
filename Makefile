@@ -1,9 +1,9 @@
 COMMANDS?=regctl regsync regbot
 BINARIES?=$(addprefix bin/,$(COMMANDS))
 IMAGES?=$(addprefix docker-,$(COMMANDS))
-ARTIFACT_PLATFORMS?=linux-amd64 linux-arm64 linux-ppc64le linux-s390x darwin-amd64 darwin-arm64 windows-amd64.exe
+ARTIFACT_PLATFORMS?=linux-amd64 linux-arm64 linux-ppc64le linux-s390x linux-riscv64 darwin-amd64 darwin-arm64 windows-amd64.exe freebsd-amd64
 ARTIFACTS?=$(foreach cmd,$(addprefix artifacts/,$(COMMANDS)),$(addprefix $(cmd)-,$(ARTIFACT_PLATFORMS)))
-TEST_PLATFORMS?=linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x
+IMAGE_PLATFORMS?=linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x,linux/riscv64
 VCS_REPO?="https://github.com/regclient/regclient.git"
 VCS_REF?=$(shell git rev-list -1 HEAD)
 ifneq ($(shell git status --porcelain 2>/dev/null),)
@@ -35,16 +35,16 @@ ifeq "$(strip $(VER_BUMP))" ''
 		-u "$(shell id -u):$(shell id -g)" \
 		$(VER_BUMP_CONTAINER)
 endif
-MARKDOWN_LINT_VER?=v0.18.1
+MARKDOWN_LINT_VER?=v0.19.1
 GOFUMPT_VER?=v0.9.2
 GOMAJOR_VER?=v0.15.0
 GOSEC_VER?=v2.22.10
 GO_VULNCHECK_VER?=v1.1.4
-OSV_SCANNER_VER?=v2.2.4
+OSV_SCANNER_VER?=v2.3.0
 SYFT?=$(shell command -v syft 2>/dev/null)
 SYFT_CMD_VER:=$(shell [ -x "$(SYFT)" ] && echo "v$$($(SYFT) version | awk '/^Version: / {print $$2}')" || echo "0")
-SYFT_VERSION?=v1.37.0
-SYFT_CONTAINER?=anchore/syft:v1.37.0@sha256:48d679480c6d272c1801cf30460556959c01d4826795be31d4fd8b53750b7d91
+SYFT_VERSION?=v1.38.0
+SYFT_CONTAINER?=anchore/syft:v1.38.0@sha256:825cad3a952c87676a6d07e9a3bb05ac9c401d598360070e970aa46d54c1727e
 ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 	SYFT=docker run --rm \
 		-v "$(shell pwd)/:$(shell pwd)/" -w "$(shell pwd)" \
@@ -53,7 +53,7 @@ ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 endif
 STATICCHECK_VER?=v0.6.1
 CI_DISTRIBUTION_VER?=3.0.0
-CI_ZOT_VER?=v2.1.10
+CI_ZOT_VER?=v2.1.11
 
 .PHONY: .FORCE
 .FORCE:
@@ -137,15 +137,15 @@ docker-%: .FORCE
 oci-image: $(addprefix oci-image-,$(COMMANDS)) ## Build reproducible images to an OCI Layout
 
 oci-image-%: bin/regctl .FORCE
-	PATH="$(PWD)/bin:$(PATH)" build/oci-image.sh -r scratch -i "$*" -p "$(TEST_PLATFORMS)"
-	PATH="$(PWD)/bin:$(PATH)" build/oci-image.sh -r alpine  -i "$*" -p "$(TEST_PLATFORMS)" -b "alpine:3"
+	PATH="$(PWD)/bin:$(PATH)" build/oci-image.sh -r scratch -i "$*" -p "$(IMAGE_PLATFORMS)"
+	PATH="$(PWD)/bin:$(PATH)" build/oci-image.sh -r alpine  -i "$*" -p "$(IMAGE_PLATFORMS)" -b "alpine:3"
 
 .PHONY: test-docker
 test-docker: $(addprefix test-docker-,$(COMMANDS)) ## Build multi-platform docker images (but do not tag)
 
 test-docker-%:
-	docker buildx build --platform="$(TEST_PLATFORMS)" -f build/Dockerfile.$*.buildkit .
-	docker buildx build --platform="$(TEST_PLATFORMS)" -f build/Dockerfile.$*.buildkit --target release-alpine .
+	docker buildx build --platform="$(IMAGE_PLATFORMS)" -f build/Dockerfile.$*.buildkit .
+	docker buildx build --platform="$(IMAGE_PLATFORMS)" -f build/Dockerfile.$*.buildkit --target release-alpine .
 
 .PHONY: ci
 ci: ci-distribution ci-zot ## Run CI tests against self hosted registries

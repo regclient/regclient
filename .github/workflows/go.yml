@@ -32,10 +32,10 @@ jobs:
 
     steps:
     - name: Check out code
-      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
 
     - name: "Set up Go ${{ matrix.gover }}"
-      uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+      uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
       with:
         go-version: "${{ matrix.gover }}"
         check-latest: true
@@ -60,10 +60,10 @@ jobs:
 
     - name: Install syft
       if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main'
-      uses: anchore/sbom-action/download-syft@8e94d75ddd33f69f691467e42275782e4bfefe84 # v0.20.9
+      uses: anchore/sbom-action/download-syft@fbfd9c6c189226748411491745178e0c2017392d # v0.20.10
       id: syft
       with:
-        syft-version: "v1.37.0"
+        syft-version: "v1.38.0"
 
     - name: Build artifacts
       if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main'
@@ -73,7 +73,7 @@ jobs:
       if: ( startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main' ) && matrix.gover == env.RELEASE_GO_VER
       uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
       with:
-        cosign-release: "v2.6.1"
+        cosign-release: "v3.0.2"
 
     - name: Package artifacts
       if: ( startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main' ) && matrix.gover == env.RELEASE_GO_VER
@@ -82,27 +82,35 @@ jobs:
         for artifact in \
             regbot-darwin-amd64 \
             regbot-darwin-arm64 \
+            regbot-freebsd-amd64 \
             regbot-linux-amd64 \
             regbot-linux-arm64 \
             regbot-linux-ppc64le \
             regbot-linux-s390x \
+            regbot-linux-riscv64 \
             regbot-windows-amd64.exe \
             regctl-darwin-amd64 \
             regctl-darwin-arm64 \
+            regctl-freebsd-amd64 \
             regctl-linux-amd64 \
             regctl-linux-arm64 \
             regctl-linux-ppc64le \
             regctl-linux-s390x \
+            regctl-linux-riscv64 \
             regctl-windows-amd64.exe \
             regsync-darwin-amd64 \
             regsync-darwin-arm64 \
+            regsync-freebsd-amd64 \
             regsync-linux-amd64 \
             regsync-linux-arm64 \
             regsync-linux-ppc64le \
             regsync-linux-s390x \
+            regsync-linux-riscv64 \
             regsync-windows-amd64.exe \
           ; do
-          cosign sign-blob -y --output-signature "${artifact%.exe}.sig" --output-certificate "${artifact%.exe}.pem" "${artifact}"
+          # sign content with and without the bundle to simplify client migrations
+          cosign sign-blob -y --new-bundle-format=false --use-signing-config=false --output-signature "${artifact%.exe}.sig" --output-certificate "${artifact%.exe}.pem" "${artifact}"
+          cosign sign-blob -y --new-bundle-format=true  --use-signing-config=true  --bundle "${artifact%.exe}.sigstore.json" "${artifact}"
         done
         tar -cvzf metadata.tgz *.sig *.pem *.json
 
@@ -121,7 +129,7 @@ jobs:
     - name: Create release
       if: steps.release_details.outputs.valid == 'true' && matrix.gover == env.RELEASE_GO_VER
       id: release_create
-      uses: softprops/action-gh-release@5be0e66d93ac7ed76da52eca8bb058f665c3a5fe # v2.4.2
+      uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
@@ -132,24 +140,30 @@ jobs:
         files: |
           ./artifacts/regbot-darwin-amd64
           ./artifacts/regbot-darwin-arm64
+          ./artifacts/regbot-freebsd-amd64
           ./artifacts/regbot-linux-amd64
           ./artifacts/regbot-linux-arm64
           ./artifacts/regbot-linux-ppc64le
           ./artifacts/regbot-linux-s390x
+          ./artifacts/regbot-linux-riscv64
           ./artifacts/regbot-windows-amd64.exe
           ./artifacts/regctl-darwin-amd64
           ./artifacts/regctl-darwin-arm64
+          ./artifacts/regctl-freebsd-amd64
           ./artifacts/regctl-linux-amd64
           ./artifacts/regctl-linux-arm64
           ./artifacts/regctl-linux-ppc64le
           ./artifacts/regctl-linux-s390x
+          ./artifacts/regctl-linux-riscv64
           ./artifacts/regctl-windows-amd64.exe
           ./artifacts/regsync-darwin-amd64
           ./artifacts/regsync-darwin-arm64
+          ./artifacts/regsync-freebsd-amd64
           ./artifacts/regsync-linux-amd64
           ./artifacts/regsync-linux-arm64
           ./artifacts/regsync-linux-ppc64le
           ./artifacts/regsync-linux-s390x
+          ./artifacts/regsync-linux-riscv64
           ./artifacts/regsync-windows-amd64.exe
           ./artifacts/metadata.tgz
 
