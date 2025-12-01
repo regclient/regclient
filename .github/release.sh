@@ -96,7 +96,7 @@ get_pr_user() {
 
 # prompt with last tag, asking for next tag, defaulting to patch update
 if [ -z "$prev_tag" ]; then
-  prev_tag="$(git tag -l | tail -1)"
+  prev_tag="$(git tag --sort=version:refname -l | tail -1)"
 fi
 # for dry-run, output the change list from the prev_tag to main and stop
 # TODO: add a dry-run func to echo vs exec commands that would change things
