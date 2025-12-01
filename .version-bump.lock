@@ -23,7 +23,7 @@
 {"name":"gha-uses-commit","key":"https://github.com/docker/setup-buildx-action.git:v3.11.1","version":"e468171a9de216ec08956ac3ada2f0791b6bd435"}
 {"name":"gha-uses-commit","key":"https://github.com/regclient/actions.git:main","version":"ed5268e995795eb54f4187ada5728d118ad674f3"}
 {"name":"gha-uses-commit","key":"https://github.com/sigstore/cosign-installer.git:v4.0.0","version":"faadad0cce49287aee09b3a48701e75088a2c6ad"}
-{"name":"gha-uses-commit","key":"https://github.com/softprops/action-gh-release.git:v2.4.2","version":"5be0e66d93ac7ed76da52eca8bb058f665c3a5fe"}
+{"name":"gha-uses-commit","key":"https://github.com/softprops/action-gh-release.git:v2.5.0","version":"a06a81a03ee405af7f2048a818ed3f03bbf83c7b"}
 {"name":"gha-uses-semver","key":"https://github.com/actions/checkout.git","version":"v6.0.0"}
 {"name":"gha-uses-semver","key":"https://github.com/actions/setup-go.git","version":"v6.1.0"}
 {"name":"gha-uses-semver","key":"https://github.com/actions/stale.git","version":"v10.1.0"}
@@ -33,7 +33,7 @@
 {"name":"gha-uses-semver","key":"https://github.com/docker/login-action.git","version":"v3.6.0"}
 {"name":"gha-uses-semver","key":"https://github.com/docker/setup-buildx-action.git","version":"v3.11.1"}
 {"name":"gha-uses-semver","key":"https://github.com/sigstore/cosign-installer.git","version":"v4.0.0"}
-{"name":"gha-uses-semver","key":"https://github.com/softprops/action-gh-release.git","version":"v2.4.2"}
+{"name":"gha-uses-semver","key":"https://github.com/softprops/action-gh-release.git","version":"v2.5.0"}
 {"name":"go-mod-golang-release","key":"golang-oldest","version":"1.24.0"}
 {"name":"makefile-ci-distribution","key":"docker.io/library/registry","version":"3.0.0"}
 {"name":"makefile-ci-zot","key":"ghcr.io/project-zot/zot-linux-amd64","version":"v2.1.11"}
