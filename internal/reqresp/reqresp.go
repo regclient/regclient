@@ -4,6 +4,7 @@ package reqresp
 import (
 	"bytes"
 	"encoding/base64"
+	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
@@ -93,6 +94,7 @@ func (r *rrHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 			(reqMatch.Path != "" && reqMatch.Path != req.URL.Path) ||
 			!strMapMatch(reqMatch.Query, req.URL.Query()) ||
 			!strMapMatch(reqMatch.Headers, req.Header) ||
+			(reqMatch.Headers != nil && reqMatch.Headers.Get("Content-Length") != "" && reqMatch.Headers.Get("Content-Length") != fmt.Sprintf("%d", req.ContentLength)) ||
 			(len(reqMatch.Body) > 0 && !bytes.Equal(reqMatch.Body, reqBody)) {
 			// skip if any field does not match
 			continue
