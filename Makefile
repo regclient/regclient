@@ -38,13 +38,13 @@ endif
 MARKDOWN_LINT_VER?=v0.20.0
 GOFUMPT_VER?=v0.9.2
 GOMAJOR_VER?=v0.15.0
-GOSEC_VER?=v2.22.10
+GOSEC_VER?=v2.22.11
 GO_VULNCHECK_VER?=v1.1.4
-OSV_SCANNER_VER?=v2.3.0
+OSV_SCANNER_VER?=v2.3.1
 SYFT?=$(shell command -v syft 2>/dev/null)
 SYFT_CMD_VER:=$(shell [ -x "$(SYFT)" ] && echo "v$$($(SYFT) version | awk '/^Version: / {print $$2}')" || echo "0")
-SYFT_VERSION?=v1.38.0
-SYFT_CONTAINER?=anchore/syft:v1.38.0@sha256:825cad3a952c87676a6d07e9a3bb05ac9c401d598360070e970aa46d54c1727e
+SYFT_VERSION?=v1.38.2
+SYFT_CONTAINER?=anchore/syft:v1.38.2@sha256:63a159108794114992136692c92155c7694f259aca814a92c187a4e025754b00
 ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 	SYFT=docker run --rm \
 		-v "$(shell pwd)/:$(shell pwd)/" -w "$(shell pwd)" \
