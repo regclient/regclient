@@ -1,14 +1,14 @@
-{"name":"docker-arg-alpine-digest","key":"docker.io/library/alpine:3.23.0","version":"sha256:51183f2cfa6320055da30872f211093f9ff1d3cf06f39a0bdb212314c5dc7375"}
-{"name":"docker-arg-alpine-tag","key":"docker.io/library/alpine","version":"3.23.0"}
+{"name":"docker-arg-alpine-digest","key":"docker.io/library/alpine:3.23.2","version":"sha256:865b95f46d98cf867a156fe4a135ad3fe50d2056aa3f25ed31662dff6da4eb62"}
+{"name":"docker-arg-alpine-tag","key":"docker.io/library/alpine","version":"3.23.2"}
 {"name":"docker-arg-ecr","key":"https://github.com/awslabs/amazon-ecr-credential-helper.git","version":"v0.11.0"}
 {"name":"docker-arg-gcr","key":"https://github.com/GoogleCloudPlatform/docker-credential-gcr.git","version":"v2.1.30"}
-{"name":"docker-arg-go-digest","key":"docker.io/library/golang:1.25.5-alpine","version":"sha256:26111811bc967321e7b6f852e914d14bede324cd1accb7f81811929a6a57fea9"}
+{"name":"docker-arg-go-digest","key":"docker.io/library/golang:1.25.5-alpine","version":"sha256:ac09a5f469f307e5da71e766b0bd59c9c49ea460a528cc3e6686513d64a6f1fb"}
 {"name":"docker-arg-go-tag","key":"docker.io/library/golang","version":"1.25.5"}
 {"name":"docker-arg-lunajson","key":"https://github.com/grafi-tt/lunajson.git:master","version":"3d10600874527d71519b33ecbb314eb93ccd1df6"}
 {"name":"docker-arg-semver","key":"https://github.com/kikito/semver.lua.git:master","version":"a4b708ba243208d46e575da870af969dca46a94d"}
-{"name":"gha-alpine-digest","key":"docker.io/library/alpine:3.23.0","version":"sha256:51183f2cfa6320055da30872f211093f9ff1d3cf06f39a0bdb212314c5dc7375"}
+{"name":"gha-alpine-digest","key":"docker.io/library/alpine:3.23.2","version":"sha256:865b95f46d98cf867a156fe4a135ad3fe50d2056aa3f25ed31662dff6da4eb62"}
 {"name":"gha-alpine-tag-base","key":"docker.io/library/alpine","version":"3"}
-{"name":"gha-alpine-tag-comment","key":"docker.io/library/alpine","version":"3.23.0"}
+{"name":"gha-alpine-tag-comment","key":"docker.io/library/alpine","version":"3.23.2"}
 {"name":"gha-cosign-version","key":"https://github.com/sigstore/cosign.git","version":"v3.0.3"}
 {"name":"gha-golang-matrix","key":"golang-matrix","version":"[\"1.24\", \"1.25\"]"}
 {"name":"gha-golang-release","key":"golang-latest","version":"1.25"}
@@ -20,8 +20,8 @@
 {"name":"gha-uses-commit","key":"https://github.com/anchore/sbom-action.git:v0.20.11","version":"43a17d6e7add2b5535efe4dcae9952337c479a93"}
 {"name":"gha-uses-commit","key":"https://github.com/docker/build-push-action.git:v6.18.0","version":"263435318d21b8e681c14492fe198d362a7d2c83"}
 {"name":"gha-uses-commit","key":"https://github.com/docker/login-action.git:v3.6.0","version":"5e57cd118135c172c3672efd75eb46360885c0ef"}
-{"name":"gha-uses-commit","key":"https://github.com/docker/setup-buildx-action.git:v3.11.1","version":"e468171a9de216ec08956ac3ada2f0791b6bd435"}
-{"name":"gha-uses-commit","key":"https://github.com/regclient/actions.git:main","version":"fbe1652f0f817997df4af08dfd7706bf45247cf2"}
+{"name":"gha-uses-commit","key":"https://github.com/docker/setup-buildx-action.git:v3.12.0","version":"8d2750c68a42422c14e847fe6c8ac0403b4cbd6f"}
+{"name":"gha-uses-commit","key":"https://github.com/regclient/actions.git:main","version":"3bf69189e904cf474978b10d944611b9d23a1ccc"}
 {"name":"gha-uses-commit","key":"https://github.com/sigstore/cosign-installer.git:v4.0.0","version":"faadad0cce49287aee09b3a48701e75088a2c6ad"}
 {"name":"gha-uses-commit","key":"https://github.com/softprops/action-gh-release.git:v2.5.0","version":"a06a81a03ee405af7f2048a818ed3f03bbf83c7b"}
 {"name":"gha-uses-semver","key":"https://github.com/actions/checkout.git","version":"v6.0.1"}
@@ -31,7 +31,7 @@
 {"name":"gha-uses-semver","key":"https://github.com/anchore/sbom-action.git","version":"v0.20.11"}
 {"name":"gha-uses-semver","key":"https://github.com/docker/build-push-action.git","version":"v6.18.0"}
 {"name":"gha-uses-semver","key":"https://github.com/docker/login-action.git","version":"v3.6.0"}
-{"name":"gha-uses-semver","key":"https://github.com/docker/setup-buildx-action.git","version":"v3.11.1"}
+{"name":"gha-uses-semver","key":"https://github.com/docker/setup-buildx-action.git","version":"v3.12.0"}
 {"name":"gha-uses-semver","key":"https://github.com/sigstore/cosign-installer.git","version":"v4.0.0"}
 {"name":"gha-uses-semver","key":"https://github.com/softprops/action-gh-release.git","version":"v2.5.0"}
 {"name":"go-mod-golang-release","key":"golang-oldest","version":"1.24.0"}
@@ -48,6 +48,6 @@
 {"name":"makefile-syft-container-tag","key":"anchore/syft","version":"v1.38.2"}
 {"name":"makefile-syft-version","key":"docker.io/anchore/syft","version":"v1.38.2"}
 {"name":"osv-golang-release","key":"docker.io/library/golang","version":"1.25.5"}
-{"name":"shell-alpine-digest","key":"docker.io/library/alpine:3.23.0","version":"sha256:51183f2cfa6320055da30872f211093f9ff1d3cf06f39a0bdb212314c5dc7375"}
+{"name":"shell-alpine-digest","key":"docker.io/library/alpine:3.23.2","version":"sha256:865b95f46d98cf867a156fe4a135ad3fe50d2056aa3f25ed31662dff6da4eb62"}
 {"name":"shell-alpine-tag-base","key":"docker.io/library/alpine","version":"3"}
-{"name":"shell-alpine-tag-comment","key":"docker.io/library/alpine","version":"3.23.0"}
+{"name":"shell-alpine-tag-comment","key":"docker.io/library/alpine","version":"3.23.2"}

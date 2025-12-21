@@ -29,7 +29,7 @@ jobs:
 
     env:
       ALPINE_NAME: "alpine:3"
-      ALPINE_DIGEST: "sha256:51183f2cfa6320055da30872f211093f9ff1d3cf06f39a0bdb212314c5dc7375" # 3.23.0
+      ALPINE_DIGEST: "sha256:865b95f46d98cf867a156fe4a135ad3fe50d2056aa3f25ed31662dff6da4eb62" # 3.23.2
 
     steps:
     - name: Check out code
@@ -87,7 +87,7 @@ jobs:
         echo "repo_url=${REPO_URL}" >>$GITHUB_OUTPUT
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+      uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
     - name: Login to DockerHub
       if: github.repository_owner == 'regclient'
@@ -135,7 +135,7 @@ jobs:
     
     # Dogfooding, use regctl to modify regclient images to improve reproducibility
     - name: Install regctl
-      uses: regclient/actions/regctl-installer@fbe1652f0f817997df4af08dfd7706bf45247cf2 # main
+      uses: regclient/actions/regctl-installer@3bf69189e904cf474978b10d944611b9d23a1ccc # main
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       with:
         release: main
