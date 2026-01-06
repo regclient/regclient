@@ -47,7 +47,11 @@ type configOpts struct {
 func NewConfigCmd(rOpts *rootOpts) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config <cmd>",
-		Short: "read/set configuration options",
+		Short: "get/set configuration options",
+		Long: fmt.Sprintf(`Retrieve or update a configuration option.
+By default, the configuration is loaded from $HOME/%s/%s.
+This location can be overridden with the %s environment variable.
+Note that these commands do not include logins imported from Docker or values injected with --host.`, ConfigDir, ConfigFilename, ConfigEnv),
 	}
 	cmd.AddCommand(newConfigGetCmd(rOpts))
 	cmd.AddCommand(newConfigSetCmd(rOpts))
