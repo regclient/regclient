@@ -70,7 +70,10 @@ func DockerLoad() ([]Host, error) {
 	hosts := []Host{}
 	errList := []error{}
 	// load from a file
-	cf := conffile.New(conffile.WithDirName(dockerDir, dockerConfFile), conffile.WithEnvDir(dockerEnv, dockerConfFile))
+	cf := conffile.New(
+		conffile.WithHomeDir(dockerDir, dockerConfFile, true),
+		conffile.WithEnvDir(dockerEnv, dockerConfFile),
+	)
 	rdr, err := cf.Open()
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		errList = append(errList, err)

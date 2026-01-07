@@ -49,7 +49,7 @@ func NewRegistryCmd(rOpts *rootOpts) *cobra.Command {
 		Long: fmt.Sprintf(`Retrieve or update registry configurations.
 By default, the configuration is loaded from $HOME/%s/%s.
 This location can be overridden with the %s environment variable.
-Note that these commands do not include logins imported from Docker or values injected with --host.`, ConfigDir, ConfigFilename, ConfigEnv),
+Note that these commands do not include logins imported from Docker or values injected with --host.`, ConfigHomeDir, ConfigFilename, ConfigEnv),
 	}
 	cmd.AddCommand(newRegistryConfigCmd(rOpts))
 	cmd.AddCommand(newRegistryLoginCmd(rOpts))
