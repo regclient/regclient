@@ -217,21 +217,25 @@ func TestConfig(t *testing.T) {
 			name: "new-name",
 			host: *newHostNameP,
 			hostExpect: Host{
+				Name:     "host.example.org",
 				TLS:      TLSEnabled,
 				Hostname: "host.example.org",
 				APIOpts:  map[string]string{},
 			},
 			credExpect: Cred{},
+			isZero:     true,
 		},
 		{
 			name: "new-default-nil",
 			host: *newHostDefNil,
 			hostExpect: Host{
+				Name:     "host.example.org",
 				TLS:      TLSEnabled,
 				Hostname: "host.example.org",
 				APIOpts:  map[string]string{},
 			},
 			credExpect: Cred{},
+			isZero:     true,
 		},
 		{
 			name: "new-default-mirror",
