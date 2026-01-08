@@ -235,12 +235,11 @@ func (host *Host) refreshHelper() {
 
 // IsZero returns true if the struct is set to the zero value or the result of [HostNew].
 func (host Host) IsZero() bool {
-	if host.Name != "" ||
-		(host.TLS != TLSUndefined && host.TLS != TLSEnabled) ||
+	if (host.TLS != TLSUndefined && host.TLS != TLSEnabled) ||
 		host.RegCert != "" ||
 		host.ClientCert != "" ||
 		host.ClientKey != "" ||
-		host.Hostname != "" ||
+		(host.Hostname != "" && host.Hostname != host.Name) ||
 		host.User != "" ||
 		host.Pass != "" ||
 		host.Token != "" ||

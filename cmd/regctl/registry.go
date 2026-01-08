@@ -284,7 +284,7 @@ func (opts *registryOpts) runRegistryLogin(cmd *cobra.Command, args []string) er
 	if !config.HostValidate(args[0]) {
 		return fmt.Errorf("invalid registry name provided: %s", args[0])
 	}
-	h := config.HostNewName(args[0])
+	h := &config.Host{Name: args[0]}
 	if curH, ok := c.Hosts[h.Name]; ok {
 		h = curH
 	} else {
@@ -391,10 +391,8 @@ func (opts *registryOpts) runRegistryLogout(cmd *cobra.Command, args []string) e
 	if !config.HostValidate(args[0]) {
 		return fmt.Errorf("invalid registry name provided: %s", args[0])
 	}
-	h := config.HostNewName(args[0])
-	if curH, ok := c.Hosts[h.Name]; ok {
-		h = curH
-	} else {
+	h, ok := c.Hosts[args[0]]
+	if !ok {
 		opts.rootOpts.log.Warn("No configuration/credentials found",
 			slog.String("registry", h.Name))
 		return nil
@@ -402,6 +400,9 @@ func (opts *registryOpts) runRegistryLogout(cmd *cobra.Command, args []string) e
 	h.User = ""
 	h.Pass = ""
 	h.Token = ""
+	if h.IsZero() {
+		delete(c.Hosts, h.Name)
+	}
 	// TODO: add credHelper calls to erase a password
 	err = c.ConfigSave()
 	if err != nil {
@@ -499,6 +500,9 @@ func (opts *registryOpts) runRegistrySet(cmd *cobra.Command, args []string) erro
 				delete(h.APIOpts, kvArr[0])
 			}
 		}
+	}
+	if h.IsZero() {
+		delete(c.Hosts, h.Name)
 	}
 
 	err = c.ConfigSave()

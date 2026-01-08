@@ -192,21 +192,9 @@ func ConfigLoadConfFile(cf *conffile.File) (*Config, error) {
 		if c.Hosts[h].Name == "" {
 			c.Hosts[h].Name = h
 		}
-		if c.Hosts[h].Hostname == "" {
-			c.Hosts[h].Hostname = h
-		}
-		if c.Hosts[h].TLS == config.TLSUndefined {
-			c.Hosts[h].TLS = config.TLSEnabled
-		}
 		if h == config.DockerRegistryDNS || h == config.DockerRegistry || h == config.DockerRegistryAuth {
 			// Docker Hub
 			c.Hosts[h].Name = config.DockerRegistry
-			if c.Hosts[h].Hostname == h {
-				c.Hosts[h].Hostname = config.DockerRegistryDNS
-			}
-			if c.Hosts[h].CredHost == h {
-				c.Hosts[h].CredHost = config.DockerRegistryAuth
-			}
 		}
 		// ensure key matches Name
 		if c.Hosts[h].Name != h {
