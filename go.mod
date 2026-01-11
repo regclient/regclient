@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7
-	github.com/goccy/go-yaml v1.19.1
+	github.com/goccy/go-yaml v1.19.2
 	github.com/klauspost/compress v1.18.2
 	github.com/olareg/olareg v0.1.2
 	github.com/opencontainers/go-digest v1.0.0
@@ -13,8 +13,8 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/ulikunitz/xz v0.5.15
 	github.com/yuin/gopher-lua v1.1.1
-	golang.org/x/sys v0.39.0
-	golang.org/x/term v0.38.0
+	golang.org/x/sys v0.40.0
+	golang.org/x/term v0.39.0
 )
 
 require (
