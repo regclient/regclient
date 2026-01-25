@@ -60,7 +60,7 @@ jobs:
 
     - name: Install syft
       if: startsWith( github.ref, 'refs/tags/v' ) || github.ref == 'refs/heads/main'
-      uses: anchore/sbom-action/download-syft@0b82b0b1a22399a1c542d4d656f70cd903571b5c # v0.21.1
+      uses: anchore/sbom-action/download-syft@62ad5284b8ced813296287a0b63906cb364b73ee # v0.22.0
       id: syft
       with:
         syft-version: "v1.40.1"
