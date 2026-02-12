@@ -1,11 +1,11 @@
 module github.com/regclient/regclient
 
-go 1.24.0
+go 1.26
 
 require (
 	github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7
 	github.com/goccy/go-yaml v1.19.2
-	github.com/klauspost/compress v1.18.3
+	github.com/klauspost/stdgozstd v0.0.0-20260211113614-3a619e64e22b
 	github.com/olareg/olareg v0.1.2
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/robfig/cron/v3 v3.0.1

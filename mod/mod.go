@@ -11,7 +11,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/klauspost/compress/zstd"
+	zstd "github.com/klauspost/stdgozstd"
 	"github.com/opencontainers/go-digest"
 
 	"github.com/regclient/regclient"
@@ -186,7 +186,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 				}()
 				var tw *tar.Writer
 				var gw *gzip.Writer
-				var zw *zstd.Encoder
+				var zw *zstd.Writer
 				digRaw := desc.DigestAlgo().Digester() // raw/compressed digest
 				digUC := desc.DigestAlgo().Digester()  // uncompressed digest
 				if dl.desc.MediaType == mediatype.Docker2LayerGzip || dl.desc.MediaType == mediatype.OCI1LayerGzip {
@@ -197,11 +197,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 					tw = tar.NewWriter(ucw)
 				} else if dl.desc.MediaType == mediatype.Docker2LayerZstd || dl.desc.MediaType == mediatype.OCI1LayerZstd {
 					cw := io.MultiWriter(fh, digRaw.Hash())
-					zw, err = zstd.NewWriter(cw)
-					if err != nil {
-						_ = rdr.Close()
-						return nil, err
-					}
+					zw = zstd.NewWriter(cw)
 					defer zw.Close()
 					ucw := io.MultiWriter(zw, digUC.Hash())
 					tw = tar.NewWriter(ucw)

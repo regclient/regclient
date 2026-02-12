@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/klauspost/compress/zstd"
+	zstd "github.com/klauspost/stdgozstd"
 	"github.com/ulikunitz/xz"
 )
 
@@ -55,7 +55,7 @@ func newGzipWriter(w io.Writer) (io.WriteCloser, error) {
 
 // newZstdWriter generates a writer with the default options.
 func newZstdWriter(w io.Writer) (io.WriteCloser, error) {
-	return zstd.NewWriter(w)
+	return zstd.NewWriter(w), nil
 }
 
 // writeToRead uses a pipe + goroutine + copy to switch from a writer to a reader.
