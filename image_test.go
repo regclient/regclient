@@ -2,8 +2,10 @@ package regclient
 
 import (
 	"archive/tar"
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http/httptest"
@@ -19,6 +21,7 @@ import (
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/copyfs"
 	"github.com/regclient/regclient/scheme/reg"
+	"github.com/regclient/regclient/types/blob"
 	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/ref"
 )
@@ -253,6 +256,7 @@ func TestCopy(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	boolT := true
+	copyHookErr := errors.New("copy hook failure")
 	regHandler := olareg.New(oConfig.Config{
 		Storage: oConfig.ConfigStorage{
 			StoreType: oConfig.StoreMem,
@@ -398,6 +402,36 @@ func TestCopy(t *testing.T) {
 			src:  "ocidir://./testdata/testrepo:mirror",
 			tgt:  "ocidir://" + tempDir + "/testrepo:mirror",
 			opts: []ImageOpts{ImageWithDigestTags()},
+		},
+		{
+			name: "ocidir to ocidir with blob reader hook",
+			src:  "ocidir://./testdata/testrepo:v1",
+			tgt:  "ocidir://" + tempDir + "/testrepo:v4",
+			opts: []ImageOpts{ImageWithBlobReaderHook(func(b *blob.BReader) (*blob.BReader, error) {
+				desc := b.GetDescriptor()
+				blobBody, err := io.ReadAll(b)
+				if err != nil {
+					return nil, err
+				}
+				calcDig := desc.Digest.Algorithm().FromBytes(blobBody)
+				if desc.Digest != calcDig {
+					return nil, fmt.Errorf("unexpected digest, expected %s, calculated %s", desc.Digest, calcDig)
+				}
+				return blob.NewReader(
+					blob.WithHeader(b.RawHeaders()),
+					blob.WithDesc(desc),
+					blob.WithReader(bytes.NewReader(blobBody)),
+				), nil
+			})},
+		},
+		{
+			name: "ocidir to ocidir with blob reader hook error",
+			src:  "ocidir://./testdata/testrepo:v2",
+			tgt:  "ocidir://" + tempDir + "/testrepo:v50",
+			opts: []ImageOpts{ImageWithBlobReaderHook(func(b *blob.BReader) (*blob.BReader, error) {
+				return nil, copyHookErr
+			})},
+			expectErr: copyHookErr,
 		},
 	}
 	for _, tc := range tt {
