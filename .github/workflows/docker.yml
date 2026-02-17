@@ -105,7 +105,7 @@ jobs:
         password: ${{ secrets.GHCR_TOKEN }}
 
     - name: Build
-      uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+      uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
       id: build
       with:
         context: .
@@ -131,11 +131,11 @@ jobs:
       uses: anchore/sbom-action/download-syft@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
       id: syft
       with:
-        syft-version: "v1.41.2"
+        syft-version: "v1.42.0"
     
     # Dogfooding, use regctl to modify regclient images to improve reproducibility
     - name: Install regctl
-      uses: regclient/actions/regctl-installer@148669fe4b19151fcab6e00c6df2db43b9e2b097 # main
+      uses: regclient/actions/regctl-installer@6c6b75855b974ce802ca128f748109531d049a7f # main
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       with:
         release: main

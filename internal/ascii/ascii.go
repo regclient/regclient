@@ -3,6 +3,7 @@ package ascii
 
 import (
 	"io"
+	"math"
 
 	"golang.org/x/term"
 )
@@ -12,5 +13,6 @@ func IsWriterTerminal(w io.Writer) bool {
 	if !ok {
 		return false
 	}
-	return term.IsTerminal(int(wFd.Fd()))
+	//#nosec G115 false positive
+	return wFd.Fd() <= math.MaxInt && term.IsTerminal(int(wFd.Fd()))
 }

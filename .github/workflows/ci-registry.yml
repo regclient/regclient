@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      RELEASE_GO_VER: "1.25"
+      RELEASE_GO_VER: "1.26"
 
     steps:
     - name: Check out code

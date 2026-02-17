@@ -281,6 +281,7 @@ func (o *OCIDir) writeIndex(r ref.Ref, i v1.Index, locked bool) error {
 		return fmt.Errorf("cannot close index: %w", errC)
 	}
 	indexFile := path.Join(r.Path, "index.json")
+	//#nosec G703 inputs are user controlled
 	err = os.Rename(path.Join(r.Path, tmpName), indexFile)
 	if err != nil {
 		return fmt.Errorf("cannot rename tmpfile to index: %w", err)

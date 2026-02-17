@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"os"
 	"os/signal"
 	"strings"
@@ -330,7 +331,8 @@ func (opts *registryOpts) runRegistryLogin(cmd *cobra.Command, args []string) er
 	} else {
 		// prompt for a password
 		var fd int
-		if ifd, ok := cmd.InOrStdin().(interface{ Fd() uintptr }); ok {
+		if ifd, ok := cmd.InOrStdin().(interface{ Fd() uintptr }); ok && ifd.Fd() <= math.MaxInt {
+			//#nosec G115 false positive
 			fd = int(ifd.Fd())
 		} else {
 			return fmt.Errorf("file descriptor needed to prompt for password (resolve by using \"-p\" flag)")
