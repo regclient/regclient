@@ -3,6 +3,7 @@ package ascii
 import (
 	"fmt"
 	"io"
+	"math"
 
 	"golang.org/x/term"
 )
@@ -15,7 +16,9 @@ type ProgressBar struct {
 
 func NewProgressBar(w io.Writer) *ProgressBar {
 	width := 0
-	if wFd, ok := w.(interface{ Fd() uintptr }); ok && term.IsTerminal(int(wFd.Fd())) {
+	//#nosec G115 false positive
+	if wFd, ok := w.(interface{ Fd() uintptr }); ok && wFd.Fd() <= math.MaxInt && term.IsTerminal(int(wFd.Fd())) {
+		//#nosec G115 false positive
 		w, _, err := term.GetSize(int(wFd.Fd()))
 		if err == nil {
 			width = w

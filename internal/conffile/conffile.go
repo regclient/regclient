@@ -158,13 +158,16 @@ func (f *File) Write(rdr io.Reader) error {
 	}
 
 	// update mode and owner of temp file
+	//#nosec G703 tempfile location is user controlled
 	if err := os.Chmod(tmpFullname, mode); err != nil {
 		return err
 	}
 	if uid > 0 && gid > 0 {
+		//#nosec G703 tempfile location is user controlled
 		_ = os.Chown(tmpFullname, uid, gid)
 	}
 	// move temp file to target filename
+	//#nosec G703 tempfile location is user controlled
 	return os.Rename(tmpFullname, f.fullname)
 }
 

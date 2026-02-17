@@ -272,6 +272,7 @@ func (o *OCIDir) manifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 		return fmt.Errorf("failed to close manifest tmpfile: %w", errC)
 	}
 	file := path.Join(dir, desc.Digest.Encoded())
+	//#nosec G703 inputs are user controlled
 	err = os.Rename(path.Join(dir, tmpName), file)
 	if err != nil {
 		return fmt.Errorf("failed to write manifest (rename tmpfile): %w", err)

@@ -55,6 +55,7 @@ type CredsFn func(host string) Cred
 // Else if user and password are provided, they are attempted with all auth methods.
 // Else if neither are provided and auth method is bearer, an anonymous login is attempted.
 type Cred struct {
+	//#nosec G117 exported struct intentionally holds secrets
 	User, Password string // clear text username and password
 	Token          string // refresh token only used for bearer auth
 }
@@ -505,10 +506,10 @@ type bearerHandler struct {
 // bearerToken is the json response to the Bearer request
 type bearerToken struct {
 	Token        string    `json:"token"`
-	AccessToken  string    `json:"access_token"`
+	AccessToken  string    `json:"access_token"` //#nosec G117 exported struct intentionally holds secrets
 	ExpiresIn    int       `json:"expires_in"`
 	IssuedAt     time.Time `json:"issued_at"`
-	RefreshToken string    `json:"refresh_token"`
+	RefreshToken string    `json:"refresh_token"` //#nosec G117 exported struct intentionally holds secrets
 	Scope        string    `json:"scope"`
 }
 
@@ -700,6 +701,7 @@ func (b *bearerHandler) tryGet(cred Cred) error {
 	req.Header.Add("User-Agent", b.clientID)
 	req.URL.RawQuery = reqParams.Encode()
 
+	//#nosec G704 inputs are user controlled or follow specification
 	resp, err := b.client.Do(req)
 	if err != nil {
 		return err
@@ -738,6 +740,7 @@ func (b *bearerHandler) tryPost(cred Cred) error {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
 	req.Header.Add("User-Agent", b.clientID)
 
+	//#nosec G704 inputs are user controlled or follow specification
 	resp, err := b.client.Do(req)
 	if err != nil {
 		return err
@@ -827,12 +830,12 @@ type jwtHubHandler struct {
 
 type jwtHubPost struct {
 	User string `json:"username"`
-	Pass string `json:"password"`
+	Pass string `json:"password"` //#nosec G117 exported struct intentionally holds secrets
 }
 type jwtHubResp struct {
 	Detail       string `json:"detail"`
 	Token        string `json:"token"`
-	RefreshToken string `json:"refresh_token"`
+	RefreshToken string `json:"refresh_token"` //#nosec G117 exported struct intentionally holds secrets
 }
 
 // NewJWTHubHandler creates a new JWTHandler for Docker Hub.
@@ -881,6 +884,7 @@ func (j *jwtHubHandler) ProcessChallenge(c challenge) error {
 	req.Header.Add("Accept", "application/json")
 	req.Header.Add("User-Agent", j.clientID)
 
+	//#nosec G704 inputs are user controlled or follow specification requirements
 	resp, err := j.client.Do(req)
 	if err != nil {
 		return err

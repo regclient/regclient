@@ -182,6 +182,7 @@ func Apply(ctx context.Context, rc *regclient.RegClient, rSrc ref.Ref, opts ...O
 				}
 				defer func() {
 					_ = fh.Close()
+					//#nosec G703 tempfile location is user controlled
 					_ = os.Remove(fh.Name())
 				}()
 				var tw *tar.Writer

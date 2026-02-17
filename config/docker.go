@@ -49,7 +49,7 @@ type dockerProxyConfig struct {
 // dockerAuthConfig contains the auths
 type dockerAuthConfig struct {
 	Username string `json:"username,omitempty"`
-	Password string `json:"password,omitempty"`
+	Password string `json:"password,omitempty"` //#nosec G117 exported struct intentionally holds secrets
 	Auth     string `json:"auth,omitempty"`
 
 	ServerAddress string `json:"serveraddress,omitempty"`
