@@ -148,9 +148,7 @@ func (opts *rootOpts) runOnce(cmd *cobra.Command, args []string) error {
 	var mainErr error
 	for _, s := range opts.conf.Scripts {
 		if opts.conf.Defaults.Parallel > 0 {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				err := opts.process(ctx, s)
 				if err != nil {
 					if mainErr == nil {
@@ -158,7 +156,7 @@ func (opts *rootOpts) runOnce(cmd *cobra.Command, args []string) error {
 					}
 					return
 				}
-			}()
+			})
 		} else {
 			err := opts.process(ctx, s)
 			if err != nil {

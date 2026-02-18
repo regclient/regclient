@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/regclient/regclient/scheme/reg"
 	"github.com/regclient/regclient/types/errs"
 )
 
@@ -18,7 +19,7 @@ func TestRepoList(t *testing.T) {
 	delayMax, _ := time.ParseDuration("0.10s")
 	rc := New(
 		WithSlog(log),
-		WithRetryDelay(delayInit, delayMax),
+		WithRegOpts(reg.WithDelay(delayInit, delayMax)),
 	)
 	_, err := rc.RepoList(ctx, "registry.example.com/path")
 	if !errors.Is(err, errs.ErrParsingFailed) {

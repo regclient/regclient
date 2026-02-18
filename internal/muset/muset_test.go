@@ -25,12 +25,10 @@ func TestMuset(t *testing.T) {
 	finished := false
 	delay := time.Microsecond * 10
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		Lock(&muA, &muB, &muC)
 		finished = true
-		wg.Done()
-	}()
+	})
 	time.Sleep(delay)
 	if finished {
 		t.Error("finished before unlock")

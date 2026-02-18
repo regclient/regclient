@@ -189,7 +189,7 @@ func TestImageConfig(t *testing.T) {
 	rc := New(
 		WithConfigHost(rcHosts...),
 		WithSlog(log),
-		WithRetryDelay(delayInit, delayMax),
+		WithRegOpts(reg.WithDelay(delayInit, delayMax)),
 	)
 	tt := []struct {
 		name       string
@@ -308,7 +308,7 @@ func TestCopy(t *testing.T) {
 	rc := New(
 		WithConfigHost(rcHosts...),
 		WithSlog(log),
-		WithRetryDelay(delayInit, delayMax),
+		WithRegOpts(reg.WithDelay(delayInit, delayMax)),
 	)
 	tempDir := t.TempDir()
 	tt := []struct {

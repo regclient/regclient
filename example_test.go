@@ -25,7 +25,7 @@ func ExampleNew() {
 	}
 	// define a regclient with desired options
 	rc := regclient.New(
-		regclient.WithConfigHosts([]config.Host{exHostLocal, exHostDH}),
+		regclient.WithConfigHost([]config.Host{exHostLocal, exHostDH}...),
 		regclient.WithDockerCerts(),
 		regclient.WithDockerCreds(),
 		regclient.WithUserAgent("regclient/example"),

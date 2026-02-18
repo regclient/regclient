@@ -14,6 +14,7 @@ import (
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/copyfs"
+	"github.com/regclient/regclient/scheme/reg"
 	"github.com/regclient/regclient/types/ref"
 )
 
@@ -72,7 +73,7 @@ func TestTag(t *testing.T) {
 	rc := New(
 		WithConfigHost(rcHosts...),
 		WithSlog(log),
-		WithRetryDelay(delayInit, delayMax),
+		WithRegOpts(reg.WithDelay(delayInit, delayMax)),
 	)
 	tempDir := t.TempDir()
 	err := copyfs.Copy(tempDir+"/"+existingRepo, "./testdata/"+existingRepo)

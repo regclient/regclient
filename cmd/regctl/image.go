@@ -1000,7 +1000,7 @@ regctl image ratelimit alpine --format '{{.Remain}}'`,
 func imageParseOptTime(s string) (mod.OptTime, map[string]string, error) {
 	ot := mod.OptTime{}
 	otherFields := map[string]string{}
-	for _, ss := range strings.Split(s, ",") {
+	for ss := range strings.SplitSeq(s, ",") {
 		kv := strings.SplitN(ss, "=", 2)
 		if len(kv) != 2 {
 			return ot, otherFields, fmt.Errorf("parameter without a value: %s", ss)

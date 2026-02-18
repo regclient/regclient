@@ -63,12 +63,9 @@ func NewVersion(v string) (Version, error) {
 // Compare returns -1 if v < other, 0 if v == other, 1 if v > other
 func (v Version) Compare(other Version) int {
 	// Compare version parts
-	maxLen := len(v.parts)
-	if len(other.parts) > maxLen {
-		maxLen = len(other.parts)
-	}
+	maxLen := max(len(other.parts), len(v.parts))
 
-	for i := 0; i < maxLen; i++ {
+	for i := range maxLen {
 		vPart := 0
 		if i < len(v.parts) {
 			vPart = v.parts[i]
@@ -240,8 +237,8 @@ func NewConstraint(c string) (Constraint, error) {
 		}
 
 		// Handle caret (^) constraint
-		if strings.HasPrefix(part, "^") {
-			v, err := NewVersion(strings.TrimPrefix(part, "^"))
+		if after, ok := strings.CutPrefix(part, "^"); ok {
+			v, err := NewVersion(after)
 			if err != nil {
 				return Constraint{}, fmt.Errorf("invalid caret constraint version: %w", err)
 			}
@@ -263,8 +260,8 @@ func NewConstraint(c string) (Constraint, error) {
 		}
 
 		// Handle tilde (~) constraint
-		if strings.HasPrefix(part, "~") {
-			v, err := NewVersion(strings.TrimPrefix(part, "~"))
+		if after, ok := strings.CutPrefix(part, "~"); ok {
+			v, err := NewVersion(after)
 			if err != nil {
 				return Constraint{}, fmt.Errorf("invalid tilde constraint version: %w", err)
 			}
