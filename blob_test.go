@@ -18,6 +18,7 @@ import (
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/reqresp"
+	"github.com/regclient/regclient/scheme/reg"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/errs"
@@ -172,7 +173,7 @@ func TestBlobGet(t *testing.T) {
 	rc := New(
 		WithConfigHost(rcHosts...),
 		WithSlog(log),
-		WithRetryDelay(delayInit, delayMax),
+		WithRegOpts(reg.WithDelay(delayInit, delayMax)),
 	)
 	// Test successful blob
 	t.Run("Get", func(t *testing.T) {
@@ -652,7 +653,7 @@ func TestBlobPut(t *testing.T) {
 	rc := New(
 		WithConfigHost(rcHosts...),
 		WithSlog(log),
-		WithRetryDelay(delayInit, delayMax),
+		WithRegOpts(reg.WithDelay(delayInit, delayMax)),
 	)
 
 	t.Run("Put", func(t *testing.T) {
@@ -1233,7 +1234,7 @@ func TestBlobCopy(t *testing.T) {
 	rc := New(
 		WithConfigHost(rcHosts...),
 		WithSlog(log),
-		WithRetryDelay(delayInit, delayMax),
+		WithRegOpts(reg.WithDelay(delayInit, delayMax)),
 	)
 
 	refA, err := ref.New(tsURL.Host + blobRepoA)

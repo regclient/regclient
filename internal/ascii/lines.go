@@ -51,7 +51,7 @@ func (b *Lines) Flush() {
 	}
 	b.lines = bytes.Count(b.buf, []byte("\n"))
 	if b.width > 0 {
-		for _, line := range bytes.Split(b.buf, []byte("\n")) {
+		for line := range bytes.SplitSeq(b.buf, []byte("\n")) {
 			if len(line) > b.width {
 				b.lines += (len(line) - 1) / b.width
 			}

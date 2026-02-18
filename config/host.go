@@ -171,9 +171,7 @@ func HostNewDefName(def *Host, name string) *Host {
 		if len(h.APIOpts) > 0 {
 			orig := h.APIOpts
 			h.APIOpts = map[string]string{}
-			for k, v := range orig {
-				h.APIOpts[k] = v
-			}
+			maps.Copy(h.APIOpts, orig)
 		}
 		if h.Mirrors != nil {
 			orig := h.Mirrors

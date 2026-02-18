@@ -22,7 +22,7 @@ func Import(ls *lua.LState, lv lua.LValue, v, orig any) (err error) {
 	rV := reflect.ValueOf(v)
 	rOrig := reflect.ValueOf(orig)
 	for rV.IsValid() && rOrig.IsValid() && rV.Type() != rOrig.Type() &&
-		(rV.Type().Kind() == reflect.Interface || rV.Type().Kind() == reflect.Ptr) {
+		(rV.Type().Kind() == reflect.Interface || rV.Type().Kind() == reflect.Pointer) {
 		rV = rV.Elem()
 	}
 	return importReflect(ls, lv, rV, rOrig)
@@ -149,7 +149,7 @@ func importReflect(ls *lua.LState, lv lua.LValue, v, orig reflect.Value) error {
 			v.Set(orig)
 		}
 		return nil
-	case reflect.Ptr, reflect.Interface:
+	case reflect.Pointer, reflect.Interface:
 		if lv != lua.LNil {
 			// if pointer is nil, create a new value
 			if v.IsNil() {

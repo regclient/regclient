@@ -20,6 +20,7 @@ import (
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/reqresp"
+	"github.com/regclient/regclient/scheme/reg"
 	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/docker/schema2"
 	"github.com/regclient/regclient/types/errs"
@@ -211,7 +212,7 @@ func TestManifest(t *testing.T) {
 	rc := New(
 		WithConfigHost(rcHosts...),
 		WithSlog(log),
-		WithRetryDelay(delayInit, delayMax),
+		WithRegOpts(reg.WithDelay(delayInit, delayMax)),
 	)
 	t.Run("Get", func(t *testing.T) {
 		r, err := ref.New(tsOlaregHost + "/" + repoPath + ":" + goodTag)
