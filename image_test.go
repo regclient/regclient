@@ -320,23 +320,23 @@ func TestCopy(t *testing.T) {
 		{
 			name: "ocidir to registry",
 			src:  "ocidir://./testdata/testrepo:v1",
-			tgt:  tsHost + "/dest-ocidir:v1",
+			tgt:  tsHost + "/testrepo-rw:v1",
 		},
 		{
 			name:      "ocidir to read-only registry",
 			src:       "ocidir://./testdata/testrepo:v1",
-			tgt:       tsROHost + "/dest-ocidir:v1",
+			tgt:       tsROHost + "/testrepo-ro:v1",
 			expectErr: errs.ErrHTTPStatus,
 		},
 		{
 			name: "ocidir to ocidir",
 			src:  "ocidir://./testdata/testrepo:v1",
-			tgt:  "ocidir://" + tempDir + "/testrepo:v1",
+			tgt:  "ocidir://" + tempDir + "/testrepo-o2o:v1",
 		},
 		{
 			name: "registry to registry",
 			src:  tsHost + "/testrepo:v1",
-			tgt:  tsHost + "/dest-reg:v1",
+			tgt:  tsHost + "/testrepo-r2r:v1",
 		},
 		{
 			name: "registry to registry same repo",
@@ -346,67 +346,67 @@ func TestCopy(t *testing.T) {
 		{
 			name: "ocidir to registry with referrers and digest tags",
 			src:  "ocidir://./testdata/testrepo:v2",
-			tgt:  tsHost + "/dest-ocidir:v2",
+			tgt:  tsHost + "/testrepo-subject:v2",
 			opts: []ImageOpts{ImageWithReferrers(), ImageWithDigestTags()},
 		},
 		{
 			name: "ocidir to ocidir with referrers and digest tags",
 			src:  "ocidir://./testdata/testrepo:v2",
-			tgt:  "ocidir://" + tempDir + "/testrepo:v2",
+			tgt:  "ocidir://" + tempDir + "/testrepo-subject:v2",
 			opts: []ImageOpts{ImageWithReferrers(), ImageWithDigestTags()},
 		},
 		{
 			name: "registry to registry with referrers and digest tags",
 			src:  tsHost + "/testrepo:v2",
-			tgt:  tsHost + "/dest-reg:v2",
+			tgt:  tsHost + "/testrepo-subject2:v2",
 			opts: []ImageOpts{ImageWithReferrers(), ImageWithDigestTags()},
 		},
 		{
 			name: "ocidir to registry with external referrers and digest tags",
 			src:  "ocidir://./testdata/testrepo:v2",
-			tgt:  tsHost + "/dest-ocidir:v2",
+			tgt:  tsHost + "/testrepo-ext-referrers:v2",
 			opts: []ImageOpts{ImageWithReferrers(), ImageWithDigestTags(), ImageWithReferrerSrc(rReferrerSrc), ImageWithReferrerTgt(rReferrerTgt)},
 		},
 		{
 			name: "ocidir to registry with fast check",
 			src:  "ocidir://./testdata/testrepo:v3",
-			tgt:  tsHost + "/testrepo:v3-copy",
+			tgt:  tsHost + "/testrepo-fast:v3-copy",
 			opts: []ImageOpts{ImageWithReferrers(), ImageWithDigestTags(), ImageWithFastCheck()},
 		},
 		{
 			name: "ocidir to registry child/loop",
 			src:  "ocidir://./testdata/testrepo:child",
-			tgt:  tsHost + "/dest-ocidir:child",
+			tgt:  tsHost + "/testrepo-loop:child",
 			opts: []ImageOpts{ImageWithReferrers(), ImageWithDigestTags()},
 		},
 		{
 			name: "ocidir to ocidir child/loop",
 			src:  "ocidir://./testdata/testrepo:child",
-			tgt:  "ocidir://" + tempDir + "/testrepo:child",
+			tgt:  "ocidir://" + tempDir + "/testrepo-loop:child",
 			opts: []ImageOpts{ImageWithReferrers(), ImageWithDigestTags()},
 		},
 		{
 			name: "registry to registry child/loop",
 			src:  tsHost + "/testrepo:child",
-			tgt:  tsHost + "/dest-reg:child",
+			tgt:  tsHost + "/testrepo-r2r:child",
 			opts: []ImageOpts{ImageWithReferrers(), ImageWithDigestTags()},
 		},
 		{
 			name: "ocidir to registry mirror digest tag",
 			src:  "ocidir://./testdata/testrepo:mirror",
-			tgt:  tsHost + "/dest-ocidir:mirror",
+			tgt:  tsHost + "/testrepo-mirror:mirror",
 			opts: []ImageOpts{ImageWithDigestTags()},
 		},
 		{
 			name: "ocidir to ocidir mirror digest tag",
 			src:  "ocidir://./testdata/testrepo:mirror",
-			tgt:  "ocidir://" + tempDir + "/testrepo:mirror",
+			tgt:  "ocidir://" + tempDir + "/testrepo-mirror:mirror",
 			opts: []ImageOpts{ImageWithDigestTags()},
 		},
 		{
 			name: "ocidir to ocidir with blob reader hook",
 			src:  "ocidir://./testdata/testrepo:v1",
-			tgt:  "ocidir://" + tempDir + "/testrepo:v4",
+			tgt:  "ocidir://" + tempDir + "/testrepo-reader-hook:v1",
 			opts: []ImageOpts{ImageWithBlobReaderHook(func(b *blob.BReader) (*blob.BReader, error) {
 				desc := b.GetDescriptor()
 				blobBody, err := io.ReadAll(b)
@@ -426,8 +426,8 @@ func TestCopy(t *testing.T) {
 		},
 		{
 			name: "ocidir to ocidir with blob reader hook error",
-			src:  "ocidir://./testdata/testrepo:v2",
-			tgt:  "ocidir://" + tempDir + "/testrepo:v50",
+			src:  "ocidir://./testdata/testrepo:v1",
+			tgt:  "ocidir://" + tempDir + "/testrepo-reader-hook-err:v1",
 			opts: []ImageOpts{ImageWithBlobReaderHook(func(b *blob.BReader) (*blob.BReader, error) {
 				return nil, copyHookErr
 			})},
