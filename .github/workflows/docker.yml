@@ -124,18 +124,18 @@ jobs:
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       uses: sigstore/cosign-installer@faadad0cce49287aee09b3a48701e75088a2c6ad # v4.0.0
       with:
-        cosign-release: "v3.0.4"
+        cosign-release: "v3.0.5"
     
     - name: Install syft
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       uses: anchore/sbom-action/download-syft@28d71544de8eaf1b958d335707167c5f783590ad # v0.22.2
       id: syft
       with:
-        syft-version: "v1.42.0"
+        syft-version: "v1.42.1"
     
     # Dogfooding, use regctl to modify regclient images to improve reproducibility
     - name: Install regctl
-      uses: regclient/actions/regctl-installer@6c6b75855b974ce802ca128f748109531d049a7f # main
+      uses: regclient/actions/regctl-installer@da9319db8e44e8b062b3a147e1dfb2f574d41a03 # main
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       with:
         release: main
