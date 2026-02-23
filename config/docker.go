@@ -49,7 +49,7 @@ type dockerProxyConfig struct {
 // dockerAuthConfig contains the auths
 type dockerAuthConfig struct {
 	Username string `json:"username,omitempty"`
-	Password string `json:"password,omitempty"`
+	Password string `json:"password,omitempty"` //#nosec G117 exported struct intentionally holds secrets
 	Auth     string `json:"auth,omitempty"`
 
 	ServerAddress string `json:"serveraddress,omitempty"`
@@ -70,7 +70,10 @@ func DockerLoad() ([]Host, error) {
 	hosts := []Host{}
 	errList := []error{}
 	// load from a file
-	cf := conffile.New(conffile.WithDirName(dockerDir, dockerConfFile), conffile.WithEnvDir(dockerEnv, dockerConfFile))
+	cf := conffile.New(
+		conffile.WithHomeDir(dockerDir, dockerConfFile, true),
+		conffile.WithEnvDir(dockerEnv, dockerConfFile),
+	)
 	rdr, err := cf.Open()
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		errList = append(errList, err)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"os"
 	"os/signal"
 	"strings"
@@ -46,6 +47,10 @@ func NewRegistryCmd(rOpts *rootOpts) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "registry <cmd>",
 		Short: "manage registries",
+		Long: fmt.Sprintf(`Retrieve or update registry configurations.
+By default, the configuration is loaded from $HOME/%s/%s.
+This location can be overridden with the %s environment variable.
+Note that these commands do not include logins imported from Docker or values injected with --host.`, ConfigHomeDir, ConfigFilename, ConfigEnv),
 	}
 	cmd.AddCommand(newRegistryConfigCmd(rOpts))
 	cmd.AddCommand(newRegistryLoginCmd(rOpts))
@@ -280,7 +285,7 @@ func (opts *registryOpts) runRegistryLogin(cmd *cobra.Command, args []string) er
 	if !config.HostValidate(args[0]) {
 		return fmt.Errorf("invalid registry name provided: %s", args[0])
 	}
-	h := config.HostNewName(args[0])
+	h := &config.Host{Name: args[0]}
 	if curH, ok := c.Hosts[h.Name]; ok {
 		h = curH
 	} else {
@@ -326,7 +331,8 @@ func (opts *registryOpts) runRegistryLogin(cmd *cobra.Command, args []string) er
 	} else {
 		// prompt for a password
 		var fd int
-		if ifd, ok := cmd.InOrStdin().(interface{ Fd() uintptr }); ok {
+		if ifd, ok := cmd.InOrStdin().(interface{ Fd() uintptr }); ok && ifd.Fd() <= math.MaxInt {
+			//#nosec G115 false positive
 			fd = int(ifd.Fd())
 		} else {
 			return fmt.Errorf("file descriptor needed to prompt for password (resolve by using \"-p\" flag)")
@@ -387,10 +393,8 @@ func (opts *registryOpts) runRegistryLogout(cmd *cobra.Command, args []string) e
 	if !config.HostValidate(args[0]) {
 		return fmt.Errorf("invalid registry name provided: %s", args[0])
 	}
-	h := config.HostNewName(args[0])
-	if curH, ok := c.Hosts[h.Name]; ok {
-		h = curH
-	} else {
+	h, ok := c.Hosts[args[0]]
+	if !ok {
 		opts.rootOpts.log.Warn("No configuration/credentials found",
 			slog.String("registry", h.Name))
 		return nil
@@ -398,6 +402,9 @@ func (opts *registryOpts) runRegistryLogout(cmd *cobra.Command, args []string) e
 	h.User = ""
 	h.Pass = ""
 	h.Token = ""
+	if h.IsZero() {
+		delete(c.Hosts, h.Name)
+	}
 	// TODO: add credHelper calls to erase a password
 	err = c.ConfigSave()
 	if err != nil {
@@ -495,6 +502,9 @@ func (opts *registryOpts) runRegistrySet(cmd *cobra.Command, args []string) erro
 				delete(h.APIOpts, kvArr[0])
 			}
 		}
+	}
+	if h.IsZero() {
+		delete(c.Hosts, h.Name)
 	}
 
 	err = c.ConfigSave()

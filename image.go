@@ -107,6 +107,7 @@ type imageOpt struct {
 	mu              sync.Mutex
 	seen            map[string]*imageSeen
 	finalFn         []func(context.Context) error
+	blobReaderHook  func(*blob.BReader) (*blob.BReader, error)
 }
 
 type imageSeen struct {
@@ -116,6 +117,16 @@ type imageSeen struct {
 
 // ImageOpts define options for the Image* commands.
 type ImageOpts func(*imageOpt)
+
+// ImageWithBlobReaderHook calls the given function on every blob copy in [RegClient.ImageCopy].
+// The hook receives a [blob.BReader] from getting the blob from the source.
+// The returned [blob.BReader] will be used for pushing the blob to the target.
+// If the hook returns an error on any blob, the image copy may fail.
+func ImageWithBlobReaderHook(fn func(*blob.BReader) (*blob.BReader, error)) ImageOpts {
+	return func(opts *imageOpt) {
+		opts.blobReaderHook = fn
+	}
+}
 
 // ImageWithCallback provides progress data to a callback function.
 func ImageWithCallback(callback func(kind types.CallbackKind, instance string, state types.CallbackState, cur, total int64)) ImageOpts {
@@ -626,6 +637,9 @@ func (rc *RegClient) imageCopyOpt(ctx context.Context, refSrc ref.Ref, refTgt re
 	bOpt := []BlobOpts{}
 	if opt.callback != nil {
 		bOpt = append(bOpt, BlobWithCallback(opt.callback))
+	}
+	if opt.blobReaderHook != nil {
+		bOpt = append(bOpt, BlobWithReaderHook(opt.blobReaderHook))
 	}
 	waitCh := make(chan error)
 	waitCount := 0

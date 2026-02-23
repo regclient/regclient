@@ -104,10 +104,10 @@ type Host struct {
 	TLS           TLSConf           `json:"tls,omitempty" yaml:"tls"`                     // TLS setting: enabled (default), disabled, insecure
 	RegCert       string            `json:"regcert,omitempty" yaml:"regcert"`             // public pem cert of registry
 	ClientCert    string            `json:"clientCert,omitempty" yaml:"clientCert"`       // public pem cert for client (mTLS)
-	ClientKey     string            `json:"clientKey,omitempty" yaml:"clientKey"`         // private pem cert for client (mTLS)
+	ClientKey     string            `json:"clientKey,omitempty" yaml:"clientKey"`         //#nosec G117 private pem cert for client (mTLS)
 	Hostname      string            `json:"hostname,omitempty" yaml:"hostname"`           // hostname of registry, default is the registry name
 	User          string            `json:"user,omitempty" yaml:"user"`                   // username, not used with credHelper
-	Pass          string            `json:"pass,omitempty" yaml:"pass"`                   // password, not used with credHelper
+	Pass          string            `json:"pass,omitempty" yaml:"pass"`                   //#nosec G117 password, not used with credHelper
 	Token         string            `json:"token,omitempty" yaml:"token"`                 // token, experimental for specific APIs
 	CredHelper    string            `json:"credHelper,omitempty" yaml:"credHelper"`       // credential helper command for requesting logins
 	CredExpire    timejson.Duration `json:"credExpire,omitempty" yaml:"credExpire"`       // time until credential expires
@@ -128,7 +128,7 @@ type Host struct {
 
 // Cred defines a user credential for accessing a registry.
 type Cred struct {
-	User, Password, Token string
+	User, Password, Token string //#nosec G117 exported struct intentionally holds secrets
 }
 
 // HostNew creates a default Host entry.
@@ -171,9 +171,7 @@ func HostNewDefName(def *Host, name string) *Host {
 		if len(h.APIOpts) > 0 {
 			orig := h.APIOpts
 			h.APIOpts = map[string]string{}
-			for k, v := range orig {
-				h.APIOpts[k] = v
-			}
+			maps.Copy(h.APIOpts, orig)
 		}
 		if h.Mirrors != nil {
 			orig := h.Mirrors
@@ -235,12 +233,11 @@ func (host *Host) refreshHelper() {
 
 // IsZero returns true if the struct is set to the zero value or the result of [HostNew].
 func (host Host) IsZero() bool {
-	if host.Name != "" ||
-		(host.TLS != TLSUndefined && host.TLS != TLSEnabled) ||
+	if (host.TLS != TLSUndefined && host.TLS != TLSEnabled) ||
 		host.RegCert != "" ||
 		host.ClientCert != "" ||
 		host.ClientKey != "" ||
-		host.Hostname != "" ||
+		(host.Hostname != "" && host.Hostname != host.Name) ||
 		host.User != "" ||
 		host.Pass != "" ||
 		host.Token != "" ||

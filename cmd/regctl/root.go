@@ -45,7 +45,7 @@ func NewRootCmd() (*cobra.Command, *rootOpts) {
 		Use:   "regctl <cmd>",
 		Short: "Utility for accessing docker registries",
 		Long: `Utility for accessing docker registries
-More details at <https://github.com/regclient/regclient>`,
+More details at <https://regclient.org>`,
 		Example: `
 # login to ghcr.io
 regctl registry login ghcr.io

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"maps"
 	"math/rand"
 	"net/http"
 	"regexp"
@@ -103,9 +104,7 @@ func (r *rrHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		// respond
 		r.t.Logf("Sending response %s", reqMatch.Name)
 		rwHeader := rw.Header()
-		for k, v := range rr.RespEntry.Headers {
-			rwHeader[k] = v
-		}
+		maps.Copy(rwHeader, rr.RespEntry.Headers)
 		if rr.RespEntry.Status != 0 {
 			rw.WriteHeader(rr.RespEntry.Status)
 		}

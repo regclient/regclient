@@ -718,6 +718,7 @@ func WithFileTarTime(name string, optTime OptTime) Opts {
 			}
 			// return a reader that reads from the temporary file and deletes it when finished
 			//#nosec G304 filename is from previous CreateTemp
+			//#nosec G703 tempfile location is user controlled
 			tmpFH, err := os.Open(tmpName)
 			if err != nil {
 				return th, tr, unchanged, err

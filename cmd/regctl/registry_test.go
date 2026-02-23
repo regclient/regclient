@@ -43,6 +43,7 @@ func TestRegistry(t *testing.T) {
 		tsUnauth.Close()
 		_ = regHandler.Close()
 	})
+	tsExampleHost := "registry.example.org"
 	tempDir := t.TempDir()
 	t.Setenv(ConfigEnv, filepath.Join(tempDir, "config.json"))
 	tt := []struct {
@@ -75,6 +76,19 @@ func TestRegistry(t *testing.T) {
 			expectOut:   "",
 			outContains: false,
 		},
+		// set and unset config on example
+		{
+			name:        "set example",
+			args:        []string{"registry", "set", tsExampleHost, "--cred-helper", "docker-credential-example", "--skip-check"},
+			expectOut:   "",
+			outContains: false,
+		},
+		{
+			name:        "set example",
+			args:        []string{"registry", "set", tsExampleHost, "--cred-helper", "", "--skip-check"},
+			expectOut:   "",
+			outContains: false,
+		},
 		// query the config change
 		{
 			name:        "query good host",
@@ -99,6 +113,12 @@ func TestRegistry(t *testing.T) {
 			expectOut:   `"tls": "disabled",`,
 			outContains: true,
 		},
+		{
+			name:        "query example",
+			args:        []string{"registry", "config", tsExampleHost},
+			expectOut:   "No configuration found for registry",
+			outContains: true,
+		},
 		// login
 		{
 			name:        "login good host",
@@ -114,6 +134,12 @@ func TestRegistry(t *testing.T) {
 		{
 			name:        "login bad host",
 			args:        []string{"registry", "login", tsBadHost, "-u", "testbaduser", "-p", "testpass", "--skip-check"},
+			expectOut:   "",
+			outContains: false,
+		},
+		{
+			name:        "login example",
+			args:        []string{"registry", "login", tsExampleHost, "-u", "testexample", "-p", "testpass", "--skip-check"},
 			expectOut:   "",
 			outContains: false,
 		},
@@ -157,6 +183,12 @@ func TestRegistry(t *testing.T) {
 			expectOut:   "",
 			outContains: false,
 		},
+		{
+			name:        "logout example",
+			args:        []string{"registry", "logout", tsExampleHost},
+			expectOut:   "",
+			outContains: false,
+		},
 		// verify logout
 		{
 			name:      "check logout on good host",
@@ -177,6 +209,12 @@ func TestRegistry(t *testing.T) {
 			name:      "check logout on bad host",
 			args:      []string{"registry", "config", tsBadHost, "--format", "{{.User}}"},
 			expectOut: ``,
+		},
+		{
+			name:        "check logout on example",
+			args:        []string{"registry", "config", tsExampleHost},
+			expectOut:   "No configuration found for registry",
+			outContains: true,
 		},
 	}
 	for _, tc := range tt {

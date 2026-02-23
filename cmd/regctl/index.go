@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -517,9 +518,7 @@ func (opts *indexOpts) indexBuildDescList(ctx context.Context, rc *regclient.Reg
 		} else {
 			desc.Annotations = nil
 		}
-		for k, v := range descAnnotations {
-			desc.Annotations[k] = v
-		}
+		maps.Copy(desc.Annotations, descAnnotations)
 		descList = append(descList, desc)
 	}
 	return descList, nil

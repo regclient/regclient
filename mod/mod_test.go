@@ -397,7 +397,7 @@ func TestMod(t *testing.T) {
 		{
 			name: "Time",
 			opts: []Opts{
-				WithConfigTimestampFromLabel("org.opencontainers.image.created"),
+				WithConfigTimestamp(OptTime{FromLabel: "org.opencontainers.image.created"}),
 			},
 			ref:     tTgtHost + "/testrepo:v1",
 			wantErr: fmt.Errorf("label not found: org.opencontainers.image.created"),
@@ -420,14 +420,14 @@ func TestMod(t *testing.T) {
 		{
 			name: "Config Time",
 			opts: []Opts{
-				WithConfigTimestampMax(baseTime),
+				WithConfigTimestamp(OptTime{Set: baseTime, After: baseTime}),
 			},
 			ref: tTgtHost + "/testrepo:v1",
 		},
 		{
 			name: "Config Time Artifact",
 			opts: []Opts{
-				WithConfigTimestampMax(baseTime),
+				WithConfigTimestamp(OptTime{Set: baseTime, After: baseTime}),
 			},
 			ref:      tTgtHost + "/testrepo:a1",
 			wantSame: true,
@@ -624,7 +624,7 @@ func TestMod(t *testing.T) {
 		{
 			name: "Layer Timestamp Missing Label",
 			opts: []Opts{
-				WithLayerTimestampFromLabel("missing"),
+				WithLayerTimestamp(OptTime{FromLabel: "missing"}),
 			},
 			ref:     tTgtHost + "/testrepo:v1",
 			wantErr: fmt.Errorf("label not found: missing"),
@@ -632,7 +632,7 @@ func TestMod(t *testing.T) {
 		{
 			name: "Layer Timestamp",
 			opts: []Opts{
-				WithLayerTimestampMax(baseTime),
+				WithLayerTimestamp(OptTime{Set: baseTime, After: baseTime}),
 			},
 			ref: tTgtHost + "/testrepo:v1",
 		},
@@ -647,7 +647,7 @@ func TestMod(t *testing.T) {
 		{
 			name: "Layer Timestamp Artifact",
 			opts: []Opts{
-				WithLayerTimestampMax(baseTime),
+				WithLayerTimestamp(OptTime{Set: baseTime, After: baseTime}),
 			},
 			ref:      tTgtHost + "/testrepo:a1",
 			wantSame: true,
@@ -760,7 +760,7 @@ func TestMod(t *testing.T) {
 		{
 			name: "Layer File Tar Time Max",
 			opts: []Opts{
-				WithFileTarTimeMax("/dir/layer.tar", baseTime),
+				WithFileTarTime("/dir/layer.tar", OptTime{Set: baseTime, After: baseTime}),
 			},
 			ref: tTgtHost + "/testrepo:v3",
 		},

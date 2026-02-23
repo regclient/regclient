@@ -429,6 +429,7 @@ func (resp *Resp) next() error {
 
 			// send request
 			hc := h.getHTTPClient(req.Repository)
+			//#nosec G704 inputs are user controlled and sanitized
 			resp.resp, err = hc.Do(httpReq)
 			if err != nil {
 				c.slog.Debug("Request failed",

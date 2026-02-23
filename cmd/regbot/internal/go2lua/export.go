@@ -81,7 +81,7 @@ func exportReflect(ls *lua.LState, v reflect.Value) lua.LValue {
 		}
 		// Unsupported struct, no exported fields and no string interface
 		return lua.LNil
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if v.IsNil() {
 			return lua.LNil
 		}

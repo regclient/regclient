@@ -30,8 +30,7 @@ func WithAnnotation(name, value string) Opts {
 		allPlatforms := false
 		if name[0] == '[' && strings.Index(name, "]") > 0 {
 			end := strings.Index(name, "]")
-			list := strings.Split(name[1:end], ",")
-			for _, entry := range list {
+			for entry := range strings.SplitSeq(name[1:end], ",") {
 				entry = strings.TrimSpace(entry)
 				if entry == "*" {
 					allPlatforms = true

@@ -1,5 +1,4 @@
 //go:build !windows
-// +build !windows
 
 // Package godbg provides tooling for debugging Go
 package godbg

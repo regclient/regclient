@@ -10,6 +10,7 @@ import (
 
 // test New
 func TestNew(t *testing.T) {
+	tempDir := t.TempDir()
 	testEnvFileVar, testEnvFileVal := "TEST_CONFFILE_NEW", "./test-filename.json"
 	t.Setenv(testEnvFileVar, testEnvFileVal)
 	testEnvDirVar, testEnvDirVal := "TEST_CONFDIR_NEW", "./test-dirname"
@@ -19,7 +20,8 @@ func TestNew(t *testing.T) {
 	if _, ok := os.LookupEnv(testEnvUnset); ok {
 		t.Errorf("environment variable should not be set for tests: %s", testEnvUnset)
 	}
-	hd := homedir()
+	ad := appDir()
+	hd := homeDir()
 	tests := []struct {
 		name       string
 		opts       []Opt
@@ -31,9 +33,18 @@ func TestNew(t *testing.T) {
 			expectNil: true,
 		},
 		{
+			name: "env unset and file missing",
+			opts: []Opt{
+				WithHomeDir("../../.."+tempDir, "no-such-file.test", false),
+				WithAppDir("../../.."+tempDir, "", "no-such-file.test", false),
+				WithEnvFile(testEnvUnset),
+			},
+			expectNil: true,
+		},
+		{
 			name: "fullname override",
 			opts: []Opt{
-				WithDirName(".config", "file.json"),
+				WithHomeDir(".appname", "file.json", true),
 				WithEnvFile(testEnvFileVar),
 				WithFullname("/tmp/conf.json"),
 			},
@@ -49,33 +60,42 @@ func TestNew(t *testing.T) {
 		{
 			name: "env file override",
 			opts: []Opt{
-				WithDirName(".config", "file.json"),
+				WithHomeDir(".appname", "file.json", true),
 				WithEnvFile(testEnvFileVar),
 			},
 			expectName: testEnvFileVal,
 		},
 		{
-			name: "env dir override",
+			name: "home dir",
 			opts: []Opt{
-				WithDirName(".config", "file.json"),
+				WithHomeDir(".appname", "file.json", true),
+			},
+			expectName: filepath.Join(hd, ".appname", "file.json"),
+		},
+		{
+			name: "app dir",
+			opts: []Opt{
+				WithAppDir("AppName", "AppName", "file.json", true),
+			},
+			expectName: filepath.Join(ad, "AppName", "file.json"),
+		},
+		{
+			name: "env override",
+			opts: []Opt{
+				WithHomeDir(".appname", "file.json", true),
+				WithAppDir("appname", "AppName", "file.json", false),
 				WithEnvDir(testEnvDirVar, "file.json"),
 			},
 			expectName: filepath.Join(testEnvDirVal, "file.json"),
 		},
 		{
-			name: "dir name",
-			opts: []Opt{
-				WithDirName(".config", "file.json"),
-			},
-			expectName: filepath.Join(hd, ".config", "file.json"),
-		},
-		{
 			name: "env unset",
 			opts: []Opt{
-				WithDirName(".config", "file.json"),
+				WithHomeDir(".appname", "file.json", true),
+				WithAppDir("appname", "AppName", "file.json", false),
 				WithEnvFile(testEnvUnset),
 			},
-			expectName: filepath.Join(hd, ".config", "file.json"),
+			expectName: filepath.Join(hd, ".appname", "file.json"),
 		},
 	}
 	for _, tt := range tests {

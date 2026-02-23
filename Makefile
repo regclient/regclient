@@ -35,31 +35,31 @@ ifeq "$(strip $(VER_BUMP))" ''
 		-u "$(shell id -u):$(shell id -g)" \
 		$(VER_BUMP_CONTAINER)
 endif
-MARKDOWN_LINT_VER?=v0.20.0
+MARKDOWN_LINT_VER?=v0.21.0
 GOFUMPT_VER?=v0.9.2
 GOMAJOR_VER?=v0.15.0
-GOSEC_VER?=v2.22.10
+GOSEC_VER?=v2.23.0
 GO_VULNCHECK_VER?=v1.1.4
-OSV_SCANNER_VER?=v2.3.0
+OSV_SCANNER_VER?=v2.3.3
 SYFT?=$(shell command -v syft 2>/dev/null)
 SYFT_CMD_VER:=$(shell [ -x "$(SYFT)" ] && echo "v$$($(SYFT) version | awk '/^Version: / {print $$2}')" || echo "0")
-SYFT_VERSION?=v1.38.0
-SYFT_CONTAINER?=anchore/syft:v1.38.0@sha256:825cad3a952c87676a6d07e9a3bb05ac9c401d598360070e970aa46d54c1727e
+SYFT_VERSION?=v1.42.1
+SYFT_CONTAINER?=anchore/syft:v1.42.1@sha256:392b65f29a410d2c1294d347bb3ad6f37608345ab6e7b43d2df03ea18bd6f5b0
 ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 	SYFT=docker run --rm \
 		-v "$(shell pwd)/:$(shell pwd)/" -w "$(shell pwd)" \
 		-u "$(shell id -u):$(shell id -g)" \
 		$(SYFT_CONTAINER)
 endif
-STATICCHECK_VER?=v0.6.1
+STATICCHECK_VER?=v0.7.0
 CI_DISTRIBUTION_VER?=3.0.0
-CI_ZOT_VER?=v2.1.11
+CI_ZOT_VER?=v2.1.14
 
 .PHONY: .FORCE
 .FORCE:
 
 .PHONY: all
-all: fmt gofumpt goimports vet test lint binaries ## Full build of Go binaries (including fmt, vet, test, and lint)
+all: fmt gofumpt gofix goimports vet test lint binaries ## Full build of Go binaries (including fmt, vet, test, and lint)
 
 .PHONY: fmt
 fmt: ## go fmt
@@ -68,6 +68,10 @@ fmt: ## go fmt
 .PHONY: gofumpt
 gofumpt: $(GOPATH)/bin/gofumpt ## gofumpt is a stricter alternative to go fmt
 	gofumpt -l -w .
+
+.PHONY: gofix
+gofix: ## go fix
+	go fix ./...
 
 goimports: $(GOPATH)/bin/goimports
 	$(GOPATH)/bin/goimports -w -format-only -local github.com/regclient .
@@ -87,6 +91,7 @@ lint: lint-go lint-goimports lint-md lint-gosec ## Run all linting
 lint-go: $(GOPATH)/bin/gofumpt $(GOPATH)/bin/staticcheck .FORCE ## Run linting for Go
 	$(GOPATH)/bin/staticcheck -checks all ./...
 	$(GOPATH)/bin/gofumpt -l -d .
+	errors=$$(go fix -diff ./...); if [ "$${errors}" != "" ]; then echo "$${errors}"; exit 1; fi
 
 lint-goimports: $(GOPATH)/bin/goimports
 	@if [ -n "$$($(GOPATH)/bin/goimports -l -format-only -local github.com/regclient .)" ]; then \
@@ -246,11 +251,11 @@ $(GOPATH)/bin/gomajor: .FORCE
 	|| go install github.com/icholy/gomajor@$(GOMAJOR_VER)
 
 $(GOPATH)/bin/goimports: .FORCE
-	@[ -f "$(GOPATH)/bin/goimports" ] \
+	@[ -f "$(GOPATH)/bin/goimports" ] && [ "$$(go version | cut -f3 -d' ')" = "$$(go version $(GOPATH)/bin/goimports | cut -f2 -d' ')" ] \
 	||	go install golang.org/x/tools/cmd/goimports@latest
 
 $(GOPATH)/bin/gorelease: .FORCE
-	@[ -f "$(GOPATH)/bin/gorelease" ] \
+	@[ -f "$(GOPATH)/bin/gorelease" ] && [ "$$(go version | cut -f3 -d' ')" = "$$(go version $(GOPATH)/bin/gorelease | cut -f2 -d' ')" ] \
 	|| go install golang.org/x/exp/cmd/gorelease@latest
 
 $(GOPATH)/bin/gosec: .FORCE

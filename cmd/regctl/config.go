@@ -18,8 +18,10 @@ import (
 var (
 	// ConfigFilename is the default filename to read/write configuration
 	ConfigFilename = "config.json"
-	// ConfigDir is the default directory within the user's home directory to read/write configuration
-	ConfigDir = ".regctl"
+	// ConfigHomeDir is the default directory within the user's home directory to read/write configuration
+	ConfigHomeDir = ".regctl"
+	// ConfigAppDir is an alternate location for storing configurations
+	ConfigAppDir = "regctl"
 	// ConfigEnv is the environment variable to override the config filename
 	ConfigEnv = "REGCTL_CONFIG"
 )
@@ -47,7 +49,11 @@ type configOpts struct {
 func NewConfigCmd(rOpts *rootOpts) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config <cmd>",
-		Short: "read/set configuration options",
+		Short: "get/set configuration options",
+		Long: fmt.Sprintf(`Retrieve or update a configuration option.
+By default, the configuration is loaded from $HOME/%s/%s.
+This location can be overridden with the %s environment variable.
+Note that these commands do not include logins imported from Docker or values injected with --host.`, ConfigHomeDir, ConfigFilename, ConfigEnv),
 	}
 	cmd.AddCommand(newConfigGetCmd(rOpts))
 	cmd.AddCommand(newConfigSetCmd(rOpts))
@@ -186,21 +192,9 @@ func ConfigLoadConfFile(cf *conffile.File) (*Config, error) {
 		if c.Hosts[h].Name == "" {
 			c.Hosts[h].Name = h
 		}
-		if c.Hosts[h].Hostname == "" {
-			c.Hosts[h].Hostname = h
-		}
-		if c.Hosts[h].TLS == config.TLSUndefined {
-			c.Hosts[h].TLS = config.TLSEnabled
-		}
 		if h == config.DockerRegistryDNS || h == config.DockerRegistry || h == config.DockerRegistryAuth {
 			// Docker Hub
 			c.Hosts[h].Name = config.DockerRegistry
-			if c.Hosts[h].Hostname == h {
-				c.Hosts[h].Hostname = config.DockerRegistryDNS
-			}
-			if c.Hosts[h].CredHost == h {
-				c.Hosts[h].CredHost = config.DockerRegistryAuth
-			}
 		}
 		// ensure key matches Name
 		if c.Hosts[h].Name != h {
@@ -222,7 +216,11 @@ func ConfigLoadFile(filename string) (*Config, error) {
 
 // ConfigLoadDefault loads the config from the (default) filename
 func ConfigLoadDefault() (*Config, error) {
-	cf := conffile.New(conffile.WithDirName(ConfigDir, ConfigFilename), conffile.WithEnvFile(ConfigEnv))
+	cf := conffile.New(
+		conffile.WithHomeDir(ConfigHomeDir, ConfigFilename, true),
+		conffile.WithAppDir(ConfigAppDir, ConfigAppDir, ConfigFilename, false),
+		conffile.WithEnvFile(ConfigEnv),
+	)
 	if cf == nil {
 		return nil, fmt.Errorf("failed to define config file")
 	}

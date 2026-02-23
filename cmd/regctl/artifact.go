@@ -877,6 +877,7 @@ func (opts *artifactOpts) runArtifactPut(cmd *cobra.Command, args []string) erro
 					}
 				}
 				//#nosec G304 command is run by a user accessing their own files
+				//#nosec G703 command is run by a user accessing their own files
 				rdr, err := os.Open(openF)
 				if err != nil {
 					return err

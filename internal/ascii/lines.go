@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math"
 
 	"golang.org/x/term"
 )
@@ -18,7 +19,9 @@ type Lines struct {
 
 func NewLines(w io.Writer) *Lines {
 	width := 0
-	if wFd, ok := w.(interface{ Fd() uintptr }); ok && term.IsTerminal(int(wFd.Fd())) {
+	//#nosec G115 false positive
+	if wFd, ok := w.(interface{ Fd() uintptr }); ok && wFd.Fd() <= math.MaxInt && term.IsTerminal(int(wFd.Fd())) {
+		//#nosec G115 false positive
 		w, _, err := term.GetSize(int(wFd.Fd()))
 		if err == nil {
 			width = w
@@ -48,7 +51,7 @@ func (b *Lines) Flush() {
 	}
 	b.lines = bytes.Count(b.buf, []byte("\n"))
 	if b.width > 0 {
-		for _, line := range bytes.Split(b.buf, []byte("\n")) {
+		for line := range bytes.SplitSeq(b.buf, []byte("\n")) {
 			if len(line) > b.width {
 				b.lines += (len(line) - 1) / b.width
 			}

@@ -44,7 +44,6 @@ func TestRoundtrip(t *testing.T) {
 	for _, algo := range []CompressType{CompressNone, CompressGzip, CompressXz, CompressZstd} {
 		t.Run(algo.String(), func(t *testing.T) {
 			for _, tc := range tt {
-				tc := tc
 				t.Run(tc.name, func(t *testing.T) {
 					t.Parallel()
 					br := bytes.NewReader(tc.content)

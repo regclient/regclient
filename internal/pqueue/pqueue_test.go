@@ -144,8 +144,7 @@ func TestQueue(t *testing.T) {
 
 func TestMulti(t *testing.T) {
 	t.Parallel()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	e := testData{pref: 1}
 	qList := make([]*Queue[testData], 4)
 	for i := range qList {
