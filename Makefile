@@ -251,11 +251,11 @@ $(GOPATH)/bin/gomajor: .FORCE
 	|| go install github.com/icholy/gomajor@$(GOMAJOR_VER)
 
 $(GOPATH)/bin/goimports: .FORCE
-	@[ -f "$(GOPATH)/bin/goimports" ] \
+	@[ -f "$(GOPATH)/bin/goimports" ] && [ "$$(go version | cut -f3 -d' ')" = "$$(go version $(GOPATH)/bin/goimports | cut -f2 -d' ')" ] \
 	||	go install golang.org/x/tools/cmd/goimports@latest
 
 $(GOPATH)/bin/gorelease: .FORCE
-	@[ -f "$(GOPATH)/bin/gorelease" ] \
+	@[ -f "$(GOPATH)/bin/gorelease" ] && [ "$$(go version | cut -f3 -d' ')" = "$$(go version $(GOPATH)/bin/gorelease | cut -f2 -d' ')" ] \
 	|| go install golang.org/x/exp/cmd/gorelease@latest
 
 $(GOPATH)/bin/gosec: .FORCE
