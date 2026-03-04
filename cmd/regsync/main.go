@@ -12,6 +12,7 @@ import (
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	rootTopCmd, rootOpts := NewRootCmd()
 
 	sig := make(chan os.Signal, 1)

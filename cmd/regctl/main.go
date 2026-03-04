@@ -13,6 +13,7 @@ import (
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	cmd, opts := NewRootCmd()
 
 	sig := make(chan os.Signal, 1)

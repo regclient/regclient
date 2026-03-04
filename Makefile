@@ -38,7 +38,7 @@ endif
 MARKDOWN_LINT_VER?=v0.21.0
 GOFUMPT_VER?=v0.9.2
 GOMAJOR_VER?=v0.15.0
-GOSEC_VER?=v2.23.0
+GOSEC_VER?=v2.24.7
 GO_VULNCHECK_VER?=v1.1.4
 OSV_SCANNER_VER?=v2.3.3
 SYFT?=$(shell command -v syft 2>/dev/null)
