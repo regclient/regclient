@@ -20,6 +20,8 @@ type TarOpts func(*tarOpts)
 type tarOpts struct {
 	// allowRelative bool // allow relative paths outside of target folder
 	compress string
+	// workPath is like Dockerfile WORKDIR, it sets the base path for the tar
+	workPath string
 }
 
 // TarCompressGzip option to use gzip compression on tar files
@@ -32,6 +34,13 @@ func TarUncompressed(to *tarOpts) {
 }
 
 // TODO: add option for full path or to adjust the relative path
+func TarWorkPath(workPath string) TarOpts {
+	return func(to *tarOpts) {
+		if workPath != "" {
+			to.workPath = workPath
+		}
+	}
+}
 
 // Tar creation
 func Tar(ctx context.Context, path string, w io.Writer, opts ...TarOpts) error {
@@ -65,6 +74,10 @@ func Tar(ctx context.Context, path string, w io.Writer, opts ...TarOpts) error {
 		relPath, err := filepath.Rel(path, file)
 		if err != nil || relPath == "." {
 			return nil
+		}
+
+		if to.workPath != "" {
+			relPath = filepath.Join(to.workPath, relPath)
 		}
 
 		header, err := tar.FileInfoHeader(fi, relPath)
