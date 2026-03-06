@@ -6,7 +6,8 @@ import (
 )
 
 type compare struct {
-	host Platform
+	host    Platform
+	weights map[string]int
 }
 
 type CompareOpts func(*compare)
@@ -21,6 +22,14 @@ func NewCompare(host Platform, opts ...CompareOpts) *compare {
 		optFn(&c)
 	}
 	return &c
+}
+
+// WithWeights is used to weigh host preferences.
+// This is EXPERIMENTAL.
+func WithWeights(w map[string]int) CompareOpts {
+	return func(c *compare) {
+		c.weights = w
+	}
 }
 
 // Better returns true when the target is compatible and a better match than the previous platform.
@@ -69,6 +78,9 @@ func (c *compare) Better(target, prev Platform) bool {
 		if cmp != 0 {
 			return cmp < 0
 		}
+	}
+	if c.preferWeight(target) > c.preferWeight(prev) {
+		return true
 	}
 	return false
 }
@@ -121,6 +133,24 @@ func (c *compare) Match(target Platform) bool {
 			strSliceEq(c.host.OSFeatures, target.OSFeatures) &&
 			strSliceEq(c.host.Features, target.Features)
 	}
+}
+
+// preferWeight returns the weight of a specific target's prefers.
+func (c *compare) preferWeight(target Platform) int {
+	if target.Prefer == nil || c.host.Prefer == nil {
+		return 0
+	}
+	w := 0
+	for pref, v := range target.Prefer {
+		if c.host.Prefer[pref] == v {
+			if add, ok := c.weights[pref]; ok {
+				w += add
+			} else {
+				w++
+			}
+		}
+	}
+	return w
 }
 
 // Compatible indicates if a host can run a specified target platform image.
