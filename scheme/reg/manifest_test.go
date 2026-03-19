@@ -30,6 +30,8 @@ import (
 func TestManifest(t *testing.T) {
 	t.Parallel()
 	repoPath := "/proj"
+	repoPathAlgo := "/proj-dig-algo"
+	repoPathDigTags := "/proj-dig-tags"
 	getTag256 := "get256"
 	getTag512 := "get512"
 	bigTag := "big"
@@ -254,9 +256,48 @@ func TestManifest(t *testing.T) {
 		},
 		{
 			ReqEntry: reqresp.ReqEntry{
-				Name:   "Put tag 512",
+				Name:   "Put tag 512 unsupported",
 				Method: "PUT",
 				Path:   "/v2" + repoPath + "/manifests/" + putTag512,
+				Headers: http.Header{
+					"Content-Type":   []string{mediatype.Docker2Manifest},
+					"Content-Length": {fmt.Sprintf("%d", mLen)},
+				},
+				Body: mBody,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusCreated,
+				Headers: http.Header{
+					"Docker-Content-Digest": []string{mDigest256.String()},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "Put tag 512 with unsupported tag param",
+				Method: "PUT",
+				Path:   "/v2" + repoPathAlgo + "/manifests/" + mDigest512.String(),
+				Query: map[string][]string{
+					"tag": {putTag512},
+				},
+				Headers: http.Header{
+					"Content-Type":   []string{mediatype.Docker2Manifest},
+					"Content-Length": {fmt.Sprintf("%d", mLen)},
+				},
+				Body: mBody,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusCreated,
+				Headers: http.Header{
+					"Docker-Content-Digest": []string{mDigest512.String()},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "Put tag 512 with algorithm support",
+				Method: "PUT",
+				Path:   "/v2" + repoPathAlgo + "/manifests/" + putTag512,
 				Query: map[string][]string{
 					paramManifestDigest: {mDigest512.String()},
 				},
@@ -270,6 +311,28 @@ func TestManifest(t *testing.T) {
 				Status: http.StatusCreated,
 				Headers: http.Header{
 					"Docker-Content-Digest": []string{mDigest512.String()},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "Put tag 512 with digest and tags param",
+				Method: "PUT",
+				Path:   "/v2" + repoPathDigTags + "/manifests/" + mDigest512.String(),
+				Query: map[string][]string{
+					"tag": {putTag512},
+				},
+				Headers: http.Header{
+					"Content-Type":   []string{mediatype.Docker2Manifest},
+					"Content-Length": {fmt.Sprintf("%d", mLen)},
+				},
+				Body: mBody,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusCreated,
+				Headers: http.Header{
+					"Docker-Content-Digest": []string{mDigest512.String()},
+					"OCI-Tag":               []string{putTag512},
 				},
 			},
 		},
@@ -553,8 +616,44 @@ func TestManifest(t *testing.T) {
 			t.Errorf("failed to put manifest: %v", err)
 		}
 	})
-	t.Run("PUT tag 512", func(t *testing.T) {
+	t.Run("PUT tag 512 unsupported", func(t *testing.T) {
 		putRef, err := ref.New(tsURL.Host + repoPath + ":" + putTag512)
+		if err != nil {
+			t.Fatalf("failed creating ref: %v", err)
+		}
+		mm, err := manifest.New(manifest.WithRaw(mBody), manifest.WithDesc(descriptor.Descriptor{
+			MediaType: mediatype.Docker2Manifest,
+			Size:      int64(len(mBody)),
+			Digest:    mDigest512,
+		}))
+		if err != nil {
+			t.Fatalf("failed to create manifest: %v", err)
+		}
+		err = reg.ManifestPut(ctx, putRef, mm)
+		if err == nil {
+			t.Errorf("did not fail to put sha512 manifest by tag to unsupported registry")
+		}
+	})
+	t.Run("PUT tag 512 by algorithm", func(t *testing.T) {
+		putRef, err := ref.New(tsURL.Host + repoPathAlgo + ":" + putTag512)
+		if err != nil {
+			t.Fatalf("failed creating ref: %v", err)
+		}
+		mm, err := manifest.New(manifest.WithRaw(mBody), manifest.WithDesc(descriptor.Descriptor{
+			MediaType: mediatype.Docker2Manifest,
+			Size:      int64(len(mBody)),
+			Digest:    mDigest512,
+		}))
+		if err != nil {
+			t.Fatalf("failed to create manifest: %v", err)
+		}
+		err = reg.ManifestPut(ctx, putRef, mm)
+		if err != nil {
+			t.Errorf("failed to put manifest: %v", err)
+		}
+	})
+	t.Run("PUT tag 512 by digest and tag param", func(t *testing.T) {
+		putRef, err := ref.New(tsURL.Host + repoPathDigTags + ":" + putTag512)
 		if err != nil {
 			t.Fatalf("failed creating ref: %v", err)
 		}
@@ -585,7 +684,7 @@ func TestManifest(t *testing.T) {
 			t.Errorf("failed to put manifest: %v", err)
 		}
 	})
-	t.Run("PUT tag 512", func(t *testing.T) {
+	t.Run("PUT digest 512", func(t *testing.T) {
 		putRef, err := ref.New(tsURL.Host + repoPath + "@" + mDigest512.String())
 		if err != nil {
 			t.Fatalf("failed creating ref: %v", err)
