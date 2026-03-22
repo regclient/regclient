@@ -128,14 +128,14 @@ jobs:
     
     - name: Install syft
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
-      uses: anchore/sbom-action/download-syft@57aae528053a48a3f6235f2d9461b05fbcb7366d # v0.23.1
+      uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
       id: syft
       with:
-        syft-version: "v1.42.2"
+        syft-version: "v1.42.3"
     
     # Dogfooding, use regctl to modify regclient images to improve reproducibility
     - name: Install regctl
-      uses: regclient/actions/regctl-installer@9f6c88d6bc9e9d8416282b1f88be43758b0d066a # main
+      uses: regclient/actions/regctl-installer@7c7e6f032ce752dc58585af38e242635f4e7cd8e # main
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       with:
         release: main
