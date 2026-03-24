@@ -23,6 +23,8 @@ func TestNewVersion(t *testing.T) {
 		{name: "major.minor", input: "1.2", major: 1, minor: 2, patch: 0},
 		{name: "zero version", input: "0.0.0", major: 0, minor: 0, patch: 0},
 		{name: "windows version", input: "10.0.17763.2114", major: 10, minor: 0, patch: 17763},
+		{name: "tag prefix with v", input: "alpine-v18.10.0", major: 18, minor: 10, patch: 0},
+		{name: "tag prefix without v", input: "node-18.10.0", major: 18, minor: 10, patch: 0},
 		{name: "invalid format", input: "abc", expectError: true},
 		{name: "empty string", input: "", expectError: true},
 	}
@@ -188,6 +190,11 @@ func TestConstraintCheck(t *testing.T) {
 		// Prerelease versions
 		{name: "prerelease pass", constraint: ">=1.0.0-rc1", version: "1.0.0-rc2", expected: true},
 		{name: "prerelease release higher", constraint: ">=1.0.0-rc1", version: "1.0.0", expected: true},
+
+		// Tag-prefixed versions
+		{name: "tag prefix match", constraint: ">=18.10.0", version: "alpine-v18.10.0", expected: true},
+		{name: "tag prefix higher", constraint: ">=18.10.0", version: "alpine-v18.11.0", expected: true},
+		{name: "tag prefix lower", constraint: ">=18.10.0", version: "alpine-v18.9.0", expected: false},
 	}
 
 	for _, tt := range tests {

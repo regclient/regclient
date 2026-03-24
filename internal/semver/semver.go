@@ -21,6 +21,17 @@ func NewVersion(v string) (Version, error) {
 	// Strip leading 'v' if present
 	v = strings.TrimPrefix(v, "v")
 
+	// If the string doesn't start with a digit, try to extract a version-like
+	// substring after the last '-' to support tags like "alpine-v18.10.0".
+	if len(v) > 0 && (v[0] < '0' || v[0] > '9') {
+		if idx := strings.LastIndexByte(v, '-'); idx >= 0 {
+			rest := strings.TrimPrefix(v[idx+1:], "v")
+			if len(rest) > 0 && rest[0] >= '0' && rest[0] <= '9' {
+				v = rest
+			}
+		}
+	}
+
 	// Split on + for metadata
 	parts := strings.SplitN(v, "+", 2)
 	v = parts[0]
