@@ -1697,6 +1697,80 @@ func TestRegHttp(t *testing.T) {
 			}
 		}
 	})
+	t.Run("Rate limit retries are request local", func(t *testing.T) {
+		attempt := 0
+		tsLocal := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+			if req.URL.Path != "/v2/project/manifests/tag-get" {
+				http.NotFound(rw, req)
+				return
+			}
+			attempt++
+			// First request burns through its retry budget.
+			// Second request gets one more 429 and should still retry to success.
+			if attempt <= 4 {
+				rw.WriteHeader(http.StatusTooManyRequests)
+				_, _ = rw.Write([]byte(`{"errors":[{"code":"TOOMANYREQUESTS"}]}`))
+				return
+			}
+			rw.Header().Set("Content-Length", fmt.Sprintf("%d", len(getBody)))
+			rw.WriteHeader(http.StatusOK)
+			_, _ = rw.Write(getBody)
+		}))
+		defer tsLocal.Close()
+
+		tsLocalURL, err := url.Parse(tsLocal.URL)
+		if err != nil {
+			t.Fatalf("failed to parse local test server URL: %v", err)
+		}
+		tsLocalHost := tsLocalURL.Host
+
+		hcLocal := NewClient(
+			WithDelay(time.Millisecond, 2*time.Millisecond),
+			WithRetryLimit(3),
+			WithConfigHostFn(func(host string) *config.Host {
+				if host == "request-local."+tsLocalHost {
+					return &config.Host{
+						Name:     "request-local." + tsLocalHost,
+						Hostname: tsLocalHost,
+						TLS:      config.TLSDisabled,
+					}
+				}
+				return config.HostNewName(host)
+			}),
+		)
+
+		getReq := &Req{
+			Host:       "request-local." + tsLocalHost,
+			Method:     "GET",
+			Repository: "project",
+			Path:       "manifests/tag-get",
+			Headers:    headers,
+		}
+
+		resp, err := hcLocal.Do(ctx, getReq)
+		if err == nil {
+			_ = resp.Close()
+			t.Fatalf("first request unexpectedly succeeded")
+		}
+
+		resp, err = hcLocal.Do(ctx, getReq)
+		if err != nil {
+			t.Fatalf("second request should have its own retry budget: %v", err)
+		}
+		if resp.HTTPResponse().StatusCode != http.StatusOK {
+			t.Fatalf("invalid status code, expected %d, received %d", http.StatusOK, resp.HTTPResponse().StatusCode)
+		}
+		body, err := io.ReadAll(resp)
+		if err != nil {
+			t.Fatalf("body read failure: %v", err)
+		} else if !bytes.Equal(body, getBody) {
+			t.Fatalf("body read mismatch, expected %s, received %s", getBody, body)
+		}
+		err = resp.Close()
+		if err != nil {
+			t.Errorf("error closing request: %v", err)
+		}
+	})
 	t.Run("req-per-sec", func(t *testing.T) {
 		getReq := &Req{
 			Host:       "req-per-sec." + tsHost,

@@ -44,7 +44,6 @@ var (
 
 const (
 	DefaultRetryLimit = 5 // number of times a request will be retried
-	backoffResetCount = 5 // number of successful requests needed to reduce the backoff
 )
 
 // Client is an HTTP client wrapper.
@@ -64,18 +63,16 @@ type Client struct {
 }
 
 type clientHost struct {
-	config       *config.Host                // config entry
-	httpClient   *http.Client                // modified http client for registry specific settings
-	userAgent    string                      // user agent to specify in http request headers
-	slog         *slog.Logger                // logging for tracing and failures
-	auth         map[string]*auth.Auth       // map of auth handlers by repository
-	backoffCur   int                         // current count of backoffs for this host
-	backoffLast  time.Time                   // time the last request was released, this may be in the future if there is a queue, or zero if no delay is needed
-	backoffReset int                         // count of successful requests when a backoff is experienced, once [backoffResetCount] is reached, [backoffCur] is reduced by one and this is reset to 0
-	reqFreq      time.Duration               // how long between submitting requests for this host
-	reqNext      time.Time                   // time to release the next request
-	throttle     *pqueue.Queue[reqmeta.Data] // limit concurrent requests to the host
-	mu           sync.Mutex                  // mutex to prevent data races
+	config      *config.Host                // config entry
+	httpClient  *http.Client                // modified http client for registry specific settings
+	userAgent   string                      // user agent to specify in http request headers
+	slog        *slog.Logger                // logging for tracing and failures
+	auth        map[string]*auth.Auth       // map of auth handlers by repository
+	backoffLast time.Time                   // time a backoff was last seen, used to deprioritize mirrors for later requests
+	reqFreq     time.Duration               // how long between submitting requests for this host
+	reqNext     time.Time                   // time to release the next request
+	throttle    *pqueue.Queue[reqmeta.Data] // limit concurrent requests to the host
+	mu          sync.Mutex                  // mutex to prevent data races
 }
 
 // Req is a request to send to a registry.
@@ -109,6 +106,8 @@ type Resp struct {
 	reader           io.Reader
 	readCur, readMax int64
 	retryCount       int
+	backoffCur       int
+	backoffLast      time.Time
 	throttleDone     func()
 }
 
@@ -645,75 +644,65 @@ func (resp *Resp) Seek(offset int64, whence int) (int64, error) {
 }
 
 func (resp *Resp) backoffGet() time.Time {
-	c := resp.client
-	ch := c.getHost(resp.mirror)
-	ch.mu.Lock()
-	defer ch.mu.Unlock()
-	if ch.backoffCur > 0 {
-		delay := c.delayInit << ch.backoffCur
-		delay = min(delay, c.delayMax)
-		next := ch.backoffLast.Add(delay)
+	if resp.backoffCur > 0 {
+		delay := resp.client.delayInit << resp.backoffCur
+		delay = min(delay, resp.client.delayMax)
+		next := resp.backoffLast.Add(delay)
 		now := time.Now()
 		if now.After(next) {
 			next = now
 		}
-		ch.backoffLast = next
+		resp.backoffLast = next
 		return next
 	}
 	// reset a stale "retry-after" time
-	if !ch.backoffLast.IsZero() && ch.backoffLast.Before(time.Now()) {
-		ch.backoffLast = time.Time{}
+	if !resp.backoffLast.IsZero() && resp.backoffLast.Before(time.Now()) {
+		resp.backoffLast = time.Time{}
 	}
-	return ch.backoffLast
+	return resp.backoffLast
 }
 
 func (resp *Resp) backoffSet() error {
 	c := resp.client
-	ch := c.getHost(resp.mirror)
-	ch.mu.Lock()
-	defer ch.mu.Unlock()
+	now := time.Now()
 	// check rate limit header and use that directly if possible
 	if resp.resp != nil && resp.resp.Header.Get("Retry-After") != "" {
 		ras := resp.resp.Header.Get("Retry-After")
 		ra, _ := time.ParseDuration(ras + "s")
 		if ra > 0 {
-			next := time.Now().Add(ra)
-			if ch.backoffLast.Before(next) {
-				ch.backoffLast = next
+			next := now.Add(ra)
+			if resp.backoffLast.Before(next) {
+				resp.backoffLast = next
 			}
+			resp.backoffHostSet(next)
 			return nil
 		}
 	}
-	// Else track the number of backoffs and fail when the limit is exceeded.
-	// New requests always get at least one try, but fail fast if the server has been throwing errors.
-	ch.backoffCur++
-	if ch.backoffLast.IsZero() {
-		ch.backoffLast = time.Now()
+	// Track backoffs for this request only. Shared host backoff state caused later
+	// requests to fail after a previous request exhausted its own retry budget.
+	resp.backoffCur++
+	if resp.backoffLast.IsZero() {
+		resp.backoffLast = now
 	}
-	if ch.backoffCur >= c.retryLimit {
-		return fmt.Errorf("%w: backoffs %d", errs.ErrBackoffLimit, ch.backoffCur)
+	resp.backoffHostSet(resp.backoffLast)
+	if resp.backoffCur >= c.retryLimit {
+		return fmt.Errorf("%w: backoffs %d", errs.ErrBackoffLimit, resp.backoffCur)
 	}
 
 	return nil
 }
 
 func (resp *Resp) backoffReset() {
-	c := resp.client
-	ch := c.getHost(resp.mirror)
+	resp.backoffCur = 0
+	resp.backoffLast = time.Time{}
+}
+
+func (resp *Resp) backoffHostSet(next time.Time) {
+	ch := resp.client.getHost(resp.mirror)
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
-	if ch.backoffCur > 0 {
-		ch.backoffReset++
-		// If enough successful requests are seen, lower the backoffCur count.
-		// This requires multiple successful requests of a flaky server, but quickly drops when above the retry limit.
-		if ch.backoffReset > backoffResetCount || ch.backoffCur > c.retryLimit {
-			ch.backoffReset = 0
-			ch.backoffCur--
-			if ch.backoffCur == 0 {
-				// reset the last time to the zero value
-				ch.backoffLast = time.Time{}
-			}
-		}
+	if ch.backoffLast.Before(next) {
+		ch.backoffLast = next
 	}
 }
 
