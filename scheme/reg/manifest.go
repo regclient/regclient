@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/opencontainers/go-digest"
 
@@ -290,7 +291,12 @@ func (reg *Reg) ManifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest,
 	}
 
 	// if pushing tags by digest fails, fall back to pushing individual tags
-	respTags := resp.HTTPResponse().Header.Values("OCI-Tag")
+	respTags := []string{}
+	for _, hv := range resp.HTTPResponse().Header.Values("OCI-Tag") {
+		for sv := range strings.SplitSeq(hv, ",") {
+			respTags = append(respTags, strings.TrimSpace(sv))
+		}
+	}
 	for _, t := range expectTags {
 		if slices.Contains(respTags, t) {
 			continue
