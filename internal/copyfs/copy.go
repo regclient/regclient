@@ -32,13 +32,14 @@ func Copy(dest, src string) error {
 				if err != nil {
 					return err
 				}
+				//#nosec G122 copy is only used for internal (test) code.
 				return os.Symlink(link, destCur)
 			default:
 				return fmt.Errorf("unsupported file to copy: %s, type = %d", srcCur, fi.Mode().Type())
 			}
 		}
 		// copy file
-		//#nosec G304 copy is only used for internal (test) code.
+		//#nosec G122 G304 copy is only used for internal (test) code.
 		fhSrc, err := os.Open(srcCur)
 		if err != nil {
 			return err

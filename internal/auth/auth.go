@@ -677,6 +677,7 @@ func (b *bearerHandler) isExpired() bool {
 
 // tryGet requests a new token with a GET request
 func (b *bearerHandler) tryGet(cred Cred) error {
+	//#nosec G704 inputs follow specification
 	req, err := http.NewRequest("GET", b.tokenURL.String(), nil)
 	if err != nil {
 		return err
@@ -701,7 +702,7 @@ func (b *bearerHandler) tryGet(cred Cred) error {
 	req.Header.Add("User-Agent", b.clientID)
 	req.URL.RawQuery = reqParams.Encode()
 
-	//#nosec G704 inputs are user controlled or follow specification
+	//#nosec G704 inputs follow specification
 	resp, err := b.client.Do(req)
 	if err != nil {
 		return err
@@ -733,6 +734,7 @@ func (b *bearerHandler) tryPost(cred Cred) error {
 		form.Set("password", cred.Password)
 	}
 
+	//#nosec G704 inputs are user controlled or follow specification
 	req, err := http.NewRequest("POST", b.tokenURL.String(), strings.NewReader(form.Encode()))
 	if err != nil {
 		return err
@@ -870,7 +872,7 @@ func (j *jwtHubHandler) ProcessChallenge(c challenge) error {
 	// send a login request to hub
 	bodyBytes, err := json.Marshal(jwtHubPost{
 		User: cred.User,
-		Pass: cred.Password,
+		Pass: cred.Password, //#nosec G117 field name follows spec
 	})
 	if err != nil {
 		return err
