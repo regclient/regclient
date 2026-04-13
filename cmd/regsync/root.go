@@ -855,6 +855,9 @@ func (opts *rootOpts) processRef(ctx context.Context, s ConfigSync, src, tgt ref
 				if filter.Annotations != nil {
 					rOpts = append(rOpts, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{Annotations: filter.Annotations}))
 				}
+				if s.ReferrerSlow != nil && *s.ReferrerSlow {
+					rOpts = append(rOpts, scheme.WithReferrerSlowSearch())
+				}
 				rcOpts = append(rcOpts, regclient.ImageWithReferrers(rOpts...))
 			}
 		}

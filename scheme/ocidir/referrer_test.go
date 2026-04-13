@@ -147,6 +147,24 @@ func TestReferrer(t *testing.T) {
 		}
 	})
 
+	// list referrers with slow search
+	t.Run("List slow search", func(t *testing.T) {
+		r := mRef.SetDigest(mDesc.Digest.String())
+		rl, err := o.ReferrerList(ctx, r, scheme.WithReferrerSlowSearch())
+		if err != nil {
+			t.Fatalf("Failed running ReferrerList: %v", err)
+		}
+		matches := 0
+		for _, desc := range rl.Descriptors {
+			if desc.ArtifactType == aType {
+				matches++
+			}
+		}
+		if matches < 2 {
+			t.Fatalf("did not find at least two referrers using the slow search, returned %d", matches)
+		}
+	})
+
 	// attach to image
 	t.Run("Put", func(t *testing.T) {
 		r := mRef.SetDigest(artifactAM.GetDescriptor().Digest.String())

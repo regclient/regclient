@@ -81,6 +81,7 @@ type artifactOpts struct {
 	outputDir        string
 	platform         string
 	refers           string
+	referrerSlow     bool
 	sortAnnot        string
 	sortDesc         bool
 	stripDirs        bool
@@ -140,6 +141,7 @@ regctl artifact get registry.example.org/artifact:0.0.1 --config`,
 	_ = cmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
 	cmd.Flags().StringVar(&opts.refers, "refers", "", "Deprecated: Get a referrer to the reference")
 	_ = cmd.Flags().MarkHidden("refers")
+	cmd.Flags().BoolVar(&opts.referrerSlow, "slow-referrers", false, "Search for referrers with slower queries")
 	cmd.Flags().StringVar(&opts.sortAnnot, "sort-annotation", "", "Annotation used for sorting results")
 	cmd.Flags().BoolVar(&opts.sortDesc, "sort-desc", false, "Sort in descending order")
 	cmd.Flags().StringVar(&opts.subject, "subject", "", "Get a referrer to the subject reference")
@@ -178,6 +180,7 @@ regctl artifact list registry.example.com/repo:v1 --format '{{jsonPretty .Manife
 	cmd.Flags().BoolVar(&opts.latest, "latest", false, "Sort using the OCI created annotation")
 	cmd.Flags().StringVarP(&opts.platform, "platform", "p", "", "Specify platform (e.g. linux/amd64 or local)")
 	_ = cmd.RegisterFlagCompletionFunc("platform", completeArgPlatform)
+	cmd.Flags().BoolVar(&opts.referrerSlow, "slow-referrers", false, "Search for referrers with slower queries")
 	cmd.Flags().StringVar(&opts.sortAnnot, "sort-annotation", "", "Annotation used for sorting results")
 	cmd.Flags().BoolVar(&opts.sortDesc, "sort-desc", false, "Sort in descending order")
 	return cmd
@@ -275,6 +278,7 @@ regctl artifact tree --digest-tags ghcr.io/regclient/regsync:latest`,
 	cmd.Flags().StringArrayVar(&opts.filterAnnot, "filter-annotation", []string{}, "Filter descriptors by annotation (key=value)")
 	cmd.Flags().StringVar(&opts.format, "format", "{{printPretty .}}", "Format output with go template syntax")
 	_ = cmd.RegisterFlagCompletionFunc("format", completeArgNone)
+	cmd.Flags().BoolVar(&opts.referrerSlow, "slow-referrers", false, "Search for referrers with slower queries")
 	return cmd
 }
 
@@ -363,12 +367,15 @@ func (opts *artifactOpts) runArtifactGet(cmd *cobra.Command, args []string) erro
 		} else {
 			r = rSubject
 		}
+		if opts.referrerSlow {
+			referrerOpts = append(referrerOpts, scheme.WithReferrerSlowSearch())
+		}
 		rl, err := rc.ReferrerList(ctx, rSubject, referrerOpts...)
 		if err != nil {
 			return err
 		}
 		if len(rl.Descriptors) == 0 {
-			return fmt.Errorf("no matching referrers to %s", opts.subject)
+			return fmt.Errorf("no matching referrers to %s%.0w", opts.subject, errs.ErrNotFound)
 		} else if len(rl.Descriptors) > 1 && opts.sortAnnot == "" && !opts.latest {
 			opts.rootOpts.log.Warn("multiple referrers match, using first match",
 				slog.Int("match count", len(rl.Descriptors)),
@@ -618,6 +625,9 @@ func (opts *artifactOpts) runArtifactList(cmd *cobra.Command, args []string) err
 			return fmt.Errorf("failed to parse external ref: %w", err)
 		}
 		referrerOpts = append(referrerOpts, scheme.WithReferrerSource(rExternal))
+	}
+	if opts.referrerSlow {
+		referrerOpts = append(referrerOpts, scheme.WithReferrerSlowSearch())
 	}
 
 	rl, err := rc.ReferrerList(ctx, rSubject, referrerOpts...)
@@ -1092,6 +1102,9 @@ func (opts *artifactOpts) runArtifactTree(cmd *cobra.Command, args []string) err
 			return fmt.Errorf("failed to parse external ref: %w", err)
 		}
 		referrerOpts = append(referrerOpts, scheme.WithReferrerSource(rRefSrc))
+	}
+	if opts.referrerSlow {
+		referrerOpts = append(referrerOpts, scheme.WithReferrerSlowSearch())
 	}
 
 	// include digest tags if requested

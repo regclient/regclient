@@ -3,6 +3,7 @@ package referrer
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -133,29 +134,27 @@ var (
 		Size:         int64(len(bOCIImg)),
 		Digest:       digest.FromString(bOCIImg),
 	}
+	dOCIImgAT = descriptor.Descriptor{
+		MediaType:    "application/vnd.oci.image.manifest.v1+json",
+		ArtifactType: "application/vnd.example.data",
+		Size:         int64(len(bOCIImgAT)),
+		Digest:       digest.FromString(bOCIImgAT),
+		Annotations: map[string]string{
+			"com.example.instance": "test",
+			"com.example.version":  "1.0",
+		},
+	}
+	dOCIIndex = descriptor.Descriptor{
+		MediaType:    "application/vnd.oci.image.index.v1+json",
+		ArtifactType: "application/vnd.example.data",
+		Size:         int64(len(bOCIIndex)),
+		Digest:       digest.FromString(bOCIIndex),
+		Annotations: map[string]string{
+			"com.example.instance": "test",
+			"com.example.version":  "1.0",
+		},
+	}
 )
-
-var dOCIImgAT = descriptor.Descriptor{
-	MediaType:    "application/vnd.oci.image.manifest.v1+json",
-	ArtifactType: "application/vnd.example.data",
-	Size:         int64(len(bOCIImgAT)),
-	Digest:       digest.FromString(bOCIImgAT),
-	Annotations: map[string]string{
-		"com.example.instance": "test",
-		"com.example.version":  "1.0",
-	},
-}
-
-var dOCIIndex = descriptor.Descriptor{
-	MediaType:    "application/vnd.oci.image.index.v1+json",
-	ArtifactType: "application/vnd.example.data",
-	Size:         int64(len(bOCIIndex)),
-	Digest:       digest.FromString(bOCIIndex),
-	Annotations: map[string]string{
-		"com.example.instance": "test",
-		"com.example.version":  "1.0",
-	},
-}
 
 func init() {
 	var err error
@@ -179,6 +178,15 @@ func init() {
 
 func TestEmpty(t *testing.T) {
 	t.Parallel()
+	// verify a new list is empty
+	r, err := ref.New("example.org/test:tag")
+	if err != nil {
+		t.Fatalf("failed to setup ref: %v", err)
+	}
+	rlNew := New(r)
+	if !rlNew.IsEmpty() {
+		t.Errorf("new list returns false on IsEmpty")
+	}
 	// create an empty list and full list, test is empty
 	rlEmpty := &ReferrerList{
 		Descriptors: []descriptor.Descriptor{},
@@ -226,7 +234,7 @@ func TestEmpty(t *testing.T) {
 
 func TestAdd(t *testing.T) {
 	t.Parallel()
-	tests := []struct {
+	tt := []struct {
 		name        string
 		m           manifest.Manifest
 		expectedErr error
@@ -267,19 +275,18 @@ func TestAdd(t *testing.T) {
 		t.Fatalf("failed to generate empty index: %v", err)
 	}
 	rl.Manifest = m
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := rl.Add(tt.m)
-			if tt.expectedErr != nil {
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			err := rl.Add(tc.m)
+			if tc.expectedErr != nil {
 				if err == nil {
-					t.Errorf("add succeeded, expected %v", tt.expectedErr)
-				} else if !errors.Is(err, tt.expectedErr) && err.Error() != tt.expectedErr.Error() {
-					t.Errorf("unexpected error, expected %v, received %v", tt.expectedErr, err)
+					t.Errorf("add succeeded, expected %v", tc.expectedErr)
+				} else if !errors.Is(err, tc.expectedErr) && err.Error() != tc.expectedErr.Error() {
+					t.Errorf("unexpected error, expected %v, received %v", tc.expectedErr, err)
 				}
 				return
 			} else if err != nil {
-				t.Errorf("add failed: %v", err)
-				return
+				t.Fatalf("add failed: %v", err)
 			}
 		})
 	}
@@ -318,7 +325,7 @@ func TestDelete(t *testing.T) {
 	}
 	rl.Manifest = m
 
-	tests := []struct {
+	tt := []struct {
 		name        string
 		m           manifest.Manifest
 		expectedErr error
@@ -346,24 +353,171 @@ func TestDelete(t *testing.T) {
 			expectedErr: errs.ErrNotFound,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := rl.Delete(tt.m)
-			if tt.expectedErr != nil {
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			err := rl.Delete(tc.m)
+			if tc.expectedErr != nil {
 				if err == nil {
-					t.Errorf("delete succeeded, expected %v", tt.expectedErr)
-				} else if !errors.Is(err, tt.expectedErr) && err.Error() != tt.expectedErr.Error() {
-					t.Errorf("unexpected error, expected %v, received %v", tt.expectedErr, err)
+					t.Errorf("delete succeeded, expected %v", tc.expectedErr)
+				} else if !errors.Is(err, tc.expectedErr) && err.Error() != tc.expectedErr.Error() {
+					t.Errorf("unexpected error, expected %v, received %v", tc.expectedErr, err)
 				}
 				return
 			} else if err != nil {
-				t.Errorf("delete failed: %v", err)
-				return
+				t.Fatalf("delete failed: %v", err)
 			}
 		})
 	}
 	if len(rl.Descriptors) != 0 {
 		t.Errorf("number of descriptors, expected 0, received %d", len(rl.Descriptors))
+	}
+}
+
+func TestMerge(t *testing.T) {
+	t.Parallel()
+	m, err := manifest.New(manifest.WithOrig(v1.Index{
+		Versioned: v1.IndexSchemaVersion,
+		MediaType: mediatype.OCI1ManifestList,
+	}))
+	if err != nil {
+		t.Fatalf("failed to generate empty index: %v", err)
+	}
+
+	tt := []struct {
+		name        string
+		rl          ReferrerList
+		merge       ReferrerList
+		expectedErr error
+		result      ReferrerList
+	}{
+		{
+			name:        "empty",
+			rl:          ReferrerList{},
+			merge:       ReferrerList{},
+			expectedErr: fmt.Errorf("referrer list manifest is nil"),
+		},
+		{
+			name: "2 into 1",
+			rl: ReferrerList{
+				Manifest: m,
+				Descriptors: []descriptor.Descriptor{
+					dOCIIndex,
+				},
+			},
+			merge: ReferrerList{
+				Manifest: m,
+				Descriptors: []descriptor.Descriptor{
+					dOCIImg, dOCIImgAT,
+				},
+			},
+			result: ReferrerList{
+				Manifest: m,
+				Descriptors: []descriptor.Descriptor{
+					dOCIIndex, dOCIImg, dOCIImgAT,
+				},
+			},
+		},
+		{
+			name: "tags",
+			rl: ReferrerList{
+				Manifest: m,
+				Descriptors: []descriptor.Descriptor{
+					dOCIIndex,
+				},
+				Tags: []string{"x"},
+			},
+			merge: ReferrerList{
+				Manifest: m,
+				Descriptors: []descriptor.Descriptor{
+					dOCIImg, dOCIImgAT,
+				},
+				Tags: []string{"y", "z"},
+			},
+			result: ReferrerList{
+				Manifest: m,
+				Descriptors: []descriptor.Descriptor{
+					dOCIIndex, dOCIImg, dOCIImgAT,
+				},
+				Tags: []string{"x", "y", "z"},
+			},
+		},
+		{
+			name: "annotations",
+			rl: ReferrerList{
+				Manifest: m,
+				Descriptors: []descriptor.Descriptor{
+					dOCIIndex,
+				},
+				Annotations: map[string]string{
+					"a": "1",
+				},
+			},
+			merge: ReferrerList{
+				Manifest: m,
+				Descriptors: []descriptor.Descriptor{
+					dOCIImg, dOCIImgAT,
+				},
+				Annotations: map[string]string{
+					"a": "10",
+					"b": "20",
+				},
+			},
+			result: ReferrerList{
+				Manifest: m,
+				Descriptors: []descriptor.Descriptor{
+					dOCIIndex, dOCIImg, dOCIImgAT,
+				},
+				Annotations: map[string]string{
+					"a": "10",
+					"b": "20",
+				},
+			},
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.rl.Merge(tc.merge)
+			if tc.expectedErr != nil {
+				if err == nil {
+					t.Errorf("merge succeeded, expected %v", tc.expectedErr)
+				} else if !errors.Is(err, tc.expectedErr) && err.Error() != tc.expectedErr.Error() {
+					t.Errorf("unexpected error, expected %v, received %v", tc.expectedErr, err)
+				}
+				return
+			} else if err != nil {
+				t.Fatalf("merge failed: %v", err)
+			}
+			if len(tc.rl.Descriptors) != len(tc.result.Descriptors) {
+				t.Errorf("expected %d descriptors, received %d", len(tc.rl.Descriptors), len(tc.result.Descriptors))
+			} else {
+				for _, desc := range tc.result.Descriptors {
+					if !slices.ContainsFunc(tc.rl.Descriptors, func(e descriptor.Descriptor) bool {
+						return desc.Equal(e)
+					}) {
+						t.Errorf("did not find descriptor in result: %v", desc)
+					}
+				}
+			}
+			if len(tc.rl.Tags) != len(tc.result.Tags) {
+				t.Errorf("expected %d tags, received %d", len(tc.rl.Tags), len(tc.result.Tags))
+			} else {
+				for _, tag := range tc.result.Tags {
+					if !slices.Contains(tc.rl.Tags, tag) {
+						t.Errorf("did not find tag in result: %v", tag)
+					}
+				}
+			}
+			if len(tc.rl.Annotations) != len(tc.result.Annotations) {
+				t.Errorf("expected %d Annotations, received %d", len(tc.rl.Annotations), len(tc.result.Annotations))
+			} else {
+				for a, v := range tc.result.Annotations {
+					if result, ok := tc.rl.Annotations[a]; !ok || v != result {
+						t.Errorf("expected annotation %q to equal %q, received %q", a, v, result)
+					}
+				}
+			}
+		})
 	}
 }
 
