@@ -216,6 +216,9 @@ func TestAuth(t *testing.T) {
 	defer ts.Close()
 	tsURL, _ := url.Parse(ts.URL)
 	tsHost := tsURL.Host
+	tsHTTPS := *tsURL
+	tsHTTPS.Scheme = "https"
+	externURL, _ := url.Parse("http://registry.example.org/v2/project/manifests/latest")
 
 	tests := []struct {
 		name           string
@@ -310,6 +313,50 @@ func TestAuth(t *testing.T) {
 				Header: http.Header{},
 			},
 			wantAuthHeader: "Bearer token2",
+		},
+		{
+			name: "reject redirect to loopback",
+			auth: NewAuth(
+				WithClientID(clientID),
+				WithCreds(credsFn),
+			),
+			handleResponse: &http.Response{
+				Request: &http.Request{
+					URL: externURL,
+				},
+				StatusCode: http.StatusUnauthorized,
+				Header: http.Header{
+					http.CanonicalHeaderKey("WWW-Authenticate"): []string{
+						`Bearer realm="http://127.0.0.1/token",service="example.registry.org",scope="repository:reponame:pull"`,
+					},
+				},
+			},
+			handleRequest: &http.Request{
+				URL: externURL,
+			},
+			wantErrReq: errs.ErrHTTPUnauthorized,
+		},
+		{
+			name: "reject http downgrade",
+			auth: NewAuth(
+				WithClientID(clientID),
+				WithCreds(credsFn),
+			),
+			handleResponse: &http.Response{
+				Request: &http.Request{
+					URL: &tsHTTPS,
+				},
+				StatusCode: http.StatusUnauthorized,
+				Header: http.Header{
+					http.CanonicalHeaderKey("WWW-Authenticate"): []string{
+						`Bearer realm="` + tsURL.String() + `/token",service="` + tsHost + `",scope="repository:reponame:pull"`,
+					},
+				},
+			},
+			handleRequest: &http.Request{
+				URL: &tsHTTPS,
+			},
+			wantErrReq: errs.ErrHTTPUnauthorized,
 		},
 	}
 
@@ -765,7 +812,7 @@ func TestBearerToken(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed on response to token: %v", err)
 	}
-	req, err := http.NewRequest("GET", "http://localhost:5000", nil)
+	req, err := http.NewRequest("GET", tsURL.String()+"/v2/project/manifests/latest", nil)
 	if err != nil {
 		t.Fatalf("failed to generate new request: %v", err)
 	}
