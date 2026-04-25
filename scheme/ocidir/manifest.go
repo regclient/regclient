@@ -246,6 +246,7 @@ func (o *OCIDir) manifestPut(ctx context.Context, r ref.Ref, m manifest.Manifest
 			aOCIRefName: r.Tag,
 		}
 	}
+	// TODO: if the manifest contains a subject, option to add descriptor details and include entry in the index.json, config.child=false
 	// create manifest CAS file
 	dir := path.Join(r.Path, "blobs", desc.Digest.Algorithm().String())
 	//#nosec G301 defer to user umask settings
