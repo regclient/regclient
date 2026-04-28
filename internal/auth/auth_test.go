@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/regclient/regclient/internal/reqresp"
-	"github.com/regclient/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/internal/reqresp"
+	"github.com/csirmazbendeguz/regclient/types/errs"
 )
 
 func TestParseAuthHeader(t *testing.T) {

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types/errs"
-	"github.com/regclient/regclient/types/repo"
+	"github.com/csirmazbendeguz/regclient/scheme"
+	"github.com/csirmazbendeguz/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/repo"
 )
 
 type repoLister interface {

@@ -8,8 +8,8 @@ import (
 
 	"github.com/goccy/go-yaml"
 
-	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/pkg/template"
+	"github.com/csirmazbendeguz/regclient/config"
+	"github.com/csirmazbendeguz/regclient/pkg/template"
 )
 
 // Config is parsed configuration file for regsync

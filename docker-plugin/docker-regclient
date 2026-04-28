@@ -3,7 +3,7 @@
 docker_cli_plugin_metadata() {
   vendor="regclient"
   version="0.1"
-  url="https://github.com/regclient/regclient"
+  url="https://github.com/csirmazbendeguz/regclient"
   description="Manage docker registries"
   cat <<-EOF
   {"SchemaVersion":"0.1.0","Vendor":"${vendor}","Version":"${version}","ShortDescription":"${description}","URL":"${url}"}

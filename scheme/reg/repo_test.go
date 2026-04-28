@@ -13,10 +13,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/internal/reqresp"
-	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/config"
+	"github.com/csirmazbendeguz/regclient/internal/reqresp"
+	"github.com/csirmazbendeguz/regclient/scheme"
+	"github.com/csirmazbendeguz/regclient/types/errs"
 )
 
 func TestRepo(t *testing.T) {

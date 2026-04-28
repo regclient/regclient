@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/pkg/template"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 type refOpts struct {

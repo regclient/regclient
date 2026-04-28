@@ -20,21 +20,21 @@ import (
 	"github.com/robfig/cron/v3"
 	"github.com/spf13/cobra"
 
-	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/internal/cobradoc"
-	"github.com/regclient/regclient/internal/pqueue"
-	"github.com/regclient/regclient/internal/semver"
-	"github.com/regclient/regclient/internal/version"
-	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/scheme/reg"
-	"github.com/regclient/regclient/types"
-	"github.com/regclient/regclient/types/descriptor"
-	"github.com/regclient/regclient/types/errs"
-	"github.com/regclient/regclient/types/manifest"
-	"github.com/regclient/regclient/types/platform"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient"
+	"github.com/csirmazbendeguz/regclient/config"
+	"github.com/csirmazbendeguz/regclient/internal/cobradoc"
+	"github.com/csirmazbendeguz/regclient/internal/pqueue"
+	"github.com/csirmazbendeguz/regclient/internal/semver"
+	"github.com/csirmazbendeguz/regclient/internal/version"
+	"github.com/csirmazbendeguz/regclient/pkg/template"
+	"github.com/csirmazbendeguz/regclient/scheme"
+	"github.com/csirmazbendeguz/regclient/scheme/reg"
+	"github.com/csirmazbendeguz/regclient/types"
+	"github.com/csirmazbendeguz/regclient/types/descriptor"
+	"github.com/csirmazbendeguz/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/manifest"
+	"github.com/csirmazbendeguz/regclient/types/platform"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 const (
@@ -73,7 +73,7 @@ func NewRootCmd() (*cobra.Command, *rootOpts) {
 		Use:   "regsync <cmd>",
 		Short: "Utility for mirroring docker repositories",
 		Long: `Utility for mirroring docker repositories
-More details at <https://github.com/regclient/regclient>`,
+More details at <https://github.com/csirmazbendeguz/regclient>`,
 		SilenceUsage:      true,
 		SilenceErrors:     true,
 		PersistentPreRunE: opts.rootPreRun,

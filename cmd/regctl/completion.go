@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/regclient/regclient/types/mediatype"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/types/mediatype"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 type completeFunc func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective)

@@ -1,14 +1,14 @@
 # regclient
 
-[![Go Workflow Status](https://img.shields.io/github/actions/workflow/status/regclient/regclient/go.yml?branch=main&label=Go%20build)](https://github.com/regclient/regclient/actions/workflows/go.yml)
-[![Docker Workflow Status](https://img.shields.io/github/actions/workflow/status/regclient/regclient/docker.yml?branch=main&label=Docker%20build)](https://github.com/regclient/regclient/actions/workflows/docker.yml)
-[![Dependency Workflow Status](https://img.shields.io/github/actions/workflow/status/regclient/regclient/version-check.yml?branch=main&label=Dependency%20check)](https://github.com/regclient/regclient/actions/workflows/version-check.yml)
-[![Vulnerability Workflow Status](https://img.shields.io/github/actions/workflow/status/regclient/regclient/vulnscans.yml?branch=main&label=Vulnerability%20check)](https://github.com/regclient/regclient/actions/workflows/vulnscans.yml)
+[![Go Workflow Status](https://img.shields.io/github/actions/workflow/status/regclient/regclient/go.yml?branch=main&label=Go%20build)](https://github.com/csirmazbendeguz/regclient/actions/workflows/go.yml)
+[![Docker Workflow Status](https://img.shields.io/github/actions/workflow/status/regclient/regclient/docker.yml?branch=main&label=Docker%20build)](https://github.com/csirmazbendeguz/regclient/actions/workflows/docker.yml)
+[![Dependency Workflow Status](https://img.shields.io/github/actions/workflow/status/regclient/regclient/version-check.yml?branch=main&label=Dependency%20check)](https://github.com/csirmazbendeguz/regclient/actions/workflows/version-check.yml)
+[![Vulnerability Workflow Status](https://img.shields.io/github/actions/workflow/status/regclient/regclient/vulnscans.yml?branch=main&label=Vulnerability%20check)](https://github.com/csirmazbendeguz/regclient/actions/workflows/vulnscans.yml)
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/regclient/regclient.svg)](https://pkg.go.dev/github.com/regclient/regclient)
+[![Go Reference](https://pkg.go.dev/badge/github.com/csirmazbendeguz/regclient.svg)](https://pkg.go.dev/github.com/csirmazbendeguz/regclient)
 ![License](https://img.shields.io/github/license/regclient/regclient)
-[![Go Report Card](https://goreportcard.com/badge/github.com/regclient/regclient)](https://goreportcard.com/report/github.com/regclient/regclient)
-[![GitHub Downloads](https://img.shields.io/github/downloads/regclient/regclient/total?label=GitHub%20downloads)](https://github.com/regclient/regclient/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/csirmazbendeguz/regclient)](https://goreportcard.com/report/github.com/csirmazbendeguz/regclient)
+[![GitHub Downloads](https://img.shields.io/github/downloads/regclient/regclient/total?label=GitHub%20downloads)](https://github.com/csirmazbendeguz/regclient/releases)
 
 regclient is a client interface to OCI conformant registries and content shipped with the OCI Image Layout.
 It includes a Go library and several CLI commands.
@@ -40,7 +40,7 @@ It includes a Go library and several CLI commands.
 - Automatically import logins from the docker CLI, and registry certificates from the docker engine.
 - Automatic retry, and fallback to a chunked blob push, when network issues are encountered.
 
-The full Go references is available on [pkg.go.dev](https://pkg.go.dev/github.com/regclient/regclient).
+The full Go references is available on [pkg.go.dev](https://pkg.go.dev/github.com/csirmazbendeguz/regclient).
 
 ## regctl Features
 
@@ -109,7 +109,7 @@ See the [project documentation](https://regclient.org/usage/).
 
 ## Contributors
 
-<a href="https://github.com/regclient/regclient/graphs/contributors">
+<a href="https://github.com/csirmazbendeguz/regclient/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=regclient/regclient" alt="contributor list"/>
 </a>
 

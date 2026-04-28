@@ -7,12 +7,12 @@
 package regclient
 
 import (
-	rcTop "github.com/regclient/regclient"
-	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/internal/reghttp"
-	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types/repo"
-	"github.com/regclient/regclient/types/tag"
+	rcTop "github.com/csirmazbendeguz/regclient"
+	"github.com/csirmazbendeguz/regclient/config"
+	"github.com/csirmazbendeguz/regclient/internal/reghttp"
+	"github.com/csirmazbendeguz/regclient/scheme"
+	"github.com/csirmazbendeguz/regclient/types/repo"
+	"github.com/csirmazbendeguz/regclient/types/tag"
 )
 
 const (
@@ -28,7 +28,7 @@ const (
 
 // VCSRef is injected from a build flag, used to version the UserAgent header
 //
-// Deprecated: this should now be set using github.com/regclient/regclient/internal/version.vcsTag.
+// Deprecated: this should now be set using github.com/csirmazbendeguz/regclient/internal/version.vcsTag.
 var VCSRef = "unknown"
 
 type (

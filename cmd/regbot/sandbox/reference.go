@@ -3,7 +3,7 @@ package sandbox
 import (
 	lua "github.com/yuin/gopher-lua"
 
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 func setupReference(s *Sandbox) {

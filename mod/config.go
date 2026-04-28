@@ -11,10 +11,10 @@ import (
 
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/types/blob"
-	"github.com/regclient/regclient/types/platform"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient"
+	"github.com/csirmazbendeguz/regclient/types/blob"
+	"github.com/csirmazbendeguz/regclient/types/platform"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 // WithBuildArgRm removes a build arg from the config history.

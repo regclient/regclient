@@ -1,7 +1,7 @@
 package auth
 
 import (
-	"github.com/regclient/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/errs"
 )
 
 var (

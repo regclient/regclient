@@ -3,8 +3,8 @@ package regclient
 import (
 	"context"
 
-	"github.com/regclient/regclient/types/ping"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/types/ping"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 // Ping verifies access to a registry or equivalent.

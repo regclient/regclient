@@ -12,13 +12,13 @@ import (
 
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/types/blob"
-	"github.com/regclient/regclient/types/descriptor"
-	"github.com/regclient/regclient/types/errs"
-	"github.com/regclient/regclient/types/manifest"
-	v1 "github.com/regclient/regclient/types/oci/v1"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient"
+	"github.com/csirmazbendeguz/regclient/types/blob"
+	"github.com/csirmazbendeguz/regclient/types/descriptor"
+	"github.com/csirmazbendeguz/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/manifest"
+	v1 "github.com/csirmazbendeguz/regclient/types/oci/v1"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 type changes int

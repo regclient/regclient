@@ -11,7 +11,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/spf13/cobra"
 
-	"github.com/regclient/regclient/pkg/template"
+	"github.com/csirmazbendeguz/regclient/pkg/template"
 )
 
 type digestOpts struct {

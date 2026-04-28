@@ -5,7 +5,7 @@
 
 package regclient
 
-import "github.com/regclient/regclient/types/mediatype"
+import "github.com/csirmazbendeguz/regclient/types/mediatype"
 
 var (
 	// MediaTypeDocker1Manifest

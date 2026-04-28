@@ -8,9 +8,9 @@ import (
 
 	"github.com/goccy/go-yaml"
 
-	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/types/mediatype"
+	"github.com/csirmazbendeguz/regclient/config"
+	"github.com/csirmazbendeguz/regclient/pkg/template"
+	"github.com/csirmazbendeguz/regclient/types/mediatype"
 )
 
 // delay checking for at least 5 minutes when rate limit is exceeded

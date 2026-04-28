@@ -5,15 +5,15 @@ import (
 	"context"
 	"io"
 
-	"github.com/regclient/regclient/internal/pqueue"
-	"github.com/regclient/regclient/internal/reqmeta"
-	"github.com/regclient/regclient/types/blob"
-	"github.com/regclient/regclient/types/descriptor"
-	"github.com/regclient/regclient/types/manifest"
-	"github.com/regclient/regclient/types/ping"
-	"github.com/regclient/regclient/types/ref"
-	"github.com/regclient/regclient/types/referrer"
-	"github.com/regclient/regclient/types/tag"
+	"github.com/csirmazbendeguz/regclient/internal/pqueue"
+	"github.com/csirmazbendeguz/regclient/internal/reqmeta"
+	"github.com/csirmazbendeguz/regclient/types/blob"
+	"github.com/csirmazbendeguz/regclient/types/descriptor"
+	"github.com/csirmazbendeguz/regclient/types/manifest"
+	"github.com/csirmazbendeguz/regclient/types/ping"
+	"github.com/csirmazbendeguz/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/types/referrer"
+	"github.com/csirmazbendeguz/regclient/types/tag"
 )
 
 // API is used to interface between different methods to store images.

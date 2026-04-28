@@ -10,8 +10,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/regclient/regclient/internal/conffile"
-	"github.com/regclient/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/internal/conffile"
+	"github.com/csirmazbendeguz/regclient/types/errs"
 )
 
 const (

@@ -12,11 +12,11 @@ import (
 
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient/internal/copyfs"
-	"github.com/regclient/regclient/types/manifest"
-	"github.com/regclient/regclient/types/mediatype"
-	v1 "github.com/regclient/regclient/types/oci/v1"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/internal/copyfs"
+	"github.com/csirmazbendeguz/regclient/types/manifest"
+	"github.com/csirmazbendeguz/regclient/types/mediatype"
+	v1 "github.com/csirmazbendeguz/regclient/types/oci/v1"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 func TestManifest(t *testing.T) {

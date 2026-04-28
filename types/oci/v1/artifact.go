@@ -1,6 +1,6 @@
 package v1
 
-import "github.com/regclient/regclient/types/descriptor"
+import "github.com/csirmazbendeguz/regclient/types/descriptor"
 
 // ArtifactManifest EXPERIMENTAL defines an OCI Artifact
 type ArtifactManifest struct {

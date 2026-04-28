@@ -8,14 +8,14 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/internal/cobradoc"
-	"github.com/regclient/regclient/internal/strparse"
-	"github.com/regclient/regclient/internal/version"
-	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/scheme/reg"
-	"github.com/regclient/regclient/types"
+	"github.com/csirmazbendeguz/regclient"
+	"github.com/csirmazbendeguz/regclient/config"
+	"github.com/csirmazbendeguz/regclient/internal/cobradoc"
+	"github.com/csirmazbendeguz/regclient/internal/strparse"
+	"github.com/csirmazbendeguz/regclient/internal/version"
+	"github.com/csirmazbendeguz/regclient/pkg/template"
+	"github.com/csirmazbendeguz/regclient/scheme/reg"
+	"github.com/csirmazbendeguz/regclient/types"
 )
 
 const (

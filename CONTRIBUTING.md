@@ -6,7 +6,7 @@ Please see [SECURITY.md](security.md) for the process to report security issues.
 
 ## Reporting other issues
 
-Please search for similar issues and if none are seen, report an issue at [github.com/regclient/regclient/issues](https://github.com/regclient/regclient/issues).
+Please search for similar issues and if none are seen, report an issue at [github.com/csirmazbendeguz/regclient/issues](https://github.com/csirmazbendeguz/regclient/issues).
 
 ## Code style
 

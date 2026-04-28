@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/regclient/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/errs"
 )
 
 var testDigest = "sha256:15f840677a5e245d9ea199eb9b026b1539208a5183621dced7b469f6aa678115"

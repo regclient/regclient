@@ -13,11 +13,11 @@ import (
 	"github.com/olareg/olareg"
 	oConfig "github.com/olareg/olareg/config"
 
-	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/internal/copyfs"
-	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types/descriptor"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/config"
+	"github.com/csirmazbendeguz/regclient/internal/copyfs"
+	"github.com/csirmazbendeguz/regclient/scheme"
+	"github.com/csirmazbendeguz/regclient/types/descriptor"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 func TestReferrerList(t *testing.T) {

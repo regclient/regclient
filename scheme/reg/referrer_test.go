@@ -14,15 +14,15 @@ import (
 
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/internal/reqresp"
-	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types/descriptor"
-	"github.com/regclient/regclient/types/docker/schema2"
-	"github.com/regclient/regclient/types/manifest"
-	"github.com/regclient/regclient/types/mediatype"
-	v1 "github.com/regclient/regclient/types/oci/v1"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/config"
+	"github.com/csirmazbendeguz/regclient/internal/reqresp"
+	"github.com/csirmazbendeguz/regclient/scheme"
+	"github.com/csirmazbendeguz/regclient/types/descriptor"
+	"github.com/csirmazbendeguz/regclient/types/docker/schema2"
+	"github.com/csirmazbendeguz/regclient/types/manifest"
+	"github.com/csirmazbendeguz/regclient/types/mediatype"
+	v1 "github.com/csirmazbendeguz/regclient/types/oci/v1"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 func TestReferrer(t *testing.T) {

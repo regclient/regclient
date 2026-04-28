@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/regclient/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/errs"
 )
 
 type Cache[k comparable, v any] struct {

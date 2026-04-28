@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/regclient/regclient/internal/timejson"
+	"github.com/csirmazbendeguz/regclient/internal/timejson"
 )
 
 func TestConfig(t *testing.T) {

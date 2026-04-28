@@ -9,8 +9,8 @@ import (
 
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient/types/descriptor"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/types/descriptor"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 // Common was previously an interface. A type alias is provided for upgrades.

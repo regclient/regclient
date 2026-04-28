@@ -8,14 +8,14 @@ import (
 
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/types"
-	"github.com/regclient/regclient/types/docker/schema2"
-	"github.com/regclient/regclient/types/errs"
-	"github.com/regclient/regclient/types/manifest"
-	"github.com/regclient/regclient/types/mediatype"
-	"github.com/regclient/regclient/types/platform"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient"
+	"github.com/csirmazbendeguz/regclient/types"
+	"github.com/csirmazbendeguz/regclient/types/docker/schema2"
+	"github.com/csirmazbendeguz/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/manifest"
+	"github.com/csirmazbendeguz/regclient/types/mediatype"
+	"github.com/csirmazbendeguz/regclient/types/platform"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 // WithAnnotation adds an annotation, or deletes it if the value is set to an empty string.

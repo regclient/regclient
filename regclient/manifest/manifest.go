@@ -7,11 +7,11 @@ package manifest
 import (
 	"net/http"
 
-	topTypes "github.com/regclient/regclient/types"
-	"github.com/regclient/regclient/types/errs"
-	topManifest "github.com/regclient/regclient/types/manifest"
-	"github.com/regclient/regclient/types/mediatype"
-	"github.com/regclient/regclient/types/ref"
+	topTypes "github.com/csirmazbendeguz/regclient/types"
+	"github.com/csirmazbendeguz/regclient/types/errs"
+	topManifest "github.com/csirmazbendeguz/regclient/types/manifest"
+	"github.com/csirmazbendeguz/regclient/types/mediatype"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 const (

@@ -18,12 +18,12 @@ import (
 	"github.com/olareg/olareg"
 	oConfig "github.com/olareg/olareg/config"
 
-	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/internal/copyfs"
-	"github.com/regclient/regclient/scheme/reg"
-	"github.com/regclient/regclient/types/blob"
-	"github.com/regclient/regclient/types/errs"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/config"
+	"github.com/csirmazbendeguz/regclient/internal/copyfs"
+	"github.com/csirmazbendeguz/regclient/scheme/reg"
+	"github.com/csirmazbendeguz/regclient/types/blob"
+	"github.com/csirmazbendeguz/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 func TestImageCheckBase(t *testing.T) {

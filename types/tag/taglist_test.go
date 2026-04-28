@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/regclient/regclient/types/errs"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 func TestNew(t *testing.T) {

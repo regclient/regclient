@@ -18,13 +18,13 @@ import (
 
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient/internal/reghttp"
-	"github.com/regclient/regclient/internal/reqmeta"
-	"github.com/regclient/regclient/types/blob"
-	"github.com/regclient/regclient/types/descriptor"
-	"github.com/regclient/regclient/types/errs"
-	"github.com/regclient/regclient/types/ref"
-	"github.com/regclient/regclient/types/warning"
+	"github.com/csirmazbendeguz/regclient/internal/reghttp"
+	"github.com/csirmazbendeguz/regclient/internal/reqmeta"
+	"github.com/csirmazbendeguz/regclient/types/blob"
+	"github.com/csirmazbendeguz/regclient/types/descriptor"
+	"github.com/csirmazbendeguz/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/types/warning"
 )
 
 var zeroDig = digest.SHA256.FromBytes([]byte{})

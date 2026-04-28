@@ -5,7 +5,7 @@
 package config
 
 import (
-	topConfig "github.com/regclient/regclient/config"
+	topConfig "github.com/csirmazbendeguz/regclient/config"
 )
 
 type (

@@ -7,7 +7,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/regclient/regclient/internal/sloghandle"
+	"github.com/csirmazbendeguz/regclient/internal/sloghandle"
 )
 
 // WithLog configuring logging with a logrus Logger.

@@ -6,7 +6,7 @@
 package regclient
 
 import (
-	"github.com/regclient/regclient/config"
+	"github.com/csirmazbendeguz/regclient/config"
 )
 
 type (

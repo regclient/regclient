@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 func TestPing(t *testing.T) {

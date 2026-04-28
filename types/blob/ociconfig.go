@@ -8,8 +8,8 @@ import (
 	_ "crypto/sha256"
 	_ "crypto/sha512"
 
-	"github.com/regclient/regclient/types/mediatype"
-	v1 "github.com/regclient/regclient/types/oci/v1"
+	"github.com/csirmazbendeguz/regclient/types/mediatype"
+	v1 "github.com/csirmazbendeguz/regclient/types/oci/v1"
 )
 
 // OCIConfig was previously an interface. A type alias is provided for upgrading.

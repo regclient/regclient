@@ -10,11 +10,11 @@ import (
 	"os"
 	"path"
 
-	"github.com/regclient/regclient/internal/reqmeta"
-	"github.com/regclient/regclient/types/blob"
-	"github.com/regclient/regclient/types/descriptor"
-	"github.com/regclient/regclient/types/errs"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/internal/reqmeta"
+	"github.com/csirmazbendeguz/regclient/types/blob"
+	"github.com/csirmazbendeguz/regclient/types/descriptor"
+	"github.com/csirmazbendeguz/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 // BlobDelete removes a blob from the repository.

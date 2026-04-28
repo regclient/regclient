@@ -7,9 +7,9 @@ regsync is a registry synchronization utility used to update mirrors of OCI comp
 - Project website: [regclient.org](https://regclient.org)
 - Installation options: [regclient.org/install/](https://regclient.org/install/)
 - CLI Reference: [regclient.org/cli/regsync/](https://regclient.org/cli/regsync/)
-- Source: [github.com/regclient/regclient](https://github.com/regclient/regclient)
-- Releases: [github.com/regclient/regclient/releases](https://github.com/regclient/regclient/releases)
-- Contribution guidelines: [github.com/regclient/regclient - contributing.md](https://github.com/regclient/regclient/blob/main/CONTRIBUTING.md)
+- Source: [github.com/csirmazbendeguz/regclient](https://github.com/csirmazbendeguz/regclient)
+- Releases: [github.com/csirmazbendeguz/regclient/releases](https://github.com/csirmazbendeguz/regclient/releases)
+- Contribution guidelines: [github.com/csirmazbendeguz/regclient - contributing.md](https://github.com/csirmazbendeguz/regclient/blob/main/CONTRIBUTING.md)
 
 ## Available Tags
 
@@ -23,7 +23,7 @@ regsync is a registry synchronization utility used to update mirrors of OCI comp
 Scratch based images do not include a shell or any credential helpers.
 Alpine based images are based on the latest pinned alpine image at the time of release and include credential helpers for AWS and Google Cloud.
 
-Semver version values for `$ver` are based on the [GitHub tags](https://github.com/regclient/regclient/tags).
+Semver version values for `$ver` are based on the [GitHub tags](https://github.com/csirmazbendeguz/regclient/tags).
 These versions also tag major and minor versions, e.g. a release for `v0.7.1` will also tag `v0.7` and `v0`.
 
 ## Docker Quick Start

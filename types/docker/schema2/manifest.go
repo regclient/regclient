@@ -1,9 +1,9 @@
 package schema2
 
 import (
-	"github.com/regclient/regclient/types/descriptor"
-	"github.com/regclient/regclient/types/docker"
-	"github.com/regclient/regclient/types/mediatype"
+	"github.com/csirmazbendeguz/regclient/types/descriptor"
+	"github.com/csirmazbendeguz/regclient/types/docker"
+	"github.com/csirmazbendeguz/regclient/types/mediatype"
 )
 
 // ManifestSchemaVersion is a pre-configured versioned field for manifests

@@ -7,8 +7,8 @@ import (
 	"os"
 	"path"
 
-	"github.com/regclient/regclient/types/manifest"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/types/manifest"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 // Close triggers a garbage collection if the underlying path has been modified

@@ -14,12 +14,12 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/pkg/archive"
-	"github.com/regclient/regclient/types/descriptor"
-	"github.com/regclient/regclient/types/mediatype"
-	"github.com/regclient/regclient/types/ref"
-	"github.com/regclient/regclient/types/warning"
+	"github.com/csirmazbendeguz/regclient"
+	"github.com/csirmazbendeguz/regclient/pkg/archive"
+	"github.com/csirmazbendeguz/regclient/types/descriptor"
+	"github.com/csirmazbendeguz/regclient/types/mediatype"
+	"github.com/csirmazbendeguz/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/types/warning"
 )
 
 // Opts defines options for Apply

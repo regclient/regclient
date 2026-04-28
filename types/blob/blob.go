@@ -7,9 +7,9 @@ import (
 
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient/types/descriptor"
-	v1 "github.com/regclient/regclient/types/oci/v1"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/types/descriptor"
+	v1 "github.com/csirmazbendeguz/regclient/types/oci/v1"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 // Blob interface is used for returning blobs.

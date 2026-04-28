@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types/errs"
-	"github.com/regclient/regclient/types/platform"
-	"github.com/regclient/regclient/types/ref"
-	"github.com/regclient/regclient/types/referrer"
-	"github.com/regclient/regclient/types/warning"
+	"github.com/csirmazbendeguz/regclient/scheme"
+	"github.com/csirmazbendeguz/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/platform"
+	"github.com/csirmazbendeguz/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/types/referrer"
+	"github.com/csirmazbendeguz/regclient/types/warning"
 )
 
 // ReferrerList retrieves a list of referrers to a manifest.

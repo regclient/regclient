@@ -88,9 +88,9 @@ ARG VCS_VERSION
 LABEL maintainer="" \
       org.opencontainers.image.created=$BUILD_DATE \
       org.opencontainers.image.authors="regclient contributors" \
-      org.opencontainers.image.url="https://github.com/regclient/regclient" \
+      org.opencontainers.image.url="https://github.com/csirmazbendeguz/regclient" \
       org.opencontainers.image.documentation="https://regclient.org/" \
-      org.opencontainers.image.source="https://github.com/regclient/regclient" \
+      org.opencontainers.image.source="https://github.com/csirmazbendeguz/regclient" \
       org.opencontainers.image.version=$VCS_VERSION \
       org.opencontainers.image.revision=$VCS_REF \
       org.opencontainers.image.vendor="regclient" \
@@ -111,9 +111,9 @@ ARG VCS_VERSION
 LABEL maintainer="" \
       org.opencontainers.image.created=$BUILD_DATE \
       org.opencontainers.image.authors="regclient contributors" \
-      org.opencontainers.image.url="https://github.com/regclient/regclient" \
+      org.opencontainers.image.url="https://github.com/csirmazbendeguz/regclient" \
       org.opencontainers.image.documentation="https://regclient.org/" \
-      org.opencontainers.image.source="https://github.com/regclient/regclient" \
+      org.opencontainers.image.source="https://github.com/csirmazbendeguz/regclient" \
       org.opencontainers.image.version=$VCS_VERSION \
       org.opencontainers.image.revision=$VCS_REF \
       org.opencontainers.image.vendor="regclient" \

@@ -17,15 +17,15 @@ import (
 	oConfig "github.com/olareg/olareg/config"
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/internal/copyfs"
-	"github.com/regclient/regclient/pkg/archive"
-	"github.com/regclient/regclient/scheme/reg"
-	"github.com/regclient/regclient/types/errs"
-	"github.com/regclient/regclient/types/manifest"
-	"github.com/regclient/regclient/types/platform"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient"
+	"github.com/csirmazbendeguz/regclient/config"
+	"github.com/csirmazbendeguz/regclient/internal/copyfs"
+	"github.com/csirmazbendeguz/regclient/pkg/archive"
+	"github.com/csirmazbendeguz/regclient/scheme/reg"
+	"github.com/csirmazbendeguz/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/manifest"
+	"github.com/csirmazbendeguz/regclient/types/platform"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 func TestMod(t *testing.T) {

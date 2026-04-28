@@ -11,7 +11,7 @@ import (
 
 	digest "github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient/types/platform"
+	"github.com/csirmazbendeguz/regclient/types/platform"
 )
 
 // ImageConfig defines the execution parameters which should be used as a base when running a container using an image.

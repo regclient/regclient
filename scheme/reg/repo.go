@@ -9,11 +9,11 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/regclient/regclient/internal/reghttp"
-	"github.com/regclient/regclient/internal/reqmeta"
-	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types/mediatype"
-	"github.com/regclient/regclient/types/repo"
+	"github.com/csirmazbendeguz/regclient/internal/reghttp"
+	"github.com/csirmazbendeguz/regclient/internal/reqmeta"
+	"github.com/csirmazbendeguz/regclient/scheme"
+	"github.com/csirmazbendeguz/regclient/types/mediatype"
+	"github.com/csirmazbendeguz/regclient/types/repo"
 )
 
 // RepoList returns a list of repositories on a registry

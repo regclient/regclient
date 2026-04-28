@@ -4,7 +4,7 @@ IMAGES?=$(addprefix docker-,$(COMMANDS))
 ARTIFACT_PLATFORMS?=linux-amd64 linux-arm64 linux-ppc64le linux-s390x linux-riscv64 darwin-amd64 darwin-arm64 windows-amd64.exe freebsd-amd64
 ARTIFACTS?=$(foreach cmd,$(addprefix artifacts/,$(COMMANDS)),$(addprefix $(cmd)-,$(ARTIFACT_PLATFORMS)))
 IMAGE_PLATFORMS?=linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x,linux/riscv64
-VCS_REPO?="https://github.com/regclient/regclient.git"
+VCS_REPO?="https://github.com/csirmazbendeguz/regclient.git"
 VCS_REF?=$(shell git rev-list -1 HEAD)
 ifneq ($(shell git status --porcelain 2>/dev/null),)
   VCS_REF := $(VCS_REF)-dirty
@@ -21,7 +21,7 @@ VCS_VERSION?=$(shell vcs_describe="$$(git describe --all)"; \
 VCS_TAG?=$(shell git describe --tags --abbrev=0 2>/dev/null || true)
 VCS_SEC?=$(shell git log -1 --format=%ct)
 VCS_DATE?=$(shell date -d "@$(VCS_SEC)" +%Y-%m-%dT%H:%M:%SZ --utc)
-LD_FLAGS?=-s -w -extldflags -static -buildid= -X \"github.com/regclient/regclient/internal/version.vcsTag=$(VCS_TAG)\"
+LD_FLAGS?=-s -w -extldflags -static -buildid= -X \"github.com/csirmazbendeguz/regclient/internal/version.vcsTag=$(VCS_TAG)\"
 GO_BUILD_FLAGS?=-trimpath -ldflags "$(LD_FLAGS)"
 DOCKERFILE_EXT?=$(shell if docker build --help 2>/dev/null | grep -q -- '--progress'; then echo ".buildkit"; fi)
 DOCKER_ARGS?=--build-arg "VCS_REF=$(VCS_REF)" --build-arg "VCS_VERSION=$(VCS_VERSION)" --build-arg "SOURCE_DATE_EPOCH=$(VCS_SEC)"  --build-arg "BUILD_DATE=$(VCS_DATE)"

@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/regclient/regclient/pkg/template"
+	"github.com/csirmazbendeguz/regclient/pkg/template"
 )
 
 // List outputs a list of cobra commands.

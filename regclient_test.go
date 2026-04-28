@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/regclient/regclient/scheme/reg"
+	"github.com/csirmazbendeguz/regclient/scheme/reg"
 )
 
 func TestNew(t *testing.T) {
