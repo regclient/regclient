@@ -23,19 +23,19 @@ import (
 
 	digest "github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient/pkg/archive"
-	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types"
-	"github.com/regclient/regclient/types/blob"
-	"github.com/regclient/regclient/types/descriptor"
-	"github.com/regclient/regclient/types/docker/schema2"
-	"github.com/regclient/regclient/types/errs"
-	"github.com/regclient/regclient/types/manifest"
-	"github.com/regclient/regclient/types/mediatype"
-	v1 "github.com/regclient/regclient/types/oci/v1"
-	"github.com/regclient/regclient/types/platform"
-	"github.com/regclient/regclient/types/ref"
-	"github.com/regclient/regclient/types/warning"
+	"github.com/csirmazbendeguz/regclient/pkg/archive"
+	"github.com/csirmazbendeguz/regclient/scheme"
+	"github.com/csirmazbendeguz/regclient/types"
+	"github.com/csirmazbendeguz/regclient/types/blob"
+	"github.com/csirmazbendeguz/regclient/types/descriptor"
+	"github.com/csirmazbendeguz/regclient/types/docker/schema2"
+	"github.com/csirmazbendeguz/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/manifest"
+	"github.com/csirmazbendeguz/regclient/types/mediatype"
+	v1 "github.com/csirmazbendeguz/regclient/types/oci/v1"
+	"github.com/csirmazbendeguz/regclient/types/platform"
+	"github.com/csirmazbendeguz/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/types/warning"
 )
 
 const (

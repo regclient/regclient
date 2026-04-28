@@ -19,11 +19,11 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/spf13/cobra"
 
-	"github.com/regclient/regclient/internal/diff"
-	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/types/descriptor"
-	"github.com/regclient/regclient/types/ref"
-	"github.com/regclient/regclient/types/warning"
+	"github.com/csirmazbendeguz/regclient/internal/diff"
+	"github.com/csirmazbendeguz/regclient/pkg/template"
+	"github.com/csirmazbendeguz/regclient/types/descriptor"
+	"github.com/csirmazbendeguz/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/types/warning"
 )
 
 type blopOpts struct {

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/regclient/regclient/types/ping"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/types/ping"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 // Ping for an ocidir verifies access to read the path.

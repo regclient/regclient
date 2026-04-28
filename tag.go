@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/types/errs"
-	"github.com/regclient/regclient/types/ref"
-	"github.com/regclient/regclient/types/tag"
+	"github.com/csirmazbendeguz/regclient/scheme"
+	"github.com/csirmazbendeguz/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/types/tag"
 )
 
 // TagDelete deletes a tag from the registry. Since there's no API for this,

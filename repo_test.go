@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/regclient/regclient/scheme/reg"
-	"github.com/regclient/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/scheme/reg"
+	"github.com/csirmazbendeguz/regclient/types/errs"
 )
 
 func TestRepoList(t *testing.T) {

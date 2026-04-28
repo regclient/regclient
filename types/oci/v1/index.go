@@ -1,8 +1,8 @@
 package v1
 
 import (
-	"github.com/regclient/regclient/types/descriptor"
-	"github.com/regclient/regclient/types/oci"
+	"github.com/csirmazbendeguz/regclient/types/descriptor"
+	"github.com/csirmazbendeguz/regclient/types/oci"
 )
 
 // IndexSchemaVersion is a pre-configured versioned field for manifests

@@ -47,7 +47,7 @@ export PATH="$PATH:${git_root}/bin"
 now_date="$(date +%Y-%m-%dT%H:%M:%SZ --utc)"
 vcs_sec="$(git log -1 --format=%ct)"
 vcs_date="$(date -d "@${vcs_sec}" +%Y-%m-%dT%H:%M:%SZ --utc)"
-vcs_repo="https://github.com/regclient/regclient.git"
+vcs_repo="https://github.com/csirmazbendeguz/regclient.git"
 vcs_sha="$(git rev-list -1 HEAD)"
 if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
   vcs_sha="${vcs_sha}-dirty"

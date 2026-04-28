@@ -22,8 +22,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/regclient/regclient/internal/strparse"
-	"github.com/regclient/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/internal/strparse"
+	"github.com/csirmazbendeguz/regclient/types/errs"
 )
 
 var partRE = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)

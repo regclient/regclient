@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/regclient/regclient"
+	"github.com/csirmazbendeguz/regclient"
 )
 
 type cobraTestOpts struct {

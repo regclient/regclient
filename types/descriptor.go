@@ -1,6 +1,6 @@
 package types
 
-import "github.com/regclient/regclient/types/descriptor"
+import "github.com/csirmazbendeguz/regclient/types/descriptor"
 
 type (
 	// Descriptor is used in manifests to refer to content by media type, size, and digest.

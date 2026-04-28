@@ -4,7 +4,7 @@ package strparse
 import (
 	"fmt"
 
-	"github.com/regclient/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/errs"
 )
 
 // SplitCSKV splits a comma separated key=value list into a map

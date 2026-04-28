@@ -6,8 +6,8 @@ import (
 
 	lua "github.com/yuin/gopher-lua"
 
-	"github.com/regclient/regclient/cmd/regbot/internal/go2lua"
-	"github.com/regclient/regclient/scheme"
+	"github.com/csirmazbendeguz/regclient/cmd/regbot/internal/go2lua"
+	"github.com/csirmazbendeguz/regclient/scheme"
 )
 
 func setupRepo(s *Sandbox) {

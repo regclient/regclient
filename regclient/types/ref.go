@@ -6,7 +6,7 @@
 package types
 
 import (
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 // Ref is used for a reference to an image or repository.

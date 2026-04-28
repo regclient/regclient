@@ -18,16 +18,16 @@ import (
 	oConfig "github.com/olareg/olareg/config"
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/internal/reqresp"
-	"github.com/regclient/regclient/scheme/reg"
-	"github.com/regclient/regclient/types/descriptor"
-	"github.com/regclient/regclient/types/docker/schema2"
-	"github.com/regclient/regclient/types/errs"
-	"github.com/regclient/regclient/types/manifest"
-	"github.com/regclient/regclient/types/mediatype"
-	"github.com/regclient/regclient/types/platform"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/config"
+	"github.com/csirmazbendeguz/regclient/internal/reqresp"
+	"github.com/csirmazbendeguz/regclient/scheme/reg"
+	"github.com/csirmazbendeguz/regclient/types/descriptor"
+	"github.com/csirmazbendeguz/regclient/types/docker/schema2"
+	"github.com/csirmazbendeguz/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/manifest"
+	"github.com/csirmazbendeguz/regclient/types/mediatype"
+	"github.com/csirmazbendeguz/regclient/types/platform"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 func TestManifest(t *testing.T) {

@@ -5,7 +5,7 @@
 package blob
 
 import (
-	topBlob "github.com/regclient/regclient/types/blob"
+	topBlob "github.com/csirmazbendeguz/regclient/types/blob"
 )
 
 type (

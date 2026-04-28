@@ -11,20 +11,20 @@ import (
 	"github.com/robfig/cron/v3"
 	"github.com/spf13/cobra"
 
-	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/cmd/regbot/sandbox"
-	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/internal/cobradoc"
-	"github.com/regclient/regclient/internal/pqueue"
-	"github.com/regclient/regclient/internal/version"
-	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/scheme/reg"
-	"github.com/regclient/regclient/types"
+	"github.com/csirmazbendeguz/regclient"
+	"github.com/csirmazbendeguz/regclient/cmd/regbot/sandbox"
+	"github.com/csirmazbendeguz/regclient/config"
+	"github.com/csirmazbendeguz/regclient/internal/cobradoc"
+	"github.com/csirmazbendeguz/regclient/internal/pqueue"
+	"github.com/csirmazbendeguz/regclient/internal/version"
+	"github.com/csirmazbendeguz/regclient/pkg/template"
+	"github.com/csirmazbendeguz/regclient/scheme/reg"
+	"github.com/csirmazbendeguz/regclient/types"
 )
 
 const (
 	usageDesc = `Utility for automating repository actions
-More details at <https://github.com/regclient/regclient>`
+More details at <https://github.com/csirmazbendeguz/regclient>`
 	// UserAgent sets the header on http requests
 	UserAgent = "regclient/regbot"
 )

@@ -14,9 +14,9 @@ import (
 
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient/types/errs"
-	"github.com/regclient/regclient/types/mediatype"
-	"github.com/regclient/regclient/types/platform"
+	"github.com/csirmazbendeguz/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/mediatype"
+	"github.com/csirmazbendeguz/regclient/types/platform"
 )
 
 func TestCompare(t *testing.T) {

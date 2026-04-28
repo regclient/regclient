@@ -12,7 +12,7 @@ import (
 	"github.com/olareg/olareg"
 	oConfig "github.com/olareg/olareg/config"
 
-	"github.com/regclient/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/errs"
 )
 
 func TestRegistry(t *testing.T) {

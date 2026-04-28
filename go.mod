@@ -1,4 +1,4 @@
-module github.com/regclient/regclient
+module github.com/csirmazbendeguz/regclient
 
 go 1.25.0
 

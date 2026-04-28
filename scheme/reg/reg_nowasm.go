@@ -7,8 +7,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/regclient/regclient/internal/reghttp"
-	"github.com/regclient/regclient/internal/sloghandle"
+	"github.com/csirmazbendeguz/regclient/internal/reghttp"
+	"github.com/csirmazbendeguz/regclient/internal/sloghandle"
 )
 
 // WithLog injects a logrus Logger configuration

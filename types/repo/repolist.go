@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/regclient/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/errs"
 )
 
 // RepoList is the response for a repository listing.

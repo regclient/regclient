@@ -1,7 +1,7 @@
 package types
 
 import (
-	"github.com/regclient/regclient/types/mediatype"
+	"github.com/csirmazbendeguz/regclient/types/mediatype"
 )
 
 const (

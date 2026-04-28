@@ -10,17 +10,17 @@ import (
 	"github.com/opencontainers/go-digest"
 	"github.com/spf13/cobra"
 
-	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/types/descriptor"
-	"github.com/regclient/regclient/types/docker/schema2"
-	"github.com/regclient/regclient/types/errs"
-	"github.com/regclient/regclient/types/manifest"
-	"github.com/regclient/regclient/types/mediatype"
-	v1 "github.com/regclient/regclient/types/oci/v1"
-	"github.com/regclient/regclient/types/platform"
-	"github.com/regclient/regclient/types/ref"
-	"github.com/regclient/regclient/types/warning"
+	"github.com/csirmazbendeguz/regclient"
+	"github.com/csirmazbendeguz/regclient/pkg/template"
+	"github.com/csirmazbendeguz/regclient/types/descriptor"
+	"github.com/csirmazbendeguz/regclient/types/docker/schema2"
+	"github.com/csirmazbendeguz/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/manifest"
+	"github.com/csirmazbendeguz/regclient/types/mediatype"
+	v1 "github.com/csirmazbendeguz/regclient/types/oci/v1"
+	"github.com/csirmazbendeguz/regclient/types/platform"
+	"github.com/csirmazbendeguz/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/types/warning"
 )
 
 var indexKnownTypes = []string{

@@ -27,13 +27,13 @@ import (
 	_ "crypto/sha256"
 	_ "crypto/sha512"
 
-	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/internal/auth"
-	"github.com/regclient/regclient/internal/pqueue"
-	"github.com/regclient/regclient/internal/reqmeta"
-	"github.com/regclient/regclient/types"
-	"github.com/regclient/regclient/types/errs"
-	"github.com/regclient/regclient/types/warning"
+	"github.com/csirmazbendeguz/regclient/config"
+	"github.com/csirmazbendeguz/regclient/internal/auth"
+	"github.com/csirmazbendeguz/regclient/internal/pqueue"
+	"github.com/csirmazbendeguz/regclient/internal/reqmeta"
+	"github.com/csirmazbendeguz/regclient/types"
+	"github.com/csirmazbendeguz/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/warning"
 )
 
 var (

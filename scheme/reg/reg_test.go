@@ -1,6 +1,6 @@
 package reg
 
-import "github.com/regclient/regclient/scheme"
+import "github.com/csirmazbendeguz/regclient/scheme"
 
 // Verify Reg implements various interfaces.
 var (

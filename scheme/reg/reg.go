@@ -7,14 +7,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/internal/cache"
-	"github.com/regclient/regclient/internal/pqueue"
-	"github.com/regclient/regclient/internal/reghttp"
-	"github.com/regclient/regclient/internal/reqmeta"
-	"github.com/regclient/regclient/types/manifest"
-	"github.com/regclient/regclient/types/ref"
-	"github.com/regclient/regclient/types/referrer"
+	"github.com/csirmazbendeguz/regclient/config"
+	"github.com/csirmazbendeguz/regclient/internal/cache"
+	"github.com/csirmazbendeguz/regclient/internal/pqueue"
+	"github.com/csirmazbendeguz/regclient/internal/reghttp"
+	"github.com/csirmazbendeguz/regclient/internal/reqmeta"
+	"github.com/csirmazbendeguz/regclient/types/manifest"
+	"github.com/csirmazbendeguz/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/types/referrer"
 )
 
 const (

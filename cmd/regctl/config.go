@@ -10,9 +10,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/internal/conffile"
-	"github.com/regclient/regclient/pkg/template"
+	"github.com/csirmazbendeguz/regclient/config"
+	"github.com/csirmazbendeguz/regclient/internal/conffile"
+	"github.com/csirmazbendeguz/regclient/pkg/template"
 )
 
 var (

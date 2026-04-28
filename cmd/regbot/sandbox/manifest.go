@@ -7,11 +7,11 @@ import (
 
 	lua "github.com/yuin/gopher-lua"
 
-	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/cmd/regbot/internal/go2lua"
-	"github.com/regclient/regclient/types/manifest"
-	"github.com/regclient/regclient/types/platform"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient"
+	"github.com/csirmazbendeguz/regclient/cmd/regbot/internal/go2lua"
+	"github.com/csirmazbendeguz/regclient/types/manifest"
+	"github.com/csirmazbendeguz/regclient/types/platform"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 type sbManifest struct {

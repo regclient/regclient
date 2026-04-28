@@ -12,9 +12,9 @@ import (
 
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient/internal/limitread"
-	"github.com/regclient/regclient/types/errs"
-	"github.com/regclient/regclient/types/mediatype"
+	"github.com/csirmazbendeguz/regclient/internal/limitread"
+	"github.com/csirmazbendeguz/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/mediatype"
 )
 
 // Reader was previously an interface. A type alias is provided for upgrading.

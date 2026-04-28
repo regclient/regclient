@@ -15,11 +15,11 @@ import (
 	oConfig "github.com/olareg/olareg/config"
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/scheme/reg"
-	"github.com/regclient/regclient/types/errs"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient"
+	"github.com/csirmazbendeguz/regclient/config"
+	"github.com/csirmazbendeguz/regclient/scheme/reg"
+	"github.com/csirmazbendeguz/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 func TestManifestHead(t *testing.T) {

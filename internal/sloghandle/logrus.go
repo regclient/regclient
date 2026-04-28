@@ -10,7 +10,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/regclient/regclient/types"
+	"github.com/csirmazbendeguz/regclient/types"
 )
 
 func Logrus(logger *logrus.Logger) *logrusHandler {

@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/regclient/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/errs"
 )
 
 const (

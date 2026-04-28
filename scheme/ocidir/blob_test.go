@@ -10,10 +10,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/regclient/regclient/internal/copyfs"
-	"github.com/regclient/regclient/types/descriptor"
-	"github.com/regclient/regclient/types/manifest"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/internal/copyfs"
+	"github.com/csirmazbendeguz/regclient/types/descriptor"
+	"github.com/csirmazbendeguz/regclient/types/manifest"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 func TestBlob(t *testing.T) {

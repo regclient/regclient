@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/regclient/regclient/internal/timejson"
+	"github.com/csirmazbendeguz/regclient/internal/timejson"
 )
 
 // TLSConf specifies whether TLS is enabled and verified for a host.

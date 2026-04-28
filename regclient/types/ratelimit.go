@@ -6,7 +6,7 @@
 package types
 
 import (
-	topTypes "github.com/regclient/regclient/types"
+	topTypes "github.com/csirmazbendeguz/regclient/types"
 )
 
 // RateLimit is returned from some http requests

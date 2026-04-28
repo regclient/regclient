@@ -10,8 +10,8 @@ import (
 	"github.com/docker/libtrust"
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient/types/docker"
-	"github.com/regclient/regclient/types/mediatype"
+	"github.com/csirmazbendeguz/regclient/types/docker"
+	"github.com/csirmazbendeguz/regclient/types/mediatype"
 )
 
 var (

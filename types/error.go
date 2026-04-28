@@ -1,6 +1,6 @@
 package types
 
-import "github.com/regclient/regclient/types/errs"
+import "github.com/csirmazbendeguz/regclient/types/errs"
 
 var (
 	// ErrAllRequestsFailed when there are no mirrors left to try

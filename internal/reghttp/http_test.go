@@ -16,10 +16,10 @@ import (
 
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/internal/reqresp"
-	"github.com/regclient/regclient/types/errs"
-	"github.com/regclient/regclient/types/warning"
+	"github.com/csirmazbendeguz/regclient/config"
+	"github.com/csirmazbendeguz/regclient/internal/reqresp"
+	"github.com/csirmazbendeguz/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/warning"
 )
 
 // TODO: test for race conditions

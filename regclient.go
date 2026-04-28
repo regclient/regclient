@@ -7,11 +7,11 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/internal/version"
-	"github.com/regclient/regclient/scheme"
-	"github.com/regclient/regclient/scheme/ocidir"
-	"github.com/regclient/regclient/scheme/reg"
+	"github.com/csirmazbendeguz/regclient/config"
+	"github.com/csirmazbendeguz/regclient/internal/version"
+	"github.com/csirmazbendeguz/regclient/scheme"
+	"github.com/csirmazbendeguz/regclient/scheme/ocidir"
+	"github.com/csirmazbendeguz/regclient/scheme/reg"
 )
 
 const (

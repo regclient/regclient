@@ -16,10 +16,10 @@ import (
 	"github.com/olareg/olareg"
 	oConfig "github.com/olareg/olareg/config"
 
-	"github.com/regclient/regclient"
-	"github.com/regclient/regclient/config"
-	"github.com/regclient/regclient/internal/pqueue"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient"
+	"github.com/csirmazbendeguz/regclient/config"
+	"github.com/csirmazbendeguz/regclient/internal/pqueue"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 func TestRegbot(t *testing.T) {

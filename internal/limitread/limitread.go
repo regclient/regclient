@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/regclient/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/errs"
 )
 
 type LimitRead struct {

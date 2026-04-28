@@ -14,10 +14,10 @@ import (
 
 	"github.com/opencontainers/go-digest"
 
-	"github.com/regclient/regclient/internal/units"
-	"github.com/regclient/regclient/types/errs"
-	"github.com/regclient/regclient/types/mediatype"
-	"github.com/regclient/regclient/types/platform"
+	"github.com/csirmazbendeguz/regclient/internal/units"
+	"github.com/csirmazbendeguz/regclient/types/errs"
+	"github.com/csirmazbendeguz/regclient/types/mediatype"
+	"github.com/csirmazbendeguz/regclient/types/platform"
 )
 
 // Descriptor is used in manifests to refer to content by media type, size, and digest.

@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/regclient/regclient/internal/reghttp"
-	"github.com/regclient/regclient/internal/reqmeta"
-	"github.com/regclient/regclient/types/ping"
-	"github.com/regclient/regclient/types/ref"
+	"github.com/csirmazbendeguz/regclient/internal/reghttp"
+	"github.com/csirmazbendeguz/regclient/internal/reqmeta"
+	"github.com/csirmazbendeguz/regclient/types/ping"
+	"github.com/csirmazbendeguz/regclient/types/ref"
 )
 
 // Ping queries the /v2/ API of the registry to verify connectivity and access.
