@@ -1,4 +1,4 @@
-package main
+package root
 
 import (
 	"context"
@@ -152,6 +152,10 @@ sync step is finished.`,
 		cobradoc.NewCmd(cmd.Name(), "cli-doc"),
 	)
 	return cmd, &opts
+}
+
+func (opts *rootOpts) GetLog() *slog.Logger {
+	return opts.log
 }
 
 func (opts *rootOpts) rootPreRun(cmd *cobra.Command, args []string) error {
