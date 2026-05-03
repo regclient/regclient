@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7
 	github.com/goccy/go-yaml v1.19.2
-	github.com/klauspost/compress v1.18.5
+	github.com/klauspost/compress v1.18.6
 	github.com/olareg/olareg v0.2.1
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/robfig/cron/v3 v3.0.1
