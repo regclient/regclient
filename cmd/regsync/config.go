@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/goccy/go-yaml"
+	"github.com/regclient/regclient/pkg/regsync"
 
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/pkg/template"
@@ -26,30 +27,30 @@ var (
 
 // Config is parsed configuration file for regsync
 type Config struct {
-	Version  int            `yaml:"version" json:"version"`
-	Creds    []config.Host  `yaml:"creds" json:"creds"`
-	Defaults ConfigDefaults `yaml:"defaults" json:"defaults"`
-	Sync     []ConfigSync   `yaml:"sync" json:"sync"`
+	Version  int                  `yaml:"version" json:"version"`
+	Creds    []config.Host        `yaml:"creds" json:"creds"`
+	Defaults ConfigDefaults       `yaml:"defaults" json:"defaults"`
+	Sync     []regsync.ConfigSync `yaml:"sync" json:"sync"`
 }
 
 // ConfigDefaults is uses for general options and defaults for ConfigSync entries
 type ConfigDefaults struct {
-	Backup          string                 `yaml:"backup" json:"backup"`
-	Interval        time.Duration          `yaml:"interval" json:"interval"`
-	Schedule        string                 `yaml:"schedule" json:"schedule"`
-	RateLimit       ConfigRateLimit        `yaml:"ratelimit" json:"ratelimit"`
-	Parallel        int                    `yaml:"parallel" json:"parallel"`
-	DigestTags      *bool                  `yaml:"digestTags" json:"digestTags"`
-	Referrers       *bool                  `yaml:"referrers" json:"referrers"`
-	ReferrerFilters []ConfigReferrerFilter `yaml:"referrerFilters" json:"referrerFilters"`
-	ReferrerSrc     string                 `yaml:"referrerSource" json:"referrerSource"`
-	ReferrerTgt     string                 `yaml:"referrerTarget" json:"referrerTarget"`
-	ReferrerSlow    *bool                  `yaml:"referrerSlow" json:"referrerSlow"`
-	FastCheck       *bool                  `yaml:"fastCheck" json:"fastCheck"`
-	ForceRecursive  *bool                  `yaml:"forceRecursive" json:"forceRecursive"`
-	IncludeExternal *bool                  `yaml:"includeExternal" json:"includeExternal"`
-	MediaTypes      []string               `yaml:"mediaTypes" json:"mediaTypes"`
-	Hooks           ConfigHooks            `yaml:"hooks" json:"hooks"`
+	Backup          string                         `yaml:"backup" json:"backup"`
+	Interval        time.Duration                  `yaml:"interval" json:"interval"`
+	Schedule        string                         `yaml:"schedule" json:"schedule"`
+	RateLimit       regsync.ConfigRateLimit        `yaml:"ratelimit" json:"ratelimit"`
+	Parallel        int                            `yaml:"parallel" json:"parallel"`
+	DigestTags      *bool                          `yaml:"digestTags" json:"digestTags"`
+	Referrers       *bool                          `yaml:"referrers" json:"referrers"`
+	ReferrerFilters []regsync.ConfigReferrerFilter `yaml:"referrerFilters" json:"referrerFilters"`
+	ReferrerSrc     string                         `yaml:"referrerSource" json:"referrerSource"`
+	ReferrerTgt     string                         `yaml:"referrerTarget" json:"referrerTarget"`
+	ReferrerSlow    *bool                          `yaml:"referrerSlow" json:"referrerSlow"`
+	FastCheck       *bool                          `yaml:"fastCheck" json:"fastCheck"`
+	ForceRecursive  *bool                          `yaml:"forceRecursive" json:"forceRecursive"`
+	IncludeExternal *bool                          `yaml:"includeExternal" json:"includeExternal"`
+	MediaTypes      []string                       `yaml:"mediaTypes" json:"mediaTypes"`
+	Hooks           regsync.ConfigHooks            `yaml:"hooks" json:"hooks"`
 	// general options
 	BlobLimit      int64         `yaml:"blobLimit" json:"blobLimit"`
 	CacheCount     int           `yaml:"cacheCount" json:"cacheCount"`
@@ -58,75 +59,11 @@ type ConfigDefaults struct {
 	UserAgent      string        `yaml:"userAgent" json:"userAgent"`
 }
 
-// ConfigRateLimit is for rate limit settings
-type ConfigRateLimit struct {
-	Min   int           `yaml:"min" json:"min"`
-	Retry time.Duration `yaml:"retry" json:"retry"`
-}
-
-// ConfigSync defines a source/target repository to sync
-type ConfigSync struct {
-	Source          string                 `yaml:"source" json:"source"`
-	Target          string                 `yaml:"target" json:"target"`
-	Type            string                 `yaml:"type" json:"type"`
-	Tags            TagAllowDeny           `yaml:"tags" json:"tags"`
-	TagSets         []TagAllowDeny         `yaml:"tagSets" json:"tagSets"`
-	Repos           RepoAllowDeny          `yaml:"repos" json:"repos"`
-	DigestTags      *bool                  `yaml:"digestTags" json:"digestTags"`
-	Referrers       *bool                  `yaml:"referrers" json:"referrers"`
-	ReferrerFilters []ConfigReferrerFilter `yaml:"referrerFilters" json:"referrerFilters"`
-	ReferrerSrc     string                 `yaml:"referrerSource" json:"referrerSource"`
-	ReferrerTgt     string                 `yaml:"referrerTarget" json:"referrerTarget"`
-	ReferrerSlow    *bool                  `yaml:"referrerSlow" json:"referrerSlow"`
-	Platform        string                 `yaml:"platform" json:"platform"`
-	Platforms       []string               `yaml:"platforms" json:"platforms"`
-	FastCheck       *bool                  `yaml:"fastCheck" json:"fastCheck"`
-	ForceRecursive  *bool                  `yaml:"forceRecursive" json:"forceRecursive"`
-	IncludeExternal *bool                  `yaml:"includeExternal" json:"includeExternal"`
-	Backup          string                 `yaml:"backup" json:"backup"`
-	Interval        time.Duration          `yaml:"interval" json:"interval"`
-	Schedule        string                 `yaml:"schedule" json:"schedule"`
-	RateLimit       ConfigRateLimit        `yaml:"ratelimit" json:"ratelimit"`
-	MediaTypes      []string               `yaml:"mediaTypes" json:"mediaTypes"`
-	Hooks           ConfigHooks            `yaml:"hooks" json:"hooks"`
-}
-
-// RepoAllowDeny is an allow and deny list of regex strings for repository names
-type RepoAllowDeny struct {
-	Allow []string `yaml:"allow" json:"allow"`
-	Deny  []string `yaml:"deny" json:"deny"`
-}
-
-// TagAllowDeny is an allow and deny list of regex strings for tags, with optional semver version range support
-type TagAllowDeny struct {
-	Allow       []string `yaml:"allow" json:"allow"`
-	Deny        []string `yaml:"deny" json:"deny"`
-	SemverRange []string `yaml:"semverRange,omitempty" json:"semverRange,omitempty"` // array of semver constraints, e.g., [">=1.0.0 <2.0.0", ">=4.0.0"]
-}
-
-type ConfigReferrerFilter struct {
-	ArtifactType string            `yaml:"artifactType" json:"artifactType"`
-	Annotations  map[string]string `yaml:"annotations" json:"annotations"`
-}
-
-// ConfigHooks for commands that run during the sync
-type ConfigHooks struct {
-	Pre       *ConfigHook `yaml:"pre" json:"pre"`
-	Post      *ConfigHook `yaml:"post" json:"post"`
-	Unchanged *ConfigHook `yaml:"unchanged" json:"unchanged"`
-}
-
-// ConfigHook identifies the hook type and params
-type ConfigHook struct {
-	Type   string   `yaml:"type" json:"type"`
-	Params []string `yaml:"params" json:"params"`
-}
-
 // ConfigNew creates an empty configuration
 func ConfigNew() *Config {
 	c := Config{
 		Creds: []config.Host{},
-		Sync:  []ConfigSync{},
+		Sync:  []regsync.ConfigSync{},
 	}
 	return &c
 }
@@ -142,7 +79,7 @@ func ConfigLoadReader(r io.Reader) (*Config, error) {
 		c.Version = 1
 	}
 	if c.Version > 1 {
-		return c, ErrUnsupportedConfigVersion
+		return c, regsync.ErrUnsupportedConfigVersion
 	}
 	// apply top level defaults
 	if c.Defaults.RateLimit.Retry < rateLimitRetryMin {
@@ -186,7 +123,7 @@ func ConfigWrite(c *Config, w io.Writer) error {
 // expand templates in various parts of the config
 func configExpandTemplates(c *Config) error {
 	dataSync := struct {
-		Sync ConfigSync
+		Sync regsync.ConfigSync
 	}{}
 	for i := range c.Creds {
 		val, err := template.String(c.Creds[i].Name, nil)
@@ -251,7 +188,7 @@ func configExpandTemplates(c *Config) error {
 }
 
 // updates sync entry with defaults
-func syncSetDefaults(s *ConfigSync, d ConfigDefaults) {
+func syncSetDefaults(s *regsync.ConfigSync, d ConfigDefaults) {
 	if s.Backup == "" && d.Backup != "" {
 		s.Backup = d.Backup
 	}

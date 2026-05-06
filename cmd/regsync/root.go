@@ -6,17 +6,14 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"regexp"
-	"slices"
 	"strings"
 	"sync"
-	"time"
 
 	// crypto libraries included for go-digest
 	_ "crypto/sha256"
 	_ "crypto/sha512"
 
-	"github.com/opencontainers/go-digest"
+	"github.com/regclient/regclient/pkg/regsync"
 	"github.com/robfig/cron/v3"
 	"github.com/spf13/cobra"
 
@@ -24,35 +21,16 @@ import (
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/cobradoc"
 	"github.com/regclient/regclient/internal/pqueue"
-	"github.com/regclient/regclient/internal/semver"
 	"github.com/regclient/regclient/internal/version"
 	"github.com/regclient/regclient/pkg/template"
-	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/scheme/reg"
 	"github.com/regclient/regclient/types"
-	"github.com/regclient/regclient/types/descriptor"
-	"github.com/regclient/regclient/types/errs"
-	"github.com/regclient/regclient/types/manifest"
-	"github.com/regclient/regclient/types/platform"
-	"github.com/regclient/regclient/types/ref"
 )
 
 const (
 	// UserAgent sets the header on http requests
 	UserAgent = "regclient/regsync"
 )
-
-type actionType int
-
-const (
-	actionCheck actionType = iota
-	actionCopy
-	actionMissing
-)
-
-// throttle is used for limiting concurrent sync steps from running.
-// This is separate from the concurrency limits in regclient itself.
-type throttle struct{}
 
 type rootOpts struct {
 	confFile   string
@@ -64,7 +42,8 @@ type rootOpts struct {
 	missing    bool
 	conf       *Config
 	rc         *regclient.RegClient
-	throttle   *pqueue.Queue[throttle]
+	throttle   *pqueue.Queue[regsync.Throttle]
+	rs         *regsync.Regsync
 }
 
 func NewRootCmd() (*cobra.Command, *rootOpts) {
@@ -200,9 +179,9 @@ func (opts *rootOpts) runOnce(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	action := actionCopy
+	action := regsync.ActionCopy
 	if opts.missing {
-		action = actionMissing
+		action = regsync.ActionMissing
 	}
 	ctx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()
@@ -212,8 +191,8 @@ func (opts *rootOpts) runOnce(cmd *cobra.Command, args []string) error {
 	for _, s := range opts.conf.Sync {
 		if opts.conf.Defaults.Parallel > 0 {
 			wg.Go(func() {
-				err := opts.process(ctx, s, action)
-				if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, ErrCanceled) {
+				err := opts.rs.Process(ctx, s, action)
+				if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, regsync.ErrCanceled) {
 					if opts.abortOnErr {
 						cancel()
 					}
@@ -223,7 +202,7 @@ func (opts *rootOpts) runOnce(cmd *cobra.Command, args []string) error {
 				}
 			})
 		} else {
-			err := opts.process(ctx, s, action)
+			err := opts.rs.Process(ctx, s, action)
 			if err != nil {
 				errs = append(errs, err)
 				if opts.abortOnErr {
@@ -268,8 +247,8 @@ func (opts *rootOpts) runServer(cmd *cobra.Command, args []string) error {
 					slog.String("type", s.Type))
 				wg.Add(1)
 				defer wg.Done()
-				err := opts.process(ctx, s, actionCopy)
-				if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, ErrCanceled) {
+				err := opts.rs.Process(ctx, s, regsync.ActionCopy)
+				if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, regsync.ErrCanceled) {
 					if opts.abortOnErr {
 						cancel()
 					}
@@ -292,8 +271,8 @@ func (opts *rootOpts) runServer(cmd *cobra.Command, args []string) error {
 			// immediately copy any images that are missing from target
 			if opts.conf.Defaults.Parallel > 0 {
 				wg.Go(func() {
-					err := opts.process(ctx, s, actionMissing)
-					if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, ErrCanceled) {
+					err := opts.rs.Process(ctx, s, regsync.ActionMissing)
+					if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, regsync.ErrCanceled) {
 						if opts.abortOnErr {
 							cancel()
 						}
@@ -303,8 +282,8 @@ func (opts *rootOpts) runServer(cmd *cobra.Command, args []string) error {
 					}
 				})
 			} else {
-				err := opts.process(ctx, s, actionMissing)
-				if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, ErrCanceled) {
+				err := opts.rs.Process(ctx, s, regsync.ActionMissing)
+				if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, regsync.ErrCanceled) {
 					mu.Lock()
 					errs = append(errs, err)
 					mu.Unlock()
@@ -348,8 +327,8 @@ func (opts *rootOpts) runCheck(cmd *cobra.Command, args []string) error {
 	errs := []error{}
 	ctx := cmd.Context()
 	for _, s := range opts.conf.Sync {
-		err := opts.process(ctx, s, actionCheck)
-		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, ErrCanceled) {
+		err := opts.rs.Process(ctx, s, regsync.ActionCheck)
+		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, regsync.ErrCanceled) {
 			errs = append(errs, err)
 			if opts.abortOnErr {
 				break
@@ -377,7 +356,7 @@ func (opts *rootOpts) loadConf() error {
 			return err
 		}
 	} else {
-		return ErrMissingInput
+		return regsync.ErrMissingInput
 	}
 	// use a throttle to control parallelism
 	concurrent := opts.conf.Defaults.Parallel
@@ -386,7 +365,7 @@ func (opts *rootOpts) loadConf() error {
 	}
 	opts.log.Debug("Configuring parallel settings",
 		slog.Int("concurrent", concurrent))
-	opts.throttle = pqueue.New(pqueue.Opts[throttle]{Max: concurrent})
+	opts.throttle = pqueue.New(pqueue.Opts[regsync.Throttle]{Max: concurrent})
 	// set the regclient, loading docker creds unless disabled, and inject logins from config file
 	rcOpts := []regclient.Opt{
 		regclient.WithSlog(opts.log),
@@ -422,665 +401,12 @@ func (opts *rootOpts) loadConf() error {
 		rcOpts = append(rcOpts, regclient.WithConfigHost(rcHosts...))
 	}
 	opts.rc = regclient.New(rcOpts...)
+
+	rsOpts := []regsync.Opt{
+		regsync.WithAbortOnErr(opts.abortOnErr),
+		regsync.WithThrottle(opts.throttle),
+	}
+	opts.rs = regsync.New(opts.rc, rsOpts...)
+
 	return nil
-}
-
-// process a sync step
-func (opts *rootOpts) process(ctx context.Context, s ConfigSync, action actionType) error {
-	switch s.Type {
-	case "registry":
-		if err := opts.processRegistry(ctx, s, s.Source, s.Target, action); err != nil {
-			return err
-		}
-	case "repository":
-		if err := opts.processRepo(ctx, s, s.Source, s.Target, action); err != nil {
-			return err
-		}
-	case "image":
-		if err := opts.processImage(ctx, s, s.Source, s.Target, action); err != nil {
-			return err
-		}
-	default:
-		opts.log.Error("Type not recognized, must be one of: registry, repository, or image",
-			slog.Any("step", s),
-			slog.String("type", s.Type))
-		return ErrInvalidInput
-	}
-	return nil
-}
-
-func (opts *rootOpts) processRegistry(ctx context.Context, s ConfigSync, src, tgt string, action actionType) error {
-	last := ""
-	errs := []error{}
-	// loop through pages of the _catalog response
-	for {
-		repoOpts := []scheme.RepoOpts{}
-		if last != "" {
-			repoOpts = append(repoOpts, scheme.WithRepoLast(last))
-		}
-		sRepos, err := opts.rc.RepoList(ctx, src, repoOpts...)
-		if err != nil {
-			opts.log.Error("Failed to list source repositories",
-				slog.String("source", src),
-				slog.String("error", err.Error()))
-			return err
-		}
-		sRepoList, err := sRepos.GetRepos()
-		if err != nil {
-			opts.log.Error("Failed to list source repositories",
-				slog.String("source", src),
-				slog.String("error", err.Error()))
-			return err
-		}
-		if len(sRepoList) == 0 || last == sRepoList[len(sRepoList)-1] {
-			break
-		}
-		last = sRepoList[len(sRepoList)-1]
-		// filter repos according to allow/deny rules
-		sRepoList, err = filterRepoList(s.Repos, sRepoList)
-		if err != nil {
-			opts.log.Error("Failed processing repo filters",
-				slog.String("source", src),
-				slog.Any("allow", s.Repos.Allow),
-				slog.Any("deny", s.Repos.Deny),
-				slog.String("error", err.Error()))
-			return err
-		}
-		for _, repo := range sRepoList {
-			if err := opts.processRepo(ctx, s, fmt.Sprintf("%s/%s", src, repo), fmt.Sprintf("%s/%s", tgt, repo), action); err != nil {
-				errs = append(errs, err)
-				if opts.abortOnErr {
-					break
-				}
-			}
-		}
-		if opts.abortOnErr && len(errs) > 0 {
-			break
-		}
-	}
-	return errors.Join(errs...)
-}
-
-func (opts *rootOpts) processRepo(ctx context.Context, s ConfigSync, src, tgt string, action actionType) error {
-	sRepoRef, err := ref.New(src)
-	if err != nil {
-		opts.log.Error("Failed parsing source",
-			slog.String("source", src),
-			slog.String("error", err.Error()))
-		return err
-	}
-	sTags, err := opts.rc.TagList(ctx, sRepoRef)
-	if err != nil {
-		opts.log.Error("Failed getting source tags",
-			slog.String("source", sRepoRef.CommonName()),
-			slog.String("error", err.Error()))
-		return err
-	}
-	sTagsList, err := sTags.GetTags()
-	if err != nil {
-		opts.log.Error("Failed getting source tags",
-			slog.String("source", sRepoRef.CommonName()),
-			slog.String("error", err.Error()))
-		return err
-	}
-	sets := s.TagSets
-	if len(s.Tags.Allow) > 0 || len(s.Tags.Deny) > 0 || len(s.Tags.SemverRange) > 0 {
-		sets = append(sets, s.Tags)
-	}
-	sTagsFiltered := []string{}
-	if len(sets) == 0 {
-		// no filters includes all tags
-		sTagsFiltered = sTagsList
-	}
-	for _, set := range sets {
-		sFilteredCur, err := filterTagList(set, sTagsList)
-		if err != nil {
-			opts.log.Error("Failed processing tag filters",
-				slog.String("source", sRepoRef.CommonName()),
-				slog.Any("allow", set.Allow),
-				slog.Any("deny", set.Deny),
-				slog.Any("semverRange", set.SemverRange),
-				slog.String("error", err.Error()))
-			return err
-		}
-		if len(sTagsFiltered) == 0 {
-			sTagsFiltered = sFilteredCur
-		} else {
-			// add unique tags
-			for _, tag := range sFilteredCur {
-				if !slices.Contains(sTagsFiltered, tag) {
-					sTagsFiltered = append(sTagsFiltered, tag)
-				}
-			}
-		}
-	}
-	if len(sTagsFiltered) == 0 {
-		opts.log.Warn("No matching tags found",
-			slog.String("source", sRepoRef.CommonName()),
-			slog.Any("tags", s.Tags),
-			slog.Any("tagSets", s.TagSets),
-			slog.Any("available", sTagsList))
-		return nil
-	}
-	// if only copying missing entries, delete tags that already exist on target
-	if action == actionMissing {
-		tRepoRef, err := ref.New(tgt)
-		if err != nil {
-			opts.log.Error("Failed parsing target",
-				slog.String("target", tgt),
-				slog.String("error", err.Error()))
-			return err
-		}
-		tTags, err := opts.rc.TagList(ctx, tRepoRef)
-		if err != nil {
-			opts.log.Debug("Failed getting target tags",
-				slog.String("target", tRepoRef.CommonName()),
-				slog.String("error", err.Error()))
-		}
-		tTagList := []string{}
-		if err == nil {
-			tTagList, err = tTags.GetTags()
-			if err != nil {
-				opts.log.Debug("Failed getting target tags",
-					slog.String("target", tRepoRef.CommonName()),
-					slog.String("error", err.Error()))
-			}
-		}
-		slices.Sort(sTagsFiltered)
-		slices.Sort(tTagList)
-		sI := len(sTagsFiltered) - 1
-		tI := len(tTagList) - 1
-		for sI >= 0 && tI >= 0 {
-			switch strings.Compare(sTagsFiltered[sI], tTagList[tI]) {
-			case 0:
-				sTagsFiltered = slices.Delete(sTagsFiltered, sI, sI+1)
-				sI--
-				tI--
-			case -1:
-				tI--
-			case 1:
-				sI--
-			default:
-				opts.log.Warn("strings.Compare unexpected result",
-					slog.Int("result", strings.Compare(sTagsFiltered[sI], tTagList[tI])),
-					slog.String("left", sTagsFiltered[sI]),
-					slog.String("right", tTagList[tI]))
-				sI--
-				tI--
-			}
-		}
-	}
-	errs := []error{}
-	for _, tag := range sTagsFiltered {
-		if err := opts.processImage(ctx, s, fmt.Sprintf("%s:%s", src, tag), fmt.Sprintf("%s:%s", tgt, tag), action); err != nil {
-			errs = append(errs, err)
-			if opts.abortOnErr {
-				break
-			}
-		}
-	}
-	return errors.Join(errs...)
-}
-
-func (opts *rootOpts) processImage(ctx context.Context, s ConfigSync, src, tgt string, action actionType) error {
-	sRef, err := ref.New(src)
-	if err != nil {
-		opts.log.Error("Failed parsing source",
-			slog.String("source", src),
-			slog.String("error", err.Error()))
-		return err
-	}
-	tRef, err := ref.New(tgt)
-	if err != nil {
-		opts.log.Error("Failed parsing target",
-			slog.String("target", tgt),
-			slog.String("error", err.Error()))
-		return err
-	}
-	err = opts.processRef(ctx, s, sRef, tRef, action)
-	if err != nil {
-		opts.log.Error("Failed to sync",
-			slog.String("target", tRef.CommonName()),
-			slog.String("source", sRef.CommonName()),
-			slog.String("error", err.Error()))
-	}
-	if err := opts.rc.Close(ctx, tRef); err != nil {
-		opts.log.Error("Error closing ref",
-			slog.String("ref", tRef.CommonName()),
-			slog.String("error", err.Error()))
-	}
-	return err
-}
-
-// process a sync step
-func (opts *rootOpts) processRef(ctx context.Context, s ConfigSync, src, tgt ref.Ref, action actionType) error {
-	mSrc, err := opts.rc.ManifestHead(ctx, src, regclient.WithManifestRequireDigest())
-	if err != nil && errors.Is(err, errs.ErrUnsupportedAPI) {
-		mSrc, err = opts.rc.ManifestGet(ctx, src)
-	}
-	if err != nil {
-		opts.log.Error("Failed to lookup source manifest",
-			slog.String("source", src.CommonName()),
-			slog.String("error", err.Error()))
-		return err
-	}
-	fastCheck := (s.FastCheck != nil && *s.FastCheck)
-	forceRecursive := (s.ForceRecursive != nil && *s.ForceRecursive)
-	referrers := (s.Referrers != nil && *s.Referrers)
-	digestTags := (s.DigestTags != nil && *s.DigestTags)
-	mTgt, err := opts.rc.ManifestHead(ctx, tgt, regclient.WithManifestRequireDigest())
-	tgtExists := (err == nil)
-	tgtMatches := false
-	if err == nil && manifest.GetDigest(mSrc).String() == manifest.GetDigest(mTgt).String() {
-		tgtMatches = true
-	}
-	if tgtMatches && (fastCheck || (!forceRecursive && !referrers && !digestTags)) {
-		opts.log.Debug("Image matches",
-			slog.String("source", src.CommonName()),
-			slog.String("target", tgt.CommonName()))
-		return nil
-	}
-	if tgtExists && action == actionMissing {
-		opts.log.Debug("target exists",
-			slog.String("source", src.CommonName()),
-			slog.String("target", tgt.CommonName()))
-		return nil
-	}
-
-	// skip when source manifest is an unsupported type
-	smt := manifest.GetMediaType(mSrc)
-	if !slices.Contains(s.MediaTypes, smt) {
-		opts.log.Info("Skipping unsupported media type",
-			slog.String("ref", src.CommonName()),
-			slog.String("mediaType", manifest.GetMediaType(mSrc)),
-			slog.Any("allowed", s.MediaTypes))
-		return nil
-	}
-
-	// if platform is defined and source is a list, resolve the source platform
-	if mSrc.IsList() && s.Platform != "" {
-		platDigest, err := opts.getPlatformDigest(ctx, src, s.Platform, mSrc)
-		if err != nil {
-			return err
-		}
-		src.Digest = platDigest.String()
-		if tgtExists && platDigest.String() == manifest.GetDigest(mTgt).String() {
-			tgtMatches = true
-		}
-		if tgtMatches && (s.ForceRecursive == nil || !*s.ForceRecursive) {
-			opts.log.Debug("Image matches for platform",
-				slog.String("source", src.CommonName()),
-				slog.String("platform", s.Platform),
-				slog.String("target", tgt.CommonName()))
-			return nil
-		}
-	}
-	if tgtMatches {
-		opts.log.Info("Image refreshing",
-			slog.String("source", src.CommonName()),
-			slog.String("target", tgt.CommonName()),
-			slog.Bool("forced", forceRecursive),
-			slog.Bool("digestTags", digestTags),
-			slog.Bool("referrers", referrers))
-	} else {
-		opts.log.Info("Image sync needed",
-			slog.String("source", src.CommonName()),
-			slog.String("target", tgt.CommonName()))
-	}
-	if action == actionCheck {
-		return nil
-	}
-
-	// wait for parallel tasks
-	throttleDone, err := opts.throttle.Acquire(ctx, throttle{})
-	if err != nil {
-		return fmt.Errorf("failed to acquire throttle: %w", err)
-	}
-	// delay for rate limit on source
-	if s.RateLimit.Min > 0 && manifest.GetRateLimit(mSrc).Set {
-		// refresh current rate limit after acquiring throttle
-		mSrc, err = opts.rc.ManifestHead(ctx, src)
-		if err != nil {
-			opts.log.Error("rate limit check failed",
-				slog.String("source", src.CommonName()),
-				slog.String("error", err.Error()))
-			throttleDone()
-			return err
-		}
-		// delay if rate limit exceeded
-		rlSrc := manifest.GetRateLimit(mSrc)
-		for rlSrc.Remain < s.RateLimit.Min {
-			throttleDone()
-			opts.log.Info("Delaying for rate limit",
-				slog.String("source", src.CommonName()),
-				slog.Int("source-remain", rlSrc.Remain),
-				slog.Int("source-limit", rlSrc.Limit),
-				slog.Int("step-min", s.RateLimit.Min),
-				slog.Duration("sleep", s.RateLimit.Retry))
-			select {
-			case <-ctx.Done():
-				return ErrCanceled
-			case <-time.After(s.RateLimit.Retry):
-			}
-			throttleDone, err = opts.throttle.Acquire(ctx, throttle{})
-			if err != nil {
-				return fmt.Errorf("failed to reacquire throttle: %w", err)
-			}
-			mSrc, err = opts.rc.ManifestHead(ctx, src)
-			if err != nil {
-				opts.log.Error("rate limit check failed",
-					slog.String("source", src.CommonName()),
-					slog.String("error", err.Error()))
-				throttleDone()
-				return err
-			}
-			rlSrc = manifest.GetRateLimit(mSrc)
-		}
-		opts.log.Debug("Rate limit passed",
-			slog.String("source", src.CommonName()),
-			slog.Int("source-remain", rlSrc.Remain),
-			slog.Int("step-min", s.RateLimit.Min))
-	}
-	defer throttleDone()
-
-	// verify context has not been canceled while waiting for throttle
-	select {
-	case <-ctx.Done():
-		return ErrCanceled
-	default:
-	}
-
-	// run backup
-	if tgtExists && !tgtMatches && s.Backup != "" {
-		// expand template
-		data := struct {
-			Ref  ref.Ref
-			Step ConfigSync
-			Sync ConfigSync
-		}{Ref: tgt, Step: s, Sync: s}
-		backupStr, err := template.String(s.Backup, data)
-		if err != nil {
-			opts.log.Error("Failed to expand backup template",
-				slog.String("original", tgt.CommonName()),
-				slog.String("backup-template", s.Backup),
-				slog.String("error", err.Error()))
-			return err
-		}
-		backupStr = strings.TrimSpace(backupStr)
-		backupRef := tgt
-		if strings.ContainsAny(backupStr, ":/") {
-			// if the : or / are in the string, parse it as a full reference
-			backupRef, err = ref.New(backupStr)
-			if err != nil {
-				opts.log.Error("Failed to parse backup reference",
-					slog.String("original", tgt.CommonName()),
-					slog.String("template", s.Backup),
-					slog.String("backup", backupStr),
-					slog.String("error", err.Error()))
-				return err
-			}
-		} else {
-			// else parse backup string as just a tag
-			backupRef = backupRef.SetTag(backupStr)
-		}
-		defer opts.rc.Close(ctx, backupRef)
-		// run copy from tgt ref to backup ref
-		opts.log.Info("Saving backup",
-			slog.String("original", tgt.CommonName()),
-			slog.String("backup", backupRef.CommonName()))
-		err = opts.rc.ImageCopy(ctx, tgt, backupRef)
-		if err != nil {
-			// Possible registry corruption with existing image, only warn and continue/overwrite
-			opts.log.Warn("Failed to backup existing image",
-				slog.String("original", tgt.CommonName()),
-				slog.String("template", s.Backup),
-				slog.String("backup", backupRef.CommonName()),
-				slog.String("error", err.Error()))
-		}
-	}
-
-	rcOpts := []regclient.ImageOpts{}
-	if s.DigestTags != nil && *s.DigestTags {
-		rcOpts = append(rcOpts, regclient.ImageWithDigestTags())
-	}
-	if s.Referrers != nil && *s.Referrers {
-		if len(s.ReferrerFilters) == 0 {
-			rcOpts = append(rcOpts, regclient.ImageWithReferrers())
-		} else {
-			for _, filter := range s.ReferrerFilters {
-				rOpts := []scheme.ReferrerOpts{}
-				if filter.ArtifactType != "" {
-					rOpts = append(rOpts, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{ArtifactType: filter.ArtifactType}))
-				}
-				if filter.Annotations != nil {
-					rOpts = append(rOpts, scheme.WithReferrerMatchOpt(descriptor.MatchOpt{Annotations: filter.Annotations}))
-				}
-				if s.ReferrerSlow != nil && *s.ReferrerSlow {
-					rOpts = append(rOpts, scheme.WithReferrerSlowSearch())
-				}
-				rcOpts = append(rcOpts, regclient.ImageWithReferrers(rOpts...))
-			}
-		}
-		if s.ReferrerSrc != "" {
-			referrerSrc, err := ref.New(s.ReferrerSrc)
-			if err != nil {
-				opts.log.Error("failed to parse referrer source reference",
-					slog.String("referrerSource", s.ReferrerSrc),
-					slog.String("error", err.Error()))
-			}
-			rcOpts = append(rcOpts, regclient.ImageWithReferrerSrc(referrerSrc))
-		}
-		if s.ReferrerTgt != "" {
-			referrerTgt, err := ref.New(s.ReferrerTgt)
-			if err != nil {
-				opts.log.Error("failed to parse referrer target reference",
-					slog.String("referrerTarget", s.ReferrerTgt),
-					slog.String("error", err.Error()))
-			}
-			rcOpts = append(rcOpts, regclient.ImageWithReferrerTgt(referrerTgt))
-		}
-	}
-	if s.FastCheck != nil && *s.FastCheck {
-		rcOpts = append(rcOpts, regclient.ImageWithFastCheck())
-	}
-	if s.ForceRecursive != nil && *s.ForceRecursive {
-		rcOpts = append(rcOpts, regclient.ImageWithForceRecursive())
-	}
-	if s.IncludeExternal != nil && *s.IncludeExternal {
-		rcOpts = append(rcOpts, regclient.ImageWithIncludeExternal())
-	}
-	if len(s.Platforms) > 0 {
-		rcOpts = append(rcOpts, regclient.ImageWithPlatforms(s.Platforms))
-	}
-
-	// Copy the image
-	opts.log.Debug("Image sync running",
-		slog.String("source", src.CommonName()),
-		slog.String("target", tgt.CommonName()))
-	err = opts.rc.ImageCopy(ctx, src, tgt, rcOpts...)
-	if err != nil {
-		opts.log.Error("Failed to copy image",
-			slog.String("source", src.CommonName()),
-			slog.String("target", tgt.CommonName()),
-			slog.String("error", err.Error()))
-		return err
-	}
-	return nil
-}
-
-// filterByRegex applies allow/deny regex patterns to a list of strings.
-// filterRegexAllow returns items that match at least one allow pattern.
-// If no patterns are provided, returns all items.
-func filterRegexAllow(patterns []string, in []string) ([]string, error) {
-	if len(patterns) == 0 {
-		return in, nil
-	}
-
-	// Compile all patterns
-	exps := make([]*regexp.Regexp, 0, len(patterns))
-	for _, pattern := range patterns {
-		exp, err := regexp.Compile("^" + pattern + "$")
-		if err != nil {
-			return nil, fmt.Errorf("invalid allow pattern %q: %w", pattern, err)
-		}
-		exps = append(exps, exp)
-	}
-
-	// Keep items matching any pattern
-	result := make([]string, 0, len(in))
-	for _, item := range in {
-		for _, exp := range exps {
-			if exp.MatchString(item) {
-				result = append(result, item)
-				break
-			}
-		}
-	}
-	return result, nil
-}
-
-// filterRegexDeny removes items that match any deny pattern.
-// If no patterns are provided, returns all items unchanged.
-func filterRegexDeny(patterns []string, in []string) ([]string, error) {
-	if len(patterns) == 0 {
-		return in, nil
-	}
-
-	// Compile all patterns
-	exps := make([]*regexp.Regexp, 0, len(patterns))
-	for _, pattern := range patterns {
-		exp, err := regexp.Compile("^" + pattern + "$")
-		if err != nil {
-			return nil, fmt.Errorf("invalid deny pattern %q: %w", pattern, err)
-		}
-		exps = append(exps, exp)
-	}
-
-	// Remove items matching any pattern
-	result := make([]string, 0, len(in))
-	for _, item := range in {
-		denied := false
-		for _, exp := range exps {
-			if exp.MatchString(item) {
-				denied = true
-				break
-			}
-		}
-		if !denied {
-			result = append(result, item)
-		}
-	}
-	return result, nil
-}
-
-func filterRepoList(ad RepoAllowDeny, in []string) ([]string, error) {
-	// Apply allow filter
-	result, err := filterRegexAllow(ad.Allow, in)
-	if err != nil {
-		return nil, err
-	}
-	// Apply deny filter
-	return filterRegexDeny(ad.Deny, result)
-}
-
-func filterTagList(ad TagAllowDeny, in []string) ([]string, error) {
-	result := in
-
-	// Step 1: Apply semverRange filter
-	if len(ad.SemverRange) > 0 {
-		// Parse all constraints
-		constraints := make([]semver.Constraint, 0, len(ad.SemverRange))
-		for _, rangeStr := range ad.SemverRange {
-			if rangeStr == "" {
-				continue
-			}
-			constraint, err := semver.NewConstraint(rangeStr)
-			if err != nil {
-				return nil, fmt.Errorf("invalid semver range %q: %w", rangeStr, err)
-			}
-			constraints = append(constraints, constraint)
-		}
-
-		// Apply version filtering if we have valid constraints
-		if len(constraints) > 0 {
-			filtered := make([]string, 0, len(result))
-			for _, tag := range result {
-				// Try to parse as semver, skip non-semver tags
-				v, err := semver.NewVersion(tag)
-				if err != nil {
-					continue
-				}
-				// Check if version matches any constraint (OR logic)
-				for _, constraint := range constraints {
-					if constraint.Check(v) {
-						filtered = append(filtered, tag)
-						break
-					}
-				}
-			}
-			result = filtered
-		}
-	}
-
-	// Step 2: Apply Allow filter
-	if len(ad.Allow) > 0 {
-		var err error
-		result, err = filterRegexAllow(ad.Allow, result)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// Step 3: Apply Deny filter
-	return filterRegexDeny(ad.Deny, result)
-}
-
-var manifestCache struct {
-	mu        sync.Mutex
-	manifests map[string]manifest.Manifest
-}
-
-func init() {
-	manifestCache.manifests = map[string]manifest.Manifest{}
-}
-
-// getPlatformDigest resolves a manifest list to a specific platform's digest
-// This uses the above cache to only call ManifestGet when a new manifest list digest is seen
-func (opts *rootOpts) getPlatformDigest(ctx context.Context, r ref.Ref, platStr string, origMan manifest.Manifest) (digest.Digest, error) {
-	plat, err := platform.Parse(platStr)
-	if err != nil {
-		opts.log.Warn("Could not parse platform",
-			slog.String("platform", platStr),
-			slog.String("err", err.Error()))
-		return "", err
-	}
-	// cache manifestGet response
-	manifestCache.mu.Lock()
-	getMan, ok := manifestCache.manifests[manifest.GetDigest(origMan).String()]
-	if !ok {
-		getMan, err = opts.rc.ManifestGet(ctx, r)
-		if err != nil {
-			opts.log.Error("Failed to get source manifest",
-				slog.String("source", r.CommonName()),
-				slog.String("error", err.Error()))
-			manifestCache.mu.Unlock()
-			return "", err
-		}
-		manifestCache.manifests[manifest.GetDigest(origMan).String()] = getMan
-	}
-	manifestCache.mu.Unlock()
-	descPlat, err := manifest.GetPlatformDesc(getMan, &plat)
-	if err != nil {
-		pl, _ := manifest.GetPlatformList(getMan)
-		var ps []string
-		for _, p := range pl {
-			ps = append(ps, p.String())
-		}
-		opts.log.Warn("Platform could not be found in source manifest list",
-			slog.String("platform", plat.String()),
-			slog.String("err", err.Error()),
-			slog.String("platforms", strings.Join(ps, ", ")))
-		return "", ErrNotFound
-	}
-	return descPlat.Digest, nil
 }
