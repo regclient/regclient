@@ -18,6 +18,7 @@ import (
 	"github.com/olareg/olareg"
 	oConfig "github.com/olareg/olareg/config"
 	"github.com/opencontainers/go-digest"
+	"github.com/regclient/regclient/pkg/regsync"
 
 	"github.com/regclient/regclient"
 	"github.com/regclient/regclient/config"
@@ -93,7 +94,8 @@ func TestProcess(t *testing.T) {
 		regclient.WithConfigHost(rcHosts...),
 		regclient.WithRegOpts(reg.WithDelay(delayInit, delayMax)),
 	)
-	pq := pqueue.New(pqueue.Opts[throttle]{Max: 1})
+	rs := regsync.New(rc)
+	pq := pqueue.New(pqueue.Opts[regsync.Throttle]{Max: 1})
 	confBytes := `
 version: 1
 defaults:
@@ -232,8 +234,8 @@ defaults:
 	// run process on each entry
 	tt := []struct {
 		name       string
-		sync       ConfigSync
-		action     actionType
+		sync       regsync.ConfigSync
+		action     regsync.ActionType
 		abortOnErr bool
 		expect     map[string]digest.Digest
 		exists     []string
@@ -242,12 +244,12 @@ defaults:
 	}{
 		{
 			name: "Action Missing",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source: tsHost + "/testrepo:v1",
 				Target: tsHost + "/test1:latest",
 				Type:   "image",
 			},
-			action: actionMissing,
+			action: regsync.ActionMissing,
 			expect: map[string]digest.Digest{
 				tsHost + "/test1:latest": d1,
 			},
@@ -264,12 +266,12 @@ defaults:
 		},
 		{
 			name: "RepoCopy",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source: tsHost + "/testrepo",
 				Target: tsHost + "/test2",
 				Type:   "repository",
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expect: map[string]digest.Digest{
 				tsHost + "/test2:v1": d1,
 				tsHost + "/test2:v2": d2,
@@ -279,23 +281,23 @@ defaults:
 		},
 		{
 			name: "ReadOnly Error Abort",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source: tsHost + "/testrepo",
 				Target: tsROHost + "/test-readonly",
 				Type:   "repository",
 			},
-			action:     actionCopy,
+			action:     regsync.ActionCopy,
 			abortOnErr: true,
 			expErr:     errs.ErrHTTPStatus,
 		},
 		{
 			name: "Overwrite",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source: tsHost + "/testrepo:v2",
 				Target: tsHost + "/test1:latest",
 				Type:   "image",
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expect: map[string]digest.Digest{
 				tsHost + "/test1:latest": d2,
 			},
@@ -308,7 +310,7 @@ defaults:
 		},
 		{
 			name: "Fast Check",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source:     tsHost + "/testrepo:v2",
 				Target:     tsHost + "/test1:latest",
 				Type:       "image",
@@ -316,7 +318,7 @@ defaults:
 				Referrers:  &boolT,
 				DigestTags: &boolT,
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expect: map[string]digest.Digest{
 				tsHost + "/test1:latest": d2,
 			},
@@ -329,14 +331,14 @@ defaults:
 		},
 		{
 			name: "Action Check",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source:     tsHost + "/testrepo:v1",
 				Target:     tsHost + "/test1:latest",
 				Type:       "image",
 				Referrers:  &boolT,
 				DigestTags: &boolT,
 			},
-			action: actionCheck,
+			action: regsync.ActionCheck,
 			expect: map[string]digest.Digest{
 				tsHost + "/test1:latest": d2,
 			},
@@ -345,14 +347,14 @@ defaults:
 		},
 		{
 			name: "Action Missing Exists",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source:     tsHost + "/testrepo:v1",
 				Target:     tsHost + "/test1:latest",
 				Type:       "image",
 				Referrers:  &boolT,
 				DigestTags: &boolT,
 			},
-			action: actionMissing,
+			action: regsync.ActionMissing,
 			expect: map[string]digest.Digest{
 				tsHost + "/test1:latest": d2,
 			},
@@ -365,15 +367,15 @@ defaults:
 		},
 		{
 			name: "RepoTagFilterAllow",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source: tsHost + "/testrepo",
 				Target: tsHost + "/test3",
 				Type:   "repository",
-				Tags: TagAllowDeny{
+				Tags: regsync.TagAllowDeny{
 					Allow: []string{"v1", "v3", "latest"},
 				},
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expect: map[string]digest.Digest{
 				tsHost + "/test3:v1": d1,
 				tsHost + "/test3:v3": d3,
@@ -387,15 +389,15 @@ defaults:
 		},
 		{
 			name: "RepoTagFilterDeny",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source: tsHost + "/testrepo",
 				Target: tsHost + "/test4",
 				Type:   "repository",
-				Tags: TagAllowDeny{
+				Tags: regsync.TagAllowDeny{
 					Deny: []string{"v2", "old"},
 				},
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expect: map[string]digest.Digest{
 				tsHost + "/test4:v1": d1,
 				tsHost + "/test4:v3": d3,
@@ -409,15 +411,15 @@ defaults:
 		},
 		{
 			name: "RepoSemver",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source: tsHost + "/testrepo",
 				Target: tsHost + "/testsemver",
 				Type:   "repository",
-				Tags: TagAllowDeny{
+				Tags: regsync.TagAllowDeny{
 					SemverRange: []string{">=v2"},
 				},
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expect: map[string]digest.Digest{
 				tsHost + "/testsemver:v2": d2,
 				tsHost + "/testsemver:v3": d3,
@@ -436,16 +438,16 @@ defaults:
 		},
 		{
 			name: "RepoTagSet",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source: tsHost + "/testrepo",
 				Target: tsHost + "/testset",
 				Type:   "repository",
-				TagSets: []TagAllowDeny{
+				TagSets: []regsync.TagAllowDeny{
 					{Allow: []string{"a.*", "loop"}},
 					// {SemverRange: []string{">=v2"}},
 				},
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expect: map[string]digest.Digest{
 				// tsHost + "/testset:v2":   d2,
 				// tsHost + "/testset:v3":   d3,
@@ -464,12 +466,12 @@ defaults:
 		},
 		{
 			name: "Missing Setup v1",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source: tsHost + "/testrepo:v2",
 				Target: tsHost + "/test-missing:v1",
 				Type:   "image",
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expect: map[string]digest.Digest{
 				tsHost + "/test-missing:v1": d2,
 			},
@@ -481,12 +483,12 @@ defaults:
 		},
 		{
 			name: "Missing Setup v1.1",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source: tsHost + "/testrepo:v2",
 				Target: tsHost + "/test-missing:v1.1",
 				Type:   "image",
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expect: map[string]digest.Digest{
 				tsHost + "/test-missing:v1":   d2,
 				tsHost + "/test-missing:v1.1": d2,
@@ -499,12 +501,12 @@ defaults:
 		},
 		{
 			name: "Missing Setup v3",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source: tsHost + "/testrepo:v3",
 				Target: tsHost + "/test-missing:v3",
 				Type:   "image",
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expect: map[string]digest.Digest{
 				tsHost + "/test-missing:v1":   d2,
 				tsHost + "/test-missing:v1.1": d2,
@@ -517,15 +519,15 @@ defaults:
 		},
 		{
 			name: "Missing",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source: tsHost + "/testrepo",
 				Target: tsHost + "/test-missing",
 				Type:   "repository",
-				Tags: TagAllowDeny{
+				Tags: regsync.TagAllowDeny{
 					Allow: []string{"v1", "v2", "v3", "latest"},
 				},
 			},
-			action: actionMissing,
+			action: regsync.ActionMissing,
 			expect: map[string]digest.Digest{
 				tsHost + "/test-missing:v1":   d2,
 				tsHost + "/test-missing:v1.1": d2,
@@ -539,13 +541,13 @@ defaults:
 		},
 		{
 			name: "ImageDigestTags",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source:     "ocidir://" + tempDir + "/testrepo:v1",
 				Target:     "ocidir://" + tempDir + "/test5:v1",
 				Type:       "image",
 				DigestTags: &boolT,
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expect: map[string]digest.Digest{
 				"ocidir://" + tempDir + "/test5:v1":                                                d1,
 				fmt.Sprintf("ocidir://%s/test5:sha256-%s.%.16s.meta", tempDir, d1.Hex(), d3.Hex()): digest.Digest(d3.String()),
@@ -554,15 +556,15 @@ defaults:
 		},
 		{
 			name: "ImageReferrers Fast",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source:          tsHost + "/testrepo:v2",
 				Target:          tsHost + "/test-referrer:v2",
 				Type:            "image",
 				FastCheck:       &boolT,
 				Referrers:       &boolT,
-				ReferrerFilters: []ConfigReferrerFilter{},
+				ReferrerFilters: []regsync.ConfigReferrerFilter{},
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expect: map[string]digest.Digest{
 				tsHost + "/test-referrer:v2": d2,
 			},
@@ -579,18 +581,18 @@ defaults:
 		},
 		{
 			name: "ImageReferrers",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source:    tsHost + "/testrepo:v2",
 				Target:    tsHost + "/test-referrer2:v2",
 				Type:      "image",
 				Referrers: &boolT,
-				ReferrerFilters: []ConfigReferrerFilter{
+				ReferrerFilters: []regsync.ConfigReferrerFilter{
 					{
 						ArtifactType: "application/example.sbom",
 					},
 				},
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expect: map[string]digest.Digest{
 				tsHost + "/test-referrer2:v2": d2,
 			},
@@ -607,19 +609,19 @@ defaults:
 		},
 		{
 			name: "ImageReferrersExtSrc",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source:    tsHost + "/testrepo:v2",
 				Target:    tsHost + "/test-referrer-ext1:v2",
 				Type:      "image",
 				Referrers: &boolT,
-				ReferrerFilters: []ConfigReferrerFilter{
+				ReferrerFilters: []regsync.ConfigReferrerFilter{
 					{
 						ArtifactType: "application/example.sbom",
 					},
 				},
 				ReferrerSrc: tsHost + "/external",
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expect: map[string]digest.Digest{
 				tsHost + "/test-referrer-ext1:v2": d2,
 			},
@@ -638,12 +640,12 @@ defaults:
 		},
 		{
 			name: "ImageReferrersExtBoth",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source:    tsHost + "/testrepo:v2",
 				Target:    tsHost + "/test-referrer-ext2:v2",
 				Type:      "image",
 				Referrers: &boolT,
-				ReferrerFilters: []ConfigReferrerFilter{
+				ReferrerFilters: []regsync.ConfigReferrerFilter{
 					{
 						ArtifactType: "application/example.sbom",
 					},
@@ -651,7 +653,7 @@ defaults:
 				ReferrerSrc: tsHost + "/external",
 				ReferrerTgt: tsHost + "/test-referrer-ext2-tgt",
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expect: map[string]digest.Digest{
 				tsHost + "/test-referrer-ext2:v2": d2,
 			},
@@ -673,13 +675,13 @@ defaults:
 
 		{
 			name: "Backup",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source: tsHost + "/testrepo:v3",
 				Target: tsHost + "/test1:latest",
 				Type:   "image",
 				Backup: "old",
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expect: map[string]digest.Digest{
 				tsHost + "/test1:latest": d3,
 				tsHost + "/test1:old":    d2,
@@ -688,13 +690,13 @@ defaults:
 		},
 		{
 			name: "BackupFormat",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source: tsHost + "/testrepo:v1",
 				Target: tsHost + "/test1:latest",
 				Type:   "image",
 				Backup: tsHost + "/backups:{{.Ref.Tag}}",
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expect: map[string]digest.Digest{
 				tsHost + "/test1:latest":   d1,
 				tsHost + "/backups:latest": d3,
@@ -703,13 +705,13 @@ defaults:
 		},
 		{
 			name: "Image Self Digest Tag",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source:     "ocidir://" + tempDir + "/testrepo:mirror",
 				Target:     "ocidir://" + tempDir + "/test-mirror:mirror",
 				Type:       "image",
 				DigestTags: &boolT,
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expect: map[string]digest.Digest{
 				"ocidir://" + tempDir + "/test-mirror:mirror":                  dMirror,
 				"ocidir://" + tempDir + "/test-mirror:sha256-" + dMirror.Hex(): dMirror,
@@ -718,13 +720,13 @@ defaults:
 		},
 		{
 			name: "Image Loop",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source:    tsHost + "/testrepo:loop",
 				Target:    tsHost + "/test-loop:loop",
 				Type:      "image",
 				Referrers: &boolT,
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expect: map[string]digest.Digest{
 				tsHost + "/test-loop:loop": dLoop,
 			},
@@ -735,73 +737,73 @@ defaults:
 		},
 		{
 			name: "MissingImage",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source: tsHost + "/testmissing:v1",
 				Target: tsHost + "/testmissing:v1.1",
 				Type:   "image",
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expErr: errs.ErrNotFound,
 		},
 		{
 			name: "MissingRepository",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source: "ocidir://" + tempDir + "/testmissing",
 				Target: tsHost + "/testmissing",
 				Type:   "repository",
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expErr: fs.ErrNotExist,
 		},
 		{
 			name: "InvalidSourceImage",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source: "InvalidTestmissing:v1:garbage",
 				Target: tsHost + "/testrepo:v1",
 				Type:   "image",
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expErr: errs.ErrInvalidReference,
 		},
 		{
 			name: "InvalidTargetImage",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source: tsHost + "/testrepo:v1",
 				Target: "InvalidTestmissing:v1:garbage",
 				Type:   "image",
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expErr: errs.ErrInvalidReference,
 		},
 		{
 			name: "InvalidSourceRepository",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source: "InvalidTestmissing:garbage",
 				Target: tsHost + "/testrepo",
 				Type:   "repository",
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expErr: errs.ErrInvalidReference,
 		},
 		{
 			name: "InvalidTargetRepository",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source: tsHost + "/testrepo",
 				Target: "InvalidTestmissing:garbage",
 				Type:   "repository",
 			},
-			action: actionCopy,
+			action: regsync.ActionCopy,
 			expErr: errs.ErrInvalidReference,
 		},
 		{
 			name: "InvalidType",
-			sync: ConfigSync{
+			sync: regsync.ConfigSync{
 				Source: tsHost + "/testrepo:v1",
 				Target: tsHost + "/test1:v1",
 				Type:   "invalid",
 			},
-			action: actionCopy,
-			expErr: ErrInvalidInput,
+			action: regsync.ActionCopy,
+			expErr: regsync.ErrInvalidInput,
 		},
 	}
 	for _, tc := range tt {
@@ -813,9 +815,10 @@ defaults:
 				throttle:   pq,
 				log:        slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})),
 				abortOnErr: tc.abortOnErr,
+				rs:         rs,
 			}
 			syncSetDefaults(&tc.sync, conf.Defaults)
-			err = rootOpts.process(ctx, tc.sync, tc.action)
+			err = rootOpts.rs.Process(ctx, tc.sync, tc.action)
 			// validate err
 			if tc.expErr != nil {
 				if err == nil {
@@ -876,7 +879,8 @@ func TestProcessRef(t *testing.T) {
 	}
 	// setup various globals normally done by loadConf
 	rc := regclient.New()
-	cs := ConfigSync{
+	rs := regsync.New(rc)
+	cs := regsync.ConfigSync{
 		Source: "ocidir://" + tempDir + "/testrepo",
 		Target: "ocidir://" + tempDir + "/testdest",
 		Type:   "repository",
@@ -887,7 +891,7 @@ func TestProcessRef(t *testing.T) {
 		name         string
 		src          string
 		tgt          string
-		action       actionType
+		action       regsync.ActionType
 		expErr       error
 		checkTgtEq   bool
 		checkTgtDiff bool
@@ -900,21 +904,21 @@ func TestProcessRef(t *testing.T) {
 			name:         "check v1",
 			src:          "v1",
 			tgt:          "tgt",
-			action:       actionCheck,
+			action:       regsync.ActionCheck,
 			checkTgtDiff: true,
 		},
 		{
 			name:       "copy v1",
 			src:        "v1",
 			tgt:        "tgt",
-			action:     actionCopy,
+			action:     regsync.ActionCopy,
 			checkTgtEq: true,
 		},
 		{
 			name:         "missing only on v2",
 			src:          "v2",
 			tgt:          "tgt",
-			action:       actionMissing,
+			action:       regsync.ActionMissing,
 			checkTgtDiff: true,
 		},
 	}
@@ -924,9 +928,10 @@ func TestProcessRef(t *testing.T) {
 			rootOpts := rootOpts{
 				rc: rc,
 				conf: &Config{
-					Sync: []ConfigSync{cs},
+					Sync: []regsync.ConfigSync{cs},
 				},
 				log: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})),
+				rs:  rs,
 			}
 			src, err := ref.New(cs.Source)
 			if err != nil {
@@ -938,7 +943,7 @@ func TestProcessRef(t *testing.T) {
 			}
 			src = src.SetTag(tc.src)
 			tgt = tgt.SetTag(tc.tgt)
-			err = rootOpts.processRef(ctx, cs, src, tgt, tc.action)
+			err = rootOpts.rs.ProcessRef(ctx, cs, src, tgt, tc.action)
 			// validate err
 			if tc.expErr != nil {
 				if err == nil {
@@ -984,14 +989,14 @@ func TestProcessRef(t *testing.T) {
 func TestFilterListVersionScheme(t *testing.T) {
 	tests := []struct {
 		name        string
-		ad          TagAllowDeny
+		ad          regsync.TagAllowDeny
 		input       []string
 		expected    []string
 		expectError bool
 	}{
 		{
 			name: "semver with multiple ranges and deny",
-			ad: TagAllowDeny{
+			ad: regsync.TagAllowDeny{
 				SemverRange: []string{">=1.0.0 <2.0.0", ">=4.0.0"},
 				Deny:        []string{".*-rc.*"},
 			},
@@ -1000,7 +1005,7 @@ func TestFilterListVersionScheme(t *testing.T) {
 		},
 		{
 			name: "semver filters non-semver tags",
-			ad: TagAllowDeny{
+			ad: regsync.TagAllowDeny{
 				SemverRange: []string{">=1.0.0"},
 			},
 			input:    []string{"latest", "dev", "1.0.0", "1.5.0", "main"},
@@ -1008,7 +1013,7 @@ func TestFilterListVersionScheme(t *testing.T) {
 		},
 		{
 			name: "semver with allow/deny combination",
-			ad: TagAllowDeny{
+			ad: regsync.TagAllowDeny{
 				SemverRange: []string{">=1.0.0 <3.0.0"},
 				Deny:        []string{".*-rc.*"},
 			},
@@ -1017,7 +1022,7 @@ func TestFilterListVersionScheme(t *testing.T) {
 		},
 		{
 			name: "no version range (backward compatibility)",
-			ad: TagAllowDeny{
+			ad: regsync.TagAllowDeny{
 				Allow: []string{"v[0-9]+\\.[0-9]+\\.[0-9]+"},
 			},
 			input:    []string{"v1.0.0", "v1.5.0", "latest", "dev"},
@@ -1025,7 +1030,7 @@ func TestFilterListVersionScheme(t *testing.T) {
 		},
 		{
 			name: "empty result when no matches",
-			ad: TagAllowDeny{
+			ad: regsync.TagAllowDeny{
 				SemverRange: []string{">=5.0.0"},
 			},
 			input:    []string{"1.0.0", "2.0.0", "3.0.0"},
@@ -1033,7 +1038,7 @@ func TestFilterListVersionScheme(t *testing.T) {
 		},
 		{
 			name: "multiple ranges skip middle versions",
-			ad: TagAllowDeny{
+			ad: regsync.TagAllowDeny{
 				SemverRange: []string{">=1.0.0 <1.20.0", ">=1.22.0"},
 			},
 			input:    []string{"1.0.0", "1.19.0", "1.20.0", "1.21.0", "1.22.0", "1.23.0"},
@@ -1041,7 +1046,7 @@ func TestFilterListVersionScheme(t *testing.T) {
 		},
 		{
 			name: "version range with allow filter",
-			ad: TagAllowDeny{
+			ad: regsync.TagAllowDeny{
 				SemverRange: []string{">=1.0.0"},
 				Allow:       []string{"v.*"},
 			},
@@ -1050,7 +1055,7 @@ func TestFilterListVersionScheme(t *testing.T) {
 		},
 		{
 			name: "empty version range array",
-			ad: TagAllowDeny{
+			ad: regsync.TagAllowDeny{
 				SemverRange: []string{},
 			},
 			input:    []string{"1.0.0", "2.0.0"},
@@ -1058,7 +1063,7 @@ func TestFilterListVersionScheme(t *testing.T) {
 		},
 		{
 			name: "semver with suffix alpine",
-			ad: TagAllowDeny{
+			ad: regsync.TagAllowDeny{
 				SemverRange: []string{">=1.0.0 <2.0.0"},
 			},
 			input:    []string{"v1.2.3-alpine3.21", "v1.5.0-alpine3.20", "v2.0.0-alpine3.21", "v0.9.0-alpine3.19"},
@@ -1066,7 +1071,7 @@ func TestFilterListVersionScheme(t *testing.T) {
 		},
 		{
 			name: "semver with suffix scratch",
-			ad: TagAllowDeny{
+			ad: regsync.TagAllowDeny{
 				SemverRange: []string{">=5.0.0"},
 			},
 			input:    []string{"v5-scratch", "v4-scratch", "v6-scratch", "v5.1-scratch"},
@@ -1074,7 +1079,7 @@ func TestFilterListVersionScheme(t *testing.T) {
 		},
 		{
 			name: "semver with suffix mixed",
-			ad: TagAllowDeny{
+			ad: regsync.TagAllowDeny{
 				SemverRange: []string{">=1.0.0 <3.0.0"},
 			},
 			input:    []string{"v1.0.0", "v1.5.0-alpine", "v2.0.0-scratch", "v2.5.1-debian", "v3.0.0-alpine"},
@@ -1082,7 +1087,7 @@ func TestFilterListVersionScheme(t *testing.T) {
 		},
 		{
 			name: "semver major version only",
-			ad: TagAllowDeny{
+			ad: regsync.TagAllowDeny{
 				SemverRange: []string{">=2 <5"},
 			},
 			input:    []string{"v1", "v2", "v3", "v4", "v5", "v6"},
@@ -1090,7 +1095,7 @@ func TestFilterListVersionScheme(t *testing.T) {
 		},
 		{
 			name: "semver major.minor only",
-			ad: TagAllowDeny{
+			ad: regsync.TagAllowDeny{
 				SemverRange: []string{">=1.5 <2.0"},
 			},
 			input:    []string{"v1.4", "v1.5", "v1.6", "v1.9", "v2.0", "v2.1"},
@@ -1098,7 +1103,7 @@ func TestFilterListVersionScheme(t *testing.T) {
 		},
 		{
 			name: "semver mixed version formats",
-			ad: TagAllowDeny{
+			ad: regsync.TagAllowDeny{
 				SemverRange: []string{">=1.0.0 <3.0.0"},
 			},
 			input:    []string{"v1", "v1.5", "v1.5.0", "v2", "v2.0", "v2.0.0", "v3", "v3.0.0"},
@@ -1106,7 +1111,7 @@ func TestFilterListVersionScheme(t *testing.T) {
 		},
 		{
 			name: "semver with deny on suffixes",
-			ad: TagAllowDeny{
+			ad: regsync.TagAllowDeny{
 				SemverRange: []string{">=1.0.0"},
 				Deny:        []string{".*-alpine.*"},
 			},
@@ -1115,7 +1120,7 @@ func TestFilterListVersionScheme(t *testing.T) {
 		},
 		{
 			name: "semver + allow adds non-semver tags",
-			ad: TagAllowDeny{
+			ad: regsync.TagAllowDeny{
 				SemverRange: []string{">=1.0.0 <2.0.0"},
 				Allow:       []string{"latest", "edge"},
 			},
@@ -1124,7 +1129,7 @@ func TestFilterListVersionScheme(t *testing.T) {
 		},
 		{
 			name: "semver + allow + deny combines all filters",
-			ad: TagAllowDeny{
+			ad: regsync.TagAllowDeny{
 				SemverRange: []string{">=1.0.0"},
 				Allow:       []string{"latest", "stable"},
 				Deny:        []string{".*-rc.*", "latest"},
@@ -1134,7 +1139,7 @@ func TestFilterListVersionScheme(t *testing.T) {
 		},
 		{
 			name: "allow without semver still works (backward compatible)",
-			ad: TagAllowDeny{
+			ad: regsync.TagAllowDeny{
 				Allow: []string{"v[0-9]+\\.[0-9]+"},
 			},
 			input:    []string{"v1.0", "v1.5", "v2.0", "latest", "edge"},
@@ -1142,7 +1147,7 @@ func TestFilterListVersionScheme(t *testing.T) {
 		},
 		{
 			name: "semver + allow with overlapping matches",
-			ad: TagAllowDeny{
+			ad: regsync.TagAllowDeny{
 				SemverRange: []string{">=1.0.0"},
 				Allow:       []string{"v[0-9]+\\.[0-9]+\\.[0-9]+"},
 			},
@@ -1153,7 +1158,7 @@ func TestFilterListVersionScheme(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := filterTagList(tt.ad, tt.input)
+			result, err := regsync.FilterTagList(tt.ad, tt.input)
 
 			if tt.expectError {
 				if err == nil {
@@ -1206,7 +1211,7 @@ func TestConfigRead(t *testing.T) {
 					},
 				},
 				Defaults: ConfigDefaults{
-					RateLimit: ConfigRateLimit{
+					RateLimit: regsync.ConfigRateLimit{
 						Min:   100,
 						Retry: 15 * time.Minute,
 					},
@@ -1216,14 +1221,14 @@ func TestConfigRead(t *testing.T) {
 					CacheCount: 500,
 					CacheTime:  5 * time.Minute,
 				},
-				Sync: []ConfigSync{
+				Sync: []regsync.ConfigSync{
 					{
 						Source:   "busybox:latest",
 						Target:   "registry:5000/library/busybox:latest",
 						Type:     "image",
 						Schedule: "15 3 * * *",
 						Backup:   "bkup-{{.Ref.Tag}}",
-						RateLimit: ConfigRateLimit{
+						RateLimit: regsync.ConfigRateLimit{
 							Min:   100,
 							Retry: 15 * time.Minute,
 						},
@@ -1239,12 +1244,12 @@ func TestConfigRead(t *testing.T) {
 						Source: "alpine",
 						Target: "registry:5000/hub/alpine",
 						Type:   "repository",
-						Tags: TagAllowDeny{
+						Tags: regsync.TagAllowDeny{
 							Allow: []string{"3", "3.9", "latest"},
 						},
 						Interval: 60 * time.Minute,
 						Backup:   "bkup-{{.Ref.Tag}}",
-						RateLimit: ConfigRateLimit{
+						RateLimit: regsync.ConfigRateLimit{
 							Min:   100,
 							Retry: 15 * time.Minute,
 						},
@@ -1260,12 +1265,12 @@ func TestConfigRead(t *testing.T) {
 						Source: "gcr.io/example/repo",
 						Target: "registry:5000/gcr/example/repo",
 						Type:   "repository",
-						Tags: TagAllowDeny{
+						Tags: regsync.TagAllowDeny{
 							Allow: []string{"3", "3.9", "latest"},
 						},
 						Interval: 60 * time.Minute,
 						Backup:   "bkup-{{.Ref.Tag}}",
-						RateLimit: ConfigRateLimit{
+						RateLimit: regsync.ConfigRateLimit{
 							Min:   100,
 							Retry: 15 * time.Minute,
 						},
@@ -1293,17 +1298,17 @@ func TestConfigRead(t *testing.T) {
 				},
 				Defaults: ConfigDefaults{
 					Schedule: "15 3 * * *",
-					RateLimit: ConfigRateLimit{
+					RateLimit: regsync.ConfigRateLimit{
 						Retry: rateLimitRetryMin,
 					},
 				},
-				Sync: []ConfigSync{
+				Sync: []regsync.ConfigSync{
 					{
 						Source:   "busybox:latest",
 						Target:   "registry:5000/library/busybox:latest",
 						Type:     "image",
 						Interval: 12 * time.Hour,
-						RateLimit: ConfigRateLimit{
+						RateLimit: regsync.ConfigRateLimit{
 							Retry: rateLimitRetryMin,
 						},
 						MediaTypes:      defaultMediaTypes,
@@ -1319,7 +1324,7 @@ func TestConfigRead(t *testing.T) {
 						Target:   "registry:5000/library/alpine:latest",
 						Type:     "image",
 						Schedule: "15 3 * * *",
-						RateLimit: ConfigRateLimit{
+						RateLimit: regsync.ConfigRateLimit{
 							Retry: rateLimitRetryMin,
 						},
 						MediaTypes:      defaultMediaTypes,
