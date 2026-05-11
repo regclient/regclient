@@ -1,12 +1,16 @@
 package ocidir
 
 import (
+	"encoding/json"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/opencontainers/go-digest"
 
+	"github.com/regclient/regclient/internal/reproducible"
 	"github.com/regclient/regclient/scheme"
+	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/mediatype"
@@ -23,7 +27,9 @@ var (
 )
 
 func TestIndex(t *testing.T) {
-	t.Parallel()
+	// t.Parallel() // unable to use parallel when setting env
+	t.Setenv(reproducible.EpocEnv, "0")
+	expectCreated := "1970-01-01T00:00:00Z"
 	// ctx := context.Background()
 	tempDir := t.TempDir()
 	o := New()
@@ -37,49 +43,49 @@ func TestIndex(t *testing.T) {
 	rA := r.SetTag("tag-a")
 	rB := r.SetTag("tag-b")
 	rC := r.SetTag("tag-c")
-	rDig := r.SetDigest(dig1.String())
-	descNoTag := descriptor.Descriptor{
+	rDig1 := r.SetDigest(dig1.String())
+	descDig1 := descriptor.Descriptor{
 		MediaType: mediatype.Docker2Manifest,
 		Size:      1234,
 		Digest:    dig1,
 	}
-	descA := descriptor.Descriptor{
+	descDig2TagA := descriptor.Descriptor{
 		MediaType: mediatype.Docker2Manifest,
 		Size:      1234,
 		Digest:    dig2,
 		Annotations: map[string]string{
-			aOCIRefName: "tag-a",
+			types.AnnotationRefName: "tag-a",
 		},
 	}
-	descB := descriptor.Descriptor{
+	descDig2TagB := descriptor.Descriptor{
 		MediaType: mediatype.Docker2Manifest,
 		Size:      1234,
 		Digest:    dig2,
 		Annotations: map[string]string{
-			aOCIRefName: "tag-b",
+			types.AnnotationRefName: "tag-b",
 		},
 	}
-	descC := descriptor.Descriptor{
+	descDig3TagFullC := descriptor.Descriptor{
 		MediaType: mediatype.Docker2Manifest,
 		Size:      1234,
 		Digest:    dig3,
 		Annotations: map[string]string{
-			aOCIRefName: rC.CommonName(),
+			types.AnnotationRefName: rC.CommonName(),
 		},
 	}
 	tests := []struct {
 		name         string
 		index        v1.Index
-		get          ref.Ref
+		getRef       ref.Ref
 		expectGet    descriptor.Descriptor
 		expectGetErr error
-		set          ref.Ref
+		setRef       ref.Ref
 		setDesc      descriptor.Descriptor
 		expectLen    int
 	}{
 		{
 			name:         "empty",
-			get:          rA,
+			getRef:       rA,
 			expectGetErr: errs.ErrNotFound,
 		},
 		{
@@ -88,13 +94,13 @@ func TestIndex(t *testing.T) {
 				Versioned: v1.IndexSchemaVersion,
 				MediaType: mediatype.OCI1ManifestList,
 				Manifests: []descriptor.Descriptor{
-					descNoTag,
+					descDig1,
 				},
 			},
-			get:       rDig,
-			expectGet: descNoTag,
-			set:       rA,
-			setDesc:   descA,
+			getRef:    rDig1,
+			expectGet: descDig1,
+			setRef:    rA,
+			setDesc:   descDig2TagA,
 			expectLen: 2,
 		},
 		{
@@ -103,15 +109,15 @@ func TestIndex(t *testing.T) {
 				Versioned: v1.IndexSchemaVersion,
 				MediaType: mediatype.OCI1ManifestList,
 				Manifests: []descriptor.Descriptor{
-					descNoTag,
-					descA,
+					descDig1,
+					descDig2TagA,
 				},
 			},
-			get:       rDig,
-			expectGet: descNoTag,
-			set:       rC,
-			setDesc:   descNoTag,
-			expectLen: 2,
+			getRef:    rDig1,
+			expectGet: descDig1,
+			setRef:    rC,
+			setDesc:   descDig1,
+			expectLen: 3,
 		},
 		{
 			name: "tag b",
@@ -119,15 +125,15 @@ func TestIndex(t *testing.T) {
 				Versioned: v1.IndexSchemaVersion,
 				MediaType: mediatype.OCI1ManifestList,
 				Manifests: []descriptor.Descriptor{
-					descNoTag,
-					descB,
+					descDig1,
+					descDig2TagB,
 				},
 			},
-			get:       rB,
-			expectGet: descB,
-			set:       rB,
-			setDesc:   descNoTag,
-			expectLen: 1,
+			getRef:    rB,
+			expectGet: descDig2TagB,
+			setRef:    rB,
+			setDesc:   descDig1,
+			expectLen: 2,
 		},
 		{
 			name: "tag c",
@@ -135,14 +141,14 @@ func TestIndex(t *testing.T) {
 				Versioned: v1.IndexSchemaVersion,
 				MediaType: mediatype.OCI1ManifestList,
 				Manifests: []descriptor.Descriptor{
-					descA,
-					descC,
+					descDig2TagA,
+					descDig3TagFullC,
 				},
 			},
-			get:       rC,
-			expectGet: descC,
-			set:       rA,
-			setDesc:   descNoTag,
+			getRef:    rC,
+			expectGet: descDig3TagFullC,
+			setRef:    rA,
+			setDesc:   descDig1,
 			expectLen: 2,
 		},
 	}
@@ -157,8 +163,8 @@ func TestIndex(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to read index: %v", err)
 			}
-			if !tt.get.IsZero() {
-				d, err := indexGet(index, tt.get)
+			if !tt.getRef.IsZero() {
+				d, err := indexGet(index, tt.getRef)
 				if tt.expectGetErr != nil {
 					if err == nil {
 						t.Errorf("indexGet did not fail")
@@ -173,10 +179,16 @@ func TestIndex(t *testing.T) {
 					}
 				}
 			}
-			if !tt.set.IsZero() {
-				err := indexSet(&index, tt.set, tt.setDesc)
+			if !tt.setRef.IsZero() {
+				err := indexSet(&index, tt.setRef, tt.setDesc)
 				if err != nil {
 					t.Errorf("indexSet failed: %v", err)
+				}
+				if !slices.ContainsFunc(index.Manifests, func(d descriptor.Descriptor) bool {
+					return d.Digest == tt.setDesc.Digest && d.Annotations != nil && d.Annotations[types.AnnotationCreated] == expectCreated
+				}) {
+					b, _ := json.Marshal(index)
+					t.Errorf("indexSet did not configure the timestamp for digest %s:\n%s", tt.setDesc.Digest, string(b))
 				}
 			}
 			if len(index.Manifests) != tt.expectLen {

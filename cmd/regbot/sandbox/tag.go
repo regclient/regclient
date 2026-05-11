@@ -1,9 +1,13 @@
 package sandbox
 
 import (
+	"fmt"
 	"log/slog"
 
 	lua "github.com/yuin/gopher-lua"
+
+	"github.com/regclient/regclient/cmd/regbot/internal/go2lua"
+	"github.com/regclient/regclient/scheme"
 )
 
 func setupTag(s *Sandbox) {
@@ -45,16 +49,37 @@ func (s *Sandbox) tagDelete(ls *lua.LState) int {
 	return 0
 }
 
+type tagLsOpts struct {
+	Limit int    `json:"limit"`
+	Last  string `json:"last"`
+}
+
 func (s *Sandbox) tagLs(ls *lua.LState) int {
 	err := s.ctx.Err()
 	if err != nil {
 		ls.RaiseError("Context error: %v", err)
 	}
 	r := s.checkReference(ls, 1)
+	opts := tagLsOpts{}
+	optsArgs := []scheme.TagOpts{}
+	if ls.GetTop() > 1 {
+		tab := ls.CheckTable(2)
+		err := go2lua.Import(ls, tab, &opts, nil)
+		if err != nil {
+			ls.ArgError(2, fmt.Sprintf("Failed to parse options: %v", err))
+		}
+		if opts.Limit > 0 {
+			optsArgs = append(optsArgs, scheme.WithTagLimit(opts.Limit))
+		}
+		if opts.Last != "" {
+			optsArgs = append(optsArgs, scheme.WithTagLast(opts.Last))
+		}
+	}
 	s.log.Debug("Listing tags",
 		slog.String("script", s.name),
-		slog.String("repo", r.r.CommonName()))
-	tl, err := s.rc.TagList(s.ctx, r.r)
+		slog.String("repo", r.r.CommonName()),
+		slog.Any("opts", opts))
+	tl, err := s.rc.TagList(s.ctx, r.r, optsArgs...)
 	if err != nil {
 		ls.RaiseError("Failed retrieving tag list: %v", err)
 	}

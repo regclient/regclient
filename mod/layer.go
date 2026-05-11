@@ -481,7 +481,8 @@ func WithLayerTimestamp(optTime OptTime) Opts {
 				return nil
 			})
 		}
-		dc.stepsLayerFile = append(dc.stepsLayerFile,
+		dc.stepsLayerFile = append(
+			dc.stepsLayerFile,
 			func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dl *dagLayer, th *tar.Header, tr io.Reader) (*tar.Header, io.Reader, changes, error) {
 				if optTime.Set.IsZero() {
 					return nil, nil, unchanged, fmt.Errorf("timestamp not available")

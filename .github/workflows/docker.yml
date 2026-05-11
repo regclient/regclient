@@ -29,7 +29,7 @@ jobs:
 
     env:
       ALPINE_NAME: "alpine:3"
-      ALPINE_DIGEST: "sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659" # 3.23.3
+      ALPINE_DIGEST: "sha256:5b10f432ef3da1b8d4c7eb6c487f2f5a8f096bc91145e68878dd4a5019afde11" # 3.23.4
 
     steps:
     - name: Check out code
@@ -65,7 +65,7 @@ jobs:
           MINOR="${VERSION%.*}"
           MAJOR="${MINOR%.*}"
           TAG_COPIES="${HUB_IMAGE}:${MINOR}${EXT},${HUB_IMAGE}:${MAJOR}${EXT}"
-          TAG_COPIES="${GHCR_IMAGE}:${MINOR}${EXT},${GHCR_IMAGE}:${MAJOR}${EXT}"
+          TAG_COPIES="${TAG_COPIES},${GHCR_IMAGE}:${MINOR}${EXT},${GHCR_IMAGE}:${MAJOR}${EXT}"
           if [ "${{ matrix.type }}" == "scratch" ]; then
             TAG_COPIES="${TAG_COPIES},${HUB_IMAGE}:latest"
             TAG_COPIES="${TAG_COPIES},${GHCR_IMAGE}:latest"
@@ -122,7 +122,7 @@ jobs:
 
     - name: Install cosign
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
-      uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003 # v4.1.1
+      uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       with:
         cosign-release: "v3.0.6"
     
@@ -131,11 +131,11 @@ jobs:
       uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
       id: syft
       with:
-        syft-version: "v1.42.4"
+        syft-version: "v1.44.0"
     
     # Dogfooding, use regctl to modify regclient images to improve reproducibility
     - name: Install regctl
-      uses: regclient/actions/regctl-installer@f07124ffba4b0cbf96b2a666d481ed9d44b5e7e4 # main
+      uses: regclient/actions/regctl-installer@f3c6d87835906c175eb6ccfc18b348b69bb447e7 # main
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       with:
         release: main

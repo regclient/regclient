@@ -111,6 +111,17 @@ echo 64 arms | regctl artifact put \
   --artifact-type application/example.arms -m application/example.arms \
   --subject ocidir://testrepo:v2 --platform linux/arm64
 
+# create two artifacts on v3, but push the manifests directly and remove the fallback tag
+echo oatmeal | regctl artifact put \
+  --artifact-type application/example.sbom -m application/example.sbom.breakfast \
+  --annotation type=eat \
+  --subject ocidir://testrepo:v3 --by-digest ocidir://testrepo
+echo orange juice | regctl artifact put \
+  --artifact-type application/example.sbom -m application/example.sbom.breakfast \
+  --annotation type=drink \
+  --subject ocidir://testrepo:v3 --by-digest ocidir://testrepo
+regctl manifest delete --force-tag-dereference "ocidir://testrepo:$(regctl image digest ocidir://testrepo:v3 | tr ':' '-')"
+
 # another standalone artifact with multiple layers
 regctl artifact put \
   --artifact-type application/example.layers \

@@ -80,6 +80,16 @@ func TestArtifactGet(t *testing.T) {
 			args:      []string{"artifact", "get", "--subject", "ocidir://../../testdata/testrepo:v2", "--filter-artifact-type", "application/example.sbom", "--sort-annotation", "preference", "--external", "ocidir://../../testdata/external"},
 			expectOut: "bacon",
 		},
+		{
+			name:      "Slow referrers missing",
+			args:      []string{"artifact", "get", "--subject", "ocidir://../../testdata/testrepo:v3", "--filter-artifact-type", "application/example.sbom", "--filter-annotation", "type=eat"},
+			expectErr: errs.ErrNotFound,
+		},
+		{
+			name:      "Slow referrers",
+			args:      []string{"artifact", "get", "--subject", "ocidir://../../testdata/testrepo:v3", "--filter-artifact-type", "application/example.sbom", "--filter-annotation", "type=eat", "--slow-referrers"},
+			expectOut: "oatmeal",
+		},
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
@@ -158,6 +168,12 @@ func TestArtifactList(t *testing.T) {
 			name:        "External referrers",
 			args:        []string{"artifact", "list", "ocidir://../../testdata/testrepo:v2", "--external", "ocidir://../../testdata/external"},
 			expectOut:   "Referrers:",
+			outContains: true,
+		},
+		{
+			name:        "Slow referrers",
+			args:        []string{"artifact", "list", "ocidir://../../testdata/testrepo:v3", "--slow-referrers"},
+			expectOut:   "application/example.sbom",
 			outContains: true,
 		},
 	}
@@ -393,6 +409,12 @@ func TestArtifactTree(t *testing.T) {
 			name:        "External referrers",
 			args:        []string{"artifact", "tree", "ocidir://../../testdata/testrepo:v2", "--external", "ocidir://../../testdata/external"},
 			expectOut:   "Referrers",
+			outContains: true,
+		},
+		{
+			name:        "Slow referrers",
+			args:        []string{"artifact", "tree", "ocidir://../../testdata/testrepo:v3", "--slow-referrers"},
+			expectOut:   "application/example.sbom",
 			outContains: true,
 		},
 	}

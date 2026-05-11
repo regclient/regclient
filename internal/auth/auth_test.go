@@ -216,6 +216,9 @@ func TestAuth(t *testing.T) {
 	defer ts.Close()
 	tsURL, _ := url.Parse(ts.URL)
 	tsHost := tsURL.Host
+	tsHTTPS := *tsURL
+	tsHTTPS.Scheme = "https"
+	externURL, _ := url.Parse("http://registry.example.org/v2/project/manifests/latest")
 
 	tests := []struct {
 		name           string
@@ -310,6 +313,50 @@ func TestAuth(t *testing.T) {
 				Header: http.Header{},
 			},
 			wantAuthHeader: "Bearer token2",
+		},
+		{
+			name: "reject redirect to loopback",
+			auth: NewAuth(
+				WithClientID(clientID),
+				WithCreds(credsFn),
+			),
+			handleResponse: &http.Response{
+				Request: &http.Request{
+					URL: externURL,
+				},
+				StatusCode: http.StatusUnauthorized,
+				Header: http.Header{
+					http.CanonicalHeaderKey("WWW-Authenticate"): []string{
+						`Bearer realm="http://127.0.0.1/token",service="example.registry.org",scope="repository:reponame:pull"`,
+					},
+				},
+			},
+			handleRequest: &http.Request{
+				URL: externURL,
+			},
+			wantErrReq: errs.ErrHTTPUnauthorized,
+		},
+		{
+			name: "reject http downgrade",
+			auth: NewAuth(
+				WithClientID(clientID),
+				WithCreds(credsFn),
+			),
+			handleResponse: &http.Response{
+				Request: &http.Request{
+					URL: &tsHTTPS,
+				},
+				StatusCode: http.StatusUnauthorized,
+				Header: http.Header{
+					http.CanonicalHeaderKey("WWW-Authenticate"): []string{
+						`Bearer realm="` + tsURL.String() + `/token",service="` + tsHost + `",scope="repository:reponame:pull"`,
+					},
+				},
+			},
+			handleRequest: &http.Request{
+				URL: &tsHTTPS,
+			},
+			wantErrReq: errs.ErrHTTPUnauthorized,
 		},
 	}
 
@@ -520,7 +567,8 @@ func TestBearer(t *testing.T) {
 	defer ts.Close()
 	tsURL, _ := url.Parse(ts.URL)
 	tsHost := tsURL.Host
-	bearer := NewBearerHandler(&http.Client{}, useragent, tsHost,
+	bearer := NewBearerHandler(
+		&http.Client{}, useragent, tsHost,
 		func(h string) Cred { return Cred{User: user, Password: pass} },
 		slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
 	).(*bearerHandler)
@@ -537,7 +585,8 @@ func TestBearer(t *testing.T) {
 	c, err := parseAuthHeader(
 		`Bearer realm="` + tsURL.String() +
 			`/tokens",service="test"` +
-			`,scope="repository:reponame:pull"`)
+			`,scope="repository:reponame:pull"`,
+	)
 	if err != nil {
 		t.Errorf("failed on parse challenge 1: %v", err)
 	}
@@ -744,7 +793,8 @@ func TestBearerToken(t *testing.T) {
 	defer ts.Close()
 	tsURL, _ := url.Parse(ts.URL)
 	tsHost := tsURL.Host
-	bearer := NewBearerHandler(&http.Client{}, useragent, tsHost,
+	bearer := NewBearerHandler(
+		&http.Client{}, useragent, tsHost,
 		func(h string) Cred { return Cred{User: user, Token: token} },
 		slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
 	).(*bearerHandler)
@@ -757,7 +807,8 @@ func TestBearerToken(t *testing.T) {
 	c, err := parseAuthHeader(
 		`Bearer realm="` + tsURL.String() +
 			`/tokens",service="test"` +
-			`,scope="repository:reponame:pull"`)
+			`,scope="repository:reponame:pull"`,
+	)
 	if err != nil {
 		t.Errorf("failed on parse challenge: %v", err)
 	}
@@ -765,7 +816,7 @@ func TestBearerToken(t *testing.T) {
 	if err != nil {
 		t.Errorf("failed on response to token: %v", err)
 	}
-	req, err := http.NewRequest("GET", "http://localhost:5000", nil)
+	req, err := http.NewRequest("GET", tsURL.String()+"/v2/project/manifests/latest", nil)
 	if err != nil {
 		t.Fatalf("failed to generate new request: %v", err)
 	}

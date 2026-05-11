@@ -486,7 +486,8 @@ regctl image mod registry.example.org/regctl:v0.5.1-alpine \
 			if err != nil && val != "" {
 				vSlice = []string{"/bin/sh", "-c", val}
 			}
-			opts.modOpts = append(opts.modOpts,
+			opts.modOpts = append(
+				opts.modOpts,
 				mod.WithConfigCmd(vSlice),
 			)
 			return nil
@@ -500,7 +501,8 @@ regctl image mod registry.example.org/regctl:v0.5.1-alpine \
 			if err != nil && val != "" {
 				vSlice = []string{"/bin/sh", "-c", val}
 			}
-			opts.modOpts = append(opts.modOpts,
+			opts.modOpts = append(
+				opts.modOpts,
 				mod.WithConfigEntrypoint(vSlice),
 			)
 			return nil
@@ -513,7 +515,8 @@ regctl image mod registry.example.org/regctl:v0.5.1-alpine \
 			if err != nil {
 				return err
 			}
-			opts.modOpts = append(opts.modOpts,
+			opts.modOpts = append(
+				opts.modOpts,
 				mod.WithConfigPlatform(p),
 			)
 			return nil
@@ -533,7 +536,8 @@ regctl image mod registry.example.org/regctl:v0.5.1-alpine \
 				}
 				return fmt.Errorf("unknown time option: %s", strings.Join(keys, ", "))
 			}
-			opts.modOpts = append(opts.modOpts,
+			opts.modOpts = append(
+				opts.modOpts,
 				mod.WithConfigTimestamp(ot),
 			)
 			return nil
@@ -798,7 +802,8 @@ regctl image mod registry.example.org/regctl:v0.5.1-alpine \
 				}
 				return fmt.Errorf("unknown time option: %s", strings.Join(keys, ", "))
 			}
-			opts.modOpts = append(opts.modOpts,
+			opts.modOpts = append(
+				opts.modOpts,
 				mod.WithLayerTimestamp(ot),
 			)
 			return nil
@@ -815,7 +820,8 @@ regctl image mod registry.example.org/regctl:v0.5.1-alpine \
 				mod.OptTime{
 					Set:   t,
 					After: t,
-				}))
+				},
+			))
 			return nil
 		},
 	}, "layer-time-max", `max timestamp for a layer`)
@@ -884,7 +890,8 @@ regctl image mod registry.example.org/regctl:v0.5.1-alpine \
 				}
 				return fmt.Errorf("unknown time option: %s", strings.Join(keys, ", "))
 			}
-			opts.modOpts = append(opts.modOpts,
+			opts.modOpts = append(
+				opts.modOpts,
 				mod.WithConfigTimestamp(ot),
 				mod.WithLayerTimestamp(ot),
 			)
@@ -1667,7 +1674,7 @@ func (opts *imageOpts) runImageMod(cmd *cobra.Command, args []string) error {
 	var rTgt ref.Ref
 	if opts.create != "" {
 		if strings.ContainsAny(opts.create, "/:") {
-			rTgt, err = ref.New((opts.create))
+			rTgt, err = ref.New(opts.create)
 			if err != nil {
 				return fmt.Errorf("failed to parse new image name %s: %w", opts.create, err)
 			}

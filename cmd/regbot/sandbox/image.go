@@ -208,7 +208,8 @@ func (s *Sandbox) imageCopy(ls *lua.LState) int {
 		}
 		defer done()
 	}
-	s.log.Info("Copy image",
+	s.log.Info(
+		"Copy image",
 		slog.String("script", s.name),
 		slog.String("source", src.r.CommonName()),
 		slog.String("target", tgt.r.CommonName()),

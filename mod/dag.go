@@ -13,6 +13,7 @@ import (
 	"github.com/opencontainers/go-digest"
 
 	"github.com/regclient/regclient"
+	"github.com/regclient/regclient/internal/reproducible"
 	"github.com/regclient/regclient/types/blob"
 	"github.com/regclient/regclient/types/descriptor"
 	"github.com/regclient/regclient/types/errs"
@@ -29,6 +30,8 @@ const (
 	replaced
 	deleted
 )
+
+var timeStart = reproducible.TimeNow()
 
 type dagConfig struct {
 	stepsManifest  []func(context.Context, *regclient.RegClient, ref.Ref, ref.Ref, *dagManifest) error

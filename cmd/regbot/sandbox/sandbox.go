@@ -164,7 +164,7 @@ func (s *Sandbox) sandboxLog(ls *lua.LState) int {
 func wrapUserData(ls *lua.LState, udVal any, wrapVal any, udType string) (lua.LValue, error) {
 	ud := ls.NewUserData()
 	ud.Value = udVal
-	udTypeMT, ok := (ls.GetTypeMetatable(udType)).(*lua.LTable)
+	udTypeMT, ok := ls.GetTypeMetatable(udType).(*lua.LTable)
 	if !ok {
 		return nil, ErrInvalidInput
 	}
