@@ -19,6 +19,7 @@ const (
 	luaReferenceName   = "reference"
 	luaTagName         = "tag"
 	luaManifestName    = "manifest"
+	luaDescriptorName  = "descriptor"
 	luaImageName       = "image"
 	luaImageConfigName = "imageconfig"
 	luaBlobName        = "blob"
@@ -44,6 +45,7 @@ var luaMods = []LuaMod{
 	setupTag,
 	setupImage,
 	setupManifest,
+	setupDescriptor,
 	setupBlob,
 }
 

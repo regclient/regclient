@@ -24,6 +24,7 @@ func setupManifest(s *Sandbox) {
 		luaManifestName,
 		map[string]lua.LGFunction{
 			"__tostring": s.manifestJSON,
+			"descriptor": s.manifestDescriptor,
 			"get":        s.manifestGet,
 			"getList":    s.manifestGetList,
 			"head":       s.manifestHead,
@@ -33,6 +34,7 @@ func setupManifest(s *Sandbox) {
 			"__index": {
 				"config":        s.configGet,
 				"delete":        s.manifestDelete,
+				"descriptor":    s.manifestDescriptor,
 				"export":        s.manifestExport,
 				"get":           s.manifestGet,
 				"head":          s.manifestHead,
@@ -45,15 +47,10 @@ func setupManifest(s *Sandbox) {
 }
 
 func (s *Sandbox) checkManifest(ls *lua.LState, i int, list bool, head bool) *sbManifest {
-	var m *sbManifest
-	switch ls.Get(i).Type() {
-	case lua.LTString:
-		r, err := ref.New(ls.CheckString(1))
-		if err != nil {
-			ls.RaiseError("reference parsing failed: %v", err)
-		}
+	fetchManifest := func(r ref.Ref) *sbManifest {
+		var m *sbManifest
 		if head {
-			rcM, err := s.rc.ManifestHead(s.ctx, r)
+			rcM, err := s.rc.ManifestHead(s.ctx, r, regclient.WithManifestRequireDigest())
 			if err != nil {
 				ls.RaiseError("Failed retrieving \"%s\" manifest: %v", r.CommonName(), err)
 			}
@@ -65,6 +62,17 @@ func (s *Sandbox) checkManifest(ls *lua.LState, i int, list bool, head bool) *sb
 			}
 			m = &sbManifest{m: rcM, r: r}
 		}
+		return m
+	}
+
+	var m *sbManifest
+	switch ls.Get(i).Type() {
+	case lua.LTString:
+		r, err := ref.New(ls.CheckString(1))
+		if err != nil {
+			ls.RaiseError("reference parsing failed: %v", err)
+		}
+		m = fetchManifest(r)
 	case lua.LTUserData:
 		ud := ls.CheckUserData(i)
 		switch ud.Value.(type) {
@@ -75,19 +83,7 @@ func (s *Sandbox) checkManifest(ls *lua.LState, i int, list bool, head bool) *sb
 			m = &sbManifest{r: c.r, m: c.m}
 		case *reference:
 			r := ud.Value.(*reference)
-			if head {
-				rcM, err := s.rc.ManifestHead(s.ctx, r.r)
-				if err != nil {
-					ls.RaiseError("Failed retrieving \"%s\" manifest: %v", r.r.CommonName(), err)
-				}
-				m = &sbManifest{m: rcM, r: r.r}
-			} else {
-				rcM, err := s.rcManifestGet(r.r, list, "")
-				if err != nil {
-					ls.RaiseError("manifest pull failed: %v", err)
-				}
-				m = &sbManifest{m: rcM, r: r.r}
-			}
+			m = fetchManifest(r.r)
 		default:
 			ls.ArgError(i, "manifest expected")
 		}
@@ -228,6 +224,22 @@ func (s *Sandbox) manifestHead(ls *lua.LState) int {
 	ud, err := wrapUserData(ls, &sbManifest{m: m, r: r.r}, m, luaManifestName)
 	if err != nil {
 		ls.RaiseError("Failed packaging \"%s\" manifest: %v", r.r.CommonName(), err)
+	}
+	ls.Push(ud)
+	return 1
+}
+
+func (s *Sandbox) manifestDescriptor(ls *lua.LState) int {
+	err := s.ctx.Err()
+	if err != nil {
+		ls.RaiseError("Context error: %v", err)
+	}
+
+	d := s.checkDescriptor(ls, 1)
+
+	ud, err := wrapUserData(ls, d, d.d, luaDescriptorName)
+	if err != nil {
+		ls.RaiseError("Failed packaging \"%s\" descriptor: %v", d.r.CommonName(), err)
 	}
 	ls.Push(ud)
 	return 1
