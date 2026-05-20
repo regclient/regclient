@@ -21,7 +21,7 @@
 {"name":"gha-uses-commit","key":"https://github.com/docker/build-push-action.git:v7.1.0","version":"bcafcacb16a39f128d818304e6c9c0c18556b85f"}
 {"name":"gha-uses-commit","key":"https://github.com/docker/login-action.git:v4.1.0","version":"4907a6ddec9925e35a0a9e82d7399ccc52663121"}
 {"name":"gha-uses-commit","key":"https://github.com/docker/setup-buildx-action.git:v4.0.0","version":"4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd"}
-{"name":"gha-uses-commit","key":"https://github.com/regclient/actions.git:main","version":"f3c6d87835906c175eb6ccfc18b348b69bb447e7"}
+{"name":"gha-uses-commit","key":"https://github.com/regclient/actions.git:main","version":"c70ad64367908075211b10dcd2ab9fad4bfa1816"}
 {"name":"gha-uses-commit","key":"https://github.com/sigstore/cosign-installer.git:v4.1.2","version":"6f9f17788090df1f26f669e9d70d6ae9567deba6"}
 {"name":"gha-uses-commit","key":"https://github.com/softprops/action-gh-release.git:v3.0.0","version":"b4309332981a82ec1c5618f44dd2e27cc8bfbfda"}
 {"name":"gha-uses-semver","key":"https://github.com/actions/checkout.git","version":"v6.0.2"}
@@ -36,7 +36,7 @@
 {"name":"gha-uses-semver","key":"https://github.com/softprops/action-gh-release.git","version":"v3.0.0"}
 {"name":"go-mod-golang-release","key":"golang-oldest","version":"1.25.0"}
 {"name":"makefile-ci-distribution","key":"docker.io/library/registry","version":"3.1.1"}
-{"name":"makefile-ci-zot","key":"ghcr.io/project-zot/zot-linux-amd64","version":"v2.1.16"}
+{"name":"makefile-ci-zot","key":"ghcr.io/project-zot/zot-linux-amd64","version":"v2.1.17"}
 {"name":"makefile-go-vulncheck","key":"https://go.googlesource.com/vuln.git","version":"v1.3.0"}
 {"name":"makefile-gofumpt","key":"https://github.com/mvdan/gofumpt.git","version":"v0.10.0"}
 {"name":"makefile-gomajor","key":"https://github.com/icholy/gomajor.git","version":"v0.15.0"}
