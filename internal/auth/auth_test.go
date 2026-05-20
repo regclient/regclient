@@ -334,7 +334,7 @@ func TestAuth(t *testing.T) {
 			handleRequest: &http.Request{
 				URL: externURL,
 			},
-			wantErrReq: errs.ErrHTTPUnauthorized,
+			wantErrReq: errs.ErrHTTPRedirectRefused,
 		},
 		{
 			name: "reject http downgrade",
@@ -356,7 +356,7 @@ func TestAuth(t *testing.T) {
 			handleRequest: &http.Request{
 				URL: &tsHTTPS,
 			},
-			wantErrReq: errs.ErrHTTPUnauthorized,
+			wantErrReq: errs.ErrHTTPRedirectRefused,
 		},
 	}
 

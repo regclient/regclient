@@ -347,6 +347,20 @@ func TestBlobGet(t *testing.T) {
 		}
 	})
 
+	t.Run("External Reject redirect", func(t *testing.T) {
+		r, err := ref.New("registry.example.org/proj/external")
+		if err != nil {
+			t.Fatalf("Failed creating ref: %v", err)
+		}
+		br, err := reg.BlobGet(ctx, r, descriptor.Descriptor{Digest: d1, URLs: []string{tsURL.Scheme + "://" + tsURL.Host + "/external/" + d1.String()}})
+		if err == nil {
+			br.Close()
+		}
+		if !errors.Is(err, errs.ErrHTTPRedirectRefused) {
+			t.Fatalf("Redirect to a local URL was not rejected as expected: %v", err)
+		}
+	})
+
 	t.Run("Missing", func(t *testing.T) {
 		r, err := ref.New(tsURL.Host + blobRepo)
 		if err != nil {
