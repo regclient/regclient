@@ -30,6 +30,7 @@ import (
 	"github.com/regclient/regclient/config"
 	"github.com/regclient/regclient/internal/auth"
 	"github.com/regclient/regclient/internal/pqueue"
+	"github.com/regclient/regclient/internal/regnet"
 	"github.com/regclient/regclient/internal/reqmeta"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/errs"
@@ -813,6 +814,11 @@ func (ch *clientHost) checkRedirect(repo string, orig func(req *http.Request, vi
 		// fail on too many redirects
 		if len(via) >= 10 {
 			return errors.New("stopped after 10 redirects")
+		}
+		// verify redirect is allowed
+		last := via[len(via)-1]
+		if err := regnet.AllowRedirect(*last.URL, *req.URL); err != nil {
+			return err
 		}
 		// add auth headers if appropriate for the target host
 		hAuth := ch.getAuth(repo)
