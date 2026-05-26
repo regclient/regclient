@@ -402,7 +402,8 @@ func (resp *Resp) next() error {
 				}
 				// add auth headers
 				err = hAuth.UpdateRequest(httpReq)
-				if err != nil {
+				// abort on auth errors, but only after the first request has been attempted
+				if err != nil && resp.resp != nil {
 					if errors.Is(err, errs.ErrHTTPUnauthorized) {
 						dropHost = true
 					} else {
@@ -558,7 +559,7 @@ func (resp *Resp) HTTPResponse() *http.Response {
 
 // Read provides a retryable read from the body of the response.
 func (resp *Resp) Read(b []byte) (int, error) {
-	if resp.done {
+	if resp.done || resp.reader == nil {
 		return 0, io.EOF
 	}
 	if resp.resp == nil {
@@ -857,8 +858,13 @@ func (ch *clientHost) AuthCreds() func(h string) auth.Cred {
 		return auth.DefaultCredsFn
 	}
 	return func(h string) auth.Cred {
-		hCred := ch.config.GetCred()
-		return auth.Cred{User: hCred.User, Password: hCred.Password, Token: hCred.Token}
+		// only return credentials to challenges from the registry server, not to any redirects
+		if h == ch.config.Hostname {
+			hCred := ch.config.GetCred()
+			return auth.Cred{User: hCred.User, Password: hCred.Password, Token: hCred.Token}
+		} else {
+			return auth.Cred{}
+		}
 	}
 }
 

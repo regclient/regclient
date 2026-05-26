@@ -929,6 +929,11 @@ func TestRegHttp(t *testing.T) {
 				"expectns." + ts2Host,
 			},
 		},
+		"external-host.example.org": {
+			Name:     "external-host.example.org",
+			Hostname: "external-host.example.org",
+			TLS:      config.TLSDisabled,
+		},
 	}
 
 	// create APIs for requests to run
@@ -1215,6 +1220,42 @@ func TestRegHttp(t *testing.T) {
 		err = resp.Close()
 		if err != nil {
 			t.Errorf("error closing request: %v", err)
+		}
+	})
+	// test redirect where auth should not be sent
+	t.Run("redirect-without-auth", func(t *testing.T) {
+		u, err := tsURL.Parse("/v2/project/manifests/tag-auth")
+		if err != nil {
+			t.Fatalf("failed to parse url: %v", err)
+		}
+		authReq := &Req{
+			Host:       "external-host.example.org",
+			Method:     "GET",
+			Repository: "project-redirect",
+			Path:       "manifests/tag-auth",
+			DirectURL:  u,
+			Headers:    headers,
+		}
+		resp, err := hc.Do(ctx, authReq)
+		if !errors.Is(err, errs.ErrHTTPUnauthorized) {
+			t.Errorf("expected Unauthorized, received %v", err)
+		}
+		if resp == nil {
+			t.Errorf("response missing")
+		} else {
+			if resp.HTTPResponse().StatusCode != http.StatusUnauthorized {
+				t.Errorf("invalid status code, expected %d, received %d", http.StatusUnauthorized, resp.HTTPResponse().StatusCode)
+			}
+			body, err := io.ReadAll(resp)
+			if err != nil {
+				t.Fatalf("body read failure: %v", err)
+			} else if bytes.Equal(body, getBody) {
+				t.Errorf("body received without auth")
+			}
+			err = resp.Close()
+			if err != nil {
+				t.Errorf("error closing request: %v", err)
+			}
 		}
 	})
 	// test repoauth
