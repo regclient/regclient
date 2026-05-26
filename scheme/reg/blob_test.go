@@ -222,6 +222,8 @@ func TestBlobGet(t *testing.T) {
 			Name:     tsHost,
 			Hostname: tsHost,
 			TLS:      config.TLSDisabled,
+			User:     "username",
+			Pass:     "secret",
 		},
 	}
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
@@ -347,6 +349,46 @@ func TestBlobGet(t *testing.T) {
 		}
 	})
 
+	t.Run("External Reject redirect", func(t *testing.T) {
+		r, err := ref.New("registry.example.org/proj/external")
+		if err != nil {
+			t.Fatalf("Failed creating ref: %v", err)
+		}
+		br, err := reg.BlobGet(ctx, r, descriptor.Descriptor{Digest: d1, URLs: []string{tsURL.Scheme + "://" + tsURL.Host + "/external/" + d1.String()}})
+		if err == nil {
+			br.Close()
+		}
+		if !errors.Is(err, errs.ErrHTTPRedirectRefused) {
+			t.Fatalf("Redirect to a local URL was not rejected as expected: %v", err)
+		}
+	})
+
+	t.Run("Detect external credential leak", func(t *testing.T) {
+		extServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			auth := r.Header.Get("Authorization")
+			if auth != "" {
+				t.Errorf("credential leak detected: %s", auth)
+				w.WriteHeader(http.StatusOK)
+				w.Write(blob1)
+			} else {
+				w.Header().Add("WWW-Authenticate", "Basic realm=\"External Blob Host\"")
+				w.WriteHeader(http.StatusUnauthorized)
+			}
+		}))
+		defer extServer.Close()
+		r, err := ref.New(tsURL.Host + externalRepo)
+		if err != nil {
+			t.Fatalf("Failed creating ref: %v", err)
+		}
+		br, err := reg.BlobGet(ctx, r, descriptor.Descriptor{Digest: d1, URLs: []string{extServer.URL + "/external/" + d1.String()}})
+		if err == nil {
+			br.Close()
+		}
+		if !errors.Is(err, errs.ErrHTTPUnauthorized) {
+			t.Fatalf("Unauthorized status not received, err received: %v", err)
+		}
+	})
+
 	t.Run("Missing", func(t *testing.T) {
 		r, err := ref.New(tsURL.Host + blobRepo)
 		if err != nil {
@@ -414,6 +456,7 @@ func TestBlobPut(t *testing.T) {
 	blobLen3 := 1000 // blob without a full final chunk
 	blobLen4 := 2048 // must be blobChunk < blobLen <= blobChunk * 2
 	blobLen5 := 500  // single chunk
+	blobLen7 := 1024
 	d1, blob1 := reqresp.NewRandomBlob(blobLen, seed)
 	d2, blob2 := reqresp.NewRandomBlob(blobLen, seed+1)
 	d2Bad := digest.SHA256.FromString("digest 2 bad")
@@ -422,6 +465,7 @@ func TestBlobPut(t *testing.T) {
 	d5, blob5 := reqresp.NewRandomBlob(blobLen5, seed+4)
 	blob6 := []byte{}
 	d6 := digest.SHA256.FromBytes(blob6)
+	d7, blob7 := reqresp.NewRandomBlob(blobLen7, seed+5) // external auth refused blob
 	d1sha512 := digest.SHA512.FromBytes(blob1)
 	d5sha512 := digest.SHA512.FromBytes(blob5)
 	uuid1 := reqresp.NewRandomID(seed + 10)
@@ -431,6 +475,7 @@ func TestBlobPut(t *testing.T) {
 	uuid4 := reqresp.NewRandomID(seed + 14)
 	uuid5 := reqresp.NewRandomID(seed + 15)
 	uuid6 := reqresp.NewRandomID(seed + 16)
+	uuid7 := reqresp.NewRandomID(seed + 17)
 	// dMissing := digest.FromBytes([]byte("missing"))
 	user := "testing"
 	pass := "password"
@@ -448,7 +493,6 @@ func TestBlobPut(t *testing.T) {
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", len(blob1))},
 					"Content-Type":   {"application/octet-stream"},
-					"Authorization":  {fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(user+":"+pass)))},
 				},
 				Body: blob1,
 			},
@@ -463,27 +507,6 @@ func TestBlobPut(t *testing.T) {
 		},
 		{
 			ReqEntry: reqresp.ReqEntry{
-				Name:   "PUT for d1 unauth",
-				Method: "PUT",
-				Path:   "/v2" + blobRepo + "/blobs/uploads/" + uuid1,
-				Query: map[string][]string{
-					"digest": {d1.String()},
-				},
-				Headers: http.Header{
-					"Content-Length": {fmt.Sprintf("%d", len(blob1))},
-					"Content-Type":   {"application/octet-stream"},
-				},
-				Body: blob1,
-			},
-			RespEntry: reqresp.RespEntry{
-				Status: http.StatusUnauthorized,
-				Headers: http.Header{
-					"WWW-Authenticate": {"Basic realm=\"testing\""},
-				},
-			},
-		},
-		{
-			ReqEntry: reqresp.ReqEntry{
 				Name:   "PUT for d1 sha512",
 				Method: "PUT",
 				Path:   "/v2" + blobRepo1sha512 + "/blobs/uploads/" + uuid1,
@@ -493,7 +516,6 @@ func TestBlobPut(t *testing.T) {
 				Headers: http.Header{
 					"Content-Length": {fmt.Sprintf("%d", len(blob1))},
 					"Content-Type":   {"application/octet-stream"},
-					"Authorization":  {fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(user+":"+pass)))},
 				},
 				Body: blob1,
 			},
@@ -508,17 +530,71 @@ func TestBlobPut(t *testing.T) {
 		},
 		{
 			ReqEntry: reqresp.ReqEntry{
-				Name:   "PUT for d1 sha512 unauth",
-				Method: "PUT",
-				Path:   "/v2" + blobRepo1sha512 + "/blobs/uploads/" + uuid1,
+				Name:   "GET for d7 unauth",
+				Method: "GET",
+				Path:   "/v2" + blobRepo + "/blobs/uploads/" + uuid7,
 				Query: map[string][]string{
-					"digest": {d1sha512.String()},
+					"digest": {d7.String()},
+				},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusUnauthorized,
+				Headers: http.Header{
+					"WWW-Authenticate": {"Basic realm=\"testing\""},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "DELETE for d7 unauth",
+				Method: "DELETE",
+				Path:   "/v2" + blobRepo + "/blobs/uploads/" + uuid7,
+				Query: map[string][]string{
+					"digest": {d7.String()},
+				},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusUnauthorized,
+				Headers: http.Header{
+					"WWW-Authenticate": {"Basic realm=\"testing\""},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "PUT for d7 unauth",
+				Method: "PUT",
+				Path:   "/v2" + blobRepo + "/blobs/uploads/" + uuid7,
+				Query: map[string][]string{
+					"digest": {d7.String()},
 				},
 				Headers: http.Header{
-					"Content-Length": {fmt.Sprintf("%d", len(blob1))},
+					"Content-Length": {fmt.Sprintf("%d", len(blob7))},
 					"Content-Type":   {"application/octet-stream"},
 				},
-				Body: blob1,
+				Body: blob7,
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusUnauthorized,
+				Headers: http.Header{
+					"WWW-Authenticate": {"Basic realm=\"testing\""},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "PATCH for d7 unauth",
+				Method: "PATCH",
+				Path:   "/v2" + blobRepo + "/blobs/uploads/" + uuid7,
+				Query: map[string][]string{
+					"digest": {d7.String()},
+				},
+				Headers: http.Header{
+					"Content-Length": {fmt.Sprintf("%d", blobChunk)},
+					"Content-Range":  {fmt.Sprintf("0-%d", blobChunk-1)},
+					"Content-Type":   {"application/octet-stream"},
+				},
+				Body: blob7[0:blobChunk],
 			},
 			RespEntry: reqresp.RespEntry{
 				Status: http.StatusUnauthorized,
@@ -1337,6 +1413,44 @@ func TestBlobPut(t *testing.T) {
 				},
 			},
 		},
+		// upload put for d7
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "POST for d7",
+				Method: "POST",
+				Path:   "/v2" + blobRepo + "/blobs/uploads/",
+				Query: map[string][]string{
+					"mount": {d7.String()},
+				},
+				Headers: http.Header{
+					"Authorization": {fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString([]byte(user+":"+pass)))},
+				},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusAccepted,
+				Headers: http.Header{
+					"Content-Length": {"0"},
+					"Location":       {fmt.Sprintf("http://%s/v2%s/blobs/uploads/%s", blobHost, blobRepo, uuid7)},
+				},
+			},
+		},
+		{
+			ReqEntry: reqresp.ReqEntry{
+				Name:   "POST for d7 unauth",
+				Method: "POST",
+				Path:   "/v2" + blobRepo + "/blobs/uploads/",
+				Query: map[string][]string{
+					"mount": {d7.String()},
+				},
+			},
+			RespEntry: reqresp.RespEntry{
+				Status: http.StatusUnauthorized,
+				Headers: http.Header{
+					"Content-Length":   {"0"},
+					"WWW-Authenticate": {"Basic realm=\"testing\""},
+				},
+			},
+		},
 	}
 	rrs = append(rrs, reqresp.BaseEntries...)
 	// create a server
@@ -1557,6 +1671,19 @@ func TestBlobPut(t *testing.T) {
 		}
 		if dp.Size != int64(len(blob6)) {
 			t.Errorf("Content length mismatch, expected %d, received %d", len(blob6), dp.Size)
+		}
+	})
+
+	// external blob server should not request auth creds
+	t.Run("External request for auth", func(t *testing.T) {
+		r, err := ref.New(tsURL.Host + blobRepo)
+		if err != nil {
+			t.Fatalf("Failed creating ref: %v", err)
+		}
+		br := bytes.NewReader(blob7)
+		_, err = reg.BlobPut(ctx, r, descriptor.Descriptor{Digest: d7, Size: int64(len(blob7))}, br)
+		if !errors.Is(err, errs.ErrHTTPUnauthorized) {
+			t.Fatalf("BlobPut to external server requesting auth, expected: %v, received: %v", errs.ErrHTTPUnauthorized, err)
 		}
 	})
 

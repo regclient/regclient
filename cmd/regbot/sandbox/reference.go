@@ -85,17 +85,6 @@ func (s *Sandbox) checkReference(ls *lua.LState, i int) *reference {
 	return r
 }
 
-// func isReference(ls *lua.LState, i int) bool {
-// 	if ls.Get(i).Type() != lua.LTUserData {
-// 		return false
-// 	}
-// 	ud := ls.CheckUserData(i)
-// 	if _, ok := ud.Value.(*reference); ok {
-// 		return true
-// 	}
-// 	return false
-// }
-
 // referenceString converts a reference back to a common name
 func (s *Sandbox) referenceString(ls *lua.LState) int {
 	r := s.checkReference(ls, 1)

@@ -45,59 +45,6 @@ func setupBlob(s *Sandbox) {
 	)
 }
 
-// func (s *Sandbox) checkBlob(ls *lua.LState, i int, head bool) *sbBlob {
-// 	var b *sbBlob
-// 	switch ls.Get(i).Type() {
-// 	case lua.LTString:
-// 		r, err := ref.New(ls.CheckString(1))
-// 		if err != nil {
-// 			ls.RaiseError("reference parsing failed: %v", err)
-// 		}
-// 		if head {
-// 			rcB, err := s.rc.BlobHead(s.ctx, r, digest.Digest(r.Digest))
-// 			if err != nil {
-// 				ls.RaiseError("Failed retrieving \"%s\" blob: %v", r.CommonName(), err)
-// 			}
-// 			b = &sbBlob{b: rcB, r: r, d: digest.Digest(r.Digest)}
-// 		} else {
-// 			rcB, err := s.rc.BlobGet(s.ctx, r, digest.Digest(r.Digest))
-// 			if err != nil {
-// 				ls.RaiseError("Blob pull failed: %v", err)
-// 			}
-// 			b = &sbBlob{b: rcB, r: r, d: digest.Digest(r.Digest)}
-// 		}
-// 	case lua.LTUserData:
-// 		ud := ls.CheckUserData(i)
-// 		switch ud.Value.(type) {
-// 		case *sbBlob:
-// 			b = ud.Value.(*sbBlob)
-// 		case *config:
-// 			c := ud.Value.(*config)
-// 			b = &sbBlob{b: c.conf, r: c.r, d: digest.Digest(c.r.Digest)}
-// 		case *reference:
-// 			r := ud.Value.(*reference).r
-// 			if head {
-// 				rcB, err := s.rc.BlobHead(s.ctx, r, digest.Digest(r.Digest))
-// 				if err != nil {
-// 					ls.RaiseError("Failed retrieving \"%s\" blob: %v", r.CommonName(), err)
-// 				}
-// 				b = &sbBlob{b: rcB, r: r, d: digest.Digest(r.Digest)}
-// 			} else {
-// 				rcB, err := s.rc.BlobGet(s.ctx, r, digest.Digest(r.Digest))
-// 				if err != nil {
-// 					ls.RaiseError("Blob pull failed: %v", err)
-// 				}
-// 				b = &sbBlob{b: rcB, r: r, d: digest.Digest(r.Digest)}
-// 			}
-// 		default:
-// 			ls.ArgError(i, "blob expected")
-// 		}
-// 	default:
-// 		ls.ArgError(i, "blob expected")
-// 	}
-// 	return b
-// }
-
 func (s *Sandbox) blobGet(ls *lua.LState) int {
 	err := s.ctx.Err()
 	if err != nil {

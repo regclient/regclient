@@ -24,6 +24,7 @@ func setupManifest(s *Sandbox) {
 		luaManifestName,
 		map[string]lua.LGFunction{
 			"__tostring": s.manifestJSON,
+			"descriptor": s.manifestDescriptor,
 			"get":        s.manifestGet,
 			"getList":    s.manifestGetList,
 			"head":       s.manifestHead,
@@ -33,6 +34,7 @@ func setupManifest(s *Sandbox) {
 			"__index": {
 				"config":        s.configGet,
 				"delete":        s.manifestDelete,
+				"descriptor":    s.manifestDescriptor,
 				"export":        s.manifestExport,
 				"get":           s.manifestGet,
 				"head":          s.manifestHead,
@@ -48,12 +50,12 @@ func (s *Sandbox) checkManifest(ls *lua.LState, i int, list bool, head bool) *sb
 	var m *sbManifest
 	switch ls.Get(i).Type() {
 	case lua.LTString:
-		r, err := ref.New(ls.CheckString(1))
+		r, err := ref.New(ls.CheckString(i))
 		if err != nil {
 			ls.RaiseError("reference parsing failed: %v", err)
 		}
 		if head {
-			rcM, err := s.rc.ManifestHead(s.ctx, r)
+			rcM, err := s.rc.ManifestHead(s.ctx, r, regclient.WithManifestRequireDigest())
 			if err != nil {
 				ls.RaiseError("Failed retrieving \"%s\" manifest: %v", r.CommonName(), err)
 			}
@@ -76,7 +78,7 @@ func (s *Sandbox) checkManifest(ls *lua.LState, i int, list bool, head bool) *sb
 		case *reference:
 			r := ud.Value.(*reference)
 			if head {
-				rcM, err := s.rc.ManifestHead(s.ctx, r.r)
+				rcM, err := s.rc.ManifestHead(s.ctx, r.r, regclient.WithManifestRequireDigest())
 				if err != nil {
 					ls.RaiseError("Failed retrieving \"%s\" manifest: %v", r.r.CommonName(), err)
 				}
@@ -125,6 +127,17 @@ func (s *Sandbox) manifestDelete(ls *lua.LState) int {
 	return 0
 }
 
+func (s *Sandbox) manifestDescriptor(ls *lua.LState) int {
+	m := s.checkManifest(ls, 1, true, true)
+	if m == nil || m.m == nil {
+		ls.RaiseError("Failed retrieving manifest")
+	}
+	desc := m.m.GetDescriptor()
+	ud := go2lua.Export(ls, desc)
+	ls.Push(ud)
+	return 1
+}
+
 func (s *Sandbox) manifestExport(ls *lua.LState) int {
 	var newM *sbManifest
 	i := 1
@@ -153,7 +166,6 @@ func (s *Sandbox) manifestExport(ls *lua.LState) int {
 		}
 		// save image to a new manifest
 		rcM, err := manifest.New(manifest.WithOrig(reflect.ValueOf(newMMP).Elem().Interface())) // reflect is needed again to deref the pointer now
-		// rcM, err := manifest.FromOrig(newMM)
 		if err != nil {
 			ls.RaiseError("Failed exporting manifest (from orig): %v", err)
 		}
@@ -220,7 +232,7 @@ func (s *Sandbox) manifestHead(ls *lua.LState) int {
 		slog.String("script", s.name),
 		slog.String("image", r.r.CommonName()))
 
-	m, err := s.rc.ManifestHead(s.ctx, r.r)
+	m, err := s.rc.ManifestHead(s.ctx, r.r, regclient.WithManifestRequireDigest())
 	if err != nil {
 		ls.RaiseError("Failed retrieving \"%s\" manifest: %v", r.r.CommonName(), err)
 	}
