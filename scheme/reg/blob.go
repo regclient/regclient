@@ -533,6 +533,9 @@ func (reg *Reg) blobPutUploadChunked(ctx context.Context, r ref.Ref, d descripto
 				resp.HTTPResponse().Header.Get("Location") != "" &&
 				resp.HTTPResponse().Header.Get("Range") != "" {
 				retryCur++
+				if retryCur > retryLimit {
+					return d, fmt.Errorf("failed to send blob (chunk), ref %s: http status: %w", r.CommonName(), reghttp.HTTPError(resp.HTTPResponse().StatusCode))
+				}
 				reg.slog.Debug("Recoverable chunk upload error",
 					slog.String("ref", r.CommonName()),
 					slog.Int64("chunkStart", chunkStart),
