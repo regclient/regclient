@@ -31,6 +31,7 @@ const (
 type RegClient struct {
 	hosts       map[string]*config.Host
 	hostDefault *config.Host
+	ocidirOpts  []ocidir.Opts
 	regOpts     []reg.Opts
 	schemes     map[string]scheme.API
 	slog        *slog.Logger
@@ -76,12 +77,14 @@ func New(opts ...Opt) *RegClient {
 		reg.WithSlog(rc.slog),
 		reg.WithUserAgent(rc.userAgent),
 	)
+	rc.ocidirOpts = append(
+		rc.ocidirOpts,
+		ocidir.WithSlog(rc.slog),
+	)
 
 	// setup scheme's
 	rc.schemes["reg"] = reg.New(rc.regOpts...)
-	rc.schemes["ocidir"] = ocidir.New(
-		ocidir.WithSlog(rc.slog),
-	)
+	rc.schemes["ocidir"] = ocidir.New(rc.ocidirOpts...)
 
 	rc.slog.Debug("regclient initialized",
 		slog.String("VCSRef", info.VCSRef),
@@ -170,6 +173,16 @@ func WithDockerCredsFile(fname string) Opt {
 			return
 		}
 		rc.hostLoad("docker-file", configHosts)
+	}
+}
+
+// WithOCIDirOpts passes through opts to the ocidir scheme.
+func WithOCIDirOpts(opts ...ocidir.Opts) Opt {
+	return func(rc *RegClient) {
+		if len(opts) == 0 {
+			return
+		}
+		rc.ocidirOpts = append(rc.ocidirOpts, opts...)
 	}
 }
 

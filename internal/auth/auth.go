@@ -897,14 +897,12 @@ func (j *jwtHubHandler) ProcessChallenge(c challenge) error {
 		return err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-
 	if resp.StatusCode != 200 || resp.StatusCode >= 300 {
 		return errs.ErrHTTPUnauthorized
 	}
 
 	var bodyParsed jwtHubResp
-	err = json.Unmarshal(body, &bodyParsed)
+	err = json.NewDecoder(resp.Body).Decode(&bodyParsed)
 	if err != nil {
 		return err
 	}

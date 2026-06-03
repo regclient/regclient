@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path"
@@ -13,6 +14,7 @@ import (
 	"github.com/opencontainers/go-digest"
 
 	"github.com/regclient/regclient/internal/copyfs"
+	"github.com/regclient/regclient/types/errs"
 	"github.com/regclient/regclient/types/manifest"
 	"github.com/regclient/regclient/types/mediatype"
 	v1 "github.com/regclient/regclient/types/oci/v1"
@@ -234,5 +236,19 @@ func TestManifest(t *testing.T) {
 	_, err = o.ManifestHead(ctx, r11)
 	if err != nil {
 		t.Errorf("could not query manifest after pushing dup tag")
+	}
+	err = o.Close(ctx, r11)
+	if err != nil {
+		t.Errorf("failed closing: %v", err)
+	}
+	// test manifest limits
+	o = New(WithManifestMax(16, 32))
+	_, err = o.ManifestGet(ctx, r11)
+	if !errors.Is(err, errs.ErrSizeLimitExceeded) {
+		t.Errorf("manifest pull limit expected err: %v, received: %v", errs.ErrSizeLimitExceeded, err)
+	}
+	err = o.Close(ctx, r11)
+	if err != nil {
+		t.Errorf("failed closing: %v", err)
 	}
 }
