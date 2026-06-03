@@ -29,16 +29,22 @@ import (
 const (
 	imageLayoutFile = "oci-layout"
 	defThrottle     = 3
+	// defaultManifestMaxPull limits the largest manifest that will be pulled
+	defaultManifestMaxPull = 1024 * 1024 * 8
+	// defaultManifestMaxPush limits the largest manifest that will be pushed
+	defaultManifestMaxPush = 1024 * 1024 * 4
 )
 
 // OCIDir is used for accessing OCI Image Layouts defined as a directory
 type OCIDir struct {
-	slog        *slog.Logger
-	gc          bool
-	modRefs     map[string]*ociGC
-	throttle    map[string]*pqueue.Queue[reqmeta.Data]
-	throttleDef int
-	mu          sync.Mutex
+	slog            *slog.Logger
+	gc              bool
+	manifestMaxPull int64
+	manifestMaxPush int64
+	modRefs         map[string]*ociGC
+	throttle        map[string]*pqueue.Queue[reqmeta.Data]
+	throttleDef     int
+	mu              sync.Mutex
 }
 
 type ociGC struct {
@@ -47,9 +53,11 @@ type ociGC struct {
 }
 
 type ociConf struct {
-	gc       bool
-	slog     *slog.Logger
-	throttle int
+	gc              bool
+	manifestMaxPull int64
+	manifestMaxPush int64
+	slog            *slog.Logger
+	throttle        int
 }
 
 // Opts are used for passing options to ocidir
@@ -58,19 +66,23 @@ type Opts func(*ociConf)
 // New creates a new OCIDir with options
 func New(opts ...Opts) *OCIDir {
 	conf := ociConf{
-		slog:     slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
-		gc:       true,
-		throttle: defThrottle,
+		slog:            slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{})),
+		gc:              true,
+		manifestMaxPull: defaultManifestMaxPull,
+		manifestMaxPush: defaultManifestMaxPush,
+		throttle:        defThrottle,
 	}
 	for _, opt := range opts {
 		opt(&conf)
 	}
 	return &OCIDir{
-		slog:        conf.slog,
-		gc:          conf.gc,
-		modRefs:     map[string]*ociGC{},
-		throttle:    map[string]*pqueue.Queue[reqmeta.Data]{},
-		throttleDef: conf.throttle,
+		slog:            conf.slog,
+		gc:              conf.gc,
+		manifestMaxPull: conf.manifestMaxPull,
+		manifestMaxPush: conf.manifestMaxPush,
+		modRefs:         map[string]*ociGC{},
+		throttle:        map[string]*pqueue.Queue[reqmeta.Data]{},
+		throttleDef:     conf.throttle,
 	}
 }
 
@@ -79,6 +91,14 @@ func New(opts ...Opts) *OCIDir {
 func WithGC(gc bool) Opts {
 	return func(c *ociConf) {
 		c.gc = gc
+	}
+}
+
+// WithManifestMax sets the push and pull limits for manifests
+func WithManifestMax(push, pull int64) Opts {
+	return func(c *ociConf) {
+		c.manifestMaxPush = push
+		c.manifestMaxPull = pull
 	}
 }
 
@@ -194,11 +214,7 @@ func (o *OCIDir) readIndex(r ref.Ref, locked bool) (v1.Index, error) {
 		return index, fmt.Errorf("%s cannot be open: %w", indexFile, err)
 	}
 	defer fh.Close()
-	ib, err := io.ReadAll(fh)
-	if err != nil {
-		return index, fmt.Errorf("%s cannot be read: %w", indexFile, err)
-	}
-	err = json.Unmarshal(ib, &index)
+	err = json.NewDecoder(fh).Decode(&index)
 	if err != nil {
 		return index, fmt.Errorf("%s cannot be parsed: %w", indexFile, err)
 	}
@@ -304,11 +320,7 @@ func (o *OCIDir) valid(dir string, locked bool) error {
 		return fmt.Errorf("%s cannot be open: %w", imageLayoutFile, err)
 	}
 	defer fh.Close()
-	lb, err := io.ReadAll(fh)
-	if err != nil {
-		return fmt.Errorf("%s cannot be read: %w", imageLayoutFile, err)
-	}
-	err = json.Unmarshal(lb, &layout)
+	err = json.NewDecoder(fh).Decode(&layout)
 	if err != nil {
 		return fmt.Errorf("%s cannot be parsed: %w", imageLayoutFile, err)
 	}

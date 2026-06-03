@@ -18,6 +18,7 @@ import (
 
 	"github.com/opencontainers/go-digest"
 
+	"github.com/regclient/regclient/internal/limitread"
 	"github.com/regclient/regclient/scheme"
 	"github.com/regclient/regclient/types"
 	"github.com/regclient/regclient/types/errs"
@@ -116,6 +117,9 @@ func (o *OCIDir) manifestGet(_ context.Context, r ref.Ref) (manifest.Manifest, e
 			return nil, err
 		}
 	}
+	if desc.Size > o.manifestMaxPull {
+		return nil, fmt.Errorf("manifest exceeds size limit, ref: %s, limit: %d, size: %d%.0w", r.CommonName(), o.manifestMaxPull, desc.Size, errs.ErrSizeLimitExceeded)
+	}
 	if desc.Digest == "" {
 		return nil, errs.ErrNotFound
 	}
@@ -129,7 +133,11 @@ func (o *OCIDir) manifestGet(_ context.Context, r ref.Ref) (manifest.Manifest, e
 		return nil, fmt.Errorf("failed to open manifest: %w", err)
 	}
 	defer fd.Close()
-	mb, err := io.ReadAll(fd)
+	limit := desc.Size
+	if desc.Size == 0 {
+		limit = o.manifestMaxPull
+	}
+	mb, err := io.ReadAll(&limitread.LimitRead{Reader: fd, Limit: limit})
 	if err != nil {
 		return nil, fmt.Errorf("failed to read manifest: %w", err)
 	}

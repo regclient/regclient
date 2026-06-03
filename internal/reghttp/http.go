@@ -44,8 +44,9 @@ var (
 )
 
 const (
-	DefaultRetryLimit = 5 // number of times a request will be retried
-	backoffResetCount = 5 // number of successful requests needed to reduce the backoff
+	DefaultRetryLimit = 5               // number of times a request will be retried
+	backoffResetCount = 5               // number of successful requests needed to reduce the backoff
+	ReadBodyLimit     = 8 * 1024 * 1024 // limit for reading the body for errors
 )
 
 // Client is an HTTP client wrapper.
@@ -482,7 +483,7 @@ func (resp *Resp) next() error {
 					dropHost = true
 				}
 				errHTTP := HTTPError(resp.resp.StatusCode)
-				errBody, _ := io.ReadAll(resp.resp.Body)
+				errBody, _ := io.ReadAll(&io.LimitedReader{R: resp.resp.Body, N: ReadBodyLimit})
 				_ = resp.resp.Body.Close()
 				return fmt.Errorf("request failed: %w: %s", errHTTP, errBody)
 			}
