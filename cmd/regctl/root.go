@@ -200,9 +200,11 @@ func (opts *rootOpts) newRegClient() *regclient.RegClient {
 				slog.String("err", err.Error()))
 		}
 		host := config.Host{
-			Name: hKV["reg"],
-			User: hKV["user"],
-			Pass: hKV["pass"],
+			Name:     hKV["reg"],
+			Hostname: hKV["hostname"],
+			IPAddr:   hKV["ip"],
+			User:     hKV["user"],
+			Pass:     hKV["pass"],
 		}
 		if hKV["tls"] != "" {
 			var hostTLS config.TLSConf

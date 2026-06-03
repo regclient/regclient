@@ -28,6 +28,7 @@ type registryOpts struct {
 	passStdin            bool
 	credHelper           string
 	hostname, pathPrefix string
+	ipAddr               string
 	cacert, tls          string // set opts
 	clientCert           string
 	clientKey            string
@@ -178,6 +179,8 @@ regctl registry set quay.io --req-per-sec 10`,
 	cmd.Flags().StringVar(&opts.credHelper, "cred-helper", "", "Credential helper (full binary name, including docker-credential- prefix)")
 	cmd.Flags().StringVar(&opts.hostname, "hostname", "", "Hostname or ip with port")
 	_ = cmd.RegisterFlagCompletionFunc("hostname", completeArgNone)
+	cmd.Flags().StringVar(&opts.ipAddr, "ip", "", "Override IP to dial, hostname is still used for TLS SNI, Host header, and cert validation")
+	_ = cmd.RegisterFlagCompletionFunc("ip", completeArgNone)
 	cmd.Flags().StringArrayVar(&opts.mirrors, "mirror", nil, "List of mirrors (registry names)")
 	_ = cmd.RegisterFlagCompletionFunc("mirror", completeArgNone)
 	cmd.Flags().StringVar(&opts.pathPrefix, "path-prefix", "", "Prefix to all repositories")
@@ -463,6 +466,9 @@ func (opts *registryOpts) runRegistrySet(cmd *cobra.Command, args []string) erro
 	}
 	if flagChanged(cmd, "hostname") {
 		h.Hostname = opts.hostname
+	}
+	if flagChanged(cmd, "ip") {
+		h.IPAddr = opts.ipAddr
 	}
 	if flagChanged(cmd, "path-prefix") {
 		h.PathPrefix = opts.pathPrefix

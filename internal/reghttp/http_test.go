@@ -934,6 +934,12 @@ func TestRegHttp(t *testing.T) {
 			Hostname: "external-host.example.org",
 			TLS:      config.TLSDisabled,
 		},
+		"ipaddr." + tsHost: {
+			Name:     "ipaddr." + tsHost,
+			Hostname: "ipaddr-unresolvable.example.org",
+			IPAddr:   tsHost,
+			TLS:      config.TLSDisabled,
+		},
 	}
 
 	// create APIs for requests to run
@@ -965,6 +971,33 @@ func TestRegHttp(t *testing.T) {
 	t.Run("Get", func(t *testing.T) {
 		getReq := &Req{
 			Host:       tsHost,
+			Method:     "GET",
+			Repository: "project",
+			Path:       "manifests/tag-get",
+			Headers:    headers,
+		}
+		resp, err := hc.Do(ctx, getReq)
+		if err != nil {
+			t.Fatalf("failed to run get: %v", err)
+		}
+		if resp.HTTPResponse().StatusCode != 200 {
+			t.Errorf("invalid status code, expected 200, received %d", resp.HTTPResponse().StatusCode)
+		}
+		body, err := io.ReadAll(resp)
+		if err != nil {
+			t.Fatalf("body read failure: %v", err)
+		} else if !bytes.Equal(body, getBody) {
+			t.Errorf("body read mismatch, expected %s, received %s", getBody, body)
+		}
+		err = resp.Close()
+		if err != nil {
+			t.Errorf("error closing request: %v", err)
+		}
+	})
+	// test IPAddr override: hostname is unresolvable but the dialed IP points to the test server
+	t.Run("IPAddr", func(t *testing.T) {
+		getReq := &Req{
+			Host:       "ipaddr." + tsHost,
 			Method:     "GET",
 			Repository: "project",
 			Path:       "manifests/tag-get",

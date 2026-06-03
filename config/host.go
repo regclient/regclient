@@ -106,6 +106,7 @@ type Host struct {
 	ClientCert    string            `json:"clientCert,omitempty" yaml:"clientCert"`       // public pem cert for client (mTLS)
 	ClientKey     string            `json:"clientKey,omitempty" yaml:"clientKey"`         //#nosec G117 private pem cert for client (mTLS)
 	Hostname      string            `json:"hostname,omitempty" yaml:"hostname"`           // hostname of registry, default is the registry name
+	IPAddr        string            `json:"ipAddr,omitempty" yaml:"ipAddr"`               // override IP to dial, hostname is still used for TLS SNI, Host header, and cert validation
 	User          string            `json:"user,omitempty" yaml:"user"`                   // username, not used with credHelper
 	Pass          string            `json:"pass,omitempty" yaml:"pass"`                   //#nosec G117 password, not used with credHelper
 	Token         string            `json:"token,omitempty" yaml:"token"`                 // token, experimental for specific APIs
@@ -238,6 +239,7 @@ func (host Host) IsZero() bool {
 		host.ClientCert != "" ||
 		host.ClientKey != "" ||
 		(host.Hostname != "" && host.Hostname != host.Name) ||
+		host.IPAddr != "" ||
 		host.User != "" ||
 		host.Pass != "" ||
 		host.Token != "" ||
@@ -391,6 +393,16 @@ func (host *Host) Merge(newHost Host, log *slog.Logger) error {
 				slog.String("host", name))
 		}
 		host.Hostname = newHost.Hostname
+	}
+
+	if newHost.IPAddr != "" {
+		if host.IPAddr != "" && host.IPAddr != newHost.IPAddr {
+			log.Warn("Changing IP address settings for registry",
+				slog.String("orig", host.IPAddr),
+				slog.String("new", newHost.IPAddr),
+				slog.String("host", name))
+		}
+		host.IPAddr = newHost.IPAddr
 	}
 
 	if newHost.PathPrefix != "" {

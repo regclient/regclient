@@ -126,6 +126,7 @@ func TestConfig(t *testing.T) {
 	{
 	  "tls": "disabled",
 		"hostname": "host2.example.com",
+		"ipAddr": "192.0.2.10:443",
 		"user": "user-ex3",
 		"pass": "secret3",
 		"regcert": "` + strings.ReplaceAll(caCert, "\n", "\\n") + `",
@@ -288,6 +289,7 @@ func TestConfig(t *testing.T) {
 			hostExpect: Host{
 				TLS:        TLSDisabled,
 				Hostname:   "host2.example.com",
+				IPAddr:     "192.0.2.10:443",
 				User:       "user-ex3",
 				Pass:       "secret3",
 				RegCert:    caCert,
@@ -346,6 +348,7 @@ func TestConfig(t *testing.T) {
 			hostExpect: Host{
 				TLS:        TLSDisabled,
 				Hostname:   "host2.example.com",
+				IPAddr:     "192.0.2.10:443",
 				User:       "user-ex3",
 				Pass:       "secret3",
 				RegCert:    caCert,
@@ -442,6 +445,9 @@ func TestConfig(t *testing.T) {
 			}
 			if tc.host.Hostname != tc.hostExpect.Hostname {
 				t.Errorf("hostname field mismatch, expected %s, found %s", tc.hostExpect.Hostname, tc.host.Hostname)
+			}
+			if tc.host.IPAddr != tc.hostExpect.IPAddr {
+				t.Errorf("ipAddr field mismatch, expected %s, found %s", tc.hostExpect.IPAddr, tc.host.IPAddr)
 			}
 			if tc.host.User != tc.hostExpect.User {
 				t.Errorf("user field mismatch, expected %s, found %s", tc.hostExpect.User, tc.host.User)

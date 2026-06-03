@@ -44,6 +44,7 @@ func TestRegistry(t *testing.T) {
 		_ = regHandler.Close()
 	})
 	tsExampleHost := "registry.example.org"
+	tsIPHost := "ipoverride.example.org"
 	tempDir := t.TempDir()
 	t.Setenv(ConfigEnv, filepath.Join(tempDir, "config.json"))
 	tt := []struct {
@@ -88,6 +89,24 @@ func TestRegistry(t *testing.T) {
 			args:        []string{"registry", "set", tsExampleHost, "--cred-helper", "", "--skip-check"},
 			expectOut:   "",
 			outContains: false,
+		},
+		// set and query an IP override
+		{
+			name:        "set ip override",
+			args:        []string{"registry", "set", tsIPHost, "--ip", "10.0.0.1:443", "--skip-check"},
+			expectOut:   "",
+			outContains: false,
+		},
+		{
+			name:        "query ip override",
+			args:        []string{"registry", "config", tsIPHost},
+			expectOut:   `"ipAddr": "10.0.0.1:443",`,
+			outContains: true,
+		},
+		{
+			name:      "query ip override format",
+			args:      []string{"registry", "config", tsIPHost, "--format", "{{.IPAddr}}"},
+			expectOut: `10.0.0.1:443`,
 		},
 		// query the config change
 		{

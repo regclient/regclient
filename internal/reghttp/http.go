@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -755,6 +756,28 @@ func (c *Client) getHost(host string) *clientHost {
 	h.httpClient = &hc
 	if h.httpClient.Transport == nil {
 		h.httpClient.Transport = http.DefaultTransport.(*http.Transport).Clone()
+	}
+	// override the dialed IP while leaving the hostname (TLS SNI, Host header, and cert validation) unchanged
+	if h.config.IPAddr != "" {
+		if t, ok := h.httpClient.Transport.(*http.Transport); ok {
+			t = t.Clone()
+			ipAddr := h.config.IPAddr
+			origDial := t.DialContext
+			if origDial == nil {
+				origDial = (&net.Dialer{}).DialContext
+			}
+			t.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+				if _, port, err := net.SplitHostPort(addr); err == nil {
+					if _, _, errIP := net.SplitHostPort(ipAddr); errIP == nil {
+						addr = ipAddr // override includes its own port
+					} else {
+						addr = net.JoinHostPort(ipAddr, port)
+					}
+				}
+				return origDial(ctx, network, addr)
+			}
+			h.httpClient.Transport = t
+		}
 	}
 	// configure transport for insecure requests and root certs
 	if h.config.TLS == config.TLSInsecure || len(c.rootCAPool) > 0 || len(c.rootCADirs) > 0 || h.config.RegCert != "" || (h.config.ClientCert != "" && h.config.ClientKey != "") {
