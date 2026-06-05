@@ -4,6 +4,7 @@ package regnet
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 
 	"github.com/regclient/regclient/types/errs"
@@ -20,6 +21,10 @@ func AllowRedirect(src, dest url.URL) error {
 }
 
 func IsLocal(hostPort string) bool {
+	// skip check on any requests going through a proxy, ProxyFromEnv assumes http, and localhost is unlikely to have an https cert
+	if u, err := http.ProxyFromEnvironment(&http.Request{URL: &url.URL{Host: hostPort}}); err == nil && u != nil {
+		return false
+	}
 	// strip trailing port
 	host, _, err := net.SplitHostPort(hostPort)
 	if err != nil {
