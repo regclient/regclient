@@ -59,6 +59,7 @@ func urlMustParse(t *testing.T, s string) url.URL {
 func TestIsLocal(t *testing.T) {
 	tt := []struct {
 		host   string
+		proxy  bool
 		expect bool
 	}{
 		{
@@ -89,9 +90,26 @@ func TestIsLocal(t *testing.T) {
 			host:   "regclient.org",
 			expect: false,
 		},
+		{
+			host:   "regclient.org",
+			expect: false,
+			proxy:  true,
+		},
 	}
 	for _, tc := range tt {
 		t.Run(tc.host, func(t *testing.T) {
+			// caution, proxy variables are only read once on startup, resulting in false positive and negatives from this test
+			if tc.proxy {
+				t.Setenv("HTTP_PROXY", "http://proxy.example.org:5555")
+				t.Setenv("HTTPS_PROXY", "http://proxy.example.org:5555")
+				t.Setenv("NO_PROXY", ".internal.example.org")
+			} else {
+				t.Setenv("HTTP_PROXY", "")
+				t.Setenv("http_proxy", "")
+				t.Setenv("HTTPS_PROXY", "")
+				t.Setenv("https_proxy", "")
+				t.Setenv("NO_PROXY", "")
+			}
 			result := IsLocal(tc.host)
 			if result != tc.expect {
 				t.Errorf("expected %t, received %t", tc.expect, result)
