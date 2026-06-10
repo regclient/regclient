@@ -56,6 +56,23 @@ func WithBuildArgRm(arg string, value *regexp.Regexp) Opts {
 	}
 }
 
+// WithConfigAuthor sets the author in the config.
+func WithConfigAuthor(author string) Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
+			oc := doc.oc.GetConfig()
+			if oc.Author == author {
+				return nil
+			}
+			oc.Author = author
+			doc.oc.SetConfig(oc)
+			doc.modified = true
+			return nil
+		})
+		return nil
+	}
+}
+
 // WithConfigCmd sets the command in the config.
 // For running a shell command, the `cmd` value should be `[]string{"/bin/sh", "-c", command}`.
 func WithConfigCmd(cmd []string) Opts {
@@ -243,39 +260,79 @@ func WithConfigTimestampMax(t time.Time) Opts {
 	})
 }
 
+// WithConfigUser is used to alter the user/uid and group/gid in the image config.
+// To include the group, use a ":" separator in the string, "user:group".
+// Note that if a group/gid is specified, secondary groups from /etc/group are ignored.
+func WithConfigUser(user string) Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		// extract the list for platforms to update
+		user, platforms, err := extractPlatformList(user)
+		if err != nil {
+			return fmt.Errorf("failed to mod user: %w", err)
+		}
+		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
+			// if platforms are listed, skip non-matching platforms
+			if len(platforms) > 0 {
+				p := doc.oc.GetConfig().Platform
+				if !slices.ContainsFunc(platforms, func(pe platform.Platform) bool { return platform.Match(p, pe) }) {
+					return nil
+				}
+			}
+			oc := doc.oc.GetConfig()
+			if oc.Config.User == user {
+				return nil
+			}
+			oc.Config.User = user
+			doc.oc.SetConfig(oc)
+			doc.modified = true
+			return nil
+		})
+		return nil
+	}
+}
+
+// WithConfigWorkdir is used to alter the workdir in the image config.
+func WithConfigWorkdir(workdir string) Opts {
+	return func(dc *dagConfig, dm *dagManifest) error {
+		// extract the list for platforms to update
+		workdir, platforms, err := extractPlatformList(workdir)
+		if err != nil {
+			return fmt.Errorf("failed to mod workdir: %w", err)
+		}
+		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
+			// if platforms are listed, skip non-matching platforms
+			if len(platforms) > 0 {
+				p := doc.oc.GetConfig().Platform
+				if !slices.ContainsFunc(platforms, func(pe platform.Platform) bool { return platform.Match(p, pe) }) {
+					return nil
+				}
+			}
+			oc := doc.oc.GetConfig()
+			if oc.Config.WorkingDir == workdir {
+				return nil
+			}
+			oc.Config.WorkingDir = workdir
+			doc.oc.SetConfig(oc)
+			doc.modified = true
+			return nil
+		})
+		return nil
+	}
+}
+
 // WithEnv sets or deletes an environment variable from the image config.
 func WithEnv(name, value string) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		// extract the list for platforms to update from the name
-		name = strings.TrimSpace(name)
-		platforms := []platform.Platform{}
-		if name[0] == '[' && strings.Index(name, "]") > 0 {
-			end := strings.Index(name, "]")
-			for entry := range strings.SplitSeq(name[1:end], ",") {
-				entry = strings.TrimSpace(entry)
-				if entry == "*" {
-					continue
-				}
-				p, err := platform.Parse(entry)
-				if err != nil {
-					return fmt.Errorf("failed to parse env platform %s: %w", entry, err)
-				}
-				platforms = append(platforms, p)
-			}
-			name = name[end+1:]
+		name, platforms, err := extractPlatformList(name)
+		if err != nil {
+			return fmt.Errorf("failed to mod env: %w", err)
 		}
 		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
 			// if platforms are listed, skip non-matching platforms
 			if len(platforms) > 0 {
 				p := doc.oc.GetConfig().Platform
-				found := false
-				for _, pe := range platforms {
-					if platform.Match(p, pe) {
-						found = true
-						break
-					}
-				}
-				if !found {
+				if !slices.ContainsFunc(platforms, func(pe platform.Platform) bool { return platform.Match(p, pe) }) {
 					return nil
 				}
 			}
@@ -367,35 +424,15 @@ func WithExposeRm(port string) Opts {
 func WithLabel(name, value string) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		// extract the list for platforms to update from the name
-		name = strings.TrimSpace(name)
-		platforms := []platform.Platform{}
-		if name[0] == '[' && strings.Index(name, "]") > 0 {
-			end := strings.Index(name, "]")
-			for entry := range strings.SplitSeq(name[1:end], ",") {
-				entry = strings.TrimSpace(entry)
-				if entry == "*" {
-					continue
-				}
-				p, err := platform.Parse(entry)
-				if err != nil {
-					return fmt.Errorf("failed to parse label platform %s: %w", entry, err)
-				}
-				platforms = append(platforms, p)
-			}
-			name = name[end+1:]
+		name, platforms, err := extractPlatformList(name)
+		if err != nil {
+			return fmt.Errorf("failed to mod label: %w", err)
 		}
 		dc.stepsOCIConfig = append(dc.stepsOCIConfig, func(c context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, doc *dagOCIConfig) error {
 			// if platforms are listed, skip non-matching platforms
 			if len(platforms) > 0 {
 				p := doc.oc.GetConfig().Platform
-				found := false
-				for _, pe := range platforms {
-					if platform.Match(p, pe) {
-						found = true
-						break
-					}
-				}
-				if !found {
+				if !slices.ContainsFunc(platforms, func(pe platform.Platform) bool { return platform.Match(p, pe) }) {
 					return nil
 				}
 			}
