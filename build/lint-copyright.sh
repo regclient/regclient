@@ -1,3 +1,5 @@
+#!/bin/sh
+
 # Copyright the regclient contributors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,5 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-github: [sudo-bmitch]
-tidelift: go/github.com/regclient/regclient
+rc=0
+for file in $(git ls-files -- '*.go' '*.sh' '*.yml'); do
+  if ! grep -iq "copyright the regclient contributors" "${file}"; then
+    echo "Missing copyright comment: ${file}" >&2
+	 rc=1
+  fi
+done
+
+exit ${rc}
