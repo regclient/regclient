@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/opencontainers/go-digest"
 
@@ -25,48 +24,23 @@ import (
 func WithAnnotation(name, value string) Opts {
 	return func(dc *dagConfig, dm *dagManifest) error {
 		// extract the list for platforms to update from the name
-		name = strings.TrimSpace(name)
-		platforms := []platform.Platform{}
-		allPlatforms := false
-		if name[0] == '[' && strings.Index(name, "]") > 0 {
-			end := strings.Index(name, "]")
-			for entry := range strings.SplitSeq(name[1:end], ",") {
-				entry = strings.TrimSpace(entry)
-				if entry == "*" {
-					allPlatforms = true
-					continue
-				}
-				p, err := platform.Parse(entry)
-				if err != nil {
-					return fmt.Errorf("failed to parse annotation platform %s: %w", entry, err)
-				}
-				platforms = append(platforms, p)
-			}
-			name = name[end+1:]
+		name, platforms, err := extractPlatformList(name)
+		if err != nil {
+			return fmt.Errorf("failed to mod annotations: %w", err)
 		}
 		dc.stepsManifest = append(dc.stepsManifest, func(ctx context.Context, rc *regclient.RegClient, rSrc, rTgt ref.Ref, dm *dagManifest) error {
 			// skip deleted manifest, those not in the platform list, or the non-top manifest if no platform list provided
 			if dm.mod == deleted {
 				return nil
 			}
-			if len(platforms) > 0 && !allPlatforms {
+			if len(platforms) > 0 {
 				if dm.m.IsList() || dm.config == nil || dm.config.oc == nil {
 					return nil
 				}
 				p := dm.config.oc.GetConfig().Platform
-				found := false
-				for _, pe := range platforms {
-					if platform.Match(p, pe) {
-						found = true
-						break
-					}
-				}
-				if !found {
+				if !slices.ContainsFunc(platforms, func(pe platform.Platform) bool { return platform.Match(p, pe) }) {
 					return nil
 				}
-			}
-			if len(platforms) == 0 && !allPlatforms && !dm.top {
-				return nil
 			}
 			// check if annotation is already set to the correct value
 			ma := dm.m.(manifest.Annotator)

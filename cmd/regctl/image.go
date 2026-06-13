@@ -453,6 +453,13 @@ regctl image mod registry.example.org/regctl:v0.5.1-alpine \
 	cmd.Flags().Var(&modFlagFunc{
 		t: "string",
 		f: func(val string) error {
+			opts.modOpts = append(opts.modOpts, mod.WithConfigAuthor(val))
+			return nil
+		},
+	}, "author", `set image author`)
+	cmd.Flags().Var(&modFlagFunc{
+		t: "string",
+		f: func(val string) error {
 			vs := strings.SplitN(val, "=", 2)
 			if len(vs) != 2 {
 				return fmt.Errorf("arg must be in the format \"name=value\"")
@@ -961,6 +968,13 @@ regctl image mod registry.example.org/regctl:v0.5.1-alpine \
 	}, "to-oci-referrers", "", `convert to OCI referrers`)
 	flagOCIReferrers.NoOptDefVal = "true"
 	cmd.Flags().Var(&modFlagFunc{
+		t: "string",
+		f: func(val string) error {
+			opts.modOpts = append(opts.modOpts, mod.WithConfigUser(val))
+			return nil
+		},
+	}, "user", `set default user (username, uid, with optional colon and group/gid value)`)
+	cmd.Flags().Var(&modFlagFunc{
 		t: "stringArray",
 		f: func(val string) error {
 			opts.modOpts = append(opts.modOpts, mod.WithVolumeAdd(val))
@@ -974,6 +988,13 @@ regctl image mod registry.example.org/regctl:v0.5.1-alpine \
 			return nil
 		},
 	}, "volume-rm", `delete a volume definition`)
+	cmd.Flags().Var(&modFlagFunc{
+		t: "string",
+		f: func(val string) error {
+			opts.modOpts = append(opts.modOpts, mod.WithConfigWorkdir(val))
+			return nil
+		},
+	}, "workdir", `set default workdir path`)
 
 	return cmd
 }
