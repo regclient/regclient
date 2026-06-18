@@ -385,7 +385,7 @@ func indexGet(index v1.Index, r ref.Ref) (descriptor.Descriptor, error) {
 			}
 		}
 	}
-	return descriptor.Descriptor{}, errs.ErrNotFound
+	return descriptor.Descriptor{}, fmt.Errorf("could not find entry in index.json: %s%.0w", r.CommonName(), errs.ErrNotFound)
 }
 
 func indexSet(index *v1.Index, r ref.Ref, d descriptor.Descriptor) error {
