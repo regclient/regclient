@@ -135,7 +135,7 @@ func (o *OCIDir) manifestGet(_ context.Context, r ref.Ref) (manifest.Manifest, e
 		return nil, fmt.Errorf("manifest exceeds size limit, ref: %s, limit: %d, size: %d%.0w", r.CommonName(), o.manifestMaxPull, desc.Size, errs.ErrSizeLimitExceeded)
 	}
 	if desc.Digest == "" {
-		return nil, errs.ErrNotFound
+		return nil, fmt.Errorf("digest could not be determined for %s%.0w", r.CommonName(), errs.ErrNotFound)
 	}
 	if err = desc.Digest.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid digest in index: %s: %w", string(desc.Digest), err)
@@ -186,7 +186,7 @@ func (o *OCIDir) ManifestHead(ctx context.Context, r ref.Ref) (manifest.Manifest
 		}
 	}
 	if desc.Digest == "" {
-		return nil, errs.ErrNotFound
+		return nil, fmt.Errorf("digest could not be determined for %s%.0w", r.CommonName(), errs.ErrNotFound)
 	}
 	if err = desc.Digest.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid digest in index: %s: %w", string(desc.Digest), err)
