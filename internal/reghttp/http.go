@@ -768,12 +768,15 @@ func (c *Client) getHost(host string) *clientHost {
 	hc := *c.httpClient
 	h.httpClient = &hc
 	if h.httpClient.Transport == nil {
-		h.httpClient.Transport = http.DefaultTransport.(*http.Transport).Clone()
+		if t, ok := http.DefaultTransport.(*http.Transport); ok {
+			h.httpClient.Transport = t.Clone()
+		} else {
+			h.httpClient.Transport = http.DefaultTransport
+		}
 	}
 	// configure transport for insecure requests and root certs
 	if h.config.TLS == config.TLSInsecure || len(c.rootCAPool) > 0 || len(c.rootCADirs) > 0 || h.config.RegCert != "" || (h.config.ClientCert != "" && h.config.ClientKey != "") {
-		t, ok := h.httpClient.Transport.(*http.Transport)
-		if ok {
+		if t, ok := h.httpClient.Transport.(*http.Transport); ok {
 			var tlsc *tls.Config
 			if t.TLSClientConfig != nil {
 				tlsc = t.TLSClientConfig.Clone()
