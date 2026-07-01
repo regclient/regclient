@@ -53,16 +53,11 @@ func NewProgressBar(w io.Writer) *ProgressBar {
 }
 
 func (p *ProgressBar) Generate(pct float64, pre, post string) []byte {
-	if pct < 0 {
-		pct = 0
-	} else if pct > 1 {
-		pct = 1
-	}
 	curWidth := p.Width - (len(pre) + len(post) + 2)
 	curWidth = min(max(curWidth, p.Min), p.Max)
 	buf := make([]byte, curWidth)
 
-	doneLen := int(float64(curWidth) * pct)
+	doneLen := min(max(int(float64(curWidth)*pct), 0), curWidth)
 	for i := range doneLen {
 		buf[i] = p.Done
 	}

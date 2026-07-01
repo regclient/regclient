@@ -148,7 +148,7 @@ func (o *OCIDir) manifestGet(_ context.Context, r ref.Ref) (manifest.Manifest, e
 	}
 	defer fd.Close()
 	limit := desc.Size
-	if desc.Size == 0 {
+	if desc.Size <= 0 || desc.MediaType == mediatype.Docker1Manifest || desc.MediaType == mediatype.Docker1ManifestSigned {
 		limit = o.manifestMaxPull
 	}
 	mb, err := io.ReadAll(&limitread.LimitRead{Reader: fd, Limit: limit})
