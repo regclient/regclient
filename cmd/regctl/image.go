@@ -1323,7 +1323,10 @@ func (ip *imageProgress) display(final bool) {
 				if len(pre) > 15 {
 					pre = pre[:14] + " "
 				}
-				pct := float64(e.cur) / float64(e.total)
+				var pct float64
+				if e.total > 0 {
+					pct = float64(e.cur) / float64(e.total)
+				}
 				post := fmt.Sprintf(" %4.2f%% %s/%s", pct*100, units.HumanSize(float64(e.cur)), units.HumanSize(float64(e.total)))
 				ip.asciiOut.Add(ip.bar.Generate(pct, pre, post))
 			}
