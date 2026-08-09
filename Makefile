@@ -54,7 +54,7 @@ GOFUMPT_VER?=v0.11.0
 GOMAJOR_VER?=v0.15.0
 GOSEC_VER?=v2.28.0
 GO_VULNCHECK_VER?=v1.6.0
-OSV_SCANNER_VER?=v2.4.0
+OSV_SCANNER_VER?=v2.5.0
 SYFT?=$(shell command -v syft 2>/dev/null)
 SYFT_CMD_VER:=$(shell [ -x "$(SYFT)" ] && echo "v$$($(SYFT) version | awk '/^Version: / {print $$2}')" || echo "0")
 SYFT_VERSION?=v1.50.0
@@ -67,7 +67,7 @@ ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 endif
 STATICCHECK_VER?=v0.7.0
 CI_DISTRIBUTION_VER?=3.1.1
-CI_ZOT_VER?=v2.1.18
+CI_ZOT_VER?=v2.1.20
 
 .PHONY: .FORCE
 .FORCE:
