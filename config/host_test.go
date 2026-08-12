@@ -515,3 +515,29 @@ func TestConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestMergeTokenClearsCredHelper(t *testing.T) {
+	// A host initially configured to authenticate with a credential helper.
+	host := Host{
+		Name:       "registry.example.com",
+		Hostname:   "registry.example.com",
+		CredHelper: "docker-credential-test",
+		CredExpire: timejson.Duration(time.Hour),
+	}
+	// A later config for the same registry supplies an explicit identity token
+	// and no credential helper. The token should take over and the stale helper
+	// should be cleared, matching how a user/pass entry clears a helper.
+	newHost := Host{
+		Name:  "registry.example.com",
+		Token: "identity-token",
+	}
+	if err := (&host).Merge(newHost, nil); err != nil {
+		t.Fatalf("failed to merge token onto cred helper host: %v", err)
+	}
+	if host.CredHelper != "" {
+		t.Errorf("cred helper was not cleared after merging a token: found %q", host.CredHelper)
+	}
+	if host.Token != "identity-token" {
+		t.Errorf("unexpected token after merge: found %q, expected %q", host.Token, "identity-token")
+	}
+}

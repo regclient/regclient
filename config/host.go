@@ -289,7 +289,7 @@ func (host *Host) Merge(newHost Host, log *slog.Logger) error {
 		host.Name = newHost.Name
 	}
 
-	if newHost.CredHelper == "" && (newHost.Pass != "" || host.Token != "") {
+	if newHost.CredHelper == "" && (newHost.Pass != "" || newHost.Token != "") {
 		// unset existing cred helper for user/pass or token
 		host.CredHelper = ""
 		host.CredExpire = 0
