@@ -65,7 +65,7 @@ func New(opts ...Opts) (*RepoList, error) {
 		host:      conf.host,
 	}
 
-	mt := strings.Split(conf.mt, ";")[0] // "application/json; charset=utf-8" -> "application/json"
+	mt, _, _ := strings.Cut(conf.mt, ";") // "application/json; charset=utf-8" -> "application/json"
 	switch mt {
 	case "application/json", "text/plain":
 		err := json.Unmarshal(conf.raw, &rl)

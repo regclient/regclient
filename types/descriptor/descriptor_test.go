@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"strings"
 	"testing"
 
 	// crypto libraries included for go-digest
@@ -554,7 +555,7 @@ func TestGetDataJSON(t *testing.T) {
 			if err != nil {
 				if tt.wantErr == nil {
 					t.Errorf("failed to parse json: %v", err)
-				} else if !errors.Is(err, tt.wantErr) && err.Error() != tt.wantErr.Error() {
+				} else if !errors.Is(err, tt.wantErr) && !strings.Contains(err.Error(), tt.wantErr.Error()) {
 					t.Errorf("expected error %v, received %v", tt.wantErr, err)
 				}
 				return

@@ -114,8 +114,8 @@ func (rl *ReferrerList) Delete(m manifest.Manifest) error {
 	// delete matching entries from the list
 	mDesc := m.GetDescriptor()
 	found := false
-	for i := len(rlM.Manifests) - 1; i >= 0; i-- {
-		if rlM.Manifests[i].Digest == mDesc.Digest {
+	for i, v := range slices.Backward(rlM.Manifests) {
+		if v.Digest == mDesc.Digest {
 			rlM.Manifests = slices.Delete(rlM.Manifests, i, i+1)
 			found = true
 		}
