@@ -216,8 +216,8 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rT
 			}
 		}
 		// second pass in reverse to delete entries
-		for i := len(dm.manifests) - 1; i >= 0; i-- {
-			child := dm.manifests[i]
+		for i, child := range slices.Backward(dm.manifests) {
+
 			if child.mod != deleted {
 				continue
 			}
@@ -323,8 +323,8 @@ func dagPut(ctx context.Context, rc *regclient.RegClient, mc dagConfig, rSrc, rT
 		}
 		// second pass in reverse to delete entries
 		iConfig = len(oc.History) - 1
-		for i := len(dm.layers) - 1; i >= 0; i-- {
-			layer := dm.layers[i]
+		for i, layer := range slices.Backward(dm.layers) {
+
 			for iConfig >= 0 && oc.History[iConfig].EmptyLayer {
 				iConfig--
 			}

@@ -33,10 +33,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        gover: ["1.25", "1.26"]
+        gover: ["1.26", "1.27"]
 
     env:
-      RELEASE_GO_VER: "1.26"
+      RELEASE_GO_VER: "1.27"
       # do not automatically upgrade go to a different version: https://go.dev/doc/toolchain
       GOTOOLCHAIN: "local"
 

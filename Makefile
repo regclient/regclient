@@ -65,7 +65,7 @@ ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 		-u "$(shell id -u):$(shell id -g)" \
 		$(SYFT_CONTAINER)
 endif
-STATICCHECK_VER?=v0.7.0
+STATICCHECK_VER?=v0.8.1
 CI_DISTRIBUTION_VER?=3.1.1
 CI_ZOT_VER?=v2.1.20
 

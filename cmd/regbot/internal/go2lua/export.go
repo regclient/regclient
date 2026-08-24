@@ -69,8 +69,7 @@ func exportReflect(ls *lua.LState, v reflect.Value) lua.LValue {
 		vType := v.Type()
 		lTab := ls.NewTable()
 		foundExported := false
-		for i := range vType.NumField() {
-			field := vType.Field(i)
+		for field := range vType.Fields() {
 			// skip unexported fields
 			if !v.FieldByName(field.Name).CanInterface() {
 				continue
@@ -79,7 +78,7 @@ func exportReflect(ls *lua.LState, v reflect.Value) lua.LValue {
 			lVal := exportReflect(ls, v.FieldByName(field.Name))
 			lTab.RawSetString(field.Name, lVal)
 			// map json keys to values if defined
-			jsonName := strings.Split(field.Tag.Get("json"), ",")[0]
+			jsonName, _, _ := strings.Cut(field.Tag.Get("json"), ",")
 			if jsonName != "" && jsonName != "-" {
 				lTab.RawSetString(jsonName, lVal)
 			}

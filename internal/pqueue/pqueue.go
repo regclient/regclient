@@ -180,8 +180,8 @@ func AcquireMulti[T any](ctx context.Context, e T, qList ...*Queue[T]) (context.
 		}
 	}
 	// delete nil entries
-	for i := len(qList) - 1; i >= 0; i-- {
-		if qList[i] == nil {
+	for i, q := range slices.Backward(qList) {
+		if q == nil {
 			qList = slices.Delete(qList, i, i+1)
 		}
 	}
@@ -244,8 +244,8 @@ func AcquireMulti[T any](ctx context.Context, e T, qList ...*Queue[T]) (context.
 	cleanup := func() {
 		ctxVal.qList = nil
 		// dequeue in reverse order to minimize chance of another AcquireMulti being freed and immediately blocking on the next queue
-		for i := len(doneList) - 1; i >= 0; i-- {
-			doneList[i]()
+		for _, d := range slices.Backward(doneList) {
+			d()
 		}
 	}
 	return newCtx, cleanup, nil

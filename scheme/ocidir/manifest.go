@@ -82,9 +82,9 @@ func (o *OCIDir) ManifestDelete(ctx context.Context, r ref.Ref, opts ...scheme.M
 	if err != nil {
 		return fmt.Errorf("failed to read index: %w", err)
 	}
-	for i := len(index.Manifests) - 1; i >= 0; i-- {
+	for i, v := range slices.Backward(index.Manifests) {
 		// remove matching entry from index
-		if r.Digest != "" && index.Manifests[i].Digest.String() == r.Digest {
+		if r.Digest != "" && v.Digest.String() == r.Digest {
 			changed = true
 			index.Manifests = slices.Delete(index.Manifests, i, i+1)
 		}

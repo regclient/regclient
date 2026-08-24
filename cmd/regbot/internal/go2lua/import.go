@@ -136,8 +136,7 @@ func importReflect(ls *lua.LState, lv lua.LValue, v, orig reflect.Value) error {
 		foundExported := false
 		if lvi, ok := lv.(*lua.LTable); ok {
 			vType := v.Type()
-			for i := range vType.NumField() {
-				field := vType.Field(i)
+			for field := range vType.Fields() {
 				// skip unexported fields
 				if !v.FieldByName(field.Name).CanInterface() {
 					continue
@@ -145,7 +144,7 @@ func importReflect(ls *lua.LState, lv lua.LValue, v, orig reflect.Value) error {
 				foundExported = true
 				key := field.Name
 				// use json keys if defined
-				jsonName := strings.Split(field.Tag.Get("json"), ",")[0]
+				jsonName, _, _ := strings.Cut(field.Tag.Get("json"), ",")
 				if jsonName != "" && jsonName != "-" {
 					key = jsonName
 				}

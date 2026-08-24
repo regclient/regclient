@@ -27,7 +27,7 @@ jobs:
     name: Run vulnerability scans
     runs-on: ubuntu-latest
     env:
-      RELEASE_GO_VER: "1.26"
+      RELEASE_GO_VER: "1.27"
 
     steps:
     - name: Check out code

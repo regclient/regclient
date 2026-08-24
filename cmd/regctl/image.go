@@ -1296,8 +1296,8 @@ func (ip *imageProgress) display(final bool) {
 	startCount, startLimit := 0, 2
 	finishedCount, finishedLimit := 0, 2
 	// hide old finished entries
-	for i := len(keys) - 1; i >= 0; i-- {
-		e := ip.entries[keys[i]]
+	for _, key := range slices.Backward(keys) {
+		e := ip.entries[key]
 		if e.kind != types.CallbackManifest && e.state == types.CallbackFinished {
 			finishedCount++
 			if finishedCount > finishedLimit {
@@ -1577,8 +1577,8 @@ func (opts *imageOpts) runImageGetFile(cmd *cobra.Command, args []string) error 
 	if err != nil {
 		return err
 	}
-	for i := len(layers) - 1; i >= 0; i-- {
-		blob, err := rc.BlobGet(ctx, r, layers[i])
+	for i, layer := range slices.Backward(layers) {
+		blob, err := rc.BlobGet(ctx, r, layer)
 		if err != nil {
 			return fmt.Errorf("failed pulling layer %d: %w", i, err)
 		}

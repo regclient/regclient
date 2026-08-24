@@ -476,16 +476,16 @@ func (opts *artifactOpts) runArtifactGet(cmd *cobra.Command, args []string) erro
 	}
 	// filter by media-type if defined
 	if len(opts.artifactFileMT) > 0 {
-		for i := len(layers) - 1; i >= 0; i-- {
-			if !slices.Contains(opts.artifactFileMT, layers[i].MediaType) {
+		for i, layer := range slices.Backward(layers) {
+			if !slices.Contains(opts.artifactFileMT, layer.MediaType) {
 				layers = slices.Delete(layers, i, i+1)
 			}
 		}
 	}
 	// filter by filename if defined
 	if len(opts.artifactFile) > 0 {
-		for i := len(layers) - 1; i >= 0; i-- {
-			af, ok := layers[i].Annotations[ociAnnotTitle]
+		for i, layer := range slices.Backward(layers) {
+			af, ok := layer.Annotations[ociAnnotTitle]
 			if !ok || !slices.Contains(opts.artifactFile, af) {
 				layers = slices.Delete(layers, i, i+1)
 			}
