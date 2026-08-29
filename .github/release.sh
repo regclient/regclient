@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 # Copyright the regclient contributors.
 #
@@ -14,7 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# TODO: support RCs
 set -e
 branch=""
 tag=""
@@ -22,6 +21,7 @@ prev_tag=""
 opt_dry_run=0
 opt_help=0
 gh_repo="regclient/regclient"
+gh_branch="main"
 gh_auth=""
 
 # CLI options to override image, platform, base digest, and comma separated list of tags to push
@@ -52,8 +52,8 @@ cd "$(dirname $0)"
 cd "$(git rev-parse --show-toplevel)"
 
 generate_changelog() {
-  echo "# Release ${1}\n\nChanges:\n"
-  hashes="$(git log --reverse --merges --format="%h" "${prev_tag}..HEAD")"
+  echo -e "## Release ${1}\n\nChanges:\n"
+  hashes="$(git log --reverse --merges --format="%h" "${prev_tag:+${prev_tag}..}HEAD")"
   prs=""
   users=""
   for hash in ${hashes}; do
@@ -68,12 +68,10 @@ generate_changelog() {
         prs="${prs} ${pr}"
       fi
       users="${users}\n$(get_pr_user "${pr}")"
-      # msg="$(git show --format=%b ${hash})"
-      # echo "- $msg ([PR ${pr}][pr-${pr}])"
     fi
   done
-  echo "\nContributors:\n"
-  for user in $(echo "$users" | sort -u); do
+  echo -e "\nContributors:\n"
+  for user in $(echo -e "$users" | sort -u); do
     if [ -n "$user" ]; then
       echo "- @${user}"
     fi
@@ -110,57 +108,58 @@ get_pr_user() {
 
 # prompt with last tag, asking for next tag, defaulting to patch update
 if [ -z "$prev_tag" ]; then
-  prev_tag="$(git tag --sort=version:refname -l | tail -1)"
+  prev_tag="$(git tag -l | grep -v -- "-rc" | tail -1)"
 fi
 # for dry-run, output the change list from the prev_tag to main and stop
-# TODO: add a dry-run func to echo vs exec commands that would change things
 if [ "$opt_dry_run" = "1" ]; then
   generate_changelog "dry run"
   exit 0
 fi
 if [ -z "$tag" ] || git show-ref "refs/tags/${tag}" --quiet; then
   # extract patch version from prev_tag
-  next_patch="$(expr 1 + "${prev_tag##*.}")"
-  next_tag="${prev_tag%.*}.${next_patch}"
-  read -p "Enter tag to create [${next_tag}]: " tag
+  next_tag=v0.1.0
+  if [ -n "${prev_tag}" ]; then
+    next_patch="$(expr 1 + "${prev_tag##*.}")"
+    next_tag="${prev_tag%.*}.${next_patch}"
+  fi
+  read -p "Enter release to create [${next_tag}]: " tag
   if [ -z "$tag" ]; then
     tag="$next_tag"
   fi
   if git show-ref "refs/tags/${tag}" --quiet; then
-    echo "Tag already exists: ${tag}" >&2
+    echo "Release already exists: ${tag}" >&2
     exit 1
   fi
 fi
 
-# TODO: validate tag format (v1.2.3)
-
-# check if branch exists, create if missing from the last release branch, else checkout
-branch="${tag#v}"
-branch="${branch%.*}"
-if git show-ref "refs/heads/releases/${branch}"; then
-  git checkout "releases/${branch}"
-else
-  prev_branch="${prev_tag#v}"
-  prev_branch="${prev_branch%.*}"
-  git checkout -b "releases/${branch}" "releases/${prev_branch}"
+# validate tag syntax (v1.2.3-rc1)
+if [[ ! ${tag} =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-.*|$) ]]; then
+  echo -e "Unexpected tag syntax: \"${tag}\"" >&2
+  exit 1
 fi
-
-# merge changes from main
-git merge main -m "Merge for release ${tag}"
 
 # query for all logs since last tag, extract PR list with PR number and title
 # look into pulling PR text from GH and extracting change log message
 # format the log output to extract the PR number and commit id, don't show local branches
 echo "Generating changelog..."
-generate_changelog ${tag} | tee release.md
+echo -e "# Release Notes\n" >RELEASE.md-next
+generate_changelog ${tag} | tee -a RELEASE.md-next
 
-# prompt user to make any changes to release.md and approve release
+# update the release notes with the newest release at the top of the file
+echo >>RELEASE.md-next
+if [ -f RELEASE.md ]; then
+  tail +3 RELEASE.md >>RELEASE.md-next
+fi
+mv RELEASE.md-next RELEASE.md
+
+# prompt user on the next steps
+remote="$(git remote -v show | awk "\$2~/github.com:${gh_repo%/*}\/${gh_repo##*/}/{print \$1; exit}")"
+remote="${remote:-origin}"
 cat <<EOF
-# Verify and update the release.md, then execute the following:
-git add release.md
-git commit -sm "Release ${tag}"
-git push upstream releases/${branch}
-git tag -asm "Release ${tag}" ${tag}
-git push upstream ${tag}
-git checkout main
+# Verify and update the RELEASE.md, then push it in a PR.
+# Once the PR has merged, tag the release with:
+git checkout "${gh_branch}"
+git pull "${remote}" "${gh_branch}"
+git tag -asm "Release ${tag}" "${tag}"
+git push "${remote}" "${tag}"
 EOF
