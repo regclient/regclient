@@ -21,6 +21,7 @@ on:
       - 'feature/**'
     tags:
       - 'v*.*.*'
+      - 'v*.*.*-rc*'
   schedule:
     - cron: '0 06 * * *'
 
