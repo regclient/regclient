@@ -241,13 +241,11 @@ util-golang-update: ## update go module versions
 
 .PHONY: util-release-preview
 util-release-preview: $(GOPATH)/bin/gorelease ## preview changes for next release
-	git checkout main
 	./.github/release.sh -d
 	gorelease
 
 .PHONY: util-release-run
 util-release-run: ## generate a new release
-	git checkout main
 	./.github/release.sh
 
 .PHONY: util-version-check
