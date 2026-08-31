@@ -1,5 +1,45 @@
 # Release Notes
 
+## Release v0.11.6-rc1
+
+Features:
+
+- image mod support for user, workdir, and author. ([PR 1101][pr-1101])
+- Support RC releases. ([PR 1126][pr-1126])
+
+Fixes:
+
+- Add limits and controls to ReadAll. ([PR 1096][pr-1096])
+- Skip local check on requests going through a proxy. ([PR 1099][pr-1099])
+- URLs passed to ProxyFromEnvironment require a scheme. ([PR 1104][pr-1104])
+- Avoid a panic if http.DefaultTransport is altered. ([PR 1109][pr-1109])
+- Handle docker schema v1  with ocidir. ([PR 1111][pr-1111])
+- Do not checkout main branch for releases. ([PR 1127][pr-1127])
+
+Other changes:
+
+- Add copyright headers. ([PR 1102][pr-1102])
+- Improve error messages in ocidir scheme. ([PR 1106][pr-1106])
+- Upgrade osv-scanner to v2. ([PR 1115][pr-1115])
+- Remove go reportcard. ([PR 1119][pr-1119])
+
+Contributors:
+
+- @sudo-bmitch
+
+[pr-1096]: https://github.com/regclient/regclient/pull/1096
+[pr-1099]: https://github.com/regclient/regclient/pull/1099
+[pr-1101]: https://github.com/regclient/regclient/pull/1101
+[pr-1102]: https://github.com/regclient/regclient/pull/1102
+[pr-1104]: https://github.com/regclient/regclient/pull/1104
+[pr-1106]: https://github.com/regclient/regclient/pull/1106
+[pr-1109]: https://github.com/regclient/regclient/pull/1109
+[pr-1111]: https://github.com/regclient/regclient/pull/1111
+[pr-1115]: https://github.com/regclient/regclient/pull/1115
+[pr-1119]: https://github.com/regclient/regclient/pull/1119
+[pr-1126]: https://github.com/regclient/regclient/pull/1126
+[pr-1127]: https://github.com/regclient/regclient/pull/1127
+
 ## Release v0.11.5
 
 Security:
