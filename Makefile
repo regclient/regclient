@@ -32,7 +32,7 @@ VCS_VERSION?=$(shell vcs_describe="$$(git describe --all)"; \
     if [ "main" = "$${vcs_version}" ]; then vcs_version=edge; fi; \
   fi; \
   echo "$${vcs_version}" | sed -r 's#/+#-#g')
-VCS_TAG?=$(shell git describe --tags --abbrev=0 2>/dev/null || true)
+VCS_TAG?=$(shell git describe --tags --exact-match 2>/dev/null || true)
 VCS_SEC?=$(shell git log -1 --format=%ct)
 VCS_DATE?=$(shell date -d "@$(VCS_SEC)" +%Y-%m-%dT%H:%M:%SZ --utc)
 LD_FLAGS?=-s -w -extldflags -static -buildid= -X \"github.com/regclient/regclient/internal/version.vcsTag=$(VCS_TAG)\"
