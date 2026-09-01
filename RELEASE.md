@@ -1,6 +1,6 @@
 # Release Notes
 
-## Release v0.11.6-rc1
+## Release v0.11.6-rc2
 
 Features:
 
@@ -15,6 +15,9 @@ Fixes:
 - Avoid a panic if http.DefaultTransport is altered. ([PR 1109][pr-1109])
 - Handle docker schema v1  with ocidir. ([PR 1111][pr-1111])
 - Do not checkout main branch for releases. ([PR 1127][pr-1127])
+- Pin Go version for regctl mod commands. ([PR 1130][pr-1130])
+- Improve reproducibility with tags on main branch. ([PR 1131][pr-1131])
+- Do not sign SBOMs. ([PR 1133][pr-1133])
 
 Other changes:
 
@@ -39,6 +42,9 @@ Contributors:
 [pr-1119]: https://github.com/regclient/regclient/pull/1119
 [pr-1126]: https://github.com/regclient/regclient/pull/1126
 [pr-1127]: https://github.com/regclient/regclient/pull/1127
+[pr-1130]: https://github.com/regclient/regclient/pull/1130
+[pr-1131]: https://github.com/regclient/regclient/pull/1131
+[pr-1133]: https://github.com/regclient/regclient/pull/1133
 
 ## Release v0.11.5
 
