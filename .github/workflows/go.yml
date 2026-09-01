@@ -103,6 +103,9 @@ jobs:
       run: |
         cd artifacts
         for artifact in *; do
+          if [ ${artifact} != ${artifact%.json} ]; then
+            continue # skip sbom files
+          fi
           # sign content with and without the bundle to simplify client migrations
           cosign sign-blob -y --new-bundle-format=false --use-signing-config=false --output-signature "${artifact%.exe}.sig" --output-certificate "${artifact%.exe}.pem" "${artifact}"
           cosign sign-blob -y --new-bundle-format=true  --use-signing-config=true  --bundle "${artifact%.exe}.sigstore.json" "${artifact}"
