@@ -292,6 +292,69 @@ defaults:
 			expErr: nil,
 		},
 		{
+			name: "RepoCopy TargetTag Template",
+			sync: ConfigSync{
+				Source:    tsHost + "/testrepo",
+				Target:    tsHost + "/test-target-tag",
+				Type:      "repository",
+				TargetTag: "{{ .Source.Tag }}-tt",
+			},
+			action: actionCopy,
+			expect: map[string]digest.Digest{
+				tsHost + "/test-target-tag:v1-tt": d1,
+				tsHost + "/test-target-tag:v2-tt": d2,
+				tsHost + "/test-target-tag:v3-tt": d3,
+			},
+			missing: []string{
+				// original tag names should not be created on the target
+				tsHost + "/test-target-tag:v1",
+				tsHost + "/test-target-tag:v2",
+				tsHost + "/test-target-tag:v3",
+			},
+			expErr: nil,
+		},
+		{
+			name: "RepoMissing TargetTag Template First Pass",
+			sync: ConfigSync{
+				Source:    tsHost + "/testrepo",
+				Target:    tsHost + "/test-target-tag-missing",
+				Type:      "repository",
+				TargetTag: "{{ .Source.Tag }}-tt",
+				Tags: TagAllowDeny{
+					Allow: []string{"v1", "v2"},
+				},
+			},
+			action: actionMissing,
+			expect: map[string]digest.Digest{
+				tsHost + "/test-target-tag-missing:v1-tt": d1,
+				tsHost + "/test-target-tag-missing:v2-tt": d2,
+			},
+			missing: []string{
+				tsHost + "/test-target-tag-missing:v3-tt",
+			},
+			expErr: nil,
+		},
+		{
+			name: "RepoMissing TargetTag Template Second Pass",
+			sync: ConfigSync{
+				Source:    tsHost + "/testrepo",
+				Target:    tsHost + "/test-target-tag-missing",
+				Type:      "repository",
+				TargetTag: "{{ .Source.Tag }}-tt",
+				Tags: TagAllowDeny{
+					Allow: []string{"v1", "v2", "v3"},
+				},
+			},
+			action: actionMissing,
+			expect: map[string]digest.Digest{
+				// v1-tt and v2-tt already existed from the first pass, v3-tt is newly added
+				tsHost + "/test-target-tag-missing:v1-tt": d1,
+				tsHost + "/test-target-tag-missing:v2-tt": d2,
+				tsHost + "/test-target-tag-missing:v3-tt": d3,
+			},
+			expErr: nil,
+		},
+		{
 			name: "ReadOnly Error Abort",
 			sync: ConfigSync{
 				Source: tsHost + "/testrepo",

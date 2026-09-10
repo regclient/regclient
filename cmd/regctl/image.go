@@ -154,11 +154,19 @@ func newImageCopyCmd(rOpts *rootOpts) *cobra.Command {
 		Long: `Copy or retag an image. This works between registries and only pulls layers
 that do not exist at the target. In the same registry it attempts to mount
 the layers between repositories. And within the same repository it only
-sends the manifest with the new tag.`,
+sends the manifest with the new tag.
+
+The destination reference may include go template syntax, expanded using the
+source reference (e.g. "{{.Source.Tag}}"), allowing the destination tag to be
+derived from the source.`,
 		Example: `
 # copy an image
 regctl image copy \
   ghcr.io/regclient/regctl:edge registry.example.org/regclient/regctl:edge
+
+# retag using a template to derive the destination tag from the source
+regctl image copy \
+  ghcr.io/regclient/regctl:edge 'registry.example.org/regclient/regctl:{{.Source.Tag}}-mirror'
 
 # copy an image with signatures
 regctl image copy --digest-tags \
@@ -1128,7 +1136,16 @@ func (opts *imageOpts) runImageCopy(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	rTgt, err := ref.New(args[1])
+	// the target reference may include a go template (e.g. the tag) that is
+	// expanded using the source reference, allowing the target tag to be
+	// derived from the source (mirrors regsync's targetTag support)
+	tgtStr, err := template.String(args[1], struct {
+		Source ref.Ref
+	}{Source: rSrc})
+	if err != nil {
+		return fmt.Errorf("failed to expand target template %q: %w", args[1], err)
+	}
+	rTgt, err := ref.New(strings.TrimSpace(tgtStr))
 	if err != nil {
 		return err
 	}
