@@ -576,8 +576,43 @@ func (opts *rootOpts) processRepo(ctx context.Context, s ConfigSync, src, tgt st
 			slog.Any("available", sTagsList))
 		return nil
 	}
+	// resolve the target tag for every source tag before filtering/copying, since
+	// TargetTag may render a name that differs from the source tag.
+	errs := []error{}
+	resolvedTgtTags := make(map[string]string, len(sTagsFiltered))
+	if s.TargetTag == "" {
+		for _, tag := range sTagsFiltered {
+			resolvedTgtTags[tag] = tag
+		}
+	} else {
+		// reuse sTagsFiltered's backing array to drop tags whose template failed,
+		// without a new allocation (safe since len(resolved) <= current index).
+		resolved := sTagsFiltered[:0]
+		for _, tag := range sTagsFiltered {
+			srcRef := sRepoRef.SetTag(tag)
+			data := struct {
+				Source ref.Ref
+			}{Source: srcRef}
+			tgtTagStr, tErr := template.String(s.TargetTag, data)
+			if tErr != nil {
+				opts.log.Error("Failed to expand target tag template",
+					slog.String("original", srcRef.CommonName()),
+					slog.String("targetTag", s.TargetTag),
+					slog.String("error", tErr.Error()))
+				errs = append(errs, tErr)
+				if opts.abortOnErr {
+					return errors.Join(errs...)
+				}
+				// skip this tag but keep processing the rest
+				continue
+			}
+			resolvedTgtTags[tag] = strings.TrimSpace(tgtTagStr)
+			resolved = append(resolved, tag)
+		}
+		sTagsFiltered = resolved
+	}
 	// if only copying missing entries, delete tags that already exist on target
-	if action == actionMissing {
+	if action == actionMissing && len(sTagsFiltered) > 0 {
 		tRepoRef, err := ref.New(tgt)
 		if err != nil {
 			opts.log.Error("Failed parsing target",
@@ -600,33 +635,24 @@ func (opts *rootOpts) processRepo(ctx context.Context, s ConfigSync, src, tgt st
 					slog.String("error", err.Error()))
 			}
 		}
-		slices.Sort(sTagsFiltered)
-		slices.Sort(tTagList)
-		sI := len(sTagsFiltered) - 1
-		tI := len(tTagList) - 1
-		for sI >= 0 && tI >= 0 {
-			switch strings.Compare(sTagsFiltered[sI], tTagList[tI]) {
-			case 0:
-				sTagsFiltered = slices.Delete(sTagsFiltered, sI, sI+1)
-				sI--
-				tI--
-			case -1:
-				tI--
-			case 1:
-				sI--
-			default:
-				opts.log.Warn("strings.Compare unexpected result",
-					slog.Int("result", strings.Compare(sTagsFiltered[sI], tTagList[tI])),
-					slog.String("left", sTagsFiltered[sI]),
-					slog.String("right", tTagList[tI]))
-				sI--
-				tI--
+		// build a set of existing target tags, then keep only the source tags
+		// whose *resolved* target tag (post TargetTag template) is not yet present
+		tTagSet := make(map[string]struct{}, len(tTagList))
+		for _, t := range tTagList {
+			tTagSet[t] = struct{}{}
+		}
+		missing := sTagsFiltered[:0]
+		for _, tag := range sTagsFiltered {
+			if _, ok := tTagSet[resolvedTgtTags[tag]]; !ok {
+				missing = append(missing, tag)
 			}
 		}
+		sTagsFiltered = missing
 	}
-	errs := []error{}
 	for _, tag := range sTagsFiltered {
-		if err := opts.processImage(ctx, s, fmt.Sprintf("%s:%s", src, tag), fmt.Sprintf("%s:%s", tgt, tag), action); err != nil {
+		if err := opts.processImage(
+			ctx, s, fmt.Sprintf("%s:%s", src, tag), fmt.Sprintf("%s:%s", tgt, resolvedTgtTags[tag]), action,
+		); err != nil {
 			errs = append(errs, err)
 			if opts.abortOnErr {
 				break
