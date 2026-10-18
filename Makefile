@@ -53,21 +53,21 @@ MARKDOWN_LINT_VER?=v0.23.3
 GOFUMPT_VER?=v0.12.0
 GOMAJOR_VER?=v0.15.0
 GOSEC_VER?=v2.29.0
-GO_VULNCHECK_VER?=v1.8.0
-OSV_SCANNER_VER?=v2.6.0
+GO_VULNCHECK_VER?=v1.9.0
+OSV_SCANNER_VER?=v2.7.0
 SYFT?=$(shell command -v syft 2>/dev/null)
 SYFT_CMD_VER:=$(shell [ -x "$(SYFT)" ] && echo "v$$($(SYFT) version | awk '/^Version: / {print $$2}')" || echo "0")
-SYFT_VERSION?=v1.54.0
-SYFT_CONTAINER?=anchore/syft:v1.54.0@sha256:0356562f495d432056237fbea5cbc2d4839c9c75cd500784a66de2e7cc95ca7c
+SYFT_VERSION?=v1.54.1
+SYFT_CONTAINER?=anchore/syft:v1.54.1@sha256:3eb5379ba7b409c3f4069b686110527af0c47df993fa5c10d13e7cf34f49b1aa
 ifneq "$(SYFT_CMD_VER)" "$(SYFT_VERSION)"
 	SYFT=docker run --rm \
 		-v "$(shell pwd)/:$(shell pwd)/" -w "$(shell pwd)" \
 		-u "$(shell id -u):$(shell id -g)" \
 		$(SYFT_CONTAINER)
 endif
-STATICCHECK_VER?=v0.8.1
+STATICCHECK_VER?=v0.8.2
 CI_DISTRIBUTION_VER?=3.1.2
-CI_ZOT_VER?=v2.1.21
+CI_ZOT_VER?=v2.1.22
 
 .PHONY: .FORCE
 .FORCE:
@@ -118,10 +118,11 @@ lint-goimports: $(GOPATH)/bin/goimports
 		exit 1; \
 	fi
 
-# excluding types/platform pending resultion to https://github.com/securego/gosec/issues/1116
+# excluding types/platform, see https://github.com/securego/gosec/issues/1116
 .PHONY: lint-gosec
 lint-gosec: $(GOPATH)/bin/gosec .FORCE ## Run gosec
-	$(GOPATH)/bin/gosec -terse -exclude-dir types/platform ./...
+	# $(GOPATH)/bin/gosec -terse -exclude-dir types/platform ./...
+	echo "gosec is disabled pending a new release: https://github.com/securego/gosec/issues/1774"
 
 .PHONY: lint-md
 lint-md: .FORCE ## Run linting for markdown

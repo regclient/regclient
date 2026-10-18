@@ -155,11 +155,11 @@ jobs:
       uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
       id: syft
       with:
-        syft-version: "v1.54.0"
+        syft-version: "v1.54.1"
     
     # Dogfooding, use regctl to modify regclient images to improve reproducibility
     - name: Install regctl
-      uses: regclient/actions/regctl-installer@bb562fac724b7b37c17f19671df07fe34fabc376 # main
+      uses: regclient/actions/regctl-installer@dd58ad94f76adb73d8ac1bf75ed25f01545d5b32 # main
       if: github.event_name != 'pull_request' && github.repository_owner == 'regclient'
       with:
         release: main
