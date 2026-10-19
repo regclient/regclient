@@ -189,6 +189,11 @@ func TestImageCopy(t *testing.T) {
 			expectOut: tsHost + "/newrepo:v2",
 		},
 		{
+			name:      "target-tag-template",
+			args:      []string{"image", "copy", srcRef, tsHost + "/newrepo:{{.Source.Tag}}-tt"},
+			expectOut: tsHost + "/newrepo:v2-tt",
+		},
+		{
 			name:      "reg-to-reg-platform",
 			args:      []string{"image", "copy", "--platform", "linux/amd64", tsHost + "/testrepo:v3", tsHost + "/newrepo:v3"},
 			expectOut: tsHost + "/newrepo:v3",
