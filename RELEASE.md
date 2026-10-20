@@ -1,5 +1,17 @@
 # Release Notes
 
+## Release v0.11.7-rc1
+
+Security:
+
+- Upgrading Go fixes CVE-2026-111943 ([PR 1140][pr-1140])
+
+Contributors:
+
+- @sudo-bmitch
+
+[pr-1140]: https://github.com/regclient/regclient/pull/1140
+
 ## Release v0.11.6
 
 Features:
