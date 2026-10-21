@@ -81,6 +81,14 @@ func TestDocker(t *testing.T) {
 			expectTLS:        TLSEnabled,
 		},
 		{
+			name:             "schemehost",
+			hostname:         "schemehost.example.com",
+			expectCredHelper: "docker-credential-test",
+			expectHostname:   "schemehost.example.com",
+			expectTLS:        TLSEnabled,
+			expectCredHost:   "https://schemehost.example.com",
+		},
+		{
 			name:           "localhost:5001",
 			hostname:       "localhost:5001",
 			expectUser:     "hello",
