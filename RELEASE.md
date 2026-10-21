@@ -1,6 +1,6 @@
 # Release Notes
 
-## Release v0.11.7-rc1
+## Release v0.11.7
 
 Security:
 
