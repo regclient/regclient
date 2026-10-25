@@ -785,6 +785,7 @@ func (c *Client) getHost(host string) *clientHost {
 				tlsc = &tls.Config{}
 			}
 			if h.config.TLS == config.TLSInsecure {
+				//#nosec G402 User explicitly disabled secure connections.
 				tlsc.InsecureSkipVerify = true
 			} else {
 				rootPool, err := makeRootPool(c.rootCAPool, c.rootCADirs, h.config.Hostname, h.config.RegCert)
