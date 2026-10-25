@@ -144,6 +144,7 @@ func dockerParse(rdr io.Reader) ([]Host, error) {
 		return nil, err
 	}
 	hosts := []Host{}
+	helperHosts := map[string]bool{}
 	for name, auth := range dc.AuthConfigs {
 		if !HostValidate(name) {
 			continue
@@ -161,17 +162,23 @@ func dockerParse(rdr io.Reader) ([]Host, error) {
 		}
 		h := HostNewName(name)
 		h.CredHelper = dockerHelperPre + helper
+		helperHosts[h.Name] = true
 		if _, ok := dc.AuthConfigs[name]; ok {
 			continue // skip fields with auth config
 		}
 		hosts = append(hosts, *h)
 	}
-	// add credStore entries
+	// add credStore entries, skipping hosts with a credential helper, which take precedence
 	if dc.CredentialsStore != "" {
 		ch := newCredHelper(dockerHelperPre+dc.CredentialsStore, map[string]string{})
 		csHosts, err := ch.list()
 		if err == nil {
-			hosts = append(hosts, csHosts...)
+			for _, h := range csHosts {
+				if helperHosts[h.Name] {
+					continue
+				}
+				hosts = append(hosts, h)
+			}
 		}
 	}
 	return hosts, nil
