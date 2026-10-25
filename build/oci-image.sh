@@ -21,7 +21,7 @@ base_name=""
 release="scratch"
 push_tags=""
 ALPINE_NAME="alpine:3"
-ALPINE_DIGEST="sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6" # 3.24.2
+ALPINE_DIGEST="sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a" # 3.24.3
 
 # CLI options to override image, platform, base digest, and comma separated list of tags to push
 opt_c=0
