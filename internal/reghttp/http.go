@@ -488,7 +488,7 @@ func (resp *Resp) next() error {
 				case http.StatusRequestedRangeNotSatisfiable:
 					// if range request error (blob push), drop mirror for this req, but other requests don't need backoff
 					dropHost = true
-				case http.StatusTooManyRequests, http.StatusRequestTimeout, http.StatusGatewayTimeout, http.StatusBadGateway, http.StatusInternalServerError:
+				case http.StatusTooManyRequests, http.StatusRequestTimeout, http.StatusGatewayTimeout, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusInternalServerError:
 					// server is likely overloaded, backoff but still retry
 					backoff = true
 				default:
