@@ -18,12 +18,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -309,5 +311,33 @@ func TestConfigRead(t *testing.T) {
 				t.Errorf("parsing mismatch, expected:\n%#v\n  received:\n%#v", tc.expect, *cRead)
 			}
 		})
+	}
+}
+
+func TestLoadConfNoScripts(t *testing.T) {
+	// a top-level key the decoder does not recognize must not leave a config that silently
+	// runs nothing
+	tmpDir := t.TempDir()
+	confFile := filepath.Join(tmpDir, "regbot.yml")
+	confYAML := `version: 1
+script:
+  - name: CopyLatest
+    script: |
+      regctl image copy ${source} ${target}
+`
+	if err := os.WriteFile(confFile, []byte(confYAML), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	opts := rootOpts{
+		confFile: confFile,
+		log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	err := opts.loadConf()
+	if err == nil {
+		t.Fatal("expected an error for a config without scripts")
+	}
+	if !strings.Contains(err.Error(), "no scripts") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

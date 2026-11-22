@@ -393,6 +393,11 @@ func (opts *rootOpts) loadConf() error {
 	} else {
 		return ErrMissingInput
 	}
+	// a top-level key the decoder does not recognize (e.g. "synk" instead of "sync") is dropped,
+	// which leaves a config with nothing to do that would otherwise succeed and sync nothing
+	if len(opts.conf.Sync) == 0 {
+		return errors.New("no sync entries found in the config file")
+	}
 	// use a throttle to control parallelism
 	concurrent := opts.conf.Defaults.Parallel
 	if concurrent <= 0 {

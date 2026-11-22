@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -262,6 +263,11 @@ func (opts *rootOpts) loadConf() error {
 		}
 	} else {
 		return ErrMissingInput
+	}
+	// a top-level key the decoder does not recognize (e.g. "script" instead of "scripts") is
+	// dropped, which leaves a config with nothing to do that would otherwise succeed
+	if len(opts.conf.Scripts) == 0 {
+		return errors.New("no scripts found in the config file")
 	}
 	// use a throttle to control parallelism
 	concurrent := opts.conf.Defaults.Parallel

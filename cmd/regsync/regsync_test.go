@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/http/httptest"
@@ -26,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -1364,5 +1366,32 @@ func TestConfigRead(t *testing.T) {
 				t.Errorf("parsing mismatch, expected:\n%#v\n  received:\n%#v", tc.expect, *cRead)
 			}
 		})
+	}
+}
+
+func TestLoadConfNoSyncEntries(t *testing.T) {
+	// a top-level key the decoder does not recognize must not leave a config that silently
+	// syncs nothing
+	tmpDir := t.TempDir()
+	confFile := filepath.Join(tmpDir, "regsync.yml")
+	confYAML := `version: 1
+synk:
+  - source: registry.example.com/repo
+    target: registry2.example.com/repo
+`
+	if err := os.WriteFile(confFile, []byte(confYAML), 0o600); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	opts := rootOpts{
+		confFile: confFile,
+		log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	err := opts.loadConf()
+	if err == nil {
+		t.Fatal("expected an error for a config without sync entries")
+	}
+	if !strings.Contains(err.Error(), "no sync entries") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
