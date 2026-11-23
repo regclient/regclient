@@ -55,7 +55,7 @@ jobs:
         fetch-tags: true
 
     - name: "Set up Go" # required for reproducible regctl install from main branch
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
       with:
         go-version: "${{ env.RELEASE_GO_VER }}"
 
@@ -155,7 +155,7 @@ jobs:
       uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
       id: syft
       with:
-        syft-version: "v1.57.1"
+        syft-version: "v1.57.2"
     
     # Dogfooding, use regctl to modify regclient images to improve reproducibility
     - name: Install regctl
