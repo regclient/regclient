@@ -81,6 +81,13 @@ func TestDocker(t *testing.T) {
 			expectTLS:        TLSEnabled,
 		},
 		{
+			name:             "testboth-helper-overrides-store",
+			hostname:         "testboth.example.com",
+			expectCredHelper: "docker-credential-test",
+			expectHostname:   "testboth.example.com",
+			expectTLS:        TLSEnabled,
+		},
+		{
 			name:           "localhost:5001",
 			hostname:       "localhost:5001",
 			expectUser:     "hello",
